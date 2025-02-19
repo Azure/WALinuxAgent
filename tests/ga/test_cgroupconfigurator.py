@@ -172,7 +172,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
             self.assertFalse(os.path.exists(agent_drop_in_file_cpu_quota), "{0} should not have been created".format(agent_drop_in_file_cpu_quota))
 
-    def test_initialize_should_not_enable_cgroups_v2(self):
+    def test_initialize_should_enable_cgroups_v2(self):
         with self._get_cgroup_configurator_v2() as configurator:
             self.assertTrue(configurator.enabled(), "cgroups were not enabled")
 
