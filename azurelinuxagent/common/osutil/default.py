@@ -82,7 +82,7 @@ IOCTL_SIOCGIFFLAGS = 0x8913
 IOCTL_SIOCGIFHWADDR = 0x8927
 IFNAMSIZ = 16
 
-IP_COMMAND_OUTPUT = re.compile(r'^\d+:\s+(\w+):\s+(.*)$')
+IP_COMMAND_OUTPUT = re.compile(r'^\d+:\s+([\w@]+):\s+(.*)$')
 
 STORAGE_DEVICE_PATH = '/sys/bus/vmbus/devices/'
 GEN2_DEVICE_ID = 'f8b3781a-1e82-4818-a1c3-63d806ec15bb'
@@ -346,7 +346,7 @@ class DefaultOSUtil(object):
                 raise OSUtilError("Bad public key: {0}".format(value))
             if not value.endswith("\n"):
                 value += "\n"
-            fileutil.write_file(path, value)
+            fileutil.write_file(path, value, append=True)
         elif thumbprint is not None:
             lib_dir = conf.get_lib_dir()
             crt_path = os.path.join(lib_dir, thumbprint + '.crt')

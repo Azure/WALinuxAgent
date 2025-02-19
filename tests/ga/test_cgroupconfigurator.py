@@ -567,39 +567,37 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_capture_only_the_last_subprocess_output(self, _):
         with self._get_cgroup_configurator() as configurator:
-            pass  # release the mocks used to create the test CGroupConfigurator so that they do not conflict the mock Popen below
+            original_popen = subprocess.Popen
 
-        original_popen = subprocess.Popen
+            def mock_popen(command, *args, **kwargs):
+                # Inject a syntax error to the call
 
-        def mock_popen(command, *args, **kwargs):
-            # Inject a syntax error to the call
-            
-            # Popen can accept both strings and lists, handle both here.
-            if isinstance(command, str):
-                command = command.replace('systemd-run', 'systemd-run syntax_error')
-            elif isinstance(command, list) and command[0] == 'systemd-run':
-                command = ['systemd-run', 'syntax_error'] + command[1:]
+                # Popen can accept both strings and lists, handle both here.
+                if isinstance(command, str) and command.startswith('systemd-run'):
+                    command = 'systemd-run syntax_error'
+                elif isinstance(command, list) and command[0] == 'systemd-run':
+                    command = ['systemd-run', 'syntax_error']
 
-            return original_popen(command, *args, **kwargs)
+                return original_popen(command, *args, **kwargs)
 
-        expected_output = "[stdout]\n{0}\n\n\n[stderr]\n"
+            expected_output = "[stdout]\n{0}\n\n\n[stderr]\n"
 
-        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
-            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", side_effect=mock_popen):
-                    # We expect this call to fail because of the syntax error
-                    process_output = configurator.start_extension_command(
-                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                        command="echo 'very specific test message'",
-                        cmd_name="test",
-                        timeout=300,
-                        shell=True,
-                        cwd=self.tmp_dir,
-                        env={}.update(os.environ),
-                        stdout=stdout,
-                        stderr=stderr)
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+                with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                    with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", side_effect=mock_popen):
+                        # We expect this call to fail because of the syntax error
+                        process_output = configurator.start_extension_command(
+                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                            command="echo 'very specific test message'",
+                            cmd_name="test",
+                            timeout=300,
+                            shell=True,
+                            cwd=self.tmp_dir,
+                            env={}.update(os.environ),
+                            stdout=stdout,
+                            stderr=stderr)
 
-                    self.assertEqual(expected_output.format("very specific test message"), process_output)
+                        self.assertEqual(expected_output.format("very specific test message"), process_output)
 
     def test_it_should_set_extension_services_cpu_memory_quota(self):
         service_list = [

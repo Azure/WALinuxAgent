@@ -51,8 +51,8 @@ echo "Creating symbolic link to Pypy: ~/bin/pypy3"
 #
 # In the case of 'platform', the 'linux_distribution' method was removed on Python 3.7 so we check the
 # system's module and, if the method does not exist, we also remove it from Pypy. Ubuntu 16 and 18 are
-# special cases in that the 'platform' module in Pypy identifies the distro as 'debian'; in this case we
-# copy the system's 'platform' module to Pypy.
+# special cases in that the 'platform' module in Pypy identifies the distro as 'debian';
+# Alma 8 identifies the distro as 'centos'; in this case we copy the system's 'platform' module to Pypy.
 #
 distro_path=$($python -c '
 try:
@@ -76,7 +76,10 @@ if [[ "$has_linux_distribution" == "False" ]]; then
 else
   echo "Python has platform.linux_distribution"
   uname=$(uname -v)
-  if [[ "$uname" == *~18*-Ubuntu* || "$uname" == *~16*-Ubuntu* ]]; then
+  alma_linux="/etc/almalinux-release"
+  #cat /etc/almalinux-release
+  #AlmaLinux release 8.10 (Cerulean Leopard)
+  if [[ "$uname" == *~18*-Ubuntu* || "$uname" == *~16*-Ubuntu* ]] || ([[ -f $alma_linux ]] && grep -qiE "AlmaLinux.*8\." "$alma_linux"); then
     echo "Copying the system's platform module to Pypy"
     pypy_platform=$(pypy3 -c 'import platform; print(platform.__file__)')
     python_platform=$($python -c 'import platform; print(platform.__file__)')

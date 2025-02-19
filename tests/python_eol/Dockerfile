@@ -31,7 +31,7 @@ RUN <<..
     # Install the Python venv
     #
     apt-get update
-    apt-get -y install curl bzip2 sudo
+    apt-get -y install curl bzip2 sudo iproute2
     groupadd waagent
     useradd --shell /bin/bash --create-home -g waagent waagent
     curl -sSf --retry 5 -o /tmp/python-${PYTHON_VERSION}.tar.bz2 https://dcrdata.blob.core.windows.net/python/python-${PYTHON_VERSION}.tar.bz2

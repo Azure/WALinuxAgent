@@ -14,6 +14,7 @@ def add_one_dependent_ext_without_settings():
         {
             "name": "CustomScript",
             "properties": {
+                "provisionAfterExtensions": [],
                 "publisher": "Microsoft.Azure.Extensions",
                 "type": "CustomScript",
                 "typeHandlerVersion": "2.1",

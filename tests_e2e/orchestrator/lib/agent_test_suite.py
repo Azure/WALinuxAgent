@@ -731,14 +731,14 @@ class AgentTestSuite(LisaTestSuite):
                         log.info("\t%s", r)
                     log.info("")
 
-                except:  # pylint: disable=bare-except
+                except Exception as e:
                     suite_success = False
                     self._report_test_result(
                         suite_full_name,
                         suite_name,
                         TestStatus.FAILED,
                         suite_start_time,
-                        message=f"Unhandled exception while executing test suite {suite_name}.",
+                        message=f"Unhandled exception while executing test suite {suite_name}: {e}",
                         add_exception_stack_trace=True)
                 finally:
                     if not suite_success:

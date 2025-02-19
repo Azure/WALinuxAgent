@@ -34,15 +34,15 @@ from tests_e2e.tests.lib.ssh_client import SshClient
 class KeyvaultCertificates(AgentVmTest):
     def run(self):
         test_certificates = {
-            'C49A06B3044BD1778081366929B53EBF154133B3': {
-                'AzureCloud':        'https://waagenttests.vault.azure.net/secrets/ec-cert/39862f0c6dff4b35bc8a83a5770c2102',
-                'AzureChinaCloud':   'https://waagenttests.vault.azure.cn/secrets/ec-cert/bb610217ef70412bb3b3c8d7a7fabfdc',
-                'AzureUSGovernment': 'https://waagenttests.vault.usgovcloudapi.net/secrets/ec-cert/9c20ef55c7074a468f04a168b3488933'
+            'C714CBBBDCD6EB48B05E4F69E2E8BCBB87D244BE': {
+                'AzureCloud':        'https://waagenttests.vault.azure.net/secrets/ec-cert/f2239d3eedf34312a0f219c556df336a',
+                'AzureChinaCloud':   'https://waagenttests.vault.azure.cn/secrets/ec-cert/089d16e330dc4ba5b0414c3f8e5f46cb',
+                'AzureUSGovernment': 'https://waagenttests.vault.usgovcloudapi.net/secrets/ec-cert/5f19e3b70c6b42dd93e67767a16a75f7'
             },
-            '2F846E657258E50C7011E1F68EA9AD129BA4AB31': {
-                'AzureCloud':        'https://waagenttests.vault.azure.net/secrets/rsa-cert/0b5eac1e66fb457bb3c3419fce17e705',
-                'AzureChinaCloud':   'https://waagenttests.vault.azure.cn/secrets/rsa-cert/98679243f8d6493e95281a852d8cee00',
-                'AzureUSGovernment': 'https://waagenttests.vault.usgovcloudapi.net/secrets/rsa-cert/463a8a6be3b3436d85d3d4e406621c9e'
+            'C9CDEECA5D7D1A7EFA0EBD93B745438DB4C01C60': {
+                'AzureCloud':        'https://waagenttests.vault.azure.net/secrets/rsa-cert/2cb3997a1d8740618d77b24f85359c5c',
+                'AzureChinaCloud':   'https://waagenttests.vault.azure.cn/secrets/rsa-cert/a1a6047c02d84d2da5300fec70b0d070',
+                'AzureUSGovernment': 'https://waagenttests.vault.usgovcloudapi.net/secrets/rsa-cert/100dd15190f2485fa200ab948afc1d2e'
             }
         }
         thumbprints = test_certificates.keys()

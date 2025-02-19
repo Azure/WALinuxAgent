@@ -394,7 +394,7 @@ class AgentLog(object):
                 'message': r"(?s)name=Microsoft.GuestConfiguration.ConfigurationforLinux.*op=Install.*Non-zero exit code: (1.*Text file busy|51.*Unexpected Linux distribution|126.*Exec format error)",
             },
             {
-                'message': r"A new goal state was received, but not all the extensions in the previous goal state have completed.*'Microsoft.GuestConfiguration.ConfigurationforLinux',\s+'transitioning'",
+                'message': r"A new goal state was received, but not all the extensions in the previous goal state have completed.*'Microsoft.GuestConfiguration.ConfigurationforLinux',\s+u?'transitioning'",
             },
             #
             # Below systemd errors are transient and will not block extension execution
