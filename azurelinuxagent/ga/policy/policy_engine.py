@@ -25,7 +25,6 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.archive import GoalStateHistory
 
 # Default policy values to be used when customer does not specify these attributes in the policy file.
 _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY = False
@@ -50,11 +49,12 @@ class _PolicyEngine(object):
     """
     Implements base policy engine API.
     """
-    def __init__(self, goal_state_history: GoalStateHistory = None):
+    def __init__(self, goal_state_history=None):
         """
         Initialize policy engine: if policy enforcement is enabled, read and parse policy file.
-        If goal_state_history is provided, policy file contents will be copied to history folder
-        immediately after reading.
+
+        If 'goal_state_history' is provided, policy file contents will be copied to the history folder immediately after
+        reading. 'goal_state_history' should be an instance of GoalStateHistory.
         """
         # Set defaults for policy
         self._policy_enforcement_enabled = self.__get_policy_enforcement_enabled()
@@ -93,10 +93,11 @@ class _PolicyEngine(object):
         return self._policy_enforcement_enabled
 
     @staticmethod
-    def __read_policy(history: GoalStateHistory = None):
+    def __read_policy(history=None):
         """
         Read customer-provided policy JSON file, load and return as a dict.
-        If history parameter is specified, copy the raw contents of the policy file to the goal state history folder.
+        If 'history' parameter is specified, copy the raw contents of the policy file to the goal state history folder.
+        'history' should be an instance of GoalStateHistory.
 
         Policy file is expected to be at conf.get_policy_file_path(). Note that this method should only be called
         after verifying that the file exists (currently done in __init__).
