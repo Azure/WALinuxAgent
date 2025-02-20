@@ -163,7 +163,7 @@ def verify_throttling_time_check_on_agent_cgroups():
     wait_for_log_message(
         "Disabling resource usage monitoring. Reason: Check on cgroups failed:.+The agent has been throttled",
         timeout=datetime.timedelta(minutes=10))
-    wait_for_log_message("Stopped tracking cgroup walinuxagent.service", timeout=datetime.timedelta(minutes=10))
+    wait_for_log_message("Stopped tracking cpu cgroup walinuxagent.service", timeout=datetime.timedelta(minutes=10))
     disabled: bool = retry_if_false(check_agent_quota_disabled)
     if not disabled:
         fail("The agent did not disable its CPUQuota: {0}".format(get_agent_cpu_quota()))

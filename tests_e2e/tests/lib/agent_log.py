@@ -155,13 +155,9 @@ class AgentLog(object):
             #
             # Ubuntu 22 uses cgroups v2, so we need to ignore these:
             #
-            #     2023-03-15T20:47:56.684849Z INFO ExtHandler ExtHandler [CGW] The CPU cgroup controller is not mounted
-            #     2023-03-15T20:47:56.685392Z INFO ExtHandler ExtHandler [CGW] The memory cgroup controller is not mounted
-            #     2023-03-15T20:47:56.688576Z INFO ExtHandler ExtHandler [CGW] The agent's process is not within a CPU cgroup
-            #     2023-03-15T20:47:56.688981Z INFO ExtHandler ExtHandler [CGW] The agent's process is not within a memory cgroup
-            #
+            # 2025-02-05T20:37:38.134526Z INFO ExtHandler ExtHandler [CGW] cpu controller is not enabled; will not track
             {
-                'message': r"\[CGW\]\s*(The (CPU|memory) cgroup controller is not mounted)|(The agent's process is not within a (CPU|memory) cgroup)",
+                'message': r"\[CGW\]\s*(cpu|memory) controller is not enabled",
                 'if': lambda r: DISTRO_NAME == 'ubuntu' and DISTRO_VERSION >= '22.00'
             },
             #

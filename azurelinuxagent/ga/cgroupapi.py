@@ -121,6 +121,50 @@ class CGroupUtil(object):
         return len(legacy_cgroups)
 
     @staticmethod
+    def get_current_cpu_quota(unit_name):
+        """
+        Calculate the CPU percentage from CPUQuotaPerSecUSec for given unit.
+        Params:
+            cpu_quota_per_sec_usec (str): The value of CPUQuotaPerSecUSec (e.g., "1s", "500ms", "500us", or "infinity").
+
+        Returns:
+            str: CPU percentage, or 'infinity' or 'unknown' if we can't determine the value.
+        """
+        try:
+            cpu_quota_per_sec_usec = systemd.get_unit_property(unit_name, "CPUQuotaPerSecUSec").strip().lower()
+            if cpu_quota_per_sec_usec == "infinity":
+                return cpu_quota_per_sec_usec  # No limit on CPU usage
+
+            # Parse the value based on the suffix
+            elif cpu_quota_per_sec_usec.endswith("us"):
+                # Directly use the microseconds value
+                cpu_quota_us = float(cpu_quota_per_sec_usec[:-2])
+            elif cpu_quota_per_sec_usec.endswith("ms"):
+                # Convert milliseconds to microseconds
+                cpu_quota_us = float(cpu_quota_per_sec_usec[:-2]) * 1000
+            elif cpu_quota_per_sec_usec.endswith("s"):
+                # Convert seconds to microseconds
+                cpu_quota_us = float(cpu_quota_per_sec_usec[:-1]) * 1000000
+            else:
+                raise ValueError("Invalid format. Expected 's', 'ms', 'us', or 'infinity'.")
+
+            # Calculate CPU percentage
+            cpu_percentage = (cpu_quota_us / 1000000) * 100
+            return "{0:g}%".format(cpu_percentage)  # :g Removes trailing zeros after decimal point
+        except Exception as e:
+            log_cgroup_warning("Error parsing current CPUQuotaPerSecUSec: {0}".format(ustr(e)))
+            return "unknown"
+
+    @staticmethod
+    def has_cpu_quota(unit_name):
+        """
+        Returns True if quota set for the unit.
+        """
+        cpu_quota_percentage = CGroupUtil.get_current_cpu_quota(unit_name)
+        has_quota = cpu_quota_percentage not in ("infinity", "unknown")
+        return has_quota
+
+    @staticmethod
     def cleanup_legacy_cgroups():
         """
         Previous versions of the daemon (2.2.31-2.2.40) wrote their PID to /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent;
@@ -250,12 +294,82 @@ class _SystemdCgroupApi(object):
         """
         raise NotImplementedError()
 
-    def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr,
-                                error_code=ExtensionErrorCodes.PluginUnknownFailure):
+    def can_enforce_cpu(self):
         """
-        Cgroup version specific. Starts extension command.
+        Cgroup version specific. Returns if controller can be used for enforcement
         """
         raise NotImplementedError()
+
+    def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr,
+                                error_code=ExtensionErrorCodes.PluginUnknownFailure):
+        scope = "{0}_{1}".format(cmd_name, uuid.uuid4())
+        extension_slice_name = CGroupUtil.get_extension_slice_name(extension_name)
+        with self._systemd_run_commands_lock:
+            process = subprocess.Popen(  # pylint: disable=W1509
+                # Some distros like ubuntu20 by default cpu and memory accounting enabled. Thus create nested cgroups under the extension slice
+                # So disabling CPU and Memory accounting prevents from creating nested cgroups, so that all the counters will be present in extension Cgroup
+                # since slice unit file configured with accounting enabled.
+                "systemd-run --property=CPUAccounting=no --property=MemoryAccounting=no --unit={0} --scope --slice={1} {2}".format(scope, extension_slice_name, command),
+                shell=shell,
+                cwd=cwd,
+                stdout=stdout,
+                stderr=stderr,
+                env=env,
+                preexec_fn=os.setsid)
+
+            # We start systemd-run with shell == True so process.pid is the shell's pid, not the pid for systemd-run
+            self._systemd_run_commands.append(process.pid)
+
+        scope_name = scope + '.scope'
+
+        log_cgroup_info("Started extension in unit '{0}'".format(scope_name), send_event=False)
+
+        cpu_controller = None
+        try:
+            cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice', extension_slice_name)
+            cgroup = self.get_cgroup_from_relative_path(cgroup_relative_path, extension_name)
+            has_cpu_quota = CGroupUtil.has_cpu_quota(extension_slice_name)
+            for controller in cgroup.get_controllers():
+                if isinstance(controller, _CpuController):
+                    cpu_controller = controller
+                    if has_cpu_quota:
+                        cpu_controller.track_throttle_time(True)  # CPU controller track the throttle time only when CPU quota is set
+                CGroupsTelemetry.track_cgroup_controller(controller)
+
+        except IOError as e:
+            if e.errno == 2:  # 'No such file or directory'
+                log_cgroup_info("The extension command already completed; will not track resource usage", send_event=False)
+            log_cgroup_info("Failed to start tracking resource usage for the extension: {0}".format(ustr(e)), send_event=False)
+        except Exception as e:
+            log_cgroup_info("Failed to start tracking resource usage for the extension: {0}".format(ustr(e)), send_event=False)
+
+        # Wait for process completion or timeout
+        try:
+            return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout,
+                                             stderr=stderr, error_code=error_code, cpu_controller=cpu_controller)
+        except ExtensionError as e:
+            # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
+            # extension errors.
+            if not self._is_systemd_failure(scope, stderr):
+                # There was an extension error; it either timed out or returned a non-zero exit code. Re-raise the error
+                raise
+
+            # There was an issue with systemd-run. We need to log it and retry the extension without systemd.
+            process_output = read_output(stdout, stderr)
+            # Reset the stdout and stderr
+            stdout.truncate(0)
+            stderr.truncate(0)
+
+            if isinstance(e, ExtensionOperationError):
+                # no-member: Instance of 'ExtensionError' has no 'exit_code' member (no-member) - Disabled: e is actually an ExtensionOperationError
+                err_msg = 'Systemd process exited with code %s and output %s' % (
+                    e.exit_code, process_output)  # pylint: disable=no-member
+            else:
+                err_msg = "Systemd timed-out, output: %s" % process_output
+            raise SystemdRunError(err_msg)
+        finally:
+            with self._systemd_run_commands_lock:
+                self._systemd_run_commands.remove(process.pid)
 
     @staticmethod
     def _is_systemd_failure(scope_name, stderr):
@@ -389,73 +503,8 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
             else:
                 log_cgroup_info("The {0} controller is mounted at {1}".format(controller, mount_point))
 
-    def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr,
-                                error_code=ExtensionErrorCodes.PluginUnknownFailure):
-        scope = "{0}_{1}".format(cmd_name, uuid.uuid4())
-        extension_slice_name = CGroupUtil.get_extension_slice_name(extension_name)
-        with self._systemd_run_commands_lock:
-            process = subprocess.Popen(  # pylint: disable=W1509
-                # Some distros like ubuntu20 by default cpu and memory accounting enabled. Thus create nested cgroups under the extension slice
-                # So disabling CPU and Memory accounting prevents from creating nested cgroups, so that all the counters will be present in extension Cgroup
-                # since slice unit file configured with accounting enabled.
-                "systemd-run --property=CPUAccounting=no --property=MemoryAccounting=no --unit={0} --scope --slice={1} {2}".format(scope, extension_slice_name, command),
-                shell=shell,
-                cwd=cwd,
-                stdout=stdout,
-                stderr=stderr,
-                env=env,
-                preexec_fn=os.setsid)
-
-            # We start systemd-run with shell == True so process.pid is the shell's pid, not the pid for systemd-run
-            self._systemd_run_commands.append(process.pid)
-
-        scope_name = scope + '.scope'
-
-        log_cgroup_info("Started extension in unit '{0}'".format(scope_name), send_event=False)
-
-        cpu_controller = None
-        try:
-            cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice', extension_slice_name)
-            cgroup = self.get_cgroup_from_relative_path(cgroup_relative_path, extension_name)
-            for controller in cgroup.get_controllers():
-                if isinstance(controller, _CpuController):
-                    cpu_controller = controller
-                CGroupsTelemetry.track_cgroup_controller(controller)
-
-        except IOError as e:
-            if e.errno == 2:  # 'No such file or directory'
-                log_cgroup_info("The extension command already completed; will not track resource usage", send_event=False)
-            log_cgroup_info("Failed to start tracking resource usage for the extension: {0}".format(ustr(e)), send_event=False)
-        except Exception as e:
-            log_cgroup_info("Failed to start tracking resource usage for the extension: {0}".format(ustr(e)), send_event=False)
-
-        # Wait for process completion or timeout
-        try:
-            return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout,
-                                             stderr=stderr, error_code=error_code, cpu_controller=cpu_controller)
-        except ExtensionError as e:
-            # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
-            # extension errors.
-            if not self._is_systemd_failure(scope, stderr):
-                # There was an extension error; it either timed out or returned a non-zero exit code. Re-raise the error
-                raise
-
-            # There was an issue with systemd-run. We need to log it and retry the extension without systemd.
-            process_output = read_output(stdout, stderr)
-            # Reset the stdout and stderr
-            stdout.truncate(0)
-            stderr.truncate(0)
-
-            if isinstance(e, ExtensionOperationError):
-                # no-member: Instance of 'ExtensionError' has no 'exit_code' member (no-member) - Disabled: e is actually an ExtensionOperationError
-                err_msg = 'Systemd process exited with code %s and output %s' % (
-                    e.exit_code, process_output)  # pylint: disable=no-member
-            else:
-                err_msg = "Systemd timed-out, output: %s" % process_output
-            raise SystemdRunError(err_msg)
-        finally:
-            with self._systemd_run_commands_lock:
-                self._systemd_run_commands.remove(process.pid)
+    def can_enforce_cpu(self):
+        return CgroupV1.CPU_CONTROLLER in self._cgroup_mountpoints
 
 
 class SystemdCgroupApiv2(_SystemdCgroupApi):
@@ -569,9 +618,8 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
             else:
                 log_cgroup_info("The {0} controller is not enabled at the root cgroup".format(controller))
 
-    def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr,
-                                error_code=ExtensionErrorCodes.PluginUnknownFailure):
-        raise NotImplementedError()
+    def can_enforce_cpu(self):
+        return False
 
 
 class Cgroup(object):
