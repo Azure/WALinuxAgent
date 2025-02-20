@@ -465,27 +465,36 @@ class CGroupConfigurator(object):
             self._extensions_cgroups_enabled = True
 
         def disable(self, reason, disable_cgroups):
-            if disable_cgroups == DisableCgroups.ALL:  # disable all
-                # Reset quotas
-                self._reset_cpu_quota(systemd.get_agent_unit_name())
-                extension_services = self.get_extension_services_list()
-                for extension in extension_services:
-                    log_cgroup_info("Resetting extension : {0} and it's services: {1} Quota".format(extension, extension_services[extension]), send_event=False)
-                    self.reset_extension_quota(extension_name=extension)
-                    self.reset_extension_services_quota(extension_services[extension])
-                CGroupsTelemetry.reset()
-                self._agent_cgroups_enabled = False
-                self._extensions_cgroups_enabled = False
-            elif disable_cgroups == DisableCgroups.AGENT:  # disable agent
-                self._reset_cpu_quota(systemd.get_agent_unit_name())
-                agent_controllers = self._agent_cgroup.get_controllers()
-                for controller in agent_controllers:
-                    if isinstance(controller, _CpuController):
-                        CGroupsTelemetry.stop_tracking(controller)
-                        break
-                self._agent_cgroups_enabled = False
+            """
+            TODO: This method needs a refactor. We should not disable the cgroups if we fail to reset the agent's cgroup quota.
+            Today we disable the cgroups even if we fail to reset te agent cgroup quota, as a result, extensions may run with agent limits, which is not good.
+            Other side if we don't disable the cgroups, we end up calling the reset until systemd is recovered from error. If systemd error is connection timed out, it's just adding
+            significant delay to the extension execution.
+            """
+            try:
+                if disable_cgroups == DisableCgroups.ALL:  # disable all
+                    # Reset quotas
+                    self._reset_cpu_quota(systemd.get_agent_unit_name())
+                    extension_services = self.get_extension_services_list()
+                    for extension in extension_services:
+                        log_cgroup_info("Resetting extension : {0} and it's services: {1} Quota".format(extension, extension_services[extension]), send_event=False)
+                        self.reset_extension_quota(extension_name=extension)
+                        self.reset_extension_services_quota(extension_services[extension])
+                    CGroupsTelemetry.reset()
+                    self._agent_cgroups_enabled = False
+                    self._extensions_cgroups_enabled = False
+                elif disable_cgroups == DisableCgroups.AGENT:  # disable agent
+                    self._reset_cpu_quota(systemd.get_agent_unit_name())
+                    agent_controllers = self._agent_cgroup.get_controllers()
+                    for controller in agent_controllers:
+                        if isinstance(controller, _CpuController):
+                            CGroupsTelemetry.stop_tracking(controller)
+                            break
+                    self._agent_cgroups_enabled = False
 
-            log_cgroup_warning("Disabling resource usage monitoring. Reason: {0}".format(reason), op=WALAEventOperation.CGroupsDisabled)
+                log_cgroup_warning("Disabling resource usage monitoring. Reason: {0}".format(reason), op=WALAEventOperation.CGroupsDisabled)
+            except Exception as exception:
+                log_cgroup_warning("Error disabling cgroups: {0}".format(ustr(exception)))
 
         @staticmethod
         def _set_cpu_quota(unit_name, quota):
@@ -508,8 +517,11 @@ class CGroupConfigurator(object):
             over this setting.
             """
             log_cgroup_info("Resetting {0}'s CPUQuota".format(unit_name), send_event=False)
-            CGroupConfigurator._Impl._try_set_cpu_quota(unit_name, "infinity") # systemd expresses no-quota as infinity, following the same convention
-            log_cgroup_info('Current CPUQuota: {0}'.format(systemd.get_unit_property(unit_name, "CPUQuotaPerSecUSec")))
+            if CGroupConfigurator._Impl._try_set_cpu_quota(unit_name, "infinity"): # systemd expresses no-quota as infinity, following the same convention
+                try:
+                    log_cgroup_info('Current CPUQuota: {0}'.format(systemd.get_unit_property(unit_name, "CPUQuotaPerSecUSec")))
+                except Exception as e:
+                    log_cgroup_warning('Failed to get current CPUQuotaPerSecUSec after reset: {0}'.format(ustr(e)))
 
         # W0238: Unused private member `_Impl.__try_set_cpu_quota(quota)` (unused-private-member)
         @staticmethod
@@ -517,11 +529,13 @@ class CGroupConfigurator(object):
             try:
                 current_cpu_quota = CGroupConfigurator._Impl._get_current_cpu_quota(unit_name)
                 if current_cpu_quota == quota:
-                    return
+                    return True
                 quota = quota if quota != "infinity" else ""  # no-quota expressed as empty string while setting property
                 systemd.set_unit_run_time_property(unit_name, "CPUQuota", quota)
             except Exception as exception:
                 log_cgroup_warning('Failed to set CPUQuota: {0}'.format(ustr(exception)))
+                return False
+            return True
 
         def _check_fails_if_processes_found_in_agent_cgroup_before_enable(self, agent_slice):
             """
@@ -921,7 +935,10 @@ class CGroupConfigurator(object):
             TODO: reset memory quotas
             """
             if self.enabled():
-                self._reset_cpu_quota(CGroupUtil.get_extension_slice_name(extension_name))
+                try:
+                    self._reset_cpu_quota(CGroupUtil.get_extension_slice_name(extension_name))
+                except Exception as exception:
+                    log_cgroup_warning('Failed to reset for {0}: {1}'.format(extension_name, ustr(exception)))
 
         def set_extension_services_cpu_memory_quota(self, services_list):
             """
@@ -950,7 +967,12 @@ class CGroupConfigurator(object):
 
                         cpu_quota = service.get('cpuQuotaPercentage')
                         cpu_quota = "{0}%".format(cpu_quota) if cpu_quota is not None else "infinity"  # following systemd convention for no-quota (infinity)
-                        properties_to_update, properties_values = self._get_unit_properties_requiring_update(service_name, cpu_quota)
+                        try:
+                            properties_to_update, properties_values = self._get_unit_properties_requiring_update(service_name, cpu_quota)
+                        except Exception as exception:
+                            log_cgroup_warning("Failed to get the properties to update for {0}: {1}".format(service_name, ustr(exception)))
+                            # when we fail to get the properties to update, we will skip the set-property and continue for next service
+                            continue
                         # If systemd is unaware of extension services and not loaded in the system yet, we get error while setting quotas. Hence, added unit loaded check.
                         if systemd.is_unit_loaded(service_name) and len(properties_to_update) > 0:
                             if cpu_quota != "infinity":
