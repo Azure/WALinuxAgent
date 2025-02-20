@@ -25,6 +25,7 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.utils.archive import GoalStateHistory
 
 # Default policy values to be used when customer does not specify these attributes in the policy file.
 _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY = False
@@ -44,18 +45,25 @@ class InvalidPolicyError(AgentError):
         msg = "Customer-provided policy file ('{0}') is invalid, please correct the following error: {1}".format(conf.get_policy_file_path(), msg)
         super(InvalidPolicyError, self).__init__(msg, inner)
 
+
 class _PolicyEngine(object):
     """
     Implements base policy engine API.
     """
-    def __init__(self):
+    def __init__(self, goal_state_history: GoalStateHistory = None):
+        """
+        Initialize policy engine: if policy enforcement is enabled, read and parse policy file.
+        If goal_state_history is provided, policy file contents will be copied to history folder
+        immediately after reading.
+        """
         # Set defaults for policy
         self._policy_enforcement_enabled = self.__get_policy_enforcement_enabled()
         if not self.policy_enforcement_enabled:
             return
 
         _PolicyEngine._log_policy_event("Policy enforcement is enabled.")
-        self._policy = self._parse_policy(self.__read_policy())
+        policy_contents = self.__read_policy(goal_state_history)
+        self._policy = self._parse_policy(policy_contents)
 
     @property
     def policy(self):
@@ -85,9 +93,11 @@ class _PolicyEngine(object):
         return self._policy_enforcement_enabled
 
     @staticmethod
-    def __read_policy():
+    def __read_policy(history: GoalStateHistory = None):
         """
         Read customer-provided policy JSON file, load and return as a dict.
+        If history parameter is specified, copy the raw contents of the policy file to the goal state history folder.
+
         Policy file is expected to be at conf.get_policy_file_path(). Note that this method should only be called
         after verifying that the file exists (currently done in __init__).
 
@@ -98,8 +108,14 @@ class _PolicyEngine(object):
                 contents = f.read()
                 _PolicyEngine._log_policy_event(
                     "Enforcing policy using policy file found at '{0}'.".format(conf.get_policy_file_path()))
+
+                # Save policy file contents to history folder.
+                if history is not None:
+                    history.save_policy(contents)
+
                 # json.loads will raise error if file contents are not a valid json (including empty file).
                 custom_policy = json.loads(contents)
+
             except ValueError as ex:
                 msg = "policy file does not conform to valid json syntax."
                 if contents is not None:

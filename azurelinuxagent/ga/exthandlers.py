@@ -511,10 +511,8 @@ class ExtHandlersHandler(object):
         # Save policy to history folder.
         policy_error = None
         try:
-            policy_engine = ExtensionPolicyEngine()
             gs_history = self.protocol.get_goal_state().history
-            if gs_history is not None:
-                gs_history.save_policy(json.dumps(policy_engine.policy))
+            policy_engine = ExtensionPolicyEngine(gs_history)
         except Exception as ex:
             policy_error = ex
 
