@@ -93,6 +93,7 @@ class WALAEventOperation:
     FetchGoalState = "FetchGoalState"
     Firewall = "Firewall"
     GoalState = "GoalState"
+    GoalStateCertificates = "GoalStateCertificates"
     GoalStateUnsupportedFeatures = "GoalStateUnsupportedFeatures"
     HealthCheck = "HealthCheck"
     HealthObservation = "HealthObservation"
@@ -732,6 +733,25 @@ def error(op, fmt, *args):
     logger.error(fmt, *args)
     add_event(op=op, message=fmt.format(*args), is_success=False, log_event=False)
 
+
+class LogEvent(object):
+    """
+    Helper class that allows the use of info()/warn()/error() using a specific instance of a logger.
+    """
+    def __init__(self, logger_):
+        self._logger = logger_
+
+    def info(self, op, fmt, *args):
+        self._logger.info(fmt, *args)
+        add_event(op=op, message=fmt.format(*args), is_success=True)
+
+    def warn(self, op, fmt, *args):
+        self._logger.warn(fmt, *args)
+        add_event(op=op, message="[WARNING] " + fmt.format(*args), is_success=False, log_event=False)
+
+    def error(self, op, fmt, *args):
+        self._logger.error(fmt, *args)
+        add_event(op=op, message=fmt.format(*args), is_success=False, log_event=False)
 
 def add_log_event(level, message, forced=False, reporter=__event_logger__):
     """

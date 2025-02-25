@@ -85,6 +85,7 @@ READONLY_FILE_GLOBS = [
     "*.p7m",
     "*.pem",
     "*.prv",
+    "Certificates.xml",
     "ovf-env.xml"
 ]
 

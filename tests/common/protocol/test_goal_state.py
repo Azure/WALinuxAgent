@@ -492,8 +492,8 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
 
             goal_state = GoalState(protocol.client)
 
-            self.assertEqual(0, len(goal_state.certs.summary), "Cert list should be empty")
-            self.assertEqual(1, http_get_handler.certificate_requests, "There should have been exactly 1 requests for the goal state certificates")
+            self.assertEqual(0, len(goal_state.certs.summary), "Certificates should be empty")
+            self.assertEqual(2, http_get_handler.certificate_requests, "There should have been exactly 2 requests for the goal state certificates")  # 1 for the initial request, 1 for the retry with an older cypher
 
 
     def test_it_should_raise_when_goal_state_properties_not_initialized(self):

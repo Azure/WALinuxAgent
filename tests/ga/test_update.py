@@ -2059,7 +2059,7 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             # Double check the certificates are correct
             goal_state = protocol.get_goal_state()
 
-            thumbprints = [c.thumbprint for c in goal_state.certs.cert_list.certificates]
+            thumbprints = [c["thumbprint"] for c in goal_state.certs.summary]
 
             for extension in goal_state.extensions_goal_state.extensions:
                 for settings in extension.settings:

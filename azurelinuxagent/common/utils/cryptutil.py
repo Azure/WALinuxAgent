@@ -86,36 +86,22 @@ class CryptUtil(object):
             thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
             return thumbprint
 
-    def decrypt_p7m(self, p7m_file, trans_prv_file, trans_cert_file, pem_file):
+    def decrypt_certificates_p7m(self, p7m_file, trans_prv_file, trans_cert_file, pfx_file):
+        umask = None
+        try:
+            umask = os.umask(0o077)
+            with open(pfx_file, "wb") as pfx_file_:
+                shellutil.run_command([self.openssl_cmd, "cms", "-decrypt", "-in", p7m_file, "-inkey", trans_prv_file, "-recip", trans_cert_file], stdout=pfx_file_)
+        finally:
+            if umask is not None:
+                os.umask(umask)
 
-        def _cleanup_files(files_to_cleanup):
-            for file_path in files_to_cleanup:
-                if os.path.exists(file_path):
-                    try:
-                        os.remove(file_path)
-                        logger.info("Removed file {0}", file_path)
-                    except Exception as e:
-                        logger.error("Failed to remove file {0}: {1}", file_path, ustr(e))
+    def convert_pfx_to_pem(self, pfx_file, nomacver, pem_file):
+        command = [self.openssl_cmd, "pkcs12", "-nodes", "-password", "pass:", "-nomacver", "-in", pfx_file, "-out", pem_file]
+        if nomacver:
+            command.append("-nomacver")
 
-        if not os.path.exists(p7m_file):
-            raise IOError(errno.ENOENT, "File not found", p7m_file)
-        elif not os.path.exists(trans_prv_file):
-            raise IOError(errno.ENOENT, "File not found", trans_prv_file)
-        else:
-            try:
-                shellutil.run_pipe([
-                    [self.openssl_cmd, "cms", "-decrypt", "-in", p7m_file, "-inkey", trans_prv_file, "-recip", trans_cert_file],
-                    [self.openssl_cmd, "pkcs12", "-nodes", "-password", "pass:", "-out", pem_file]])
-            except shellutil.CommandError as command_error:
-                logger.error("Failed to decrypt {0} (return code: {1})\n[stdout]\n{2}\n[stderr]\n{3}",
-                    p7m_file, command_error.returncode, command_error.stdout, command_error.stderr)
-                # If the decryption fails, old version of openssl overwrite the output file(if exist) with empty data while
-                # new version of openssl(3.2.2) does not overwrite the output file, So output file may contain old certs data.
-                # Correcting the behavior by removing the temporary output files since having empty/no data is makes sense when decryption fails
-                # otherwise we end up processing old certs again.
-                files_to_remove = [p7m_file, pem_file]
-                logger.info("Removing temporary state certificate files {0}", files_to_remove)
-                _cleanup_files(files_to_remove)
+        shellutil.run_command(command)
 
     def crt_to_ssh(self, input_file, output_file):
         with open(output_file, "ab") as file_out:

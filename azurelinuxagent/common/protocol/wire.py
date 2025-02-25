@@ -115,8 +115,7 @@ class WireProtocol(DataContract):
         return vminfo
 
     def get_certs(self):
-        certificates = self.client.get_certs()
-        return certificates.cert_list
+        return self.client.get_certs()
 
     def get_goal_state(self):
         return self.client.get_goal_state()
@@ -1140,13 +1139,11 @@ class WireClient(object):
             "Content-Type": "text/xml;charset=utf-8"
         }
 
-    def get_header_for_cert(self):
-        return self._get_header_for_encrypted_request("DES_EDE3_CBC")
-
     def get_header_for_remote_access(self):
-        return self._get_header_for_encrypted_request("AES128_CBC")
+        return self.get_headers_for_encrypted_request("AES128_CBC")
 
-    def _get_header_for_encrypted_request(self, cypher):
+    @staticmethod
+    def get_headers_for_encrypted_request(cypher):
         trans_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
         try:
             content = fileutil.read_file(trans_cert_file)
@@ -1154,12 +1151,15 @@ class WireClient(object):
             raise ProtocolError("Failed to read {0}: {1}".format(trans_cert_file, e))
 
         cert = get_bytes_from_pem(content)
-        return {
+        headers = {
             "x-ms-agent-name": "WALinuxAgent",
             "x-ms-version": PROTOCOL_VERSION,
-            "x-ms-cipher-name": cypher,
             "x-ms-guest-agent-public-x509-cert": cert
         }
+        if cypher is not None:  # the cypher header is optional, currently defaults to AES128_CBC
+            headers["x-ms-cipher-name"] = cypher
+
+        return headers
 
     def get_host_plugin(self):
         if self._host_plugin is None:

@@ -365,8 +365,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
             # ensure host plugin is not set as default
             self.assertFalse(wire.HostPluginProtocol.is_default_channel)
 
-    @patch("azurelinuxagent.common.event.add_event")
-    def test_put_status_error_reporting(self, patch_add_event):
+    def test_put_status_error_reporting(self):
         """
         Validate the telemetry when uploading status fails
         """
@@ -377,22 +376,22 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
 
                 put_error = wire.HttpError("put status http error")
                 with patch.object(restutil, "http_put", side_effect=put_error):
-                    with patch.object(wire.HostPluginProtocol,
-                                      "ensure_initialized", return_value=True):
-                        self.assertRaises(wire.ProtocolError, wire_protocol_client.upload_status_blob)
+                    with patch.object(wire.HostPluginProtocol, "ensure_initialized", return_value=True):
+                        with patch("azurelinuxagent.common.event.add_event") as patch_add_event:
+                            self.assertRaises(wire.ProtocolError, wire_protocol_client.upload_status_blob)
 
-                        # The agent tries to upload via HostPlugin and that fails due to
-                        # http_put having a side effect of "put_error"
-                        #
-                        # The agent tries to upload using a direct connection, and that succeeds.
-                        self.assertEqual(1, wire_protocol_client.status_blob.upload.call_count)  # pylint: disable=no-member
-                        # The agent never touches the default protocol is this code path, so no change.
-                        self.assertFalse(wire.HostPluginProtocol.is_default_channel)
-                        # The agent never logs telemetry event for direct fallback
-                        self.assertEqual(1, patch_add_event.call_count)
-                        self.assertEqual('ReportStatus', patch_add_event.call_args[1]['op'])
-                        self.assertTrue('Falling back to direct' in patch_add_event.call_args[1]['message'])
-                        self.assertEqual(True, patch_add_event.call_args[1]['is_success'])
+                            # The agent tries to upload via HostPlugin and that fails due to
+                            # http_put having a side effect of "put_error"
+                            #
+                            # The agent tries to upload using a direct connection, and that succeeds.
+                            self.assertEqual(1, wire_protocol_client.status_blob.upload.call_count)  # pylint: disable=no-member
+                            # The agent never touches the default protocol is this code path, so no change.
+                            self.assertFalse(wire.HostPluginProtocol.is_default_channel)
+                            # The agent never logs telemetry event for direct fallback
+                            self.assertEqual(1, patch_add_event.call_count)
+                            self.assertEqual('ReportStatus', patch_add_event.call_args[1]['op'])
+                            self.assertTrue('Falling back to direct' in patch_add_event.call_args[1]['message'])
+                            self.assertEqual(True, patch_add_event.call_args[1]['is_success'])
 
     def test_validate_http_request_when_uploading_status(self):
         """Validate correct set of data is sent to HostGAPlugin when reporting VM status"""
