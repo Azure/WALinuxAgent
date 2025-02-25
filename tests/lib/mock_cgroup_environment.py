@@ -51,7 +51,7 @@ _MOCKED_COMMANDS_COMMON = [
 '''MemoryAccounting=no
 '''),
 
-    MockCommand(r"^systemctl show extension\.service --property LoadState$",
+    MockCommand(r"^systemctl show (.+) --property LoadState$",
 '''LoadState=loaded
 '''),
 
