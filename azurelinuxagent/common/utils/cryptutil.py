@@ -97,7 +97,7 @@ class CryptUtil(object):
                 os.umask(umask)
 
     def convert_pfx_to_pem(self, pfx_file, nomacver, pem_file):
-        command = [self.openssl_cmd, "pkcs12", "-nodes", "-password", "pass:", "-nomacver", "-in", pfx_file, "-out", pem_file]
+        command = [self.openssl_cmd, "pkcs12", "-nodes", "-password", "pass:", "-in", pfx_file, "-out", pem_file]
         if nomacver:
             command.append("-nomacver")
 
