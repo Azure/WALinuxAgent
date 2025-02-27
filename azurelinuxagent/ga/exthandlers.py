@@ -512,7 +512,10 @@ class ExtHandlersHandler(object):
         policy_error = None
         try:
             gs_history = self.protocol.get_goal_state().history
-            policy_engine = ExtensionPolicyEngine(gs_history)
+            policy_file = conf.get_policy_file_path()
+            if gs_history is not None and os.path.isfile(policy_file):
+                gs_history.save_file(policy_file)
+            policy_engine = ExtensionPolicyEngine()
         except Exception as ex:
             policy_error = ex
 
@@ -774,24 +777,6 @@ class ExtHandlersHandler(object):
         self.__disallowed_ext_handlers.append(ext_handler_i.ext_handler)
 
         ext_handler_i.set_handler_status(status=ExtHandlerStatusValue.not_ready, message=message, code=error_code)
-
-        # If extension is reporting heartbeat, overwrite the heartbeat file with error message.
-        heartbeat_file = os.path.join(conf.get_lib_dir(), ext_handler_i.get_heartbeat_file())
-        if os.path.isfile(heartbeat_file):
-            heartbeat = [
-                {
-                    "version": 1.0,
-                    "heartbeat": {
-                        "status": "notready",
-                        "code": error_code,
-                        "formattedMessage": {
-                            "lang": "en-US",
-                            "message": message
-                        }
-                    }
-                }
-            ]
-            fileutil.write_file(heartbeat_file, json.dumps(heartbeat))
 
         # Only report extension status for install errors of extensions with settings. Disable/uninstall errors are
         # reported at the handler status level only.
@@ -1108,14 +1093,25 @@ class ExtHandlersHandler(object):
 
             # Since we require reading the Manifest for reading the heartbeat, this would fail if HandlerManifest not found.
             # Only try to read heartbeat if HandlerState != NotInstalled.
+            # If extension is disallowed, concatenate the heartbeat message to the existing handler status message, and
+            # do not override handler error code or status with heartbeat.
             if handler_state != ExtHandlerState.NotInstalled:
-                # Heartbeat is a handler level thing only, so we dont need to modify this
+                # Heartbeat is a handler level thing only, so we don't need to modify this
                 try:
                     heartbeat = ext_handler_i.collect_heartbeat()
                     if heartbeat is not None:
-                        handler_status.status = heartbeat.get('status')
+                        if not ext_disallowed:
+                            handler_status.status = heartbeat.get('status')
+
                         if 'formattedMessage' in heartbeat:
-                            handler_status.message = parse_formatted_message(heartbeat.get('formattedMessage'))
+                            heartbeat_message = parse_formatted_message(heartbeat.get('formattedMessage'))
+                            if ext_disallowed:
+                                handler_status.message += " Extension was previously enabled and reported the following heartbeat:\n{0}".format(heartbeat_message)
+                            else:
+                                handler_status.message = heartbeat_message
+
+
+
                 except ExtensionError as e:
                     ext_handler_i.set_handler_status(message=ustr(e), code=e.code)
 

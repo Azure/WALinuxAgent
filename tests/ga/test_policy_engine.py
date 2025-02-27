@@ -15,19 +15,13 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-import glob
 import json
 import os
 
-from azurelinuxagent.common import conf
-from azurelinuxagent.common.protocol.goal_state import GoalState
-from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, InvalidPolicyError, \
     _PolicyEngine, _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY, _DEFAULT_SIGNATURE_REQUIRED
 from tests.lib.tools import AgentTestCase
 from tests.lib.tools import patch
-from tests.lib.mock_wire_protocol import mock_wire_protocol
-from tests.lib import wire_protocol_data
 
 
 TEST_EXTENSION_NAME = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
@@ -310,32 +304,6 @@ class TestPolicyEngine(_TestPolicyBase):
             }}
         ]
         self._run_test_cases_should_fail_to_parse(cases, "unrecognized attribute in policy")
-
-    def test_should_save_policy_file_to_history_directory(self):
-        # Create policy file
-        policy_file_name = "waagent_policy.json"
-        policy = {
-            "policyVersion": "0.1.0"
-        }
-        self._create_policy_file(policy)
-
-        # Policy file should be written to history folder when _PolicyEngine is initialized (when policy file is read).
-        # Initialize _PolicyEngine with a mock history object, and assert that policy file is copied to history folder.
-        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
-            protocol.mock_wire_data.set_incarnation(999)
-            protocol.mock_wire_data.set_etag(888)
-            goal_state = GoalState(protocol.client, save_to_history=True)
-            _ = _PolicyEngine(goal_state.history)
-
-            # Assert that policy file was copied to history folder.
-            root_dir = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME)
-            matches = glob.glob(os.path.join(root_dir, "*_999-888"))
-            self.assertTrue(len(matches) == 1)
-            history_dir = matches[0]
-            file_path = os.path.join(history_dir, policy_file_name)
-            self.assertTrue(os.path.exists(file_path), "Policy file was not copied to history folder")
-            with open(file_path, mode='r') as f:
-                self.assertEqual(policy, json.load(f))
 
 
 class TestExtensionPolicyEngine(_TestPolicyBase):
