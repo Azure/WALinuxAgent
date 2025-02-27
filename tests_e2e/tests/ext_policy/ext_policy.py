@@ -366,7 +366,8 @@ class ExtPolicy(AgentVmTest):
                     }
                 }
             self._create_policy_file(policy)
-            self._operation_should_succeed("enable", azure_security)
+            if VmExtensionIds.AzureSecurityLinuxAgent.supports_distro(distro):
+                self._operation_should_succeed("enable", azure_security)
             self._operation_should_succeed("enable", custom_script)
 
             # This policy tests the following scenarios:
@@ -390,7 +391,8 @@ class ExtPolicy(AgentVmTest):
                     }
                 }
             self._create_policy_file(policy)
-            self._operation_should_fail("enable", azure_security)
+            if VmExtensionIds.AzureSecurityLinuxAgent.supports_distro(distro):
+                self._operation_should_fail("enable", azure_security)
             # Because this request marks CSE for deletion, the next operation must be a delete retry (enable will fail).
             self._operation_should_fail("delete", custom_script)
 
