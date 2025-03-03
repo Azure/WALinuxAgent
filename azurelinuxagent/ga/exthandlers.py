@@ -512,10 +512,10 @@ class ExtHandlersHandler(object):
         policy_error = None
         try:
             gs_history = self.protocol.get_goal_state().history
-            policy_file = conf.get_policy_file_path()
-            if gs_history is not None and os.path.isfile(policy_file):
-                gs_history.save_file(policy_file)
             policy_engine = ExtensionPolicyEngine()
+            if policy_engine is not None and policy_engine.policy_file_contents is not None and gs_history is not None:
+                gs_history.save(policy_engine.policy_file_contents, "waagent_policy.json")
+
         except Exception as ex:
             policy_error = ex
 
@@ -1100,17 +1100,19 @@ class ExtHandlersHandler(object):
                 try:
                     heartbeat = ext_handler_i.collect_heartbeat()
                     if heartbeat is not None:
-                        if not ext_disallowed:
+                        if ext_disallowed:
+                            pass  # The status already specifies that the extension is disallowed ('NotReady')
+                        else:
                             handler_status.status = heartbeat.get('status')
 
                         if 'formattedMessage' in heartbeat:
                             heartbeat_message = parse_formatted_message(heartbeat.get('formattedMessage'))
-                            if ext_disallowed:
+                            # If extension is disallowed, the agent should set the handler status message on behalf of the
+                            # extension, handler_status.message should not be None.
+                            if ext_disallowed and handler_status.message is not None:
                                 handler_status.message += " Extension was previously enabled and reported the following heartbeat:\n{0}".format(heartbeat_message)
                             else:
                                 handler_status.message = heartbeat_message
-
-
 
                 except ExtensionError as e:
                     ext_handler_i.set_handler_status(message=ustr(e), code=e.code)

@@ -83,7 +83,6 @@ _HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
 _REMOTE_ACCESS_FILE_NAME = "RemoteAccess.xml"
 _EXT_CONF_FILE_NAME = "ExtensionsConfig.xml"
 _MANIFEST_FILE_NAME = "{0}.manifest.xml"
-_POLICY_FILE_NAME = "waagent_policy.json"
 
 AGENT_STATUS_FILE = "waagent_status.json"
 SHARED_CONF_FILE_NAME = "SharedConfig.xml"
@@ -311,10 +310,4 @@ class GoalStateHistory(object):
     def save_manifest(self, name, text):
         self.save(text, _MANIFEST_FILE_NAME.format(name))
 
-    def save_file(self, path):
-        """
-        Save contents of the specified file to the history folder. Output file will have the same name as the original file.
-        """
-        text = fileutil.read_file(path)
-        file_name = os.path.basename(path)
-        self.save(text, file_name)
+
