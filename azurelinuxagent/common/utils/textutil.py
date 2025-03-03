@@ -17,11 +17,8 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import base64
-import crypt
 import hashlib
-import random
 import re
-import string
 import struct
 import sys
 import traceback
@@ -287,16 +284,6 @@ def remove_bom(c):
     return c
 
 
-def gen_password_hash(password, crypt_id, salt_len):
-    collection = string.ascii_letters + string.digits
-    salt = ''.join(random.choice(collection) for _ in range(salt_len))
-    salt = "${0}${1}".format(crypt_id, salt)
-    if sys.version_info[0] == 2:
-        # if python 2.*, encode to type 'str' to prevent Unicode Encode Error from crypt.crypt
-        password = password.encode('utf-8')
-    return crypt.crypt(password, salt)
-
-
 def get_bytes_from_pem(pem_str):
     base64_bytes = ""
     for line in pem_str.split('\n'):
@@ -445,7 +432,7 @@ def format_exception(exception):
     if tb is None or (sys.version_info[0] == 2 and e != exception):
         msg += "[Traceback not available]"
     else:
-        msg += ''.join(traceback.format_exception(etype=type(exception), value=exception, tb=tb))
+        msg += ''.join(traceback.format_exception(type(exception), value=exception, tb=tb))
 
     return msg
 

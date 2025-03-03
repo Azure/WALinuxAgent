@@ -21,6 +21,7 @@ from azurelinuxagent.common.osutil.bigip import BigIpOSUtil
 from azurelinuxagent.common.osutil.clearlinux import ClearLinuxUtil
 from azurelinuxagent.common.osutil.coreos import CoreOSUtil
 from azurelinuxagent.common.osutil.debian import DebianOSBaseUtil, DebianOSModernUtil
+from azurelinuxagent.common.osutil.devuan import DevuanOSUtil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.osutil.factory import _get_osutil
 from azurelinuxagent.common.osutil.freebsd import FreeBSDOSUtil
@@ -33,7 +34,7 @@ from azurelinuxagent.common.osutil.redhat import RedhatOSUtil, Redhat6xOSUtil
 from azurelinuxagent.common.osutil.suse import SUSEOSUtil, SUSE11OSUtil
 from azurelinuxagent.common.osutil.ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, \
     UbuntuSnappyOSUtil, Ubuntu16OSUtil, Ubuntu18OSUtil
-from tests.tools import AgentTestCase, patch
+from tests.lib.tools import AgentTestCase, patch
 
 
 class TestOsUtilFactory(AgentTestCase):
@@ -93,6 +94,13 @@ class TestOsUtilFactory(AgentTestCase):
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="focal",
                           distro_version="20.04",
+                          distro_full_name="")
+        self.assertTrue(isinstance(ret, Ubuntu18OSUtil))
+        self.assertEqual(ret.get_service_name(), "walinuxagent")
+
+        ret = _get_osutil(distro_name="ubuntu",
+                          distro_code_name="noble",
+                          distro_version="24.04",
                           distro_full_name="")
         self.assertTrue(isinstance(ret, Ubuntu18OSUtil))
         self.assertEqual(ret.get_service_name(), "walinuxagent")
@@ -186,6 +194,14 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_version="8")
         self.assertTrue(isinstance(ret, DebianOSModernUtil))
         self.assertEqual(ret.get_service_name(), "walinuxagent")
+
+    def test_get_osutil_it_should_return_devuan(self):
+        ret = _get_osutil(distro_name="devuan",
+                          distro_code_name="",
+                          distro_full_name="",
+                          distro_version="4")
+        self.assertTrue(isinstance(ret, DevuanOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_redhat(self):
         ret = _get_osutil(distro_name="redhat",

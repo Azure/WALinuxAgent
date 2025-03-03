@@ -23,19 +23,24 @@ Module agent
 
 from __future__ import print_function
 
+import json
 import os
 import re
 import subprocess
 import sys
 import threading
-from azurelinuxagent.common import cgroupconfigurator, logcollector
-from azurelinuxagent.common.cgroupapi import SystemdCgroupsApi
+
+from azurelinuxagent.common.exception import CGroupsException
+from azurelinuxagent.ga import logcollector, cgroupconfigurator
+from azurelinuxagent.ga.cgroupcontroller import AGENT_LOG_COLLECTOR
+from azurelinuxagent.ga.cpucontroller import _CpuController
+from azurelinuxagent.ga.cgroupapi import get_cgroup_api, log_cgroup_warning, InvalidCgroupMountpointException
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
+from azurelinuxagent.ga.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -45,7 +50,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, AGENT
     PY_VERSION_MAJOR, PY_VERSION_MINOR, \
     PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION, \
     get_daemon_version, set_daemon_version
-from azurelinuxagent.ga.collect_logs import CollectLogsHandler
+from azurelinuxagent.ga.collect_logs import CollectLogsHandler, get_log_collector_monitor_handler
 from azurelinuxagent.pa.provision.default import ProvisionHandler
 
 
@@ -104,7 +109,7 @@ class Agent(object):
             if os.path.isfile(ext_log_dir):
                 raise Exception("{0} is a file".format(ext_log_dir))
             if not os.path.isdir(ext_log_dir):
-                fileutil.mkdir(ext_log_dir, mode=0o755, owner="root")
+                fileutil.mkdir(ext_log_dir, mode=0o755, owner=self.osutil.get_root_username())
         except Exception as e:
             logger.error(
                 "Exception occurred while creating extension "
@@ -130,7 +135,7 @@ class Agent(object):
         """
         set_daemon_version(AGENT_VERSION)
         logger.set_prefix("Daemon")
-        threading.current_thread().setName("Daemon")
+        threading.current_thread().name = "Daemon"
         child_args = None \
             if self.conf_file_path is None \
                 else "-configuration-path:{0}".format(self.conf_file_path)
@@ -170,7 +175,7 @@ class Agent(object):
         Run the update and extension handler
         """
         logger.set_prefix("ExtHandler")
-        threading.current_thread().setName("ExtHandler")
+        threading.current_thread().name = "ExtHandler"
 
         #
         # Agents < 2.2.53 used to echo the log to the console. Since the extension handler could have been started by
@@ -196,36 +201,73 @@ class Agent(object):
             print("{0} = {1}".format(k, configuration[k]))
 
     def collect_logs(self, is_full_mode):
+        logger.set_prefix("LogCollector")
+
         if is_full_mode:
-            print("Running log collector mode full")
+            logger.info("Running log collector mode full")
         else:
-            print("Running log collector mode normal")
+            logger.info("Running log collector mode normal")
 
         # Check the cgroups unit
-        if CollectLogsHandler.should_validate_cgroups():
-            cpu_cgroup_path, memory_cgroup_path = SystemdCgroupsApi.get_process_cgroup_relative_paths("self")
+        log_collector_monitor = None
+        tracked_controllers = []
+        if CollectLogsHandler.is_enabled_monitor_cgroups_check():
+            try:
+                cgroup_api = get_cgroup_api()
+            except InvalidCgroupMountpointException as e:
+                log_cgroup_warning("The agent does not support cgroups if the default systemd mountpoint is not being used: {0}".format(ustr(e)), send_event=True)
+                sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
+            except CGroupsException as e:
+                log_cgroup_warning("Unable to determine which cgroup version to use: {0}".format(ustr(e)), send_event=True)
+                sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
-            cpu_slice_matches = (cgroupconfigurator.LOGCOLLECTOR_SLICE in cpu_cgroup_path)
-            memory_slice_matches = (cgroupconfigurator.LOGCOLLECTOR_SLICE in memory_cgroup_path)
+            log_collector_cgroup = cgroup_api.get_process_cgroup(process_id="self", cgroup_name=AGENT_LOG_COLLECTOR)
+            tracked_controllers = log_collector_cgroup.get_controllers()
 
-            if not cpu_slice_matches or not memory_slice_matches:
-                print("The Log Collector process is not in the proper cgroups:")
-                if not cpu_slice_matches:
-                    print("\tunexpected cpu slice")
-                if not memory_slice_matches:
-                    print("\tunexpected memory slice")
+            if len(tracked_controllers) != len(log_collector_cgroup.get_supported_controller_names()):
+                log_cgroup_warning("At least one required controller is missing. The following controllers are required for the log collector to run: {0}".format(log_collector_cgroup.get_supported_controller_names()))
+                sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
+            if not log_collector_cgroup.check_in_expected_slice(cgroupconfigurator.LOGCOLLECTOR_SLICE):
+                log_cgroup_warning("The Log Collector process is not in the proper cgroups", send_event=False)
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
         try:
             log_collector = LogCollector(is_full_mode)
-            archive = log_collector.collect_logs_and_get_archive()
-            print("Log collection successfully completed. Archive can be found at {0} "
+            # Running log collector resource monitoring only if agent starts the log collector.
+            # If Log collector start by any other means, then it will not be monitored.
+            if CollectLogsHandler.is_enabled_monitor_cgroups_check():
+                for controller in tracked_controllers:
+                    if isinstance(controller, _CpuController):
+                        controller.initialize_cpu_usage()
+                        break
+                log_collector_monitor = get_log_collector_monitor_handler(tracked_controllers)
+                log_collector_monitor.run()
+
+            archive, total_uncompressed_size = log_collector.collect_logs_and_get_archive()
+            logger.info("Log collection successfully completed. Archive can be found at {0} "
                   "and detailed log output can be found at {1}".format(archive, OUTPUT_RESULTS_FILE_PATH))
+
+            if log_collector_monitor is not None:
+                log_collector_monitor.stop()
+                try:
+                    metrics_summary = log_collector_monitor.get_max_recorded_metrics()
+                    metrics_summary['Total Uncompressed File Size (B)'] = total_uncompressed_size
+                    msg = json.dumps(metrics_summary)
+                    logger.info(msg)
+                    event.add_event(op=event.WALAEventOperation.LogCollection, message=msg, log_event=False)
+                except Exception as e:
+                    msg = "An error occurred while reporting log collector resource usage summary: {0}".format(ustr(e))
+                    logger.warn(msg)
+                    event.add_event(op=event.WALAEventOperation.LogCollection, is_success=False, message=msg, log_event=False)
+
         except Exception as e:
-            print("Log collection completed unsuccessfully. Error: {0}".format(ustr(e)))
-            print("Detailed log output can be found at {0}".format(OUTPUT_RESULTS_FILE_PATH))
+            logger.error("Log collection completed unsuccessfully. Error: {0}".format(ustr(e)))
+            logger.info("Detailed log output can be found at {0}".format(OUTPUT_RESULTS_FILE_PATH))
             sys.exit(1)
+        finally:
+            if log_collector_monitor is not None:
+                log_collector_monitor.stop()
 
     @staticmethod
     def setup_firewall(firewall_metadata):
@@ -305,7 +347,7 @@ def parse_args(sys_args):
         if arg == "":
             # Don't parse an empty parameter
             continue
-        m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", arg)  # pylint: disable=W1401
+        m = re.match(r"^(?:[-/]*)configuration-path:([\w/\.\-_]+)", arg)
         if not m is None:
             conf_file_path = m.group(1)
             if not os.path.exists(conf_file_path):

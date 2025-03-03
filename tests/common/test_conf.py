@@ -19,7 +19,7 @@ import os.path
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.utils import fileutil
-from tests.tools import AgentTestCase, data_dir
+from tests.lib.tools import AgentTestCase, data_dir
 
 
 class TestConf(AgentTestCase):
@@ -27,6 +27,8 @@ class TestConf(AgentTestCase):
     # -- These values *MUST* match those from data/test_waagent.conf
     EXPECTED_CONFIGURATION = {
         "Extensions.Enabled": True,
+        "Extensions.WaitForCloudInit": False,
+        "Extensions.WaitForCloudInitTimeout": 3600,
         "Provisioning.Agent": "auto",
         "Provisioning.DeleteRootPassword": True,
         "Provisioning.RegenerateSshHostKeyPair": True,
@@ -63,6 +65,7 @@ class TestConf(AgentTestCase):
         "OS.CheckRdmaDriver": False,
         "AutoUpdate.Enabled": True,
         "AutoUpdate.GAFamily": "Prod",
+        "AutoUpdate.UpdateToLatestVersion": True,
         "EnableOverProvisioning": True,
         "OS.AllowHTTP": False,
         "OS.EnableFirewall": False
@@ -144,3 +147,56 @@ class TestConf(AgentTestCase):
 
     def test_get_extensions_enabled(self):
         self.assertTrue(conf.get_extensions_enabled(self.conf))
+
+    def test_get_get_auto_update_to_latest_version(self):
+        # update flags not set
+        self.assertTrue(conf.get_auto_update_to_latest_version(self.conf))
+
+        config = conf.ConfigurationProvider()
+        # AutoUpdate.Enabled is set to 'n'
+        conf.load_conf_from_file(
+                os.path.join(data_dir, "config/waagent_auto_update_disabled.conf"),
+                config)
+        self.assertFalse(conf.get_auto_update_to_latest_version(config), "AutoUpdate.UpdateToLatestVersion should be 'n'")
+
+        # AutoUpdate.Enabled is set to 'y'
+        conf.load_conf_from_file(
+                os.path.join(data_dir, "config/waagent_auto_update_enabled.conf"),
+                config)
+        self.assertTrue(conf.get_auto_update_to_latest_version(config), "AutoUpdate.UpdateToLatestVersion should be 'y'")
+
+        # AutoUpdate.UpdateToLatestVersion is set to 'n'
+        conf.load_conf_from_file(
+                os.path.join(data_dir, "config/waagent_update_to_latest_version_disabled.conf"),
+                config)
+        self.assertFalse(conf.get_auto_update_to_latest_version(config), "AutoUpdate.UpdateToLatestVersion should be 'n'")
+
+        # AutoUpdate.UpdateToLatestVersion is set to 'y'
+        conf.load_conf_from_file(
+                os.path.join(data_dir, "config/waagent_update_to_latest_version_enabled.conf"),
+                config)
+        self.assertTrue(conf.get_auto_update_to_latest_version(config), "AutoUpdate.UpdateToLatestVersion should be 'y'")
+
+        # AutoUpdate.Enabled is set to 'y' and AutoUpdate.UpdateToLatestVersion is set to 'n'
+        conf.load_conf_from_file(
+                os.path.join(data_dir, "config/waagent_auto_update_enabled_update_to_latest_version_disabled.conf"),
+                config)
+        self.assertFalse(conf.get_auto_update_to_latest_version(config), "AutoUpdate.UpdateToLatestVersion should be 'n'")
+
+        # AutoUpdate.Enabled is set to 'n' and AutoUpdate.UpdateToLatestVersion is set to 'y'
+        conf.load_conf_from_file(
+                os.path.join(data_dir, "config/waagent_auto_update_disabled_update_to_latest_version_enabled.conf"),
+                config)
+        self.assertTrue(conf.get_auto_update_to_latest_version(config), "AutoUpdate.UpdateToLatestVersion should be 'y'")
+
+        # AutoUpdate.Enabled is set to 'n' and AutoUpdate.UpdateToLatestVersion is set to 'n'
+        conf.load_conf_from_file(
+                os.path.join(data_dir, "config/waagent_auto_update_disabled_update_to_latest_version_disabled.conf"),
+                config)
+        self.assertFalse(conf.get_auto_update_to_latest_version(config), "AutoUpdate.UpdateToLatestVersion should be 'n'")
+
+        # AutoUpdate.Enabled is set to 'y' and AutoUpdate.UpdateToLatestVersion is set to 'y'
+        conf.load_conf_from_file(
+                os.path.join(data_dir, "config/waagent_auto_update_enabled_update_to_latest_version_enabled.conf"),
+                config)
+        self.assertTrue(conf.get_auto_update_to_latest_version(config), "AutoUpdate.UpdateToLatestVersion should be 'y'")

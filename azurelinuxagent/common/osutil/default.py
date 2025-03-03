@@ -16,6 +16,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import array
 import base64
 import datetime
 import errno
@@ -26,23 +27,33 @@ import multiprocessing
 import os
 import platform
 import pwd
+import random
 import re
 import shutil
 import socket
+import string
 import struct
 import sys
 import time
 from pwd import getpwall
 
-import array
-
-import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
-
 from azurelinuxagent.common.exception import OSUtilError
+# 'crypt' was removed in Python 3.13; use legacycrypt instead
+if sys.version_info[0] == 3 and sys.version_info[1] >= 13 or sys.version_info[0] > 3:
+    try:
+        from legacycrypt import crypt
+    except ImportError:
+        def crypt(password, salt):
+            raise OSUtilError("Please install the legacycrypt Python module to use this feature.")
+else:
+    from crypt import crypt  # pylint: disable=deprecated-module
+
+from azurelinuxagent.common import conf
+from azurelinuxagent.common import logger
+from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils import textutil
+
 from azurelinuxagent.common.future import ustr, array_to_bytes
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -58,7 +69,7 @@ for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
 
-_IPTABLES_VERSION_PATTERN = re.compile("^[^\d\.]*([\d\.]+).*$")  # pylint: disable=W1401
+_IPTABLES_VERSION_PATTERN = re.compile(r"^[^\d\.]*([\d\.]+).*$")
 _IPTABLES_LOCKING_VERSION = FlexibleVersion('1.4.21')
 
 
@@ -106,8 +117,9 @@ def get_firewall_delete_conntrack_drop_command(wait, destination):
                       "--ctstate", "INVALID,NEW", "-j", "DROP"])
 
 
-PACKET_PATTERN = "^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"  # pylint: disable=W1401
+PACKET_PATTERN = r"^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"
 ALL_CPUS_REGEX = re.compile('^cpu .*')
+ALL_MEMS_REGEX = re.compile('^Mem.*')
 
 _enable_firewall = True
 
@@ -122,7 +134,7 @@ IOCTL_SIOCGIFFLAGS = 0x8913
 IOCTL_SIOCGIFHWADDR = 0x8927
 IFNAMSIZ = 16
 
-IP_COMMAND_OUTPUT = re.compile('^\d+:\s+(\w+):\s+(.*)$')  # pylint: disable=W1401
+IP_COMMAND_OUTPUT = re.compile(r'^\d+:\s+(\w+):\s+(.*)$')
 
 STORAGE_DEVICE_PATH = '/sys/bus/vmbus/devices/'
 GEN2_DEVICE_ID = 'f8b3781a-1e82-4818-a1c3-63d806ec15bb'
@@ -147,6 +159,14 @@ class DefaultOSUtil(object):
     @staticmethod
     def get_agent_bin_path():
         return "/usr/sbin"
+
+    @staticmethod
+    def get_vm_arch():
+        try:
+            return platform.machine()
+        except Exception as e:
+            logger.warn("Unable to determine cpu architecture: {0}", ustr(e))
+            return "unknown"
 
     def get_firewall_dropped_packets(self, dst_ip=None):
         # If a previous attempt failed, do not retry
@@ -257,16 +277,16 @@ class DefaultOSUtil(object):
 
     def enable_firewall(self, dst_ip, uid):
         """
-        It checks if every iptable rule exists and add them if not present. It returns a tuple(enable firewall success status, update rules flag)
+        It checks if every iptable rule exists and add them if not present. It returns a tuple(enable firewall success status, missing rules array)
         enable firewall success status: Returns True if every firewall rule exists otherwise False
-        update rules flag: Returns True if rules are updated otherwise False
+        missing rules: array with names of the missing rules ("ACCEPT DNS", "ACCEPT", "DROP")
         """
-        # This is to send telemetry when iptable rules updated
-        is_firewall_rules_updated = False
         # If a previous attempt failed, do not retry
         global _enable_firewall  # pylint: disable=W0603
         if not _enable_firewall:
-            return False, is_firewall_rules_updated
+            return False, []
+
+        missing_rules = []
 
         try:
             wait = self.get_firewall_will_wait()
@@ -274,10 +294,10 @@ class DefaultOSUtil(object):
             # check every iptable rule and delete others if any rule is missing
             #   and append every iptable rule to the end of the chain.
             try:
-                if not AddFirewallRules.verify_iptables_rules_exist(wait, dst_ip, uid):
+                missing_rules.extend(AddFirewallRules.get_missing_iptables_rules(wait, dst_ip, uid))
+                if len(missing_rules) > 0:
                     self.remove_firewall(dst_ip, uid, wait)
                     AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
-                    is_firewall_rules_updated = True
             except CommandError as e:
                 if e.returncode == 2:
                     self.remove_firewall(dst_ip, uid, wait)
@@ -288,14 +308,14 @@ class DefaultOSUtil(object):
                 logger.warn(ustr(error))
                 raise
 
-            return True, is_firewall_rules_updated
+            return True, missing_rules
 
         except Exception as e:
             _enable_firewall = False
             logger.info("Unable to establish firewall -- "
                         "no further attempts will be made: "
                         "{0}".format(ustr(e)))
-            return False, is_firewall_rules_updated
+            return False, missing_rules
 
     def get_firewall_list(self, wait=None):
         try:
@@ -373,6 +393,9 @@ class DefaultOSUtil(object):
         except KeyError:
             return None
 
+    def get_root_username(self):
+        return "root"
+
     def is_sys_user(self, username):
         """
         Check whether use is a system user. 
@@ -421,10 +444,20 @@ class DefaultOSUtil(object):
         if self.is_sys_user(username):
             raise OSUtilError(("User {0} is a system user, "
                                "will not set password.").format(username))
-        passwd_hash = textutil.gen_password_hash(password, crypt_id, salt_len)
+        passwd_hash = DefaultOSUtil.gen_password_hash(password, crypt_id, salt_len)
 
         self._run_command_raising_OSUtilError(["usermod", "-p", passwd_hash, username],
                                               err_msg="Failed to set password for {0}".format(username))
+
+    @staticmethod
+    def gen_password_hash(password, crypt_id, salt_len):
+        collection = string.ascii_letters + string.digits
+        salt = ''.join(random.choice(collection) for _ in range(salt_len))
+        salt = "${0}${1}".format(crypt_id, salt)
+        if sys.version_info[0] == 2:
+            # if python 2.*, encode to type 'str' to prevent Unicode Encode Error from crypt.crypt
+            password = password.encode('utf-8')
+        return crypt(password, salt)
 
     def get_users(self):
         return getpwall()
@@ -1126,7 +1159,7 @@ class DefaultOSUtil(object):
         Add specified route 
         """
         try:
-            cmd = ["ip", "route", "add", net, "via", gateway]
+            cmd = ["ip", "route", "add", str(net), "via", gateway]
             return shellutil.run_command(cmd)
         except CommandError:
             return ""
@@ -1136,9 +1169,12 @@ class DefaultOSUtil(object):
         return [int(n) for n in text.split()]
 
     @staticmethod
-    def _get_dhcp_pid(command):
+    def _get_dhcp_pid(command, transform_command_output=None):
         try:
-            return DefaultOSUtil._text_to_pid_list(shellutil.run_command(command))
+            output = shellutil.run_command(command)
+            if transform_command_output is not None:
+                output = transform_command_output(output)
+            return DefaultOSUtil._text_to_pid_list(output)
         except CommandError as exception:  # pylint: disable=W0612
             return []
 
@@ -1175,11 +1211,20 @@ class DefaultOSUtil(object):
             else:
                 logger.warn("exceeded restart retries")
 
-    def publish_hostname(self, hostname):
+    def check_and_recover_nic_state(self, ifname):
+        # TODO: This should be implemented for all distros where we reset the network during publishing hostname. Currently it is only implemented in RedhatOSUtil.
+        pass
+
+    def publish_hostname(self, hostname, recover_nic=False):
+        """
+        Publishes the provided hostname.
+        """
         self.set_dhcp_hostname(hostname)
         self.set_hostname_record(hostname)
         ifname = self.get_if_name()
         self.restart_if(ifname)
+        if recover_nic:
+            self.check_and_recover_nic_state(ifname)
 
     def set_scsi_disks_timeout(self, timeout):
         for dev in os.listdir("/sys/block"):
@@ -1410,6 +1455,27 @@ class DefaultOSUtil(object):
                         int(i) for i in line.split()[1:8])  # see "man proc" for a description of these fields
                     break
         return system_cpu
+
+    @staticmethod
+    def get_used_and_available_system_memory():
+        """
+        Get the contents of free -b in bytes.
+        # free -b
+        #              total        used        free      shared  buff/cache   available
+        # Mem:     8340144128   619352064  5236809728     1499136  2483982336  7426314240
+        # Swap:             0           0           0
+
+        :return: used and available memory in megabytes
+        """
+        used_mem = available_mem = 0
+        free_cmd = ["free", "-b"]
+        memory = shellutil.run_command(free_cmd)
+        for line in memory.split("\n"):
+            if ALL_MEMS_REGEX.match(line):
+                mems = line.split()
+                used_mem = int(mems[2])
+                available_mem = int(mems[6])  # see "man free" for a description of these fields
+        return used_mem/(1024 ** 2), available_mem/(1024 ** 2)
 
     def get_nic_state(self, as_string=False):
         """

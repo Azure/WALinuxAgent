@@ -8,95 +8,175 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-legacy-python-versions:
-    
-    name: "Python 2.6 Unit Tests"
-    runs-on: ubuntu-18.04
+  test-python-2_6-and-3_4-versions:
 
-    strategy:
-      fail-fast: false
-    env:
-      NOSEOPTS: "--verbose"
-
-    steps:
-
-    - name: Install Python 2.6
-      run: |
-        curl https://dcrdata.blob.core.windows.net/python/python-2.6.tar.bz2 -o python-2.6.tar.bz2
-        sudo tar xjvf python-2.6.tar.bz2 --directory /
-
-    - uses: actions/checkout@v2
-
-    - name: Test with nosetests
-      run: |
-        source /home/waagent/virtualenv/python2.6.9/bin/activate
-        ./ci/nosetests.sh
-        exit $?
-
-  test-current-python-versions:
-    
     strategy:
       fail-fast: false
       matrix:
         include:
+          - python-version: "2.6"
+          - python-version: "3.4"
 
-          - python-version: 2.7
-            PYLINTOPTS: "--rcfile=ci/2.7.pylintrc"
-
-          - python-version: 3.4
-            PYLINTOPTS: "--rcfile=ci/2.7.pylintrc"
-
-          - python-version: 3.6
-            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
-
-          - python-version: 3.7
-            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
-            
-          - python-version: 3.8
-            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
-
-          - python-version: 3.9
-            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
-            additional-nose-opts: "--with-coverage --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
-    
     name: "Python ${{ matrix.python-version }} Unit Tests"
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
+    container:
+      image: ubuntu:16.04
+      volumes:
+        - /home/waagent:/home/waagent
+    defaults:
+      run:
+        shell: bash -l {0}
 
     env:
-      PYLINTOPTS: ${{ matrix.PYLINTOPTS }}
-      PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests"
-      NOSEOPTS: "--with-timer ${{ matrix.additional-nose-opts }}"
-      PYTHON_VERSION: ${{ matrix.python-version }}
+      NOSEOPTS: "--verbose"
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+    
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Python ${{ matrix.python-version }}
+      run: |
+        apt-get update
+        apt-get install -y curl bzip2 sudo python3
+        curl https://dcrdata.blob.core.windows.net/python/python-${{ matrix.python-version }}.tar.bz2 -o python-${{ matrix.python-version }}.tar.bz2
+        sudo tar xjvf python-${{ matrix.python-version }}.tar.bz2 --directory /
+
+    - name: Test with nosetests
+      run: |
+        if [[ ${{ matrix.python-version }} == "2.6" ]]; then
+          source /home/waagent/virtualenv/python2.6.9/bin/activate
+        else
+          source /home/waagent/virtualenv/python3.4.8/bin/activate
+        fi
+        ./ci/nosetests.sh
+        exit $?
+
+  test-python-2_7:
+
+    strategy:
+      fail-fast: false
+
+    name: "Python 2.7 Unit Tests"
+    runs-on: ubuntu-20.04
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    env:
+      NOSEOPTS: "--verbose"
 
     steps:
-    
+    - uses: actions/checkout@v3
+
+    - name: Install Python 2.7
+      run: |
+        apt-get update
+        apt-get install -y curl bzip2 sudo
+        curl https://dcrdata.blob.core.windows.net/python/python-2.7.tar.bz2 -o python-2.7.tar.bz2
+        sudo tar xjvf python-2.7.tar.bz2 --directory /
+
+    - name: Test with nosetests
+      run: |
+        source /home/waagent/virtualenv/python2.7.16/bin/activate
+        ./ci/nosetests.sh
+        exit $?
+
+  test-current-python-versions:
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python-version: "3.5"
+            # workaround found in https://github.com/actions/setup-python/issues/866
+            # for issue "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:728)" on Python 3.5
+            pip_trusted_host: "pypi.python.org pypi.org files.pythonhosted.org"
+          - python-version: "3.6"
+          - python-version: "3.7"
+          - python-version: "3.8"
+          - python-version: "3.9"
+            additional-nose-opts: "--with-coverage --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
+          - python-version: "3.10"
+          - python-version: "3.11"
+
+    name: "Python ${{ matrix.python-version }} Unit Tests"
+    runs-on: ubuntu-20.04
+
+    env:
+      NOSEOPTS: "--with-timer ${{ matrix.additional-nose-opts }}"
+
+    steps:
+
     - name: Checkout WALinuxAgent repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Setup Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
-    
+      env:
+        PIP_TRUSTED_HOST: ${{ matrix.pip_trusted_host }}
+
     - name: Install dependencies
       id: install-dependencies
       run: |
         sudo env "PATH=$PATH" python -m pip install --upgrade pip
         sudo env "PATH=$PATH" pip install -r requirements.txt
         sudo env "PATH=$PATH" pip install -r test-requirements.txt
+        sudo env "PATH=$PATH" pip install --upgrade pylint
 
     - name: Run pylint
       run: |
-        pylint $PYLINTOPTS --jobs=0 $PYLINTFILES
+        #
+        # List of files/directories to be checked by pylint.
+        # The end-to-end tests run only on Python 3.9 and we lint them only on that version.
+        #
+        PYLINT_FILES="azurelinuxagent setup.py makepkg.py tests"
+        if [[ "${{ matrix.python-version }}" == "3.9" ]]; then
+          PYLINT_FILES="$PYLINT_FILES tests_e2e"
+        fi
 
-    - name: Test with nosetests
+        #
+        # Command-line options for pylint.
+        # * "unused-private-member" is not implemented on 3.5 and will produce "E0012: Bad option value 'unused-private-member' (bad-option-value)"
+        #   so we suppress "bad-option-value".
+        # * 3.9 will produce "no-member" for several properties/methods that are added to the mocks used by the unit tests (e.g
+        #   "E1101: Instance of 'WireProtocol' has no 'aggregate_status' member") so we suppress that warning.
+        # * On 3.9 pylint crashes when parsing azurelinuxagent/daemon/main.py (see https://github.com/pylint-dev/pylint/issues/9473), so we ignore it.
+        # * 'no-self-use' ("R0201: Method could be a function") was moved to an optional extension on 3.8 and is no longer used by default. It needs
+        #    to be suppressed for previous versions (3.0-3.7), though.
+        # * 'contextmanager-generator-missing-cleanup' are false positives if yield is used inside an if-else block for contextmanager generator functions.
+        #   (https://pylint.readthedocs.io/en/latest/user_guide/messages/warning/contextmanager-generator-missing-cleanup.html). 
+        #   This is not implemented on versions (3.0-3.7) Bad option value 'contextmanager-generator-missing-cleanup' (bad-option-value)
+        # * 3.9-3.11 will produce "too-many-positional-arguments" for several methods that are having more than 5 args, so we suppress that warning.
+        #  (R0917: Too many positional arguments (8/5) (too-many-positional-arguments))
+        PYLINT_OPTIONS="--rcfile=ci/pylintrc --jobs=0"
+        if [[ "${{ matrix.python-version }}" == "3.9" ]]; then
+          PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-member,too-many-positional-arguments --ignore=main.py"
+        fi
+        if [[ "${{ matrix.python-version }}" =~ ^3\.(10|11)$ ]]; then
+          PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=too-many-positional-arguments"
+        fi
+        if [[ "${{ matrix.python-version }}" =~ ^3\.[0-7]$ ]]; then
+          PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-self-use,bad-option-value"
+        fi
+
+        echo "PYLINT_OPTIONS: $PYLINT_OPTIONS"
+        echo "PYLINT_FILES: $PYLINT_FILES"
+
+        pylint $PYLINT_OPTIONS $PYLINT_FILES
+
+    - name: Execute Unit Tests
       if: success() || (failure() && steps.install-dependencies.outcome == 'success')
       run: |
-        ./ci/nosetests.sh
-        exit $?
+        if [[ "${{ matrix.python-version }}" =~ ^3\.[1-9][0-9]+$ ]]; then
+          ./ci/pytest.sh
+        else
+          ./ci/nosetests.sh
+        fi
 
     - name: Compile Coverage
-      if: matrix.python-version == 3.9
+      if: matrix.python-version == '3.9'
       run: |
         echo looking for coverage files :
         ls -alh | grep -i coverage
@@ -105,7 +185,7 @@ jobs:
         sudo env "PATH=$PATH" coverage report
 
     - name: Upload Coverage
-      if: matrix.python-version == 3.9
-      uses: codecov/codecov-action@v1
+      if: matrix.python-version ==  '3.9'
+      uses: codecov/codecov-action@v3
       with:
         file: ./coverage.xml

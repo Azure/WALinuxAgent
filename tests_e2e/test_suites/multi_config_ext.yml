@@ -1,0 +1,12 @@
+#
+# Multi-config extensions are no longer supported but there are still customers running RCv2 and we don't want to break
+# them. This test suite is used to verify that the agent processes RCv2 (a multi-config extension) as expected.
+#
+name: "MultiConfigExt"
+tests:
+  - "multi_config_ext/multi_config_ext.py"
+images:
+  - "endorsed"
+# TODO: This test has been failing due to issues in the RC2 extension on AzureCloud. Re-enable once the extension has been fixed.
+skip_on_clouds:
+  - "AzureCloud"

@@ -19,7 +19,7 @@ import datetime
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil, shellutil
 from azurelinuxagent.ga.env import MonitorDhcpClientRestart
-from tests.tools import AgentTestCase, patch
+from tests.lib.tools import AgentTestCase, patch
 
 
 class MonitorDhcpClientRestartTestCase(AgentTestCase):

@@ -20,6 +20,7 @@ from __future__ import print_function
 
 import json
 import os
+import platform
 import re
 import shutil
 import threading
@@ -31,20 +32,21 @@ from mock import MagicMock
 from azurelinuxagent.common.utils import textutil, fileutil
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
-from azurelinuxagent.common.event import add_event, add_periodic, add_log_event, elapsed_milliseconds, report_metric, \
+from azurelinuxagent.common.event import add_event, add_periodic, add_log_event, elapsed_milliseconds, \
     WALAEventOperation, parse_xml_event, parse_json_event, AGENT_EVENT_FILE_EXTENSION, EVENTS_DIRECTORY, \
-    TELEMETRY_EVENT_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID, TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID
+    TELEMETRY_EVENT_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID, TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID, \
+    report_metric
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.telemetryevent import CommonTelemetryEventSchema, GuestAgentGenericLogsSchema, \
     GuestAgentExtensionEventsSchema, GuestAgentPerfCounterEventsSchema
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
 from azurelinuxagent.ga.collect_telemetry_events import _CollectAndEnqueueEvents
-from tests.protocol import mockwiredata
-from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
-from tests.tools import AgentTestCase, data_dir, load_data, patch, skip_if_predicate_true
-from tests.utils.event_logger_tools import EventLoggerTools
+from tests.lib import wire_protocol_data
+from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
+from tests.lib.http_request_predicates import HttpRequestPredicates
+from tests.lib.tools import AgentTestCase, data_dir, load_data, patch, skip_if_predicate_true, is_python_version_26_or_34
+from tests.lib.event_logger_tools import EventLoggerTools
 
 
 class TestEvent(HttpRequestPredicates, AgentTestCase):
@@ -58,7 +60,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
         self.event_dir = os.path.join(self.tmp_dir, EVENTS_DIRECTORY)
         EventLoggerTools.initialize_event_logger(self.event_dir)
-        threading.current_thread().setName("TestEventThread")
+        threading.current_thread().name = "TestEventThread"
         osutil = get_osutil()
 
         self.expected_common_parameters = {
@@ -68,8 +70,8 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             CommonTelemetryEventSchema.ContainerId: AgentGlobals.get_container_id(),
             CommonTelemetryEventSchema.EventTid: threading.current_thread().ident,
             CommonTelemetryEventSchema.EventPid: os.getpid(),
-            CommonTelemetryEventSchema.TaskName: threading.current_thread().getName(),
-            CommonTelemetryEventSchema.KeywordName: '',
+            CommonTelemetryEventSchema.TaskName: threading.current_thread().name,
+            CommonTelemetryEventSchema.KeywordName: json.dumps({"CpuArchitecture": platform.machine()}),
             # common parameters computed from the OS platform
             CommonTelemetryEventSchema.OSVersion: EventLoggerTools.get_expected_os_version(),
             CommonTelemetryEventSchema.ExecutionMode: AGENT_EXECUTION_MODE,
@@ -154,18 +156,18 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
             self.fail("Could not find Contained ID on event")
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             contained_id = create_event_and_return_container_id()
             # The expect value comes from DATA_FILE
             self.assertEqual(contained_id, 'c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2', "Incorrect container ID")
 
             protocol.mock_wire_data.set_container_id('AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE')
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
             contained_id = create_event_and_return_container_id()
             self.assertEqual(contained_id, 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE', "Incorrect container ID")
 
             protocol.mock_wire_data.set_container_id('11111111-2222-3333-4444-555555555555')
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
             contained_id = create_event_and_return_container_id()
             self.assertEqual(contained_id, '11111111-2222-3333-4444-555555555555', "Incorrect container ID")
 
@@ -413,6 +415,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         self.assertEqual(len(event_list), 1)
         self.assertEqual(TestEvent._get_event_message(event_list[0]), u'World\u05e2\u05d9\u05d5\u05ea \u05d0\u05d7\u05e8\u05d5\u05ea\u0906\u091c')
 
+    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4, they run on containers where the OS commands needed by the test are not present.")
     def test_collect_events_should_ignore_invalid_event_files(self):
         self._create_test_event_file("custom_script_1.tld")  # a valid event
         self._create_test_event_file("custom_script_utf-16.tld")
@@ -785,7 +788,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             return None
         http_post_handler.request_body = None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE, http_post_handler=http_post_handler) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_post_handler=http_post_handler) as protocol:
             event_file_path = self._create_test_event_file("event_with_callstack.waagent.tld")
             expected_message = get_event_message_from_event_file(event_file_path)
 
@@ -805,7 +808,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             return None
         http_post_handler.request_body = None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE, http_post_handler=http_post_handler) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_post_handler=http_post_handler) as protocol:
             test_messages = [
                 'Non-English message -  此文字不是英文的',
                 "Ξεσκεπάζω τὴν ψυχοφθόρα βδελυγμία",

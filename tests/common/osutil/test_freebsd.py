@@ -20,7 +20,7 @@ import unittest
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.osutil.freebsd import FreeBSDOSUtil
 from azurelinuxagent.common.utils import textutil
-from tests.tools import AgentTestCase, patch
+from tests.lib.tools import AgentTestCase, patch
 from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
 
 

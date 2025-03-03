@@ -70,7 +70,7 @@ class PeriodicOperation(object):
         Takes a list of operations, finds the operation that should be executed next (that with the closest next_run_time)
         and sleeps until it is time to execute that operation.
         """
-        next_operation_time = min([op.next_run_time() for op in operations])
+        next_operation_time = min(op.next_run_time() for op in operations)
 
         sleep_timedelta = next_operation_time - datetime.datetime.utcnow()
         # timedelta.total_seconds() is not available on Python 2.6, do the computation manually

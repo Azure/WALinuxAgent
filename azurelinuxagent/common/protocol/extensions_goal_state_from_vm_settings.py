@@ -20,11 +20,12 @@ import json
 import re
 import sys
 
+from azurelinuxagent.common import logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
+from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common.future import ustr
-import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel, VmSettingsParseError
-from azurelinuxagent.common.protocol.restapi import VMAgentManifest, Extension, ExtensionRequestedState, ExtensionSettings
+from azurelinuxagent.common.protocol.restapi import VMAgentFamily, Extension, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 
@@ -48,7 +49,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         self._status_upload_blob_type = None
         self._required_features = []
         self._on_hold = False
-        self._agent_manifests = []
+        self._agent_families = []
         self._extensions = []
 
         try:
@@ -134,8 +135,8 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         return self._on_hold
 
     @property
-    def agent_manifests(self):
-        return self._agent_manifests
+    def agent_families(self):
+        return self._agent_families
 
     @property
     def extensions(self):
@@ -242,6 +243,8 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #         {
         #             "name": "Prod",
         #             "version": "9.9.9.9",
+        #             "isVersionFromRSM": true,
+        #             "isVMEnabledForRSMUpgrades": true,
         #             "uris": [
         #                 "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml",
         #                 "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml"
@@ -266,13 +269,18 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         for family in families:
             name = family["name"]
             version = family.get("version")
+            is_version_from_rsm = family.get("isVersionFromRSM")
+            is_vm_enabled_for_rsm_upgrades = family.get("isVMEnabledForRSMUpgrades")
             uris = family.get("uris")
             if uris is None:
                 uris = []
-            manifest = VMAgentManifest(name, version)
+            agent_family = VMAgentFamily(name)
+            agent_family.version = version
+            agent_family.is_version_from_rsm = is_version_from_rsm
+            agent_family.is_vm_enabled_for_rsm_upgrades = is_vm_enabled_for_rsm_upgrades
             for u in uris:
-                manifest.uris.append(u)
-            self._agent_manifests.append(manifest)
+                agent_family.uris.append(u)
+            self._agent_families.append(agent_family)
 
     def _parse_extensions(self, vm_settings):
         # Sample (NOTE: The first sample is single-config, the second multi-config):
@@ -291,7 +299,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #             "settingsSeqNo": 0,
         #             "settings": [
         #                 {
-        #                     "protectedSettingsCertThumbprint": "4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3",
+        #                     "protectedSettingsCertThumbprint": "BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F",
         #                     "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEFpB/HKM/7evRk+DBz754wUwDQYJKoZIhvcNAQEBBQAEggEADPJwniDeIUXzxNrZCloitFdscQ59Bz1dj9DLBREAiM8jmxM0LLicTJDUv272Qm/4ZQgdqpFYBFjGab/9MX+Ih2x47FkVY1woBkckMaC/QOFv84gbboeQCmJYZC/rZJdh8rCMS+CEPq3uH1PVrvtSdZ9uxnaJ+E4exTPPviIiLIPtqWafNlzdbBt8HZjYaVw+SSe+CGzD2pAQeNttq3Rt/6NjCzrjG8ufKwvRoqnrInMs4x6nnN5/xvobKIBSv4/726usfk8Ug+9Q6Benvfpmre2+1M5PnGTfq78cO3o6mI3cPoBUjp5M0iJjAMGeMt81tyHkimZrEZm6pLa4NQMOEjArBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECC5nVaiJaWt+gAhgeYvxUOYHXw==",
         #                     "publicSettings": "{\"GCS_AUTO_CONFIG\":true}"
         #                 }
@@ -492,11 +500,28 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             length = len(depends_on)
             if length > 1:
                 raise Exception('dependsOn should be an array with exactly one item for single-config extensions ({0}) (got {1})'.format(extension.name, depends_on))
-            elif length == 0:
+            if length == 0:
                 logger.warn('dependsOn is an empty array for extension {0}; setting the dependency level to 0'.format(extension.name))
-                extension.settings[0].dependencyLevel = 0
+                dependency_level = 0
             else:
-                extension.settings[0].dependencyLevel = depends_on[0]['dependencyLevel']
+                dependency_level = depends_on[0]['dependencyLevel']
+                depends_on_extension = depends_on[0].get('dependsOnExtension')
+                if depends_on_extension is None:
+                    # TODO: Consider removing this check and its telemetry after a few releases if we do not receive any telemetry indicating
+                    #       that dependsOnExtension is actually missing from the vmSettings
+                    message = 'Missing dependsOnExtension on extension {0}'.format(extension.name)
+                    logger.warn(message)
+                    add_event(WALAEventOperation.ProvisionAfterExtensions, message=message, is_success=False, log_event=False)
+                else:
+                    message = '{0} depends on {1}'.format(extension.name, depends_on_extension)
+                    logger.info(message)
+                    add_event(WALAEventOperation.ProvisionAfterExtensions, message=message, is_success=True, log_event=False)
+            if len(extension.settings) == 0:
+                message = 'Extension {0} does not have any settings. Will ignore dependency (dependency level: {1})'.format(extension.name, dependency_level)
+                logger.warn(message)
+                add_event(WALAEventOperation.ProvisionAfterExtensions, message=message, is_success=False, log_event=False)
+            else:
+                extension.settings[0].dependencyLevel = dependency_level
         else:
             # multi-config
             settings_by_name = {}

@@ -17,7 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 import datetime
 
-import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common import logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.utils import textutil
@@ -126,7 +126,7 @@ class ExtensionsGoalState(object):
         raise NotImplementedError()
 
     @property
-    def agent_manifests(self):
+    def agent_families(self):
         raise NotImplementedError()
 
     @property
@@ -233,7 +233,7 @@ class EmptyExtensionsGoalState(ExtensionsGoalState):
         return False
 
     @property
-    def agent_manifests(self):
+    def agent_families(self):
         return []
 
     @property

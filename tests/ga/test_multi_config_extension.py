@@ -13,12 +13,12 @@ from azurelinuxagent.common.protocol.restapi import ExtensionRequestedState, Ext
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, ExtensionStatusValue, ExtCommandEnvVariable, \
     GoalStateStatus, ExtHandlerInstance
-from tests.ga.extension_emulator import enable_invocations, extension_emulator, ExtensionCommandNames, Actions, \
+from tests.lib.extension_emulator import enable_invocations, extension_emulator, ExtensionCommandNames, Actions, \
     extract_extension_info_from_command
-from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
-from tests.protocol.mockwiredata import DATA_FILE, WireProtocolData
-from tests.tools import AgentTestCase, mock_sleep, patch
+from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
+from tests.lib.http_request_predicates import HttpRequestPredicates
+from tests.lib.wire_protocol_data import DATA_FILE, WireProtocolData
+from tests.lib.tools import AgentTestCase, mock_sleep, patch
 
 
 class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
@@ -41,7 +41,7 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
             self.version = version
             self.state = state
             self.is_invalid_setting = False
-            self.settings = dict()
+            self.settings = {}
 
     class _TestExtensionObject:
         def __init__(self, name, seq_no, dependency_level="0", state="enabled"):
@@ -94,12 +94,11 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
     def test_it_should_parse_multi_config_settings_properly(self):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, "ext_conf_with_multi_config.xml")
 
-        rc_extensions = dict()
-        rc_extensions["firstRunCommand"] = self._TestExtensionObject(name="firstRunCommand", seq_no=2)
-        rc_extensions["secondRunCommand"] = self._TestExtensionObject(name="secondRunCommand", seq_no=2,
-                                                                      dependency_level="3")
-        rc_extensions["thirdRunCommand"] = self._TestExtensionObject(name="thirdRunCommand", seq_no=1,
-                                                                     dependency_level="4")
+        rc_extensions = {
+            "firstRunCommand": self._TestExtensionObject(name="firstRunCommand", seq_no=2),
+            "secondRunCommand": self._TestExtensionObject(name="secondRunCommand", seq_no=2, dependency_level="3"),
+            "thirdRunCommand": self._TestExtensionObject(name="thirdRunCommand", seq_no=1, dependency_level="4")
+        }
 
         vmaccess_extensions = {
             "Microsoft.Compute.VMAccessAgent": self._TestExtensionObject(name="Microsoft.Compute.VMAccessAgent",
@@ -115,12 +114,11 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
                                                   "ext_conf_with_disabled_multi_config.xml")
 
-        rc_extensions = dict()
-        rc_extensions["firstRunCommand"] = self._TestExtensionObject(name="firstRunCommand", seq_no=3)
-        rc_extensions["secondRunCommand"] = self._TestExtensionObject(name="secondRunCommand", seq_no=3,
-                                                                      dependency_level="1")
-        rc_extensions["thirdRunCommand"] = self._TestExtensionObject(name="thirdRunCommand", seq_no=1,
-                                                                     dependency_level="4", state="disabled")
+        rc_extensions = {
+            "firstRunCommand": self._TestExtensionObject(name="firstRunCommand", seq_no=3),
+            "secondRunCommand": self._TestExtensionObject(name="secondRunCommand", seq_no=3, dependency_level="1"),
+            "thirdRunCommand": self._TestExtensionObject(name="thirdRunCommand", seq_no=1, dependency_level="4", state="disabled")
+        }
 
         vmaccess_extensions = {
             "Microsoft.Compute.VMAccessAgent": self._TestExtensionObject(name="Microsoft.Compute.VMAccessAgent",
@@ -253,7 +251,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, 'ext_conf_mc_disabled_extensions.xml')
         protocol.mock_wire_data = WireProtocolData(self.test_data)
         protocol.mock_wire_data.set_incarnation(2)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
 
@@ -286,7 +284,8 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         third_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.thirdExtension")
         fourth_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension")
 
-        with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
+        # In _setup_test_env() contextmanager, yield is used inside an if-else block and that's creating a false positive pylint warning
+        with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):  # pylint: disable=contextmanager-generator-missing-cleanup
             with enable_invocations(first_ext, second_ext, third_ext, fourth_ext) as invocation_record:
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
@@ -319,7 +318,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             # Case 3: Uninstall Multi-config handler (with enabled extensions) and single config extension
             protocol.mock_wire_data.set_incarnation(3)
             protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
             self.assertEqual(0, len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
@@ -333,7 +332,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             failing_version = "19.12.1221"
             protocol.mock_wire_data.set_extensions_config_version(failing_version)
             protocol.mock_wire_data.set_incarnation(2)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
             self.assertEqual(no_of_extensions,
@@ -411,7 +410,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, 'ext_conf_mc_update_extensions.xml')
             protocol.mock_wire_data = WireProtocolData(self.test_data)
             protocol.mock_wire_data.set_incarnation(2)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
 
             new_version = "1.1.0"
             new_first_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.firstExtension",
@@ -460,7 +459,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, 'ext_conf_mc_update_extensions.xml')
             protocol.mock_wire_data = WireProtocolData(self.test_data)
             protocol.mock_wire_data.set_incarnation(2)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
 
             new_version = "1.1.0"
             _, fail_action = Actions.generate_unique_fail()
@@ -529,7 +528,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, 'ext_conf_mc_update_extensions.xml')
             protocol.mock_wire_data = WireProtocolData(self.test_data)
             protocol.mock_wire_data.set_incarnation(2)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
 
             new_version = "1.1.0"
             fail_code, fail_action = Actions.generate_unique_fail()
@@ -655,7 +654,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, 'ext_conf_mc_disabled_extensions.xml')
             protocol.mock_wire_data = WireProtocolData(self.test_data)
             protocol.mock_wire_data.set_incarnation(2)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
 
             ext_handler.run()
             ext_handler.report_ext_handlers_status()
@@ -761,7 +760,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
                                                   "ext_conf_multi_config_no_dependencies.xml")
         with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
-            with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+            with patch('azurelinuxagent.ga.cgroupapi.subprocess.Popen', side_effect=mock_popen):
                 # Case 1: Check normal scenario - Install/Enable
                 mc_handlers, sc_handler = self.__run_and_assert_generic_case(exthandlers_handler, protocol,
                                                                              no_of_extensions)
@@ -781,7 +780,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                           'ext_conf_mc_update_extensions.xml')
                 protocol.mock_wire_data = WireProtocolData(self.test_data)
                 protocol.mock_wire_data.set_incarnation(2)
-                protocol.update_goal_state()
+                protocol.client.update_goal_state()
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
 
@@ -924,7 +923,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
                                                   "ext_conf_multi_config_no_dependencies.xml")
         with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
-            with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+            with patch('azurelinuxagent.ga.cgroupapi.subprocess.Popen', side_effect=mock_popen):
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
                 self.assertEqual(no_of_extensions,
@@ -961,7 +960,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             self.test_data['ext_conf'] = "wire/ext_conf_required_features.xml"
             protocol.mock_wire_data = WireProtocolData(self.test_data)
             protocol.mock_wire_data.set_incarnation(2)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
             # Assert the extension status is the same as we reported for Incarnation 1.
             self.__run_and_assert_generic_case(exthandlers_handler, protocol, no_of_extensions=4, with_message=False)
 
@@ -1021,7 +1020,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         with self.__setup_generic_test_env() as (exthandlers_handler, protocol, old_exts):
 
             protocol.mock_wire_data.set_incarnation(2)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
 
             # Mock manifest to not support multiple extensions
             with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.supports_multiple_extensions', return_value=False):
@@ -1072,7 +1071,8 @@ class TestMultiConfigExtensionSequencing(_MultiConfigBaseTestClass):
         dependent_sc_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension")
         independent_sc_ext = extension_emulator(name="Microsoft.Azure.Geneva.GenevaMonitoring", version="1.1.0")
 
-        with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):
+        # In _setup_test_env() contextmanager, yield is used inside an if-else block and that's creating a false positive pylint warning
+        with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):  # pylint: disable=contextmanager-generator-missing-cleanup
             yield exthandlers_handler, protocol, no_of_extensions, first_ext, second_ext, third_ext, dependent_sc_ext, independent_sc_ext
 
     def test_it_should_process_dependency_chain_extensions_properly(self):
@@ -1209,7 +1209,7 @@ class TestMultiConfigExtensionSequencing(_MultiConfigBaseTestClass):
             return original_popen(cmd, *_, **kwargs)
 
         with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
-            with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+            with patch('azurelinuxagent.ga.cgroupapi.subprocess.Popen', side_effect=mock_popen):
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
 

@@ -7,8 +7,8 @@ import re
 import shutil
 import zipfile
 
-import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.conf as conf
+from azurelinuxagent.common import conf
+from azurelinuxagent.common import logger
 from azurelinuxagent.common.utils import fileutil, timeutil
 
 # pylint: disable=W0105
@@ -306,3 +306,6 @@ class GoalStateHistory(object):
 
     def save_shared_conf(self, text):
         self.save(text, SHARED_CONF_FILE_NAME)
+
+    def save_manifest(self, name, text):
+        self.save(text, _MANIFEST_FILE_NAME.format(name))

@@ -1,0 +1,9 @@
+#
+# This scenario validates the agent status is updated without any goal state changes
+#
+name: "AgentStatus"
+tests:
+  - "agent_status/agent_status.py"
+images:
+  - "endorsed"
+  - "endorsed-arm64"

@@ -16,7 +16,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+import datetime
 import re
 import os
 import socket
@@ -28,16 +28,16 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.event import add_periodic, WALAEventOperation, add_event
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.interfaces import ThreadHandlerInterface
+from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 CACHE_PATTERNS = [
-    re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),  # pylint: disable=W1401
-    re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),  # pylint: disable=W1401
-    re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)  # pylint: disable=W1401
+    re.compile(r"^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
+    re.compile(r"^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
+    re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
 ]
 
 MAXIMUM_CACHED_FILES = 50
@@ -104,6 +104,10 @@ class EnableFirewall(PeriodicOperation):
         self._osutil = osutil
         self._protocol = protocol
         self._try_remove_legacy_firewall_rule = False
+        self._is_first_setup = True
+        self._reset_count = 0
+        self._report_after = datetime.datetime.min
+        self._report_period = None  # None indicates "report immediately"
 
     def _operation(self):
         # If the rules ever change we must reset all rules and start over again.
@@ -117,13 +121,32 @@ class EnableFirewall(PeriodicOperation):
             self._osutil.remove_legacy_firewall_rule(dst_ip=self._protocol.get_endpoint())
             self._try_remove_legacy_firewall_rule = True
 
-        success, is_firewall_rules_updated = self._osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(),
-                                                                          uid=os.getuid())
+        success, missing_firewall_rules = self._osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
 
-        if is_firewall_rules_updated:
-            msg = "Successfully added Azure fabric firewall rules. Current Firewall rules:\n{0}".format(self._osutil.get_firewall_list())
-            logger.info(msg)
-            add_event(AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.Firewall, message=msg, log_event=False)
+        if len(missing_firewall_rules) > 0:
+            if self._is_first_setup:
+                msg = "Created firewall rules for the Azure Fabric:\n{0}".format(self._get_firewall_state())
+                logger.info(msg)
+                add_event(op=WALAEventOperation.Firewall, message=msg)
+            else:
+                self._reset_count += 1
+                # We report immediately (when period is None) the first 5 instances, then we switch the period to every few hours
+                if self._report_period is None:
+                    msg = "Some firewall rules were missing: {0}. Re-created all the rules:\n{1}".format(missing_firewall_rules, self._get_firewall_state())
+                    if self._reset_count >= 5:
+                        self._report_period = datetime.timedelta(hours=3)
+                        self._reset_count = 0
+                        self._report_after = datetime.datetime.now() + self._report_period
+                elif datetime.datetime.now() >= self._report_after:
+                    msg = "Some firewall rules were missing: {0}. This has happened {1} time(s) since the last report. Re-created all the rules:\n{2}".format(
+                        missing_firewall_rules, self._reset_count, self._get_firewall_state())
+                    self._reset_count = 0
+                    self._report_after = datetime.datetime.now() + self._report_period
+                else:
+                    msg = ""
+                if msg != "":
+                    logger.info(msg)
+                    add_event(op=WALAEventOperation.ResetFirewall, message=msg)
 
         add_periodic(
             logger.EVERY_HOUR,
@@ -132,6 +155,14 @@ class EnableFirewall(PeriodicOperation):
             op=WALAEventOperation.Firewall,
             is_success=success,
             log_event=False)
+
+        self._is_first_setup = False
+
+    def _get_firewall_state(self):
+        try:
+            return self._osutil.get_firewall_list()
+        except Exception as e:
+            return "Failed to get the firewall state: {0}".format(ustr(e))
 
 
 class LogFirewallRules(PeriodicOperation):
@@ -171,7 +202,11 @@ class MonitorHostNameChanges(PeriodicOperation):
                         self._hostname,
                         curr_hostname)
             self._osutil.set_hostname(curr_hostname)
-            self._osutil.publish_hostname(curr_hostname)
+            try:
+                self._osutil.publish_hostname(curr_hostname, recover_nic=True)
+            except Exception as e:
+                msg = "Error while publishing the hostname: {0}".format(e)
+                add_event(AGENT_NAME, op=WALAEventOperation.HostnamePublishing, is_success=False, message=msg, log_event=False)
             self._hostname = curr_hostname
 
 
@@ -209,8 +244,8 @@ class EnvHandler(ThreadHandlerInterface):
 
     def start(self):
         self.env_thread = threading.Thread(target=self.daemon)
-        self.env_thread.setDaemon(True)
-        self.env_thread.setName(self.get_thread_name())
+        self.env_thread.daemon = True
+        self.env_thread.name = self.get_thread_name()
         self.env_thread.start()
 
     def daemon(self):

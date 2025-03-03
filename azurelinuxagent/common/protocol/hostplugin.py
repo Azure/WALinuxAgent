@@ -20,6 +20,7 @@ import base64
 import datetime
 import json
 import os.path
+import threading
 import uuid
 
 from azurelinuxagent.common import logger, conf
@@ -55,6 +56,7 @@ _HEADER_VERSION = "x-ms-version"
 _HEADER_HOST_CONFIG_NAME = "x-ms-host-config-name"
 _HEADER_ARTIFACT_LOCATION = "x-ms-artifact-location"
 _HEADER_ARTIFACT_MANIFEST_LOCATION = "x-ms-artifact-manifest-location"
+_HEADER_VERIFY_FROM_ARTIFACTS_BLOB = "x-ms-verify-from-artifacts-blob"
 
 MAXIMUM_PAGEBLOB_PAGE_SIZE = 4 * 1024 * 1024  # Max page size: 4MB
 
@@ -183,19 +185,21 @@ class HostPluginProtocol(object):
 
         return url, headers
 
-    def get_artifact_request(self, artifact_url, artifact_manifest_url=None):
+    def get_artifact_request(self, artifact_url, use_verify_header, artifact_manifest_url=None):
         if not self.ensure_initialized():
             raise ProtocolError("HostGAPlugin: Host plugin channel is not available")
 
         if textutil.is_str_none_or_whitespace(artifact_url):
             raise ProtocolError("HostGAPlugin: No extension artifact url was provided")
 
-        url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint,
-                                                       HOST_PLUGIN_PORT)
-        headers = {_HEADER_VERSION: API_VERSION,
-                   _HEADER_CONTAINER_ID: self.container_id,
-                   _HEADER_HOST_CONFIG_NAME: self.role_config_name,
-                   _HEADER_ARTIFACT_LOCATION: artifact_url}
+        url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint, HOST_PLUGIN_PORT)
+        headers = {
+            _HEADER_VERSION: API_VERSION,
+               _HEADER_CONTAINER_ID: self.container_id,
+               _HEADER_HOST_CONFIG_NAME: self.role_config_name,
+               _HEADER_ARTIFACT_LOCATION: artifact_url}
+        if use_verify_header:
+            headers[_HEADER_VERIFY_FROM_ARTIFACTS_BLOB] = "true"
 
         if artifact_manifest_url is not None:
             headers[_HEADER_ARTIFACT_MANIFEST_LOCATION] = artifact_manifest_url
@@ -266,7 +270,8 @@ class HostPluginProtocol(object):
         response = restutil.http_put(url,
                                      data=content,
                                      headers=self._build_log_headers(),
-                                     redact_data=True)
+                                     redact_data=True,
+                                     timeout=30)
 
         if restutil.request_failed(response):
             error_response = restutil.read_response_error(response)
@@ -419,19 +424,24 @@ class HostPluginProtocol(object):
         # This file keeps the timestamp of the most recent goal state if it was retrieved via Fast Track
         return os.path.join(conf.get_lib_dir(), "fast_track.json")
 
+    # Multiple threads create instances of HostPluginProtocol; we use this lock to protect access to the state file for Fast Track
+    _fast_track_state_lock = threading.RLock()
+
     @staticmethod
     def _save_fast_track_state(timestamp):
         try:
-            with open(HostPluginProtocol._get_fast_track_state_file(), "w") as file_:
-                json.dump({"timestamp": timestamp}, file_)
+            with HostPluginProtocol._fast_track_state_lock:
+                with open(HostPluginProtocol._get_fast_track_state_file(), "w") as file_:
+                    json.dump({"timestamp": timestamp}, file_)
         except Exception as e:
             logger.warn("Error updating the Fast Track state ({0}): {1}", HostPluginProtocol._get_fast_track_state_file(), ustr(e))
 
     @staticmethod
     def clear_fast_track_state():
         try:
-            if os.path.exists(HostPluginProtocol._get_fast_track_state_file()):
-                os.remove(HostPluginProtocol._get_fast_track_state_file())
+            with HostPluginProtocol._fast_track_state_lock:
+                if os.path.exists(HostPluginProtocol._get_fast_track_state_file()):
+                    os.remove(HostPluginProtocol._get_fast_track_state_file())
         except Exception as e:
             logger.warn("Error clearing the current state for Fast Track ({0}): {1}", HostPluginProtocol._get_fast_track_state_file(),
                         ustr(e))
@@ -442,16 +452,17 @@ class HostPluginProtocol(object):
         Returns the timestamp of the most recent FastTrack goal state retrieved by fetch_vm_settings(), or None if the most recent
         goal state was Fabric or fetch_vm_settings() has not been invoked.
         """
-        if not os.path.exists(HostPluginProtocol._get_fast_track_state_file()):
-            return timeutil.create_timestamp(datetime.datetime.min)
+        with HostPluginProtocol._fast_track_state_lock:
+            if not os.path.exists(HostPluginProtocol._get_fast_track_state_file()):
+                return timeutil.create_timestamp(datetime.datetime.min)
 
-        try:
-            with open(HostPluginProtocol._get_fast_track_state_file(), "r") as file_:
-                return json.load(file_)["timestamp"]
-        except Exception as e:
-            logger.warn("Can't retrieve the timestamp for the most recent Fast Track goal state ({0}), will assume the current time. Error: {1}",
-                    HostPluginProtocol._get_fast_track_state_file(), ustr(e))
-        return timeutil.create_timestamp(datetime.datetime.utcnow())
+            try:
+                with open(HostPluginProtocol._get_fast_track_state_file(), "r") as file_:
+                    return json.load(file_)["timestamp"]
+            except Exception as e:
+                logger.warn("Can't retrieve the timestamp for the most recent Fast Track goal state ({0}), will assume the current time. Error: {1}",
+                        HostPluginProtocol._get_fast_track_state_file(), ustr(e))
+            return timeutil.create_timestamp(datetime.datetime.utcnow())
 
     def fetch_vm_settings(self, force_update=False):
         """
@@ -487,7 +498,7 @@ class HostPluginProtocol(object):
         try:
             # Raise if VmSettings are not supported, but check again periodically since the HostGAPlugin could have been updated since the last check
             # Note that self._host_plugin_supports_vm_settings can be None, so we need to compare against False
-            if self._supports_vm_settings == False and self._supports_vm_settings_next_check > datetime.datetime.now():
+            if not self._supports_vm_settings and self._supports_vm_settings_next_check > datetime.datetime.now():
                 # Raise VmSettingsNotSupported directly instead of using raise_not_supported() to avoid resetting the timestamp for the next check
                 raise VmSettingsNotSupported()
 
@@ -547,8 +558,8 @@ class HostPluginProtocol(object):
                 logger.info(message)
                 add_event(op=WALAEventOperation.HostPlugin, message=message, is_success=True)
 
-            # Don't support HostGAPlugin versions older than 124
-            if vm_settings.host_ga_plugin_version < FlexibleVersion("1.0.8.124"):
+            # Don't support HostGAPlugin versions older than 133
+            if vm_settings.host_ga_plugin_version < FlexibleVersion("1.0.8.133"):
                 raise_not_supported()
 
             self._supports_vm_settings = True
@@ -624,7 +635,7 @@ class _VmSettingsErrorReporter(object):
         self._error_count += 1
 
         if self._error_count <= _VmSettingsErrorReporter._MaxErrors:
-            add_event(op=WALAEventOperation.VmSettings, message="[{0}] {1}".format(category, error), is_success=False, log_event=False)
+            add_event(op=WALAEventOperation.VmSettings, message="[{0}] {1}".format(category, error), is_success=True, log_event=False)
 
         if category == _VmSettingsError.ClientError:
             self._client_error_count += 1
@@ -648,7 +659,7 @@ class _VmSettingsErrorReporter(object):
                 "failedRequests": self._request_failure_count
             }
             message = json.dumps(summary)
-            add_event(op=WALAEventOperation.VmSettingsSummary, message=message, is_success=False, log_event=False)
+            add_event(op=WALAEventOperation.VmSettingsSummary, message=message, is_success=True, log_event=False)
             if self._error_count > 0:
                 logger.info("[VmSettingsSummary] {0}", message)
 

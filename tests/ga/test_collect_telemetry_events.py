@@ -36,8 +36,8 @@ from azurelinuxagent.common.telemetryevent import GuestAgentGenericLogsSchema, \
     CommonTelemetryEventSchema
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.collect_telemetry_events import ExtensionEventSchema, _ProcessExtensionEvents
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
-from tests.tools import AgentTestCase, clear_singleton_instances, data_dir
+from tests.lib.http_request_predicates import HttpRequestPredicates
+from tests.lib.tools import AgentTestCase, clear_singleton_instances, data_dir
 
 
 class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
@@ -303,6 +303,16 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
         with self._create_extension_telemetry_processor() as extension_telemetry_processor:
             extensions_with_count = self._create_random_extension_events_dir_with_events(2, os.path.join(
                 self._TEST_DATA_DIR, "special_chars"))
+
+            extension_telemetry_processor.run()
+            telemetry_events = self._get_handlers_with_version(extension_telemetry_processor.event_list)
+
+            self._assert_handler_data_in_event_list(telemetry_events, extensions_with_count)
+
+    def test_it_should_parse_int_type_for_eventpid_or_eventtid_properly(self):
+        with self._create_extension_telemetry_processor() as extension_telemetry_processor:
+            extensions_with_count = self._create_random_extension_events_dir_with_events(2, os.path.join(
+                self._TEST_DATA_DIR, "int_type"))
 
             extension_telemetry_processor.run()
             telemetry_events = self._get_handlers_with_version(extension_telemetry_processor.event_list)

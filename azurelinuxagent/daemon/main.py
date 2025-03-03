@@ -28,8 +28,9 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.event import add_event, WALAEventOperation, initialize_event_logger_vminfo_common_parameters
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateProperties
 from azurelinuxagent.common.protocol.util import get_protocol_util
-from azurelinuxagent.common.rdma import setup_rdma_device
+from azurelinuxagent.pa.rdma.rdma import setup_rdma_device
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_NAME, \
     AGENT_VERSION, \
@@ -104,9 +105,8 @@ class DaemonHandler(object):
         agent_disabled_file_path = conf.get_disable_agent_file_path()
         if os.path.exists(agent_disabled_file_path):
             import threading
-            logger.warn("Disabling the guest agent by sleeping forever; "
-                        "to re-enable, remove {0} and restart"
-                        .format(agent_disabled_file_path))
+            logger.warn("Disabling the guest agent by sleeping forever; to re-enable, remove {0} and restart".format(agent_disabled_file_path))
+            logger.warn("To enable VM extensions, also ensure that the VM's osProfile.allowExtensionOperations property is set to true.")
             self.running = False
             disable_event = threading.Event()
             disable_event.wait()
@@ -160,9 +160,9 @@ class DaemonHandler(object):
                 #   current values.
                 protocol = self.protocol_util.get_protocol()
 
-                protocol.client.update_goal_state(force_update=True)
+                goal_state = GoalState(protocol.client, goal_state_properties=GoalStateProperties.SharedConfig)
 
-                setup_rdma_device(nd_version, protocol.client.get_shared_conf())
+                setup_rdma_device(nd_version, goal_state.shared_conf)
             except Exception as e:
                 logger.error("Error setting up rdma device: %s" % e)
         else:

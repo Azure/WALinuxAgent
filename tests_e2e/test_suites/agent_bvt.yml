@@ -1,0 +1,8 @@
+name: "AgentBvt"
+tests:
+  - "agent_bvt/extension_operations.py"
+  - "agent_bvt/run_command.py"
+  - "agent_bvt/vm_access.py"
+images:
+  - "endorsed"
+  - "endorsed-arm64"

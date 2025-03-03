@@ -17,7 +17,7 @@
 import datetime
 import time
 from azurelinuxagent.ga.monitor import PeriodicOperation
-from tests.tools import AgentTestCase, patch, PropertyMock
+from tests.lib.tools import AgentTestCase, patch, PropertyMock
 
 
 class TestPeriodicOperation(AgentTestCase):

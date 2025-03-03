@@ -1,0 +1,9 @@
+#
+# This test ensures that the agent does not throw any errors while trying to transmit events to wireserver. It does not
+# validate if the events actually make it to wireserver
+#
+name: "ExtTelemetryPipeline"
+tests:
+  - "agent_bvt/vm_access.py"
+  - "ext_telemetry_pipeline/ext_telemetry_pipeline.py"
+images: "random(endorsed)"

@@ -15,7 +15,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import json  # pylint: disable=unused-import
 import os
 import tempfile
 from datetime import datetime, timedelta
@@ -24,7 +23,7 @@ from azurelinuxagent.common.event import __event_logger__, add_log_event, MAX_NU
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils import fileutil
-from tests.tools import AgentTestCase, MagicMock, patch, skip_if_predicate_true
+from tests.lib.tools import AgentTestCase, MagicMock, patch, skip_if_predicate_true
 
 _MSG_INFO = "This is our test info logging message {0} {1}"
 _MSG_WARN = "This is our test warn logging message {0} {1}"
@@ -49,6 +48,7 @@ class TestLogger(AgentTestCase):
         AgentTestCase.tearDown(self)
         logger.reset_periodic()
         logger.DEFAULT_LOGGER.appenders *= 0
+        logger.set_prefix(None)
         fileutil.rm_dirs(self.event_dir)
 
     @patch('azurelinuxagent.common.logger.Logger.verbose')

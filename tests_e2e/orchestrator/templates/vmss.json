@@ -1,0 +1,253 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "username": {
+            "type": "string"
+        },
+        "sshPublicKey": {
+            "type": "string"
+        },
+        "vmName": {
+            "type": "string"
+        },
+        "scenarioPrefix": {
+            "type": "string",
+            "defaultValue": "e2e-test"
+        },
+        "publisher": {
+            "type": "string"
+        },
+        "offer": {
+            "type": "string"
+        },
+        "sku": {
+            "type": "string"
+        },
+        "version": {
+            "type": "string"
+        }
+    },
+    "variables": {
+        "nicName": "[concat(parameters('scenarioPrefix'),'Nic')]",
+        "vnetAddressPrefix": "10.130.0.0/16",
+        "subnetName": "[concat(parameters('scenarioPrefix'),'Subnet')]",
+        "subnetPrefix": "10.130.0.0/24",
+        "publicIPAddressName": "[concat(parameters('scenarioPrefix'),'PublicIp')]",
+        "lbIpName": "[concat(parameters('scenarioPrefix'),'PublicLbIp')]",
+        "virtualNetworkName": "[concat(parameters('scenarioPrefix'),'Vnet')]",
+        "lbName": "[concat(parameters('scenarioPrefix'),'lb')]",
+        "lbIpId": "[resourceId('Microsoft.Network/publicIPAddresses', variables('lbIpName'))]",
+        "bepoolName": "[concat(variables('lbName'), 'bepool')]",
+        "natpoolName": "[concat(variables('lbName'), 'natpool')]",
+        "feIpConfigName": "[concat(variables('lbName'), 'fepool', 'IpConfig')]",
+        "sshProbeName": "[concat(variables('lbName'), 'probe')]",
+        "vnetID": "[resourceId('Microsoft.Network/virtualNetworks',variables('virtualNetworkName'))]",
+        "subnetRef": "[concat(variables('vnetID'),'/subnets/',variables('subnetName'))]",
+        "lbId": "[resourceId('Microsoft.Network/loadBalancers', variables('lbName'))]",
+        "bepoolID": "[concat(variables('lbId'), '/backendAddressPools/', variables('bepoolName'))]",
+        "natpoolID": "[concat(variables('lbId'), '/inboundNatPools/', variables('natpoolName'))]",
+        "feIpConfigId": "[concat(variables('lbId'), '/frontendIPConfigurations/', variables('feIpConfigName'))]",
+        "sshProbeId": "[concat(variables('lbId'), '/probes/', variables('sshProbeName'))]",
+        "sshKeyPath": "[concat('/home/', parameters('username'), '/.ssh/authorized_keys')]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2023-06-01",
+            "type": "Microsoft.Network/virtualNetworks",
+            "name": "[variables('virtualNetworkName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('vnetAddressPrefix')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('subnetName')]",
+                        "properties": {
+                            "addressPrefix": "[variables('subnetPrefix')]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "name": "[variables('lbIpName')]",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2023-06-01",
+            "properties": {
+                "publicIPAllocationMethod": "Dynamic",
+                "dnsSettings": {
+                    "domainNameLabel": "[parameters('vmName')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/loadBalancers",
+            "name": "[variables('lbName')]",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2020-06-01",
+            "dependsOn": [
+                "[concat('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]",
+                "[concat('Microsoft.Network/publicIPAddresses/', variables('lbIpName'))]"
+            ],
+            "properties": {
+                "frontendIPConfigurations": [
+                    {
+                        "name": "[variables('feIpConfigName')]",
+                        "properties": {
+                            "PublicIpAddress": {
+                                "id": "[variables('lbIpId')]"
+                            }
+                        }
+                    }
+                ],
+                "backendAddressPools": [
+                    {
+                        "name": "[variables('bepoolName')]"
+                    }
+                ],
+                "inboundNatPools": [
+                    {
+                        "name": "[variables('natpoolName')]",
+                        "properties": {
+                            "FrontendIPConfiguration": {
+                                "Id": "[variables('feIpConfigId')]"
+                            },
+                            "BackendPort": 22,
+                            "Protocol": "tcp",
+                            "FrontendPortRangeStart": 3500,
+                            "FrontendPortRangeEnd": 4500
+                        }
+                    }
+                ],
+                "loadBalancingRules": [
+                    {
+                        "name": "ProbeRule",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('feIpConfigId')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[variables('bepoolID')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 80,
+                            "backendPort": 80,
+                            "idleTimeoutInMinutes": 5,
+                            "probe": {
+                                "id": "[variables('sshProbeId')]"
+                            }
+                        }
+                    }
+                ],
+                "probes": [
+                    {
+                        "name": "[variables('sshProbeName')]",
+                        "properties": {
+                            "protocol": "tcp",
+                            "port": 22,
+                            "intervalInSeconds": 5,
+                            "numberOfProbes": 2
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "apiVersion": "2023-03-01",
+            "type": "Microsoft.Compute/virtualMachineScaleSets",
+            "name": "[parameters('vmName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]",
+                "[concat('Microsoft.Network/loadBalancers/', variables('lbName'))]"
+            ],
+            "sku": {
+                "name": "Standard_D2s_v3",
+                "tier": "Standard",
+                "capacity": 3
+            },
+            "properties": {
+                "orchestrationMode": "Uniform",
+                "overprovision": false,
+                "virtualMachineProfile": {
+                    "extensionProfile": {
+                        "extensions": []
+                    },
+                    "osProfile": {
+                        "computerNamePrefix": "[parameters('vmName')]",
+                        "adminUsername": "[parameters('username')]",
+                        "linuxConfiguration": {
+                            "disablePasswordAuthentication": true,
+                            "ssh": {
+                                "publicKeys": [
+                                    {
+                                        "path": "[variables('sshKeyPath')]",
+                                        "keyData": "[parameters('sshPublicKey')]"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "storageProfile": {
+                        "osDisk": {
+                            "osType": "Linux",
+                            "createOption": "FromImage",
+                            "caching": "ReadWrite",
+                            "managedDisk": {
+                                "storageAccountType": "Premium_LRS"
+                            },
+                            "diskSizeGB": 64
+                        },
+                        "imageReference": {
+                            "publisher": "[parameters('publisher')]",
+                            "offer": "[parameters('offer')]",
+                            "sku": "[parameters('sku')]",
+                            "version": "[parameters('version')]"
+                        }
+                    },
+                    "diagnosticsProfile": {
+                        "bootDiagnostics": {
+                            "enabled": true
+                        }
+                    },
+                    "networkProfile": {
+                        "networkInterfaceConfigurations": [
+                            {
+                                "name": "[variables('nicName')]",
+                                "properties": {
+                                    "primary": true,
+                                    "ipConfigurations": [
+                                        {
+                                            "name": "ipconfig1",
+                                            "properties": {
+                                                "primary": true,
+                                                "publicIPAddressConfiguration": {
+                                                    "name": "[variables('publicIPAddressName')]",
+                                                    "properties": {
+                                                        "idleTimeoutInMinutes": 15
+                                                    }
+                                                },
+                                                "subnet": {
+                                                    "id": "[variables('subnetRef')]"
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                },
+                "upgradePolicy": {
+                    "mode": "Automatic"
+                },
+                "platformFaultDomainCount": 1
+            }
+        }
+    ]
+}

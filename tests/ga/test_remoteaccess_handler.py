@@ -22,9 +22,9 @@ from azurelinuxagent.common.protocol.goal_state import RemoteAccess
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.remoteaccess import RemoteAccessHandler
-from tests.tools import AgentTestCase, load_data, patch, clear_singleton_instances
-from tests.protocol.mocks import mock_wire_protocol
-from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_REMOTE_ACCESS
+from tests.lib.tools import AgentTestCase, load_data, patch, clear_singleton_instances
+from tests.lib.mock_wire_protocol import mock_wire_protocol
+from tests.lib.wire_protocol_data import DATA_FILE, DATA_FILE_REMOTE_ACCESS
 
 
 class MockOSUtil(DefaultOSUtil):
@@ -75,15 +75,14 @@ def mock_add_event(name, op, is_success, version, message):
 
 
 class TestRemoteAccessHandler(AgentTestCase):
-    eventing_data = [()]
+    eventing_data = ()
 
     def setUp(self):
         super(TestRemoteAccessHandler, self).setUp()
         # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not
         # reuse a previous state
         clear_singleton_instances(ProtocolUtil)
-        for data in TestRemoteAccessHandler.eventing_data:
-            del data
+        TestRemoteAccessHandler.eventing_data = ()
 
     # add_user tests
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")

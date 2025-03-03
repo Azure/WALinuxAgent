@@ -21,19 +21,21 @@ import random
 import string
 
 from azurelinuxagent.common import event, logger
-from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, MetricValue
-from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.ga.cgroupcontroller import MetricValue, _REPORT_EVERY_HOUR
+from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
+from azurelinuxagent.ga.cpucontroller import CpuControllerV1
+from azurelinuxagent.ga.memorycontroller import MemoryControllerV1
 from azurelinuxagent.ga.monitor import get_monitor_handler, PeriodicOperation, SendImdsHeartbeat, \
     ResetPeriodicLogMessages, SendHostPluginHeartbeat, PollResourceUsage, \
-    ReportNetworkErrors, ReportNetworkConfigurationChanges
-from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
-from tests.protocol.mockwiredata import DATA_FILE
-from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_instances
+    ReportNetworkErrors, ReportNetworkConfigurationChanges, PollSystemWideResourceUsage
+from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
+from tests.lib.http_request_predicates import HttpRequestPredicates
+from tests.lib.wire_protocol_data import DATA_FILE
+from tests.lib.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_instances
 
 
 def random_generator(size=6, chars=string.ascii_uppercase + string.digits + string.ascii_lowercase):
@@ -74,6 +76,7 @@ class MonitorHandlerTestCase(AgentTestCase):
 
                                 expected_operations = [
                                     PollResourceUsage.__name__,
+                                    PollSystemWideResourceUsage.__name__,
                                     ReportNetworkErrors.__name__,
                                     ResetPeriodicLogMessages.__name__,
                                     SendHostPluginHeartbeat.__name__,
@@ -187,7 +190,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         CGroupsTelemetry.reset()
         clear_singleton_instances(ProtocolUtil)
         protocol = WireProtocol('endpoint')
-        protocol.update_goal_state = MagicMock()
+        protocol.client.update_goal_state = MagicMock()
         self.get_protocol = patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=protocol)
         self.get_protocol.start()
 
@@ -197,22 +200,23 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.get_protocol.stop()
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
-    @patch('azurelinuxagent.common.event.EventLogger.add_event')
-    @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
-    def test_send_extension_metrics_telemetry(self, patch_poll_all_tracked, patch_add_event,  # pylint: disable=unused-argument
+    @patch("azurelinuxagent.ga.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
+    def test_send_extension_metrics_telemetry(self, patch_poll_all_tracked,  # pylint: disable=unused-argument
                                               patch_add_metric, *args):
-        patch_poll_all_tracked.return_value = [MetricValue("Process", "% Processor Time", 1, 1),
-                                               MetricValue("Memory", "Total Memory Usage", 1, 1),
-                                               MetricValue("Memory", "Max Memory Usage", 1, 1)]
+        patch_poll_all_tracked.return_value = [MetricValue("Process", "% Processor Time", "service", 1),
+                                               MetricValue("Memory", "Total Memory Usage", "service", 1),
+                                               MetricValue("Memory", "Max Memory Usage", "service", 1, _REPORT_EVERY_HOUR),
+                                               MetricValue("Memory", "Swap Memory Usage", "service", 1, _REPORT_EVERY_HOUR)
+                                               ]
 
         PollResourceUsage().run()
         self.assertEqual(1, patch_poll_all_tracked.call_count)
-        self.assertEqual(3, patch_add_metric.call_count)  # Three metrics being sent.
+        self.assertEqual(4, patch_add_metric.call_count)  # Four metrics being sent.
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
-    @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
+    @patch("azurelinuxagent.ga.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
     def test_send_extension_metrics_telemetry_for_empty_cgroup(self, patch_poll_all_tracked,  # pylint: disable=unused-argument
-                                                               patch_add_metric,*args):
+                                                               patch_add_metric, *args):
         patch_poll_all_tracked.return_value = []
 
         PollResourceUsage().run()
@@ -220,23 +224,23 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(0, patch_add_metric.call_count)
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
-    @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage")
+    @patch("azurelinuxagent.ga.memorycontroller.MemoryControllerV1.get_memory_usage")
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
     def test_send_extension_metrics_telemetry_handling_memory_cgroup_exceptions_errno2(self, patch_periodic_warn,  # pylint: disable=unused-argument
-                                                                                       patch_get_memory_usage,
+                                                                                       get_memory_usage,
                                                                                        patch_add_metric, *args):
         ioerror = IOError()
         ioerror.errno = 2
-        patch_get_memory_usage.side_effect = ioerror
+        get_memory_usage.side_effect = ioerror
 
-        CGroupsTelemetry._tracked["/test/path"] = MemoryCgroup("cgroup_name", "/test/path")
+        CGroupsTelemetry._tracked["/test/path"] = MemoryControllerV1("_cgroup_name", "/test/path")
 
         PollResourceUsage().run()
         self.assertEqual(0, patch_periodic_warn.call_count)
         self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
-    @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage")
+    @patch("azurelinuxagent.ga.cpucontroller.CpuControllerV1.get_cpu_usage")
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
     def test_send_extension_metrics_telemetry_handling_cpu_cgroup_exceptions_errno2(self, patch_periodic_warn,  # pylint: disable=unused-argument
                                                                                     patch_cpu_usage, patch_add_metric,
@@ -245,41 +249,30 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         ioerror.errno = 2
         patch_cpu_usage.side_effect = ioerror
 
-        CGroupsTelemetry._tracked["/test/path"]= CpuCgroup("cgroup_name", "/test/path")
+        CGroupsTelemetry._tracked["/test/path"] = CpuControllerV1("_cgroup_name", "/test/path")
 
         PollResourceUsage().run()
         self.assertEqual(0, patch_periodic_warn.call_count)
         self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
 
-    def test_generate_extension_metrics_telemetry_dictionary(self, *args):  # pylint: disable=unused-argument
-        num_polls = 10
-        num_extensions = 1
 
-        cpu_percent_values = [random.randint(0, 100) for _ in range(num_polls)]
+class TestPollSystemWideResourceUsage(AgentTestCase):
 
-        # only verifying calculations and not validity of the values.
-        memory_usage_values = [random.randint(0, 8 * 1024 ** 3) for _ in range(num_polls)]
-        max_memory_usage_values = [random.randint(0, 8 * 1024 ** 3) for _ in range(num_polls)]
+    @patch('azurelinuxagent.common.event.EventLogger.add_metric')
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_used_and_available_system_memory")
+    def test_send_system_memory_metrics(self, path_get_system_memory, patch_add_metric, *args): # pylint: disable=unused-argument
+        path_get_system_memory.return_value = (234.45, 123.45)
+        PollSystemWideResourceUsage().run()
 
-        # no need to initialize the CPU usage, since we mock get_cpu_usage() below
-        with patch("azurelinuxagent.common.cgroup.CpuCgroup.initialize_cpu_usage"):
-            for i in range(num_extensions):
-                dummy_cpu_cgroup = CpuCgroup("dummy_extension_{0}".format(i), "dummy_cpu_path_{0}".format(i))
-                CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
+        self.assertEqual(1, path_get_system_memory.call_count)
+        self.assertEqual(2, patch_add_metric.call_count)  # 2 metrics being sent.
 
-                dummy_memory_cgroup = MemoryCgroup("dummy_extension_{0}".format(i), "dummy_memory_path_{0}".format(i))
-                CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
+    @patch('azurelinuxagent.common.event.EventLogger.add_metric')
+    @patch("azurelinuxagent.ga.monitor.PollSystemWideResourceUsage.poll_system_memory_metrics")
+    def test_send_system_memory_metrics_empty(self, path_poll_system_memory_metrics, patch_add_metric, # pylint: disable=unused-argument
+                                        *args):
+        path_poll_system_memory_metrics.return_value = []
+        PollSystemWideResourceUsage().run()
 
-        self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))
-
-        with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_max_memory_usage") as patch_get_memory_max_usage:
-            with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage") as patch_get_memory_usage:
-                with patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage") as patch_get_cpu_usage:
-                    with patch("azurelinuxagent.common.cgroup.CGroup.is_active") as patch_is_active:
-                        for i in range(num_polls):
-                            patch_is_active.return_value = True
-                            patch_get_cpu_usage.return_value = cpu_percent_values[i]
-                            patch_get_memory_usage.return_value = memory_usage_values[i]  # example 200 MB
-                            patch_get_memory_max_usage.return_value = max_memory_usage_values[i]  # example 450 MB
-                            CGroupsTelemetry.poll_all_tracked()
-
+        self.assertEqual(1, path_poll_system_memory_metrics.call_count)
+        self.assertEqual(0, patch_add_metric.call_count)  # Zero metrics being sent.

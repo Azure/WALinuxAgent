@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+#
+# Collects the logs needed to debug agent issues into a compressed tarball.
+#
+
+# Note that we do "set -euxo pipefail" only after executing "tar". That command exits with code 1 on warnings
+# and we do not want to consider those as failures.
+
+logs_file_name="/tmp/waagent-logs.tgz"
+
+echo "Collecting logs to $logs_file_name ..."
+
+PYTHON=$(get-agent-python)
+waagent_conf=$($PYTHON -c 'from azurelinuxagent.common.osutil import get_osutil; print(get_osutil().agent_conf_file_path)')
+
+tar --exclude='journal/*' --exclude='omsbundle' --exclude='omsagent' --exclude='mdsd' --exclude='scx*' \
+    --exclude='*.so' --exclude='*__LinuxDiagnostic__*' --exclude='*.zip' --exclude='*.deb' --exclude='*.rpm' \
+    --warning=no-file-changed \
+    -czf "$logs_file_name" \
+    /var/log \
+    /var/lib/waagent/ \
+    $waagent_conf
+
+set -euxo pipefail
+
+# Ignore warnings (exit code 1)
+exit_code=$?
+
+if [ "$exit_code" == "1" ]; then
+  echo "WARNING: tar exit code is 1"
+elif [ "$exit_code" != "0" ]; then
+    exit $exit_code
+fi
+
+chmod a+r "$logs_file_name"
+
+ls -l "$logs_file_name"

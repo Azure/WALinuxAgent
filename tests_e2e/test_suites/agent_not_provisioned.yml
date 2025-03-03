@@ -1,0 +1,12 @@
+#
+# Disables Agent provisioning using osProfile.linuxConfiguration.provisionVMAgent and verifies that the agent is disabled
+# and extension operations are not allowed.
+#
+name: "AgentNotProvisioned"
+tests:
+  - "agent_not_provisioned/agent_not_provisioned.py"
+images: "random(endorsed)"
+template: "agent_not_provisioned/disable_agent_provisioning.py"
+owns_vm: true
+install_test_agent: false
+

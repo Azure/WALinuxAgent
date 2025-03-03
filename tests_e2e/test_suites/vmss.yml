@@ -1,0 +1,8 @@
+#
+# Sample test for scale sets
+#
+name: "VMSS"
+tests:
+  - "samples/vmss_test.py"
+executes_on_scale_set: true
+images: "ubuntu_2004"

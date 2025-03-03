@@ -28,13 +28,12 @@ from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSe
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
+from azurelinuxagent.ga.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
     read_output
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable, \
-    ExtensionStatusError, _DEFAULT_SEQ_NO
-from tests.protocol import mockwiredata
-from tests.protocol.mocks import mock_wire_protocol
-from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
+    ExtensionStatusError, _DEFAULT_SEQ_NO, get_exthandlers_handler, ExtHandlerState
+from tests.lib.mock_wire_protocol import mock_wire_protocol, wire_protocol_data
+from tests.lib.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
 
 
 class TestExtHandlers(AgentTestCase):
@@ -248,7 +247,7 @@ class TestExtHandlers(AgentTestCase):
                                               expected_sequence_number=-1)
 
     def test_it_should_report_error_if_plugin_settings_version_mismatch(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_PLUGIN_SETTINGS_MISMATCH) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_PLUGIN_SETTINGS_MISMATCH) as protocol:
             with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.add_event") as mock_add_event:
                 # Forcing update of GoalState to allow the ExtConfig to report an event
                 protocol.mock_wire_data.set_incarnation(2)
@@ -287,6 +286,51 @@ class TestExtHandlers(AgentTestCase):
 
         with open(log_file_path) as truncated_log_file:
             self.assertEqual(truncated_log_file.read(), "{second_line}\n".format(second_line=second_line))
+
+    def test_set_logger_should_not_reset_the_mode_of_the_log_directory(self):
+        ext_log_dir = os.path.join(self.tmp_dir, "log_directory")
+
+        with patch("azurelinuxagent.common.conf.get_ext_log_dir", return_value=ext_log_dir):
+            ext_handler = Extension(name='foo')
+            ext_handler.version = "1.2.3"
+            ext_handler_instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
+            ext_handler_log_dir = os.path.join(ext_log_dir, ext_handler.name)
+
+            # Double-check the initial mode
+            get_mode = lambda f: os.stat(f).st_mode & 0o777
+            mode = get_mode(ext_handler_log_dir)
+            if mode != 0o755:
+                raise Exception("The initial mode of the log directory should be 0o755, got 0{0:o}".format(mode))
+
+            new_mode = 0o700
+            os.chmod(ext_handler_log_dir, new_mode)
+            ext_handler_instance.set_logger()
+
+            mode = get_mode(ext_handler_log_dir)
+            self.assertEqual(new_mode, mode, "The mode of the log directory should not have changed")
+
+    def test_it_should_report_the_message_in_the_hearbeat(self):
+        def heartbeat_with_message():
+            return {'code': 0, 'formattedMessage': {'lang': 'en-US', 'message': 'This is a heartbeat message'},
+                    'status': 'ready'}
+
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            with patch("azurelinuxagent.common.protocol.wire.WireProtocol.report_vm_status", return_value=None):
+                with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.collect_heartbeat",
+                           side_effect=heartbeat_with_message):
+                    with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_handler_state",
+                               return_value=ExtHandlerState.Enabled):
+                        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.collect_ext_status",
+                                   return_value=None):
+                            exthandlers_handler = get_exthandlers_handler(protocol)
+                            exthandlers_handler.run()
+                            vm_status = exthandlers_handler.report_ext_handlers_status()
+                            ext_handler = vm_status.vmAgent.extensionHandlers[0]
+                            self.assertEqual(ext_handler.message,
+                                             heartbeat_with_message().get('formattedMessage').get('message'),
+                                             "Extension handler messages don't match")
+                            self.assertEqual(ext_handler.status, heartbeat_with_message().get('status'),
+                                             "Extension handler statuses don't match")
 
 class LaunchCommandTestCase(AgentTestCase):
     """
@@ -631,13 +675,13 @@ sys.stderr.write("E" * 5 * 1024 * 1024)
         # Mocking the call to file.read() is difficult, so instead we mock the call to format_stdout_stderr, which takes the
         # return value of the calls to file.read(). The intention of the test is to verify we never read (and load in memory)
         # more than a few KB of data from the files used to capture stdout/stderr
-        with patch('azurelinuxagent.common.utils.extensionprocessutil.format_stdout_stderr', side_effect=format_stdout_stderr) as mock_format:
+        with patch('azurelinuxagent.ga.extensionprocessutil.format_stdout_stderr', side_effect=format_stdout_stderr) as mock_format:
             output = self.ext_handler_instance.launch_command(command)
 
         self.assertGreaterEqual(len(output), 1024)
         self.assertLessEqual(len(output), TELEMETRY_MESSAGE_MAX_LEN)
 
-        mock_format.assert_called_once()
+        self.assertEqual(1, mock_format.call_count, "format_stdout_stderr should be called once")
 
         args, kwargs = mock_format.call_args  # pylint: disable=unused-variable
         stdout, stderr = args
@@ -664,7 +708,7 @@ sys.stderr.write("STDERR")
         def capture_process_output(stdout_file, stderr_file):  # pylint: disable=unused-argument
             return original_capture_process_output(None, None)
 
-        with patch('azurelinuxagent.common.utils.extensionprocessutil.read_output', side_effect=capture_process_output):
+        with patch('azurelinuxagent.ga.extensionprocessutil.read_output', side_effect=capture_process_output):
             output = self.ext_handler_instance.launch_command(command)
 
         self.assertIn("[stderr]\nCannot read stdout/stderr:", output)

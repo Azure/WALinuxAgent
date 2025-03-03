@@ -26,9 +26,12 @@
             <Version>2.1.0</Version><Uris><Uri>http://mock-goal-state/ga-manifests/OSTCExtensions.WALinuxAgent__2.1.0</Uri></Uris>
         </Plugin>
         <Plugin>
+            <Version>2.5.0</Version><Uris><Uri>http://mock-goal-state/ga-manifests/OSTCExtensions.WALinuxAgent__2.5.0</Uri></Uris>
+        </Plugin>
+        <Plugin>
             <Version>9.9.9.10</Version>
             <Uris>
-                <Uri>http://mock-goal-state/ga-manifests/OSTCExtensions.WALinuxAgent__99999.0.0.0</Uri>
+                <Uri>http://mock-goal-state/ga-manifests/OSTCExtensions.WALinuxAgent__9.9.9.10</Uri>
             </Uris>
         </Plugin>
         <Plugin>

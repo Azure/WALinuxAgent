@@ -96,8 +96,8 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
     systemd_dir_path = osutil.get_systemd_unit_file_install_path()
     agent_bin_path = osutil.get_agent_bin_path()
 
-    if name in ('redhat', 'centos', 'almalinux', 'cloudlinux', 'rocky'):
-        if version.startswith("8"):
+    if name in ('redhat', 'rhel', 'centos', 'almalinux', 'cloudlinux', 'rocky'):
+        if version.startswith("8") or version.startswith("9"):
             # redhat8+ default to py3
             set_bin_files(data_files, dest=agent_bin_path,
                           src=["bin/py3/waagent", "bin/waagent2.0"])
@@ -106,7 +106,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_conf_files(data_files)
         set_logrotate_files(data_files)
         set_udev_files(data_files)
-        if version.startswith("8"):
+        if version.startswith("8") or version.startswith("9"):
             # redhat 8+ uses systemd and python3
             set_systemd_files(data_files, dest=systemd_dir_path,
                               src=["init/redhat/waagent.service",
@@ -147,7 +147,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
                        src=["config/clearlinux/waagent.conf"])
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/clearlinux/waagent.service"])
-    elif name == 'mariner':
+    elif name in ["mariner", "azurelinux"]:
         set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, dest="/etc",
                        src=["config/mariner/waagent.conf"])
@@ -219,6 +219,16 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_udev_files(data_files, dest="/lib/udev/rules.d")
         if debian_has_systemd():
             set_systemd_files(data_files, dest=systemd_dir_path)
+    elif name == 'devuan':
+        set_bin_files(data_files, dest=agent_bin_path,
+                      src=["bin/py3/waagent", "bin/waagent2.0"])
+        set_files(data_files, dest="/etc/init.d",
+                  src=['init/devuan/walinuxagent'])
+        set_files(data_files, dest="/etc/default",
+                  src=['init/devuan/default/walinuxagent'])
+        set_conf_files(data_files, src=['config/devuan/waagent.conf'])
+        set_logrotate_files(data_files)
+        set_udev_files(data_files, dest="/lib/udev/rules.d")
     elif name == 'iosxe':
         set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, src=["config/iosxe/waagent.conf"])
@@ -238,6 +248,12 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_conf_files(data_files, src=["config/photonos/waagent.conf"])
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/photonos/waagent.service"])
+    elif name == 'fedora':
+        set_bin_files(data_files, dest=agent_bin_path)
+        set_conf_files(data_files)
+        set_logrotate_files(data_files)
+        set_udev_files(data_files)
+        set_systemd_files(data_files, dest=systemd_dir_path)
     else:
         # Use default setting
         set_bin_files(data_files, dest=agent_bin_path)
@@ -251,7 +267,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
 def debian_has_systemd():
     try:
         return subprocess.check_output(
-            ['cat', '/proc/1/comm']).strip() == 'systemd'
+            ['cat', '/proc/1/comm']).strip().decode() == 'systemd'
     except subprocess.CalledProcessError:
         return False
 
@@ -272,7 +288,10 @@ class install(_install):  # pylint: disable=C0103
         self.lnx_distro_version = DISTRO_VERSION
         self.lnx_distro_fullname = DISTRO_FULL_NAME
         self.register_service = False
-        self.skip_data_files = False
+        # All our data files are system-wide files that are not included in the egg; skip them when
+        # creating an egg.
+        self.skip_data_files = "bdist_egg" in sys.argv
+
         # pylint: enable=attribute-defined-outside-init
 
     def finalize_options(self):
@@ -295,13 +314,17 @@ class install(_install):  # pylint: disable=C0103
 
 
 # Note to packagers and users from source.
-# In version 3.5 of Python distribution information handling in the platform
-# module was deprecated. Depending on the Linux distribution the
-# implementation may be broken prior to Python 3.7 wher the functionality
-# will be removed from Python 3
-requires = []  # pylint: disable=invalid-name
-if float(sys.version[:3]) >= 3.7:
-    requires = ['distro']  # pylint: disable=invalid-name
+# * In version 3.5 of Python distribution information handling in the platform
+#   module was deprecated. Depending on the Linux distribution the
+#   implementation may be broken prior to Python 3.8 where the functionality
+#   will be removed from Python 3.
+# * In version 3.13 of Python, the crypt module was removed and legacycrypt is
+#   required instead.
+requires = []
+if sys.version_info[0] >= 3 and sys.version_info[1] >= 8:
+    requires.append('distro')
+if sys.version_info[0] >= 3 and sys.version_info[1] >= 13:
+    requires.append('legacycrypt')
 
 modules = []  # pylint: disable=invalid-name
 

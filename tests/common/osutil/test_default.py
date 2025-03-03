@@ -34,8 +34,8 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
-from tests.common.mock_environment import MockEnvironment
-from tests.tools import AgentTestCase, patch, open_patch, load_data, data_dir
+from tests.lib.mock_environment import MockEnvironment
+from tests.lib.tools import AgentTestCase, patch, open_patch, load_data, data_dir, is_python_version_26_or_34, skip_if_predicate_true
 
 actual_get_proc_net_route = 'azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_net_route'
 
@@ -298,7 +298,7 @@ class TestOSUtil(AgentTestCase):
     def test_dhcp_lease_default(self):
         self.assertTrue(osutil.DefaultOSUtil().get_dhcp_lease_endpoint() is None)
 
-    def test_dhcp_lease_ubuntu(self):
+    def test_dhcp_lease_older_ubuntu(self):
         with patch.object(glob, "glob", return_value=['/var/lib/dhcp/dhclient.eth0.leases']):
             with patch(open_patch(), mock.mock_open(read_data=load_data("dhcp.leases"))):
                 endpoint = get_osutil(distro_name='ubuntu', distro_version='12.04').get_dhcp_lease_endpoint()  # pylint: disable=assignment-from-none
@@ -310,6 +310,20 @@ class TestOSUtil(AgentTestCase):
                 self.assertEqual(endpoint, "168.63.129.16")
 
                 endpoint = get_osutil(distro_name='ubuntu', distro_version='14.04').get_dhcp_lease_endpoint()  # pylint: disable=assignment-from-none
+                self.assertTrue(endpoint is not None)
+                self.assertEqual(endpoint, "168.63.129.16")
+
+                endpoint = get_osutil(distro_name='ubuntu', distro_version='18.04').get_dhcp_lease_endpoint()  # pylint: disable=assignment-from-none
+                self.assertTrue(endpoint is None)
+
+    def test_dhcp_lease_newer_ubuntu(self):
+        with patch.object(glob, "glob", return_value=['/run/systemd/netif/leases/2']):
+            with patch(open_patch(), mock.mock_open(read_data=load_data("2"))):
+                endpoint = get_osutil(distro_name='ubuntu', distro_version='18.04').get_dhcp_lease_endpoint()  # pylint: disable=assignment-from-none
+                self.assertTrue(endpoint is not None)
+                self.assertEqual(endpoint, "168.63.129.16")
+
+                endpoint = get_osutil(distro_name='ubuntu', distro_version='20.04').get_dhcp_lease_endpoint()  # pylint: disable=assignment-from-none
                 self.assertTrue(endpoint is not None)
                 self.assertEqual(endpoint, "168.63.129.16")
 
@@ -687,7 +701,7 @@ Match host 192.168.1.2\n\
             return mock_popen.original(command, *args, **kwargs)
         mock_popen.original = subprocess.Popen
 
-        with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as popen_patcher:
+        with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", side_effect=mock_popen) as popen_patcher:
             with patch('os.getuid', return_value=uid):
                 popen_patcher.wait = wait
                 popen_patcher.destination = destination
@@ -808,13 +822,13 @@ Match host 192.168.1.2\n\
                 success, _ = osutil.DefaultOSUtil().enable_firewall(dst_ip=mock_iptables.destination, uid=mock_iptables.uid)
 
                 self.assertTrue(success, "Enabling the firewall was not successful")
-                # Exactly 8 calls have to be made.
-                # First check rule, delete 4 rules,
+                # Exactly 10 calls have to be made.
+                # First check 3 rules, delete 4 rules,
                 # and Append the IPTable 3 rules.
-                self.assertEqual(len(mock_iptables.command_calls), 8,
+                self.assertEqual(len(mock_iptables.command_calls), 10,
                                  "Incorrect number of calls to iptables: [{0}]".format(mock_iptables.command_calls))
                 for command in mock_iptables.command_calls:
-                    self.assertNotIn("-w", command, "The -w option should have been used in {0}".format(command))
+                    self.assertNotIn("-w", command, "The -w option sh       ould have been used in {0}".format(command))
 
                 self.assertTrue(osutil._enable_firewall, "The firewall should not have been disabled")
 
@@ -910,7 +924,7 @@ Match host 192.168.1.2\n\
                     return mock_popen.original(command, *args, **kwargs)
                 mock_popen.original = subprocess.Popen
 
-                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
+                with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", side_effect=mock_popen):
                     success = osutil.DefaultOSUtil().remove_firewall(mock_iptables.destination, mock_iptables.uid, mock_iptables.wait)
 
                     delete_conntrack_accept_command = TestOSUtil._command_to_string(osutil.get_firewall_delete_conntrack_accept_command(mock_iptables.wait, mock_iptables.destination))
@@ -950,6 +964,7 @@ Match host 192.168.1.2\n\
 
                 self.assertFalse(osutil._enable_firewall)
 
+    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4, they run on containers where the OS commands needed by the test are not present.")
     def test_get_nic_state(self):
         state = osutil.DefaultOSUtil().get_nic_state()
         self.assertNotEqual(state, {})
@@ -962,6 +977,28 @@ Match host 192.168.1.2\n\
 
         as_string = osutil.DefaultOSUtil().get_nic_state(as_string=True)
         self.assertNotEqual(as_string, '')
+
+    def test_get_used_and_available_system_memory(self):
+        memory_table = "\
+              total        used        free      shared  buff/cache   available \n\
+Mem:     8340144128   619352064  5236809728     1499136  2483982336  7426314240   \n\
+Swap:             0           0           0   \n"
+        with patch.object(shellutil, 'run_command', return_value=memory_table):
+            used_mem, available_mem = osutil.DefaultOSUtil().get_used_and_available_system_memory()
+
+        self.assertEqual(used_mem, 619352064/(1024**2), "The value didn't match")
+        self.assertEqual(available_mem, 7426314240/(1024**2), "The value didn't match")
+
+    def test_get_used_and_available_system_memory_error(self):
+        msg = 'message'
+        exception = shellutil.CommandError("free -d", 1, "", msg)
+
+        with patch.object(shellutil, 'run_command',
+                          side_effect=exception) as patch_run:
+            with self.assertRaises(shellutil.CommandError) as context_manager:
+                osutil.DefaultOSUtil().get_used_and_available_system_memory()
+            self.assertEqual(patch_run.call_count, 1)
+            self.assertEqual(context_manager.exception.returncode, 1)
 
     def test_get_dhcp_pid_should_return_a_list_of_pids(self):
         osutil_get_dhcp_pid_should_return_a_list_of_pids(self, osutil.DefaultOSUtil())
@@ -1073,6 +1110,15 @@ class TestGetPublishedHostname(AgentTestCase):
         expected = "a-sample-set-hostname"
         self.assertEqual(expected, actual, "get_hostname_record returned an incorrect hostname")
         self.assertEqual(expected, self.__get_published_hostname_contents(), "get_hostname_record returned an incorrect hostname")
+
+    def test_get_password_hash(self):
+        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'test_passwords.txt'), 'rb') as in_file:
+            for data in in_file:
+                # Remove bom on bytes data before it is converted into string.
+                data = textutil.remove_bom(data)
+                data = ustr(data, encoding='utf-8')
+                password_hash = osutil.DefaultOSUtil.gen_password_hash(data, 6, 10)
+                self.assertNotEqual(None, password_hash)
 
 
 if __name__ == '__main__':

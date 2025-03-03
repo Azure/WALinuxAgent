@@ -23,7 +23,7 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 
 from azurelinuxagent.pa.deprovision import get_deprovision_handler
 from azurelinuxagent.pa.deprovision.default import DeprovisionHandler
-from tests.tools import AgentTestCase, distros, Mock, patch
+from tests.lib.tools import AgentTestCase, distros, Mock, patch
 
 
 class TestDeprovision(AgentTestCase):

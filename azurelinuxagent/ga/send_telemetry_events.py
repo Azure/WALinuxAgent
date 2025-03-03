@@ -24,7 +24,7 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ServiceStoppedError
 from azurelinuxagent.common.future import ustr, Queue, Empty
-from azurelinuxagent.common.interfaces import ThreadHandlerInterface
+from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.utils import textutil
 
 
@@ -70,8 +70,8 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
 
     def start(self):
         self._thread = threading.Thread(target=self._process_telemetry_thread)
-        self._thread.setDaemon(True)
-        self._thread.setName(self.get_thread_name())
+        self._thread.daemon = True
+        self._thread.name = self.get_thread_name()
         self._thread.start()
 
     def stop(self):

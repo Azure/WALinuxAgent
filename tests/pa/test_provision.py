@@ -17,7 +17,6 @@
 
 import os
 import re
-import tempfile
 import unittest
 
 import azurelinuxagent.common.conf as conf
@@ -28,7 +27,7 @@ from azurelinuxagent.pa.provision import get_provision_handler
 from azurelinuxagent.pa.provision.cloudinit import CloudInitProvisionHandler
 from azurelinuxagent.pa.provision.default import ProvisionHandler
 from azurelinuxagent.common.utils import fileutil
-from tests.tools import AgentTestCase, distros, load_data, MagicMock, Mock, patch
+from tests.lib.tools import AgentTestCase, distros, load_data, MagicMock, Mock, patch
 
 
 class TestProvision(AgentTestCase):
@@ -55,8 +54,7 @@ class TestProvision(AgentTestCase):
 
     def test_customdata(self):
         base64data = 'Q3VzdG9tRGF0YQ=='
-        data = DefaultOSUtil().decode_customdata(base64data)
-        fileutil.write_file(tempfile.mktemp(), data)
+        DefaultOSUtil().decode_customdata(base64data)
 
     @patch('azurelinuxagent.common.conf.get_provision_enabled',
         return_value=False)

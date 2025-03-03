@@ -309,7 +309,7 @@ def redact_sas_tokens_in_urls(url):
     return SAS_TOKEN_RETRIEVAL_REGEX.sub(r"\1" + REDACTED_TEXT + r"\3", url)
 
 
-def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
+def _http_request(method, host, rel_uri, timeout, port=None, data=None, secure=False,
                   headers=None, proxy_host=None, proxy_port=None, redact_data=False):
 
     headers = {} if headers is None else headers
@@ -334,13 +334,13 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
     if secure:
         conn = httpclient.HTTPSConnection(conn_host,
                                           conn_port,
-                                          timeout=10)
+                                          timeout=timeout)
         if use_proxy:
             conn.set_tunnel(host, port)
     else:
         conn = httpclient.HTTPConnection(conn_host,
                                          conn_port,
-                                         timeout=10)
+                                         timeout=timeout)
 
     payload = data
     if redact_data:
@@ -358,7 +358,8 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
 
 
 def http_request(method,
-                 url, data, headers=None,
+                 url, data, timeout,
+                 headers=None,
                  use_proxy=False,
                  max_retry=None,
                  retry_codes=None,
@@ -446,6 +447,7 @@ def http_request(method,
             resp = _http_request(method,
                                  host,
                                  rel_uri,
+                                 timeout,
                                  port=port,
                                  data=data,
                                  secure=secure,
@@ -510,7 +512,8 @@ def http_get(url,
              max_retry=None,
              retry_codes=None,
              retry_delay=DELAY_IN_SECONDS,
-             return_raw_response=False):
+             return_raw_response=False,
+             timeout=10):
     """
     NOTE: This method provides some logic to handle errors in the HTTP request, including checking the HTTP status of the response
           and handling some exceptions. If return_raw_response is set to True all the error handling will be skipped and the
@@ -523,7 +526,8 @@ def http_get(url,
     if retry_codes is None:
         retry_codes = RETRY_CODES
     return http_request("GET",
-                        url, None, headers=headers,
+                        url, None, timeout,
+                        headers=headers,
                         use_proxy=use_proxy,
                         max_retry=max_retry,
                         retry_codes=retry_codes,
@@ -536,14 +540,16 @@ def http_head(url,
               use_proxy=False,
               max_retry=None,
               retry_codes=None,
-              retry_delay=DELAY_IN_SECONDS):
+              retry_delay=DELAY_IN_SECONDS,
+              timeout=10):
 
     if max_retry is None:
         max_retry = DEFAULT_RETRIES
     if retry_codes is None:
         retry_codes = RETRY_CODES
     return http_request("HEAD",
-                        url, None, headers=headers,
+                        url, None, timeout,
+                        headers=headers,
                         use_proxy=use_proxy,
                         max_retry=max_retry,
                         retry_codes=retry_codes,
@@ -556,14 +562,16 @@ def http_post(url,
               use_proxy=False,
               max_retry=None,
               retry_codes=None,
-              retry_delay=DELAY_IN_SECONDS):
+              retry_delay=DELAY_IN_SECONDS,
+              timeout=10):
 
     if max_retry is None:
         max_retry = DEFAULT_RETRIES
     if retry_codes is None:
         retry_codes = RETRY_CODES
     return http_request("POST",
-                        url, data, headers=headers,
+                        url, data, timeout,
+                        headers=headers,
                         use_proxy=use_proxy,
                         max_retry=max_retry,
                         retry_codes=retry_codes,
@@ -577,14 +585,16 @@ def http_put(url,
              max_retry=None,
              retry_codes=None,
              retry_delay=DELAY_IN_SECONDS,
-             redact_data=False):
+             redact_data=False,
+             timeout=10):
 
     if max_retry is None:
         max_retry = DEFAULT_RETRIES
     if retry_codes is None:
         retry_codes = RETRY_CODES
     return http_request("PUT",
-                        url, data, headers=headers,
+                        url, data, timeout,
+                        headers=headers,
                         use_proxy=use_proxy,
                         max_retry=max_retry,
                         retry_codes=retry_codes,
@@ -597,14 +607,16 @@ def http_delete(url,
                 use_proxy=False,
                 max_retry=None,
                 retry_codes=None,
-                retry_delay=DELAY_IN_SECONDS):
+                retry_delay=DELAY_IN_SECONDS,
+                timeout=10):
 
     if max_retry is None:
         max_retry = DEFAULT_RETRIES
     if retry_codes is None:
         retry_codes = RETRY_CODES
     return http_request("DELETE",
-                        url, None, headers=headers,
+                        url, None, timeout,
+                        headers=headers,
                         use_proxy=use_proxy,
                         max_retry=max_retry,
                         retry_codes=retry_codes,

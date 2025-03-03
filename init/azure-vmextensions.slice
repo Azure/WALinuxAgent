@@ -4,3 +4,4 @@ DefaultDependencies=no
 Before=slices.target
 [Slice]
 CPUAccounting=yes
+MemoryAccounting=yes

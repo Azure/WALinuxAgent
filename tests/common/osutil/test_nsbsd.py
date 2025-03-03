@@ -19,7 +19,7 @@ from os import path
 
 from azurelinuxagent.common.osutil.nsbsd import NSBSDOSUtil
 from azurelinuxagent.common.utils.fileutil import read_file
-from tests.tools import AgentTestCase, patch
+from tests.lib.tools import AgentTestCase, patch
 
 
 class TestNSBSDOSUtil(AgentTestCase):

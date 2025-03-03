@@ -18,7 +18,7 @@
 import unittest
 
 from azurelinuxagent.common.osutil.ubuntu import Ubuntu12OSUtil, Ubuntu18OSUtil
-from tests.tools import AgentTestCase
+from tests.lib.tools import AgentTestCase
 from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
 
 

@@ -22,12 +22,13 @@ import threading
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.ga.cgroupcontroller import MetricValue, MetricsCategory, MetricsCounter
+from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.interfaces import ThreadHandlerInterface
+from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
@@ -47,18 +48,44 @@ class PollResourceUsage(PeriodicOperation):
     Periodic operation to poll the tracked cgroups for resource usage data.
 
     It also checks whether there are processes in the agent's cgroup that should not be there.
+
     """
     def __init__(self):
         super(PollResourceUsage, self).__init__(conf.get_cgroup_check_period())
         self.__log_metrics = conf.get_cgroup_log_metrics()
+        self.__periodic_metrics = {}
 
     def _operation(self):
         tracked_metrics = CGroupsTelemetry.poll_all_tracked()
 
         for metric in tracked_metrics:
-            report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
+            key = metric.category + metric.counter + metric.instance
+            if key not in self.__periodic_metrics or (self.__periodic_metrics[key] + metric.report_period) <= datetime.datetime.now():
+                report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
+                self.__periodic_metrics[key] = datetime.datetime.now()
 
         CGroupConfigurator.get_instance().check_cgroups(tracked_metrics)
+
+
+class PollSystemWideResourceUsage(PeriodicOperation):
+    def __init__(self):
+        super(PollSystemWideResourceUsage, self).__init__(datetime.timedelta(hours=1))
+        self.__log_metrics = conf.get_cgroup_log_metrics()
+        self.osutil = get_osutil()
+
+    def poll_system_memory_metrics(self):
+        used_mem, available_mem = self.osutil.get_used_and_available_system_memory()
+        return [
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.USED_MEM, "",
+                        used_mem),
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.AVAILABLE_MEM, "",
+                        available_mem)
+        ]
+
+    def _operation(self):
+        metrics = self.poll_system_memory_metrics()
+        for metric in metrics:
+            report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
 
 
 class ResetPeriodicLogMessages(PeriodicOperation):
@@ -189,10 +216,10 @@ class SendImdsHeartbeat(PeriodicOperation):
     Periodic operation to report the IDMS's health. The signal is 'Healthy' when we have successfully called and validated
     a response in the last _IMDS_HEALTH_PERIOD.
     """
-    def __init__(self, protocol_util, health_service):
+    def __init__(self, health_service):
         super(SendImdsHeartbeat, self).__init__(SendImdsHeartbeat._IMDS_HEARTBEAT_PERIOD)
         self.health_service = health_service
-        self.imds_client = get_imds_client(protocol_util.get_wireserver_endpoint())
+        self.imds_client = get_imds_client()
         self.imds_error_state = ErrorState(min_timedelta=SendImdsHeartbeat._IMDS_HEALTH_PERIOD)
 
     _IMDS_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
@@ -254,8 +281,8 @@ class MonitorHandler(ThreadHandlerInterface):
 
     def start(self):
         self.monitor_thread = threading.Thread(target=self.daemon)
-        self.monitor_thread.setDaemon(True)
-        self.monitor_thread.setName(self.get_thread_name())
+        self.monitor_thread.daemon = True
+        self.monitor_thread.name = self.get_thread_name()
         self.monitor_thread.start()
 
     def daemon(self):
@@ -269,8 +296,9 @@ class MonitorHandler(ThreadHandlerInterface):
                 ResetPeriodicLogMessages(),
                 ReportNetworkErrors(),
                 PollResourceUsage(),
+                PollSystemWideResourceUsage(),
                 SendHostPluginHeartbeat(protocol, health_service),
-                SendImdsHeartbeat(protocol_util, health_service)
+                SendImdsHeartbeat(health_service)
             ]
 
             report_network_configuration_changes = ReportNetworkConfigurationChanges()
