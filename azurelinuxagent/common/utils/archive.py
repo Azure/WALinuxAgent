@@ -309,5 +309,3 @@ class GoalStateHistory(object):
 
     def save_manifest(self, name, text):
         self.save(text, _MANIFEST_FILE_NAME.format(name))
-
-

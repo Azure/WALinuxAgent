@@ -23,7 +23,6 @@ from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, Inval
 from tests.lib.tools import AgentTestCase
 from tests.lib.tools import patch
 
-
 TEST_EXTENSION_NAME = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
 
 
