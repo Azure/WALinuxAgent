@@ -294,6 +294,18 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             extension_name)
         self.assertIn(command, configurator.mocks.commands_call_list, "The command to reset the CPU quota was not called")
 
+    def test_it_should_handle_exceptions_when_reset_extension_quota_fails(self):
+        command_mocks = [MockCommand(r"systemctl show (.+) --property CPUQuotaPerSecUSec", return_value=1, stdout='', stderr='Failed to get properties: Access denied')]
+        with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
+            extension_name = "Microsoft.CPlat.Extension"
+            configurator.reset_extension_quota(extension_name=extension_name)
+
+        command_set = 'systemctl set-property azure-vmextensions-{0}.slice CPUQuota= --runtime'.format(
+            extension_name)
+        self.assertIn(command_set, configurator.mocks.commands_call_list, "The command to reset the CPU quota was not called")
+        command_get = 'systemctl show azure-vmextensions-{0}.slice --property CPUQuotaPerSecUSec'.format(extension_name)
+        self.assertIn(command_get, configurator.mocks.commands_call_list, "The command to get the CPU quota was not called")
+
     def test_enable_should_raise_cgroups_exception_when_cgroups_are_not_supported(self):
         with self._get_cgroup_configurator(enable=False) as configurator:
             with patch.object(configurator, "supported", return_value=False):
@@ -532,6 +544,68 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                         self.assertIn("TEST_OUTPUT\n", command_output, "The test output was not captured")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_disable_cgroups_and_invoke_the_command_directly_if_systemd_fails_and_reset_fails(self, _):
+        service_list = [
+            {
+                "name": "extension.service",
+                "cpuQuotaPercentage": 5
+            }
+        ]
+        extension_name = "Microsoft.Compute.TestExtension"
+        extension_services = {extension_name: service_list}
+
+        with self._get_cgroup_configurator() as configurator:
+            with patch.object(configurator, "get_extension_services_list", return_value=extension_services):
+                configurator.mocks.add_command(MockCommand("systemd-run", return_value=1, stdout='', stderr='Failed to start transient scope unit: syntax error'))
+                configurator.mocks.add_command(MockCommand(r"^systemctl show (.+) --property CPUQuotaPerSecUSec", return_value=1, stdout='', stderr='Failed to get properties: Access denied'))
+
+                with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as output_file:
+                    with patch("azurelinuxagent.ga.cgroupapi.add_event") as mock_add_event:
+                        with patch("subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+                            CGroupsTelemetry.reset()
+
+                            command = "echo TEST_OUTPUT"
+
+                            command_output = configurator.start_extension_command(
+                                extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                                command=command,
+                                cmd_name="test",
+                                timeout=300,
+                                shell=True,
+                                cwd=self.tmp_dir,
+                                env={}.update(os.environ),
+                                stdout=output_file,
+                                stderr=output_file)
+
+                            self.assertFalse(configurator.enabled(), "Cgroups should have been disabled")
+
+                            disabled_events = [kwargs for _, kwargs in mock_add_event.call_args_list if kwargs['op'] == WALAEventOperation.CGroupsDisabled]
+
+                            self.assertTrue(len(disabled_events) == 1, "Exactly one CGroupsDisabled telemetry event should have been issued. Found: {0}".format(disabled_events))
+                            self.assertIn("Failed to start Microsoft.Compute.TestExtension-1.2.3 using systemd-run",
+                                          disabled_events[0]['message'],
+                                          "The systemd-run failure was not included in the telemetry message")
+                            self.assertEqual(False, disabled_events[0]['is_success'], "The telemetry event should indicate a failure")
+
+                            extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
+
+                            self.assertEqual(2, len(extension_calls), "The extension should have been invoked exactly twice")
+                            self.assertIn("systemd-run", extension_calls[0],
+                                          "The first call to the extension should have used systemd")
+                            self.assertEqual(command, extension_calls[1],
+                                              "The second call to the extension should not have used systemd")
+
+                            self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")
+
+                            self.assertIn("TEST_OUTPUT\n", command_output, "The test output was not captured")
+
+                            failed_systemctl_events = [kwargs for _, kwargs in mock_add_event.call_args_list if kwargs['op'] == WALAEventOperation.CGroupsInfo and "Failed to get current CPUQuotaPerSecUSec" in kwargs['message']]
+                            # we should have at least 3 telemetry events agent + extension + extension service
+                            self.assertEqual(len(failed_systemctl_events),3, "systemctl error should have been happened: {0}".format(failed_systemctl_events))
+                            self.assertIn("Failed to get properties: Access denied", failed_systemctl_events[0]['message'], "The systemctl error was not included in the telemetry message")
+
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_disable_cgroups_and_invoke_the_command_directly_if_systemd_times_out(self, _):
         with self._get_cgroup_configurator() as configurator:
             # Systemd has its own internal timeout which is shorter than what we define for extension operation timeout.
@@ -673,6 +747,38 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                             "{0} was created".format(extension_service_memory_accounting))
             self.assertFalse(os.path.exists(extension_service_memory_quota),
                             "{0} should not have been created during setup".format(extension_service_memory_quota))
+
+    def test_it_should_handle_systemd_errors_when_set_extension_services_cpu_memory_quota(self):
+        service_list = [
+            {
+                "name": "extension.service",
+                "cpuQuotaPercentage": 5
+            },
+            {
+                "name": "extension2.service",
+                "cpuQuotaPercentage": 10
+            }
+        ]
+        with self._get_cgroup_configurator() as configurator:
+            with patch("azurelinuxagent.ga.cgroupapi.add_event") as mock_add_event:
+                configurator.mocks.add_command(MockCommand("systemctl show extension.service --property CPUAccounting", return_value=1, stdout='', stderr='Failed to set properties: connection timed out'))
+                configurator.mocks.add_command(MockCommand("systemctl set-property extension2.service CPUAccounting=yes MemoryAccounting=yes CPUQuota=10% --runtime", return_value=1, stdout='', stderr='Failed to set properties: Access denied'))
+
+                configurator.set_extension_services_cpu_memory_quota(service_list)
+                commands_list = configurator.mocks.commands_call_list
+
+                extension_command_set = 'systemctl set-property extension.service CPUAccounting=yes MemoryAccounting=yes CPUQuota=5% --runtime'
+                extension2_command_set = 'systemctl set-property extension2.service CPUAccounting=yes MemoryAccounting=yes CPUQuota=10% --runtime'
+                systemd_error_timed_out_event = [kwargs for _, kwargs in mock_add_event.call_args_list if kwargs['op'] == WALAEventOperation.CGroupsInfo and "connection timed out" in kwargs['message']]
+                systemd_error_access_denied_event = [kwargs for _, kwargs in mock_add_event.call_args_list if kwargs['op'] == WALAEventOperation.CGroupsInfo and "Access denied" in kwargs['message']]
+
+                # first service(extension) should not call set-property, as get properties failed
+                self.assertNotIn(extension_command_set, commands_list, "The command to set the CPU quota was called")
+                self.assertEqual(len(systemd_error_timed_out_event), 1, "systemd error timed out should have been happened: {0}".format(systemd_error_timed_out_event))
+
+                # second service(extension2)
+                self.assertIn(extension2_command_set, commands_list, "The command to set the CPU quota was not called")
+                self.assertEqual(len(systemd_error_access_denied_event), 1, "systemd error access denied should have been happened: {0}".format(systemd_error_access_denied_event))
 
     def test_it_should_start_tracking_extension_services_cgroups(self):
         service_list = [
