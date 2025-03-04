@@ -43,10 +43,11 @@ from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension
 from azurelinuxagent.common.protocol import wire
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
+from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, migrate_handler_state, \
     get_exthandlers_handler, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
-    ExtensionStatusValue, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, GoalStateStatus
+    ExtensionStatusValue, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, GoalStateStatus, ExtHandlerState
 
 from tests.lib import wire_protocol_data
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
@@ -3715,6 +3716,89 @@ class TestExtensionPolicy(TestExtensionBase):
                 vm_status = args[0]
                 self.assertEqual(0, len(vm_status.vmAgent.extensionHandlers))
 
+    def test_should_report_both_policy_failure_and_heartbeat_in_status(self):
+        """
+        If an extension reporting heartbeat is blocked by policy, the agent should report policy failure status and
+        concatenate the extension heartbeat.
+        """
+
+        # Mock collect_heartbeat() to return heartbeat in test file
+        test_file = os.path.join(self.tmp_dir, "ext_heartbeat.json")
+        def mock_collect_heartbeat():
+            heartbeat_json = fileutil.read_file(test_file)
+            heartbeat = json.loads(heartbeat_json)[0]['heartbeat']
+            return heartbeat
+
+        # Create a mock heartbeat file reported by an extension
+        extension_heartbeat = [
+            {
+                "version": 1.0,
+                "heartbeat": {
+                    "status": "ready",
+                    "code": 0,
+                    "formattedMessage": {
+                        "lang": "en-US",
+                        "message": "This is a heartbeat message"
+                    }
+                }
+            }
+        ]
+        with open(test_file, 'w') as out_file:
+            out_file.write(json.dumps(extension_heartbeat))
+
+        # Try to install a disallowed extension, then assert that policy failure status is reported instead of heartbeat
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_heartbeat_file", return_value=test_file):
+            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.collect_heartbeat", side_effect=mock_collect_heartbeat):
+                with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_handler_state", return_value=ExtHandlerState.Enabled):
+                    policy = \
+                        {
+                            "policyVersion": "0.1.0",
+                            "extensionPolicies": {
+                                "allowListedExtensionsOnly": True
+                            }
+                        }
+
+                    with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+                        exthandlers_handler = get_exthandlers_handler(protocol)
+                        self._create_policy_file(policy)
+                        exthandlers_handler.run()
+
+                        # Assert that agent is reporting the expected handler status, heartbeat should be concatenated to policy failure message
+                        vm_status = exthandlers_handler.report_ext_handlers_status()
+                        ext_handler = vm_status.vmAgent.extensionHandlers[0]
+                        self.assertTrue("failed to run extension 'OSTCExtensions.ExampleHandlerLinux' because it is not specified as an allowed extension" in ext_handler.message,
+                                        "Should have reported policy failure")
+                        self.assertTrue("Extension was previously enabled and reported the following heartbeat:" in ext_handler.message,
+                                        "Should have concatenated heartbeat to handler status message")
+                        self.assertEqual(ext_handler.status, "NotReady", "Heartbeat should not have overridden policy failure status")
+                        self.assertEqual(ext_handler.code, ExtensionErrorCodes.PluginEnableProcessingFailed, "Heartbeat should not have overridden policy failure code")
+
+    def test_should_save_policy_file_to_history_directory(self):
+        policy_file_name = "waagent_policy.json"
+        policy = {
+            "policyVersion": "0.1.0"
+        }
+        self._create_policy_file(policy)
+
+        # Policy file should be written to history folder when extensions are processed
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS, save_to_history=True) as protocol:
+            # Update goal state with incarnation and etag, so we can search for the correct history folder
+            protocol.mock_wire_data.set_incarnation(999)
+            protocol.mock_wire_data.set_etag(888)
+            protocol.client.update_goal_state()
+            exthandlers_handler = get_exthandlers_handler(protocol)
+            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_enable_overprovisioning', return_value=False):
+                exthandlers_handler.run()
+
+            # Assert that policy file was copied to history folder.
+            root_dir = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME)
+            matches = glob.glob(os.path.join(root_dir, "*_999-888"))
+            self.assertTrue(len(matches) == 1)
+            history_dir = matches[0]
+            file_path = os.path.join(history_dir, policy_file_name)
+            self.assertTrue(os.path.exists(file_path), "Policy file was not copied to history folder")
+            with open(file_path, mode='r') as f:
+                self.assertEqual(policy, json.load(f))
 
 if __name__ == '__main__':
     unittest.main()
