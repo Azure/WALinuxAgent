@@ -6,6 +6,7 @@ import datetime
 import glob
 import os
 import re
+import subprocess
 import shutil
 import time
 
@@ -492,9 +493,85 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
 
             goal_state = GoalState(protocol.client)
 
-            self.assertEqual(0, len(goal_state.certs.summary), "Cert list should be empty")
-            self.assertEqual(1, http_get_handler.certificate_requests, "There should have been exactly 1 requests for the goal state certificates")
+            self.assertEqual(0, len(goal_state.certs.summary), "Certificates should be empty")
+            self.assertEqual(2, http_get_handler.certificate_requests, "There should have been exactly 2 requests for the goal state certificates")  # 1 for the initial request, 1 for the retry with an older cypher
 
+    def test_goal_state_should_try_legacy_cypher_and_then_fail_when_no_cyphers_are_supported_by_the_wireserver(self):
+        cyphers = []
+        def http_get_handler(url, *_, **kwargs):
+            if HttpRequestPredicates.is_certificates_request(url):
+                cypher = kwargs["headers"].get("x-ms-cipher-name")
+                if cypher is None:
+                    raise Exception("x-ms-cipher-name header is missing from the Certificates request")
+                cyphers.append(cypher)
+                return MockHttpResponse(status=400, body="unsupported cypher: {0}".format(cypher).encode('utf-8'))
+            return None
+
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            with patch("azurelinuxagent.common.event.LogEvent.error") as log_error_patch:
+                protocol.set_http_handlers(http_get_handler=http_get_handler)
+                goal_state = GoalState(protocol.client)
+
+        log_error_args, _ = log_error_patch.call_args
+
+        self.assertEqual(cyphers, ["AES128_CBC", "DES_EDE3_CBC"], "There should have been 2 requests for the goal state certificates (AES128_CBC and DES_EDE3_CBC)")
+        self.assertEqual(log_error_args[0], "GoalStateCertificates", "An error fetching the goal state Certificates should have been reported")
+        self.assertEqual(0, len(goal_state.certs.summary), "Certificates should be empty")
+        self.assertFalse(os.path.exists(os.path.join(conf.get_lib_dir(), "Certificates.pfx")), "The Certificates.pfx file should not have been created")
+
+    def test_goal_state_should_try_legacy_cypher_and_then_fail_when_no_cyphers_are_supported_by_openssl(self):
+        cyphers = []
+        def http_get_handler(url, *_, **kwargs):
+            if HttpRequestPredicates.is_certificates_request(url):
+                cyphers.append(kwargs["headers"].get("x-ms-cipher-name"))
+            return None
+
+        original_popen = subprocess.Popen
+        openssl = conf.get_openssl_cmd()
+        decrypt_calls = []
+        def mock_fail_popen(command, *args, **kwargs):
+            if len(command) > 3 and command[0:3] == [openssl, "cms", "-decrypt"]:
+                decrypt_calls.append(command)
+                command[1] = "fake_openssl_command"  # force an error on the openssl to simulate a decryption failure
+            return original_popen(command, *args, **kwargs)
+
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+            with patch("azurelinuxagent.common.event.LogEvent.error") as log_error_patch:
+                with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", mock_fail_popen):
+                    goal_state = GoalState(protocol.client)
+
+        log_error_args, _ = log_error_patch.call_args
+
+        self.assertEqual(cyphers, ["AES128_CBC", "DES_EDE3_CBC"], "There should have been 2 requests for the goal state certificates (AES128_CBC and DES_EDE3_CBC)")
+        self.assertEqual(2, len(decrypt_calls), "There should have been 2 calls to 'openssl cms -decrypt'")
+        self.assertEqual(log_error_args[0], "GoalStateCertificates", "An error fetching the goal state Certificates should have been reported")
+        self.assertEqual(0, len(goal_state.certs.summary), "Certificates should be empty")
+        self.assertFalse(os.path.exists(os.path.join(conf.get_lib_dir(), "Certificates.pfx")), "The Certificates.pfx file should not have been created")
+
+    def test_goal_state_should_try_without_and_with_mac_verification_then_fail_when_the_pfx_cannot_be_converted(self):
+        original_popen = subprocess.Popen
+        openssl = conf.get_openssl_cmd()
+        nomacver = []
+
+        def mock_fail_popen(command, *args, **kwargs):
+            if len(command) > 2 and command[0] == openssl and command[1] == "pkcs12":
+                nomacver.append("-nomacver" in command)
+                # force an error on the openssl to simulate the conversion failure
+                command[1] = "fake_openssl_command"
+            return original_popen(command, *args, **kwargs)
+
+
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            with patch("azurelinuxagent.common.event.LogEvent.error") as log_error_patch:
+                with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", mock_fail_popen):
+                    goal_state = GoalState(protocol.client)
+
+        log_error_args, _ = log_error_patch.call_args
+
+        self.assertEqual(nomacver, [True, False], "There should have been 2 attempts to parse the PFX (with and without -nomacver)")
+        self.assertEqual(log_error_args[0], "GoalStateCertificates", "An error fetching the goal state Certificates should have been reported")
+        self.assertEqual(0, len(goal_state.certs.summary), "Certificates should be empty")
 
     def test_it_should_raise_when_goal_state_properties_not_initialized(self):
         with GoalStateTestCase._create_protocol_ws_and_hgap_in_sync() as protocol:
