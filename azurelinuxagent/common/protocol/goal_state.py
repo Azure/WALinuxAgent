@@ -161,6 +161,10 @@ class GoalState(object):
         else:
             return self._remote_access
 
+    @property
+    def history(self):
+        return self._history
+
     def fetch_agent_manifest(self, family_name, uris):
         """
         This is a convenience method that wraps WireClient.fetch_manifest(), but adds the required 'use_verify_header' parameter and saves

@@ -15,12 +15,12 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-import os
 import json
+import os
 
-from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, InvalidPolicyError, \
     _PolicyEngine, _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY, _DEFAULT_SIGNATURE_REQUIRED
+from tests.lib.tools import AgentTestCase
 from tests.lib.tools import patch
 
 TEST_EXTENSION_NAME = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
