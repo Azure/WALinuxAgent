@@ -571,6 +571,7 @@ class Certificates(LogEvent):
                 self._crypt_util.decrypt_certificates_p7m(p7m_file, trans_prv_file, trans_cert_file, pfx_file)
             except shellutil.CommandError as e:
                 self.warn(WALAEventOperation.GoalState, "Error in transport decryption [cypher: {0}]: {1}", cypher, ustr(e))
+                self._remove_file(pfx_file)
                 continue
 
             return pfx_file
@@ -616,21 +617,19 @@ class Certificates(LogEvent):
         buffer = []  # buffer for reading lines belonging to a certificate or private key
         index = 0
 
-        cryptutil = CryptUtil(conf.get_openssl_cmd())
-
         with open(pem_file) as pem:
             for line in pem.readlines():
                 buffer.append(line)
                 if re.match(r'[-]+END.*KEY[-]+', line):
                     tmp_file = Certificates._write_to_tmp_file(index, 'prv', buffer)
-                    pub = cryptutil.get_pubkey_from_prv(tmp_file)
+                    pub = self._crypt_util.get_pubkey_from_prv(tmp_file)
                     private_keys[pub] = tmp_file
                     buffer = []
                     index += 1
                 elif re.match(r'[-]+END.*CERTIFICATE[-]+', line):
                     tmp_file = Certificates._write_to_tmp_file(index, 'crt', buffer)
-                    pub = cryptutil.get_pubkey_from_crt(tmp_file)
-                    thumbprint = cryptutil.get_thumbprint_from_crt(tmp_file)
+                    pub = self._crypt_util.get_pubkey_from_crt(tmp_file)
+                    thumbprint = self._crypt_util.get_thumbprint_from_crt(tmp_file)
                     thumbprints[pub] = thumbprint
                     # Rename crt with thumbprint as the file name
                     crt = "{0}.crt".format(thumbprint)
