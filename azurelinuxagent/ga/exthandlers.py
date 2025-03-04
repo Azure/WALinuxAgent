@@ -1107,12 +1107,13 @@ class ExtHandlersHandler(object):
 
                         if 'formattedMessage' in heartbeat:
                             heartbeat_message = parse_formatted_message(heartbeat.get('formattedMessage'))
-                            # If extension is disallowed, the agent should set the handler status message on behalf of the
-                            # extension, handler_status.message should not be None.
-                            if handler_status.message is None:
-                                handler_status.message = "Extension was not executed, but it was previously enabled and reported the following heartbeat:\n{0}".format(heartbeat_message)
-                            elif ext_disallowed:
-                                handler_status.message += " Extension was previously enabled and reported the following heartbeat:\n{0}".format(heartbeat_message)
+                            if ext_disallowed:
+                                # If extension is disallowed, the agent should set the handler status message on behalf of the
+                                # extension, handler_status.message should not be None.
+                                if handler_status.message is None:
+                                    handler_status.message = "Extension was not executed, but it was previously enabled and reported the following heartbeat:\n{0}".format(heartbeat_message)
+                                else:
+                                    handler_status.message += " Extension was previously enabled and reported the following heartbeat:\n{0}".format(heartbeat_message)
                             else:
                                 handler_status.message = heartbeat_message
 
