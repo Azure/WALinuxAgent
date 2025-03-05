@@ -208,6 +208,13 @@ class ExtPolicy(AgentVmTest):
                 None
             )
 
+            # AzureSecurityLinuxAgent is an extension that reports heartbeat.
+            azure_security = ExtPolicy.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureSecurityLinuxAgent,
+                                              resource_name="AzureSecurityLinuxAgent"),
+                {}
+            )
+
             # An earlier test suite may have left behind extensions; cleanup any leftovers to test a "fresh" installation
             # for each extension in this suite.
             log.info("")
@@ -336,11 +343,13 @@ class ExtPolicy(AgentVmTest):
             self._create_policy_file(policy)
             self._operation_should_fail("enable", custom_script)
 
-            # This policy tests the following scenario:
+            # This policy tests the following scenarios:
+            # - allow and enable an extension that reports heartbeat (AzureSecurityLinuxAgent) -> should succeed"
             # - allow a previously-disallowed single-config extension (CustomScript), then enable again -> should succeed
             log.info("")
             log.info("*** Begin test case 4")
             log.info("This policy tests the following scenario:")
+            log.info(" - allow and enable an extension that reports heartbeat (AzureSecurityLinuxAgent) -> should succeed")
             log.info(" - allow a previously-disallowed single-config extension (CustomScript), then enable again -> should succeed")
             policy = \
                 {
@@ -350,19 +359,24 @@ class ExtPolicy(AgentVmTest):
                         "signatureRequired": False,
                         "extensions": {
                             "Microsoft.Azure.Extensions.CustomScript": {},
+                            "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent": {},
                             # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
                             "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
                         }
                     }
                 }
             self._create_policy_file(policy)
+            if VmExtensionIds.AzureSecurityLinuxAgent.supports_distro(distro):
+                self._operation_should_succeed("enable", azure_security)
             self._operation_should_succeed("enable", custom_script)
 
             # This policy tests the following scenarios:
+            # - disallow a previously-enabled extension that reports heartbeat (AzureSecurityLinuxAgent), then try to enable again -> should fail
             # - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> should reach timeout
             log.info("")
             log.info("*** Begin test case 5")
             log.info("This policy tests the following scenarios:")
+            log.info(" - disallow a previously-enabled extension that reports heartbeat (AzureSecurityLinuxAgent), then try to enable again -> should fail")
             log.info(" - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> should reach timeout")
             policy = \
                 {
@@ -377,6 +391,8 @@ class ExtPolicy(AgentVmTest):
                     }
                 }
             self._create_policy_file(policy)
+            if VmExtensionIds.AzureSecurityLinuxAgent.supports_distro(distro):
+                self._operation_should_fail("enable", azure_security)
             # Because this request marks CSE for deletion, the next operation must be a delete retry (enable will fail).
             self._operation_should_fail("delete", custom_script)
 

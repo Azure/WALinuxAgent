@@ -508,9 +508,14 @@ class ExtHandlersHandler(object):
 
         # Instantiate policy engine, and use same engine to handle all extension handlers. If an error is thrown during
         # policy engine initialization, we block all extensions and report the error via handler status for each extension.
+        # Save policy to history folder.
         policy_error = None
         try:
+            gs_history = self.protocol.get_goal_state().history
             policy_engine = ExtensionPolicyEngine()
+            if policy_engine is not None and policy_engine.policy_file_contents is not None and gs_history is not None:
+                gs_history.save(policy_engine.policy_file_contents, "waagent_policy.json")
+
         except Exception as ex:
             policy_error = ex
 
@@ -776,7 +781,6 @@ class ExtHandlersHandler(object):
         # Only report extension status for install errors of extensions with settings. Disable/uninstall errors are
         # reported at the handler status level only.
         if extension is not None and ext_handler_i.ext_handler.state == ExtensionRequestedState.Enabled:
-            # TODO: if extension is reporting heartbeat, it overwrites status. Consider overwriting heartbeat here.
             # Overwrite any existing status file to reflect the failure accurately.
             ext_handler_i.create_status_file(extension, status=ExtensionStatusValue.error, code=error_code,
                                              operation=ext_handler_i.operation, message=message, overwrite=True)
@@ -1089,14 +1093,30 @@ class ExtHandlersHandler(object):
 
             # Since we require reading the Manifest for reading the heartbeat, this would fail if HandlerManifest not found.
             # Only try to read heartbeat if HandlerState != NotInstalled.
+            # If extension is disallowed, concatenate the heartbeat message to the existing handler status message, and
+            # do not override handler error code or status with heartbeat.
             if handler_state != ExtHandlerState.NotInstalled:
-                # Heartbeat is a handler level thing only, so we dont need to modify this
+                # Heartbeat is a handler level thing only, so we don't need to modify this
                 try:
                     heartbeat = ext_handler_i.collect_heartbeat()
                     if heartbeat is not None:
-                        handler_status.status = heartbeat.get('status')
+                        if ext_disallowed:
+                            pass  # The status already specifies that the extension is disallowed ('NotReady')
+                        else:
+                            handler_status.status = heartbeat.get('status')
+
                         if 'formattedMessage' in heartbeat:
-                            handler_status.message = parse_formatted_message(heartbeat.get('formattedMessage'))
+                            heartbeat_message = parse_formatted_message(heartbeat.get('formattedMessage'))
+                            if ext_disallowed:
+                                # If extension is disallowed, the agent should set the handler status message on behalf of the
+                                # extension, handler_status.message should not be None.
+                                if handler_status.message is None:
+                                    handler_status.message = "Extension was not executed, but it was previously enabled and reported the following heartbeat:\n{0}".format(heartbeat_message)
+                                else:
+                                    handler_status.message += " Extension was previously enabled and reported the following heartbeat:\n{0}".format(heartbeat_message)
+                            else:
+                                handler_status.message = heartbeat_message
+
                 except ExtensionError as e:
                     ext_handler_i.set_handler_status(message=ustr(e), code=e.code)
 
