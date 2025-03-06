@@ -153,13 +153,6 @@ class AgentLog(object):
                 'if': lambda r: re.match(r"(((centos|redhat)7\.[48])|(redhat7\.6)|(redhat8\.2))\D*", DISTRO_NAME, flags=re.IGNORECASE)
             },
             #
-            # Ubuntu 22 uses cgroups v2, so we need to ignore these:
-            #
-            # 2025-02-05T20:37:38.134526Z INFO ExtHandler ExtHandler [CGW] cpu controller is not enabled; will not track
-            {
-                'message': r"\[CGW\]\s*(cpu|memory) controller is not enabled",
-                'if': lambda r: DISTRO_NAME == 'ubuntu' and DISTRO_VERSION >= '22.00'
-            },
             #
             # Old daemons can produce this message
             #
@@ -417,6 +410,14 @@ class AgentLog(object):
             #
             {
                 'message': r"(?s)Disabling resource usage monitoring. Reason: Failed to start.*using systemd-run, will try invoking the extension directly. Error: \[SystemdRunError\].*Failed to start transient scope unit: (Message recipient disconnected from message bus without replying|Connection reset by peer)",
+            },
+            #
+            # If agent is not mounted at the expected path, we log this message in v2 machines. This is not an error.
+            # 2025-03-03T09:19:03.145557Z INFO ExtHandler ExtHandler [CGW] The walinuxagent.service cgroup is not mounted at the expected path; will not track. Actual cgroup path:[/sys/fs/cgroup/system.slice/walinuxagent.service] Expected:[/sys/fs/cgroup/azure.slice/walinuxagent.service]
+            #
+            {
+                'message': r"The walinuxagent.service cgroup is not mounted at the expected path; will not track. Actual cgroup path:\[.*\] Expected:\[.*\]",
+                'if': lambda r: DISTRO_NAME == 'ubuntu' and DISTRO_VERSION >= '22.04'
             },
         ]
 
