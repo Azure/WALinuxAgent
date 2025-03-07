@@ -153,6 +153,14 @@ class AgentLog(object):
                 'if': lambda r: re.match(r"(((centos|redhat)7\.[48])|(redhat7\.6)|(redhat8\.2))\D*", DISTRO_NAME, flags=re.IGNORECASE)
             },
             #
+            # We log these when the controllers not mounted at root in v2 machines, expected warn.
+            #
+            # 2025-03-07T09:14:37.792300Z INFO ExtHandler ExtHandler [CGW] cpu controller is not enabled; will not track
+            {
+                'message': r"\[CGW\]\s*(cpu|memory) controller is not enabled",
+                'if': lambda r: DISTRO_NAME == 'ubuntu' and DISTRO_VERSION >= '22.00'
+            },
+            #
             #
             # Old daemons can produce this message
             #
