@@ -39,7 +39,7 @@ class InitialAgentUpdate(AgentVmTest):
         log.info("Testing initial agent update for new vms that are enrolled into RSM")
 
         log.info("Retrieving latest version from goal state to verify initial agent update")
-        latest_version: str = self._ssh_client.run_command("agent_update-self_update_latest_version.py --family_type Prod",
+        latest_version: str = self._ssh_client.run_command("agent_update-get_latest_version_from_manifest.py --family_type Prod",
                                                            use_sudo=True).rstrip()
         log.info("Latest Version: %s", latest_version)
         self._verify_agent_updated_to_latest_version(latest_version)
