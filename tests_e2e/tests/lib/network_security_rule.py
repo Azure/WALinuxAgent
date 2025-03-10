@@ -17,7 +17,7 @@
 
 import json
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from tests_e2e.tests.lib.update_arm_template import UpdateArmTemplate
 
@@ -53,6 +53,16 @@ class NetworkSecurityRule:
 
     def add_security_rule(self, security_rule: Dict[str, Any]) -> None:
         self._get_network_security_group()["properties"]["securityRules"].append(security_rule)
+
+    def disable_default_outbound_access(self) -> None:
+        subnets = self._get_subnets()
+        if self._is_lisa_template:
+            subnet = subnets[0].get("input")
+            if subnet is None:
+                raise Exception("Cannot find the input property of the subnets in the ARM template")
+        else:
+            subnet = subnets[0]
+        subnet["properties"]["defaultoutboundaccess"] = False
 
     def _get_network_security_group(self) -> Dict[str, Any]:
         resources: Any = self._template["resources"]
@@ -104,6 +114,8 @@ class NetworkSecurityRule:
           }}
         }}""")
 
+        subnets = self._get_subnets()
+
         if self._is_lisa_template:
             # The subnets are a copy property of the virtual network in LISA's ARM template:
             #
@@ -134,13 +146,6 @@ class NetworkSecurityRule:
             #         }
             #     }
             #
-            subnets_copy = network_resource["properties"].get("copy") if network_resource.get("properties") is not None else None
-            if subnets_copy is None:
-                raise Exception("Cannot find the copy property of the virtual network in the ARM template")
-
-            subnets = [i for i in subnets_copy if "name" in i and i["name"] == 'subnets']
-            if len(subnets) == 0:
-                raise Exception("Cannot find the subnets of the virtual network in the ARM template")
 
             subnets_input = subnets[0].get("input")
             if subnets_input is None:
@@ -175,9 +180,6 @@ class NetworkSecurityRule:
             #             ]
             #         }
             #     }
-            subnets = network_resource["properties"].get("subnets") if network_resource.get("properties") is not None else None
-            if subnets is None:
-                raise Exception("Cannot find the subnets property of the virtual network in the ARM template")
 
             subnets_properties = subnets[0].get("properties")
             if subnets_properties is None:
@@ -186,3 +188,78 @@ class NetworkSecurityRule:
                 subnets_properties.update(nsg_reference)
 
         return network_security_group
+
+    def _get_subnets(self) -> List[Dict[str, Any]]:
+        resources: Any = self._template["resources"]
+
+        network_resource = UpdateArmTemplate.get_resource(resources, "Microsoft.Network/virtualNetworks")
+        if self._is_lisa_template:
+            # The subnets are a copy property of the virtual network in LISA's ARM template:
+            #
+            #     {
+            #         "condition": "[empty(parameters('virtual_network_resource_group'))]",
+            #         "apiVersion": "2020-05-01",
+            #         "type": "Microsoft.Network/virtualNetworks",
+            #         "name": "[parameters('virtual_network_name')]",
+            #         "location": "[parameters('location')]",
+            #         "properties": {
+            #             "addressSpace": {
+            #                 "addressPrefixes": [
+            #                     "10.0.0.0/16"
+            #                 ]
+            #             },
+            #             "copy": [
+            #                 {
+            #                     "name": "subnets",
+            #                     "count": "[parameters('subnet_count')]",
+            #                     "input": {
+            #                         "name": "[concat(parameters('subnet_prefix'), copyIndex('subnets'))]",
+            #                         "properties": {
+            #                             "addressPrefix": "[concat('10.0.', copyIndex('subnets'), '.0/24')]"
+            #                         }
+            #                     }
+            #                 }
+            #             ]
+            #         }
+            #     }
+            #
+            subnets_copy = network_resource["properties"].get("copy") if network_resource.get(
+                "properties") is not None else None
+            if subnets_copy is None:
+                raise Exception("Cannot find the copy property of the virtual network in the ARM template")
+
+            subnets = [i for i in subnets_copy if "name" in i and i["name"] == 'subnets']
+            if len(subnets) == 0:
+                raise Exception("Cannot find the subnets of the virtual network in the ARM template")
+
+            return subnets
+        else:
+            #
+            # The subnets are simple property of the virtual network in template for scale sets:
+            #     {
+            #         "apiVersion": "2023-06-01",
+            #         "type": "Microsoft.Network/virtualNetworks",
+            #         "name": "[variables('virtualNetworkName')]",
+            #         "location": "[resourceGroup().location]",
+            #         "properties": {
+            #             "addressSpace": {
+            #                 "addressPrefixes": [
+            #                     "[variables('vnetAddressPrefix')]"
+            #                 ]
+            #             },
+            #             "subnets": [
+            #                 {
+            #                     "name": "[variables('subnetName')]",
+            #                     "properties": {
+            #                         "addressPrefix": "[variables('subnetPrefix')]",
+            #                     }
+            #                 }
+            #             ]
+            #         }
+            #     }
+            subnets = network_resource["properties"].get("subnets") if network_resource.get(
+                "properties") is not None else None
+            if subnets is None:
+                raise Exception("Cannot find the subnets property of the virtual network in the ARM template")
+
+            return subnets
