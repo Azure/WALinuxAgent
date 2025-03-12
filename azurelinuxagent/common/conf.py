@@ -320,6 +320,10 @@ def get_policy_file_path(conf=__conf__):
     return conf.get("Policy.PolicyFilePath", "/etc/waagent_policy.json")
 
 
+def get_microsoft_root_certificate_path():
+    return "/var/lib/waagent/microsoft_root_certificate.pem"
+
+
 def get_fips_enabled(conf=__conf__):
     return conf.get_switch("OS.EnableFIPS", False)
 

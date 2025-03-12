@@ -43,6 +43,7 @@ from azurelinuxagent.ga.update import  \
     get_update_handler, ORPHAN_POLL_INTERVAL, ORPHAN_WAIT_INTERVAL, \
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, \
     READONLY_FILE_GLOBS, ExtensionsSummary
+from azurelinuxagent.ga.certificates import MICROSOFT_ROOT_CERT_2011_03_22
 from tests.lib.mock_firewall_command import MockIpTables, MockFirewallCmd
 from tests.lib.mock_update_handler import mock_update_handler
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
@@ -51,6 +52,7 @@ from tests.lib.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_da
     clear_singleton_instances, skip_if_predicate_true, load_data, mock_sleep
 from tests.lib import wire_protocol_data
 from tests.lib.http_request_predicates import HttpRequestPredicates
+
 
 NO_ERROR = {
     "last_failure": 0.0,
@@ -1186,6 +1188,14 @@ class TestUpdate(UpdateTestCase):
         info_msgs = [args[0] for (args, _) in patch_info.call_args_list if
                      "Fetching the goal state recovered from previous errors." in args[0]]
         self.assertTrue(len(info_msgs) > 0, "Agent should've logged a message when recovered from GS errors")
+
+    def test_it_should_write_root_certificate_string_to_file(self):
+        with _get_update_handler() as (update_handler, _):
+            update_handler.run(debug=True)
+            cert_path = conf.get_microsoft_root_certificate_path()
+            self.assertTrue(os.path.isfile(cert_path))
+            with open(cert_path, 'r') as f:
+                self.assertEqual(f.read(), MICROSOFT_ROOT_CERT_2011_03_22)
 
 
 class TestUpdateWaitForCloudInit(AgentTestCase):
