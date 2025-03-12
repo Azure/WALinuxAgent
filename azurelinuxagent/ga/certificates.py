@@ -60,8 +60,11 @@ SB/c9O+lxbtVGjhjhE63bK2VVOxlIhBJF7jAHscPrFRH
 def _write_certificate(cert_string, output_path):
     """
     Write certificate string to file specified by output path, and change permissions to read-only.
-    Overwrite file if it already exists.
     """
+    if os.path.isfile(output_path):
+        logger.info("Certificate already exists at {0}".format(output_path))
+        return
+
     with open(output_path, "w") as cert_file:
         cert_file.write(cert_string)
     fileutil.chmod(output_path, 0o400)
