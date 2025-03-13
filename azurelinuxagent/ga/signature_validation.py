@@ -68,7 +68,7 @@ def validate_signature(package_path, signature):
             '-CAfile', microsoft_root_cert_file,  # Path to the trusted root certificate file used for verification
             '-no_check_time'  # Skips checking whether the certificate is expired
         ]
-        run_command(command)
+        run_command(command, encode_output=False)
         os.remove(signature_path)
         return True
 
