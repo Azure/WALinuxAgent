@@ -157,11 +157,11 @@ class NetworkSecurityRule:
             if subnets_copy is None:
                 raise Exception("Cannot find the copy property of the virtual network in the ARM template")
 
-            subnets_input = [i for i in subnets_copy if "name" in i and i["name"] == 'subnets']
-            if len(subnets_input) == 0:
+            subnets_with_input = [i for i in subnets_copy if "name" in i and i["name"] == 'subnets']
+            if len(subnets_with_input) == 0:
                 raise Exception("Cannot find the subnets of the virtual network in the ARM template")
 
-            subnets = [subnet.get("input") for subnet in subnets_copy if subnet.get("input") is not None]
+            subnets = [subnet.get("input") for subnet in subnets_with_input if subnet.get("input") is not None]
 
             if len(subnets) == 0:
                 raise Exception("Cannot find the input property of the subnets in the ARM template")
