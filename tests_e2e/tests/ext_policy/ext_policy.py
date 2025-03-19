@@ -239,7 +239,8 @@ class ExtPolicy(AgentVmTest):
             # is waiting for a disallowed delete request to time out (test case 5). In this case, the GuestConfig enable
             # request would be merged with the delete request into a new goal state. CRP would report success for GuestConfig
             # enable, but continue to poll for delete for another full timeout period (15 minutes), extending the total
-            # test runtime. As a workaround, we manually install GuestConfig if not already present.
+            # test runtime. As a workaround, we manually install GuestConfig if not already present. If GuestConfig
+            # does not support the distro, skip this workaround and the test case (5).
             distro = self._ssh_client.run_command("get_distro.py").rstrip()
             if VmExtensionIds.GuestConfig.supports_distro(distro):
                 guest_config_resource_name = "AzurePolicyforLinux"
@@ -393,8 +394,16 @@ class ExtPolicy(AgentVmTest):
             self._create_policy_file(policy)
             if VmExtensionIds.AzureSecurityLinuxAgent.supports_distro(distro):
                 self._operation_should_fail("enable", azure_security)
-            # Because this request marks CSE for deletion, the next operation must be a delete retry (enable will fail).
-            self._operation_should_fail("delete", custom_script)
+
+            # To avoid Azure Policy automatically installing GuestConfig and extending the timeout period, we manually
+            # install it ahead of time on supported distros. However, Azure Policy will still attempt to install GuestConfig on
+            # unsupported distros and extend test runtime, so we skip this test case on any unsupported distros.
+            if not VmExtensionIds.GuestConfig.supports_distro(distro):
+                log.info("Skipping delete failure test case: GuestConfig does not support distro '{0}' but Azure Policy "
+                         "may still attempt to install it, extending the timeout period".format(distro))
+            else:
+                # Because this request marks CSE for deletion, the next operation must be a delete retry (enable will fail).
+                self._operation_should_fail("delete", custom_script)
 
             # This policy tests the following scenarios:
             # - allow a previously-disallowed single-config extension (CustomScript), then try to delete again -> should succeed
