@@ -69,10 +69,13 @@ def validate_signature(package_path, signature):
             '-no_check_time'  # Skips checking whether the certificate is expired
         ]
         run_command(command, encode_output=False)
-        os.remove(signature_path)
         return True
 
     except Exception as ex:
         ex_info = getattr(ex, 'stderr', ex)
         msg = "Failed to validate signature of package '{0}'. Error details:\n{1}".format(package_path, ex_info)
         raise ExtensionDisallowedError(msg=msg, code=ExtensionErrorCodes.PluginPackageExtractionFailed)
+
+    finally:
+        if os.path.isfile(signature_path):
+            os.remove(signature_path)
