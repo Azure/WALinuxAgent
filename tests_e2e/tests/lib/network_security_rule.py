@@ -17,7 +17,7 @@
 
 import json
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from tests_e2e.tests.lib.update_arm_template import UpdateArmTemplate
 
@@ -53,6 +53,11 @@ class NetworkSecurityRule:
 
     def add_security_rule(self, security_rule: Dict[str, Any]) -> None:
         self._get_network_security_group()["properties"]["securityRules"].append(security_rule)
+
+    def disable_default_outbound_access(self) -> None:
+        subnets = self._get_subnets()
+        subnet = subnets[0]
+        subnet["properties"]["defaultoutboundaccess"] = False
 
     def _get_network_security_group(self) -> Dict[str, Any]:
         resources: Any = self._template["resources"]
@@ -104,6 +109,19 @@ class NetworkSecurityRule:
           }}
         }}""")
 
+        subnets = self._get_subnets()
+        subnets_properties = subnets[0].get("properties")
+        if subnets_properties is None:
+            subnets["properties"] = nsg_reference
+        else:
+            subnets_properties.update(nsg_reference)
+
+        return network_security_group
+
+    def _get_subnets(self) -> List[Dict[str, Any]]:
+        resources: Any = self._template["resources"]
+
+        network_resource = UpdateArmTemplate.get_resource(resources, "Microsoft.Network/virtualNetworks")
         if self._is_lisa_template:
             # The subnets are a copy property of the virtual network in LISA's ARM template:
             #
@@ -134,23 +152,21 @@ class NetworkSecurityRule:
             #         }
             #     }
             #
-            subnets_copy = network_resource["properties"].get("copy") if network_resource.get("properties") is not None else None
+            subnets_copy = network_resource["properties"].get("copy") if network_resource.get(
+                "properties") is not None else None
             if subnets_copy is None:
                 raise Exception("Cannot find the copy property of the virtual network in the ARM template")
 
-            subnets = [i for i in subnets_copy if "name" in i and i["name"] == 'subnets']
-            if len(subnets) == 0:
+            subnets_with_input = [i for i in subnets_copy if "name" in i and i["name"] == 'subnets']
+            if len(subnets_with_input) == 0:
                 raise Exception("Cannot find the subnets of the virtual network in the ARM template")
 
-            subnets_input = subnets[0].get("input")
-            if subnets_input is None:
+            subnets = [subnet.get("input") for subnet in subnets_with_input if subnet.get("input") is not None]
+
+            if len(subnets) == 0:
                 raise Exception("Cannot find the input property of the subnets in the ARM template")
 
-            subnets_properties = subnets_input.get("properties")
-            if subnets_properties is None:
-                subnets_input["properties"] = nsg_reference
-            else:
-                subnets_properties.update(nsg_reference)
+            return subnets
         else:
             #
             # The subnets are simple property of the virtual network in template for scale sets:
@@ -175,14 +191,9 @@ class NetworkSecurityRule:
             #             ]
             #         }
             #     }
-            subnets = network_resource["properties"].get("subnets") if network_resource.get("properties") is not None else None
+            subnets = network_resource["properties"].get("subnets") if network_resource.get(
+                "properties") is not None else None
             if subnets is None:
                 raise Exception("Cannot find the subnets property of the virtual network in the ARM template")
 
-            subnets_properties = subnets[0].get("properties")
-            if subnets_properties is None:
-                subnets["properties"] = nsg_reference
-            else:
-                subnets_properties.update(nsg_reference)
-
-        return network_security_group
+            return subnets

@@ -951,8 +951,12 @@ class AgentTestSuite(LisaTestSuite):
                         "publisher": "[parameters('publisher')]"
                     }
 
+        network_security_rule = NetworkSecurityRule(template, is_lisa_template=False)
+        # Disabling the default outbound access due to security requirement
+        log.info("******** Waagent: Marking subnet to disable default outbound access")
+        network_security_rule.disable_default_outbound_access()
         if self._allow_ssh != '':
-            NetworkSecurityRule(template, is_lisa_template=False).add_allow_ssh_rule(self._allow_ssh)
+            network_security_rule.add_allow_ssh_rule(self._allow_ssh)
 
         return template, {
             "username": {"value": self._user},
