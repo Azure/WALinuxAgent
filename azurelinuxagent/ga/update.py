@@ -62,7 +62,7 @@ from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, list_agent_lib_di
 from azurelinuxagent.ga.guestagent import GuestAgent
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
-from azurelinuxagent.ga.signing_certificates import write_root_certificates
+from azurelinuxagent.ga.signing_certificates import write_signing_certificates
 
 CHILD_HEALTH_INTERVAL = 15 * 60
 CHILD_LAUNCH_INTERVAL = 5 * 60
@@ -375,7 +375,7 @@ class UpdateHandler(object):
             self._ensure_cgroups_initialized()
             self._ensure_extension_telemetry_state_configured_properly(protocol)
             self._cleanup_legacy_goal_state_history()
-            write_root_certificates()
+            write_signing_certificates()
 
             # Get all thread handlers
             telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)

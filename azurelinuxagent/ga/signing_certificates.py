@@ -17,7 +17,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import os
-from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common import logger
 from azurelinuxagent.common import conf
 
@@ -57,24 +56,36 @@ SB/c9O+lxbtVGjhjhE63bK2VVOxlIhBJF7jAHscPrFRH
 -----END CERTIFICATE-----"""
 
 
+def get_microsoft_signing_certificate_path():
+    return os.path.join(conf.get_lib_dir(), "microsoft_root_certificate.pem")
+
+
 def _write_certificate(cert_string, output_path):
     """
-    Write certificate string to file specified by output path, and change permissions to read-only.
+    Write certificate string to file specified by output path. Overwrite file if it already exists.
     """
-    if os.path.isfile(output_path):
-        logger.info("Certificate already exists at {0}".format(output_path))
-        return
+    umask = None
+    try:
+        # If file already exists, delete and re-write it (grant write permissions before deletion).
+        if os.path.exists(output_path):
+            os.chmod(output_path, 0o644)
+            os.remove(output_path)
 
-    with open(output_path, "w") as cert_file:
-        cert_file.write(cert_string)
-    fileutil.chmod(output_path, 0o400)
-    logger.info("Certificate written to {0}".format(output_path))
+        # File should have read-only permissions on creation
+        umask = os.umask(0o222)
+        with open(output_path, "w") as cert_file:
+            cert_file.write(cert_string)
+        logger.info("Certificate written to {0}".format(output_path))
+
+    finally:
+        if umask is not None:
+            os.umask(umask)
 
 
-def write_root_certificates():
+def write_signing_certificates():
     """
     Write root certificates to the file location specified in conf.py.
     We store root certificates as strings and then write them to a file on agent init. Both the baked-in and
     self-update agent can use the same file path for the certificates.
     """
-    _write_certificate(MICROSOFT_ROOT_CERT_2011_03_22, conf.get_microsoft_root_certificate_path())
+    _write_certificate(MICROSOFT_ROOT_CERT_2011_03_22, get_microsoft_signing_certificate_path())

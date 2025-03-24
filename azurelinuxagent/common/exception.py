@@ -147,12 +147,6 @@ class ExtensionsConfigError(ExtensionsGoalStateError):
     """
 
 
-class ExtensionDisallowedError(ExtensionError):
-    """
-    Error raised when an extension is disallowed (signature validation failure, policy enforcement failure, etc.)
-    """
-
-
 class MultiConfigExtensionEnableError(ExtensionError):
     """
     Error raised when enable for a Multi-Config extension is failing.

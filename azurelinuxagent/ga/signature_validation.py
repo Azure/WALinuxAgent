@@ -20,11 +20,18 @@ import base64
 import os
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.utils.shellutil import run_command
-from azurelinuxagent.common.exception import ExtensionDisallowedError
+from azurelinuxagent.common.utils.shellutil import run_command, CommandError
+from azurelinuxagent.common.exception import ExtensionError
 from azurelinuxagent.common import event
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionErrorCodes
+from azurelinuxagent.ga.signing_certificates import get_microsoft_signing_certificate_path
+
+
+class SignatureValidationError(ExtensionError):
+    """
+    Error raised when signature validation fails for an extension.
+    """
 
 
 def _write_signature_to_file(sig_string, output_file):
@@ -42,7 +49,7 @@ def validate_signature(package_path, signature):
     Microsoft root certificate but does not enforce certificate expiration.
     :param package_path: path to package file being validated
     :param signature: base64-encoded signature string
-    :return: True if signature valid, else raise 'ExtensionDisallowedError'
+    :raises SignatureValidationError: if signature validation fails
     """
 
     event.info(WALAEventOperation.SignatureValidation, "Validating signature of package '{0}'".format(package_path))
@@ -51,16 +58,18 @@ def validate_signature(package_path, signature):
 
     try:
         _write_signature_to_file(signature, signature_path)
-        microsoft_root_cert_file = conf.get_microsoft_root_certificate_path()
+        microsoft_root_cert_file = get_microsoft_signing_certificate_path()
 
         # Use OpenSSL CLI to verify that the provided signature file correctly signs the package. The verification
-        # process checks the certificate chain against the specified root certificate file but does not enforce
-        # certificate expiration due to the `-no_check_time` flag. This ensures the signature is valid and originates from a
-        # trusted source, regardless of the certificate's expiration status.
+        # process checks the certificate chain against the specified root certificate file, but the certificate's
+        # expiration date is not enforced due to the `-no_check_time` flag. This allows the signature to be validated
+        # regardless of the certificate's expiration status. However, bypassing expiration checking does not guarantee
+        # that the signature is valid, as it could have been created with an expired/revoked certificate. This flag serves
+        # as a temporary measure until a robust solution for handling expired/revoked certificates is implemented.
         #
         # TODO: implement timestamp token parsing and validate that certificate was valid at time of signing
         command = [
-            'openssl', 'cms', '-verify',
+            conf.get_openssl_cmd(), 'cms', '-verify',
             '-binary', '-inform', 'der',  # Signature input format must be DER (binary encoding)
             '-in', signature_path,  # Path to the CMS signature file to be verified
             '-content', package_path,  # Path to the original package that was signed
@@ -69,12 +78,10 @@ def validate_signature(package_path, signature):
             '-no_check_time'  # Skips checking whether the certificate is expired
         ]
         run_command(command, encode_output=False)
-        return True
 
-    except Exception as ex:
-        ex_info = getattr(ex, 'stderr', ex)
-        msg = "Failed to validate signature of package '{0}'. Error details:\n{1}".format(package_path, ex_info)
-        raise ExtensionDisallowedError(msg=msg, code=ExtensionErrorCodes.PluginPackageExtractionFailed)
+    except CommandError as ex:
+        msg = "Signature validation failed for package '{0}'. \nReturn code: {1}\nError details:\n{2}".format(package_path, ex.returncode, ex.stderr)
+        raise SignatureValidationError(msg=msg, code=ExtensionErrorCodes.PluginPackageExtractionFailed)
 
     finally:
         if os.path.isfile(signature_path):

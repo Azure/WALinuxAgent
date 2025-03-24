@@ -27,7 +27,6 @@ from azurelinuxagent.common.utils.fileutil import read_file #pylint: disable=R04
 from azurelinuxagent.common.exception import AgentConfigError
 
 DISABLE_AGENT_FILE = 'disable_agent'
-MICROSOFT_ROOT_CERT_FILE = "microsoft_root_certificate.pem"
 
 
 class ConfigurationProvider(object):
@@ -319,10 +318,6 @@ def get_agent_log_file():
 
 def get_policy_file_path(conf=__conf__):
     return conf.get("Policy.PolicyFilePath", "/etc/waagent_policy.json")
-
-
-def get_microsoft_root_certificate_path(conf=__conf__):
-    return os.path.join(get_lib_dir(conf), MICROSOFT_ROOT_CERT_FILE)
 
 
 def get_fips_enabled(conf=__conf__):
