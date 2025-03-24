@@ -179,8 +179,6 @@ class AgentTestCase(unittest.TestCase):
 
         conf.get_agent_pid_file_path = Mock(return_value=os.path.join(self.tmp_dir, "waagent.pid"))
 
-        get_microsoft_signing_certificate_path = Mock(return_value=os.path.join(self.tmp_dir, "msft_cert.pem"))
-
         event.init_event_status(self.tmp_dir)
         event.init_event_logger(self.tmp_dir)
 

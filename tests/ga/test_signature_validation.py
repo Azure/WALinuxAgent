@@ -46,30 +46,34 @@ class TestSignatureValidation(AgentTestCase):
         # signature validation should fail for null extension
         with open(os.path.join(data_dir, "signing/invalid_signature.txt"), 'r') as f:
             invalid_signature = f.read()
-            with self.assertRaises(SignatureValidationError):
+            with self.assertRaises(SignatureValidationError, msg="Signature is invalid, should have raised error"):
                 validate_signature(self.null_ext_zip_path, invalid_signature)
 
     def test_should_raise_error_if_package_is_invalid(self):
         # This is the null extension zip package with one byte modified, signature validation should fail
         modified_ext = os.path.join(data_dir, "signing/NullExtensionModified.zip")
-        with self.assertRaises(SignatureValidationError):
+        with self.assertRaises(SignatureValidationError, msg="Zip package does not match signature, should have raised error"):
             validate_signature(modified_ext, self.null_ext_signature)
 
     def test_should_raise_error_on_expired_signing_certificate(self):
         # This is a valid but expired Microsoft root certificate - signature validation should fail
         expired_root_cert_path = os.path.join(data_dir, "signing/expired_root_cert.pem")
         with patch("azurelinuxagent.ga.signature_validation.get_microsoft_signing_certificate_path", return_value=expired_root_cert_path):
-            expected_error_msg = "Verify error:unable to get local issuer certificate"
-            with self.assertRaisesRegex(SignatureValidationError, expected_error_msg, msg="Should have raised SignatureValidationError indicating that local issuer certificate could not be verified"):
+            with self.assertRaises(SignatureValidationError, msg="Signing certificate expired, should have raised error") as ex:
                 validate_signature(self.null_ext_zip_path, self.null_ext_signature)
+            expected_error_msg = "Verify error:unable to get local issuer certificate"
+            self.assertIn(expected_error_msg, str(ex.exception.args[0]),
+                          msg="Raised SignatureValidationError but error did not indicate certificate failure")
 
     def test_should_raise_error_on_incorrect_signing_certificate(self):
         # This certificate is valid (not expired) but does not match the one used for signing - signature validation should fail
         incorrect_root_cert_path = os.path.join(data_dir, "signing/incorrect_root_cert.pem")
         with patch("azurelinuxagent.ga.signature_validation.get_microsoft_signing_certificate_path", return_value=incorrect_root_cert_path):
-            expected_error_msg = "Verify error:unable to get local issuer certificate"
-            with self.assertRaisesRegex(SignatureValidationError, expected_error_msg, msg="Should have raised SignatureValidationError indicating that local issuer certificate could not be verified"):
+            with self.assertRaises(SignatureValidationError, msg="Signing certificate does not match, should have raised error") as ex:
                 validate_signature(self.null_ext_zip_path, self.null_ext_signature)
+            expected_error_msg = "Verify error:unable to get local issuer certificate"
+            self.assertIn(expected_error_msg, str(ex.exception.args[0]),
+                          msg="Raised SignatureValidationError but error did not indicate certificate failure")
 
     def test_should_raise_error_on_missing_signing_certificate(self):
         root_cert_path = os.path.join(self.tmp_dir, "missing_root_cert.pem")
@@ -77,9 +81,8 @@ class TestSignatureValidation(AgentTestCase):
             os.remove(root_cert_path)
 
         with patch("azurelinuxagent.ga.signature_validation.get_microsoft_signing_certificate_path", return_value=root_cert_path):
-            expected_error_regex = r'Error loading file.*' + re.escape(root_cert_path) + r'.*No such file or directory'
-            with self.assertRaisesRegex(expected_exception=SignatureValidationError,
-                                        expected_regex=expected_error_regex,
-                                        msg="Should have raised SignatureValidationError indicating that certificate could not be found"):
+            with self.assertRaises(SignatureValidationError, msg="Signing certificate missing, should have raised error") as ex:
                 validate_signature(self.null_ext_zip_path, self.null_ext_signature)
-
+            expected_error_regex = r'Error loading file.*missing_root_cert\.pem.*No such file or directory'
+            match = re.search(expected_error_regex, str(ex.exception.args[0]), re.DOTALL)
+            self.assertIsNotNone(match, msg="Raised SignatureValidationError but error did not indicate that certificate is missing")
