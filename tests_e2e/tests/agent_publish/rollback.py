@@ -16,8 +16,6 @@
 # limitations under the License.
 from typing import Any, List, Dict
 
-from assertpy import fail
-
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.agent_update_helpers import request_rsm_update, verify_current_agent_version
