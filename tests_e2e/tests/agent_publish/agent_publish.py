@@ -23,8 +23,7 @@ from assertpy import fail
 from tests_e2e.tests.lib.agent_setup_helpers import wait_for_agent_to_complete_provisioning
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
-from tests_e2e.tests.lib.agent_update_helpers import request_rsm_update
-from tests_e2e.tests.lib.retry import retry_if_false
+from tests_e2e.tests.lib.agent_update_helpers import request_rsm_update, verify_current_agent_version
 from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds, VmExtensionIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
@@ -40,6 +39,7 @@ class AgentPublishTest(AgentVmTest):
         super().__init__(context)
         self._ssh_client: SshClient = self._context.create_ssh_client()
         self._published_version = self._get_published_version()
+        self._latest_version = self._get_latest_version()
 
     def run(self):
         """
@@ -52,18 +52,27 @@ class AgentPublishTest(AgentVmTest):
         # Since we skip install_agent setup, doing it here for the Agent to complete provisioning before starting the test
         wait_for_agent_to_complete_provisioning(self._ssh_client)
         self._get_agent_info()
+        log.info("Verify agent updated to prod latest version: %s", self._latest_version)
+        verify_current_agent_version(self._ssh_client, self._latest_version)
 
-        log.info("Testing rsm update flow....")
+        log.info("")
+        log.info("Testing rsm update({0} -> {1}) flow....".format(self._latest_version, self._published_version))
         self._prepare_agent_for_rsm_update()
         self._check_update_from_log()
-        self._verify_current_agent_version()
+        verify_current_agent_version(self._ssh_client, self._published_version)
         self._check_cse()
 
-        log.info("Testing self update flow....")
-        self._prepare_agent_for_self_update()
+        log.info("")
+        log.info("Testing self update(backed-in Agent -> {0}) flow....".format(self._published_version))
+        self._prepare_agent_for_self_update(True)
         self._check_update_from_log()
-        self._verify_current_agent_version()
+        verify_current_agent_version(self._ssh_client, self._published_version)
 
+        log.info("")
+        log.info("Testing self update({0} -> {1}) flow....".format(self._latest_version, self._published_version))
+        self._prepare_agent_for_self_update(False)
+        self._check_update_from_log()
+        verify_current_agent_version(self._ssh_client, self._published_version)
         self._check_cse()
 
     def get_ignore_errors_before_timestamp(self) -> datetime:
@@ -79,6 +88,14 @@ class AgentPublishTest(AgentVmTest):
 
         version = self._ssh_client.run_command("pypy3 -c 'from azurelinuxagent.common.version import AGENT_VERSION; print(AGENT_VERSION)'").rstrip()
         return version
+
+    def _get_latest_version(self):
+        """
+        Read the latest version from the test context(test_args), else use a dummy version
+        """
+        if hasattr(self._context, "latest_version"):
+            return self._context.latest_version
+        return "9.9.9.9"
 
     def _get_agent_info(self) -> None:
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
@@ -122,14 +139,19 @@ class AgentPublishTest(AgentVmTest):
                               "update-waagent-conf Debug.EnableGAVersioning=y AutoUpdate.GAFamily=Test", use_sudo=True)
         log.info('Successfully enabled rsm updates \n %s', output)
 
-    def _prepare_agent_for_self_update(self) -> None:
+    def _prepare_agent_for_self_update(self, clean_all_agents) -> None:
         """
         This method prepares the agent for the self update
         """
         log.info("Modifying agent update related config flags and renaming the log file")
-        setup_script = ("agent-service stop &&  mv /var/log/waagent.log /var/log/waagent.$(date --iso-8601=seconds).log && "
-                        "rm -rf /var/lib/waagent/WALinuxAgent-* && "
-                        "update-waagent-conf AutoUpdate.UpdateToLatestVersion=y AutoUpdate.GAFamily=Test AutoUpdate.Enabled=y Extensions.Enabled=y Debug.EnableGAVersioning=n")
+        if clean_all_agents:
+            setup_script = ("agent-service stop &&  mv /var/log/waagent.log /var/log/waagent.$(date --iso-8601=seconds).log && "
+                            "rm -rf /var/lib/waagent/WALinuxAgent-* && "
+                            "update-waagent-conf AutoUpdate.UpdateToLatestVersion=y AutoUpdate.GAFamily=Test AutoUpdate.Enabled=y Extensions.Enabled=y Debug.EnableGAVersioning=n")
+        else:
+            setup_script = ("agent-service stop &&  mv /var/log/waagent.log /var/log/waagent.$(date --iso-8601=seconds).log && "
+                            f"rm -rf /var/lib/waagent/WALinuxAgent-{self._published_version}* && "
+                            "update-waagent-conf AutoUpdate.UpdateToLatestVersion=y AutoUpdate.GAFamily=Test AutoUpdate.Enabled=y Extensions.Enabled=y Debug.EnableGAVersioning=n")
         self._run_remote_test(self._ssh_client, f"sh -c '{setup_script}'", use_sudo=True)
         log.info('Renamed log file and updated self-update config flags')
 
@@ -137,29 +159,6 @@ class AgentPublishTest(AgentVmTest):
         log.info("Verifying for agent update status")
         self._run_remote_test(self._ssh_client, f"agent_publish-check_update.py --published-version {self._published_version}")
         log.info('Successfully checked the agent update')
-
-    def _verify_current_agent_version(self) -> None:
-        """
-        Verify current agent version running on published version
-        """
-
-        def _check_agent_version(version: str) -> bool:
-            waagent_version: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
-            expected_version = f"Goal state agent: {version}"
-            if expected_version in waagent_version:
-                return True
-            else:
-                return False
-
-        waagent_version: str = ""
-        log.info("Verifying agent updated to published version: {0}".format(self._published_version))
-        success: bool = retry_if_false(lambda: _check_agent_version(self._published_version))
-        if not success:
-            fail("Guest agent didn't update to published version {0} but found \n {1}. \n ".format(
-                self._published_version, waagent_version))
-        waagent_version: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
-        log.info(
-            f"Successfully verified agent updated to published version. Current agent version running:\n {waagent_version}")
 
     def _check_cse(self) -> None:
         custom_script_2_1 = VirtualMachineExtensionClient(

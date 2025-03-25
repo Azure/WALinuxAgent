@@ -15,6 +15,8 @@
 #
 import json
 
+from assertpy import fail
+
 import requests
 from azure.identity import DefaultAzureCredential
 from msrestazure.azure_cloud import Cloud
@@ -22,6 +24,8 @@ from azure.mgmt.compute.models import VirtualMachine
 
 from tests_e2e.tests.lib.azure_clouds import AZURE_CLOUDS
 from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.retry import retry_if_false
+from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 
 # Helper methods for agent update/publish tests
@@ -91,3 +95,26 @@ def request_rsm_update(requested_version: str, vm: VirtualMachineClient, arch_ty
     else:
         raise Exception("Error occurred while making RSM upgrade request. Status code : {0} and msg: {1}".format(
             response.status_code, response.content))
+
+def verify_current_agent_version(ssh_client: SshClient, requested_version: str) -> None:
+    """
+    Verify current agent version running on published version
+    """
+
+    def _check_agent_version(version: str) -> bool:
+        waagent_version: str = ssh_client.run_command("waagent-version", use_sudo=True)
+        expected_version = f"Goal state agent: {version}"
+        if expected_version in waagent_version:
+            return True
+        else:
+            return False
+
+    waagent_version: str = ""
+    log.info("Verifying agent updated to published version: {0}".format(requested_version))
+    success: bool = retry_if_false(lambda: _check_agent_version(requested_version))
+    if not success:
+        fail("Guest agent didn't update to published version {0} but found \n {1}. \n ".format(
+            requested_version, waagent_version))
+    waagent_version: str = ssh_client.run_command("waagent-version", use_sudo=True)
+    log.info(
+        f"Successfully verified agent updated to published version. Current agent version running:\n {waagent_version}")

@@ -20,7 +20,7 @@ from assertpy import fail
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
-from tests_e2e.tests.lib.agent_update_helpers import request_rsm_update
+from tests_e2e.tests.lib.agent_update_helpers import request_rsm_update, verify_current_agent_version
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
 from tests_e2e.tests.lib.ssh_client import SshClient
@@ -37,15 +37,13 @@ class Rollback(AgentVmTest):
 
     def run(self):
         log.info("Testing rollback update....")
-        log.info("Retrieving the rollback version from the manifest(Latest version in Prod)")
-        rollback_version: str = self._ssh_client.run_command("agent_update-get_latest_version_from_manifest.py --family_type Prod",
-                                                           use_sudo=True).rstrip()
+        log.info("Retrieving the rollback version(Latest version in Prod)")
+        rollback_version = self._get_latest_version()
 
         # At this point, vm should have been updated to published test version
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
         log.info("Current agent version running on the vm before update is \n%s", stdout)
         log.info("Attempting downgrade version %s", rollback_version)
-        rollback_version = "2.12.0.2"
         arch_type = self._ssh_client.get_architecture()
         request_rsm_update(rollback_version, self._context.vm, arch_type)
         self._check_rsm_gs(rollback_version)
@@ -54,7 +52,7 @@ class Rollback(AgentVmTest):
             "update-waagent-conf Debug.EnableGAVersioning=y", use_sudo=True)
         log.info('Successfully enabled rsm updates \n %s', output)
 
-        self._verify_current_agent_version(rollback_version)
+        verify_current_agent_version(self._ssh_client, rollback_version)
 
 
     def _check_rsm_gs(self, requested_version: str) -> None:
@@ -97,6 +95,14 @@ class Rollback(AgentVmTest):
 
         version = self._ssh_client.run_command("pypy3 -c 'from azurelinuxagent.common.version import AGENT_VERSION; print(AGENT_VERSION)'").rstrip()
         return version
+
+    def _get_latest_version(self):
+        """
+        Read the latest version from the test context(test_args), else use a dummy version
+        """
+        if hasattr(self._context, "latest_version"):
+            return self._context.latest_version
+        return "9.9.9.9"
 
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
