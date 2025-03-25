@@ -98,7 +98,7 @@ def request_rsm_update(requested_version: str, vm: VirtualMachineClient, arch_ty
 
 def verify_current_agent_version(ssh_client: SshClient, requested_version: str) -> None:
     """
-    Verify current agent version running on published version
+    Verify current agent version running on requested version
     """
 
     def _check_agent_version(version: str) -> bool:

@@ -146,11 +146,11 @@ class AgentPublishTest(AgentVmTest):
         log.info("Modifying agent update related config flags and renaming the log file")
         if clean_all_agents:
             setup_script = ("agent-service stop &&  mv /var/log/waagent.log /var/log/waagent.$(date --iso-8601=seconds).log && "
-                            "rm -rf /var/lib/waagent/WALinuxAgent-* && "
+                            "rm -rfv /var/lib/waagent/WALinuxAgent-* && "
                             "update-waagent-conf AutoUpdate.UpdateToLatestVersion=y AutoUpdate.GAFamily=Test AutoUpdate.Enabled=y Extensions.Enabled=y Debug.EnableGAVersioning=n")
         else:
             setup_script = ("agent-service stop &&  mv /var/log/waagent.log /var/log/waagent.$(date --iso-8601=seconds).log && "
-                            f"rm -rf /var/lib/waagent/WALinuxAgent-{self._published_version}* && "
+                            f"rm -rfv /var/lib/waagent/WALinuxAgent-{self._published_version}* && "
                             "update-waagent-conf AutoUpdate.UpdateToLatestVersion=y AutoUpdate.GAFamily=Test AutoUpdate.Enabled=y Extensions.Enabled=y Debug.EnableGAVersioning=n")
         self._run_remote_test(self._ssh_client, f"sh -c '{setup_script}'", use_sudo=True)
         log.info('Renamed log file and updated self-update config flags')
