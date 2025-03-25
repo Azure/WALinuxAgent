@@ -18,8 +18,6 @@
 import uuid
 from datetime import datetime
 
-from assertpy import fail
-
 from tests_e2e.tests.lib.agent_setup_helpers import wait_for_agent_to_complete_provisioning
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
