@@ -153,6 +153,14 @@ class AgentLog(object):
                 'if': lambda r: re.match(r"(((centos|redhat)7\.[48])|(redhat7\.6)|(redhat8\.2))\D*", DISTRO_NAME, flags=re.IGNORECASE)
             },
             #
+            # We log these when the controllers not mounted at root in v2 machines, expected warn.
+            #
+            # 2025-03-07T09:14:37.792300Z INFO ExtHandler ExtHandler [CGW] cpu controller is not enabled; will not track
+            {
+                'message': r"\[CGW\]\s*(cpu|memory) controller is not enabled",
+                'if': lambda r: DISTRO_NAME == 'ubuntu' and DISTRO_VERSION >= '22.00'
+            },
+            #
             #
             # Old daemons can produce this message
             #
@@ -398,8 +406,9 @@ class AgentLog(object):
             # 2025-01-06T09:32:42.594033Z INFO ExtHandler ExtHandler [CGW] Failed to set the extension azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice slice and quotas:
             # 'systemctl show azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice --property CPUAccounting' failed: 1 (Failed to get properties: Connection reset by peer)
             #
+            # 2025-03-12T08:48:02.186772Z INFO ExtHandler ExtHandler [CGW] Error parsing current CPUQuotaPerSecUSec: 'systemctl show azure-vmextensions-Microsoft.Azure.Extensions.Edp.GATestExtGo.slice --property CPUQuotaPerSecUSec' failed: 1 (Failed to get properties: Connection reset by peer)
             {
-                'message': r"Failed to set the extension.*systemctl show.*--property.*failed: 1.*(Message recipient disconnected from message bus without replying|Connection reset by peer)",
+                'message': r"(Failed to set the extension|Error parsing).*systemctl show.*--property.*failed: 1.*(Message recipient disconnected from message bus without replying|Connection reset by peer)",
             },
             #
             # 2025-01-06T09:32:44.641948Z INFO ExtHandler ExtHandler [CGW] Disabling resource usage monitoring. Reason: Failed to start Microsoft.Azure.Extensions.CustomScript-2.1.10 using systemd-run, will try invoking the extension directly. Error: [SystemdRunError] Systemd process exited with code 1 and output [stdout]
