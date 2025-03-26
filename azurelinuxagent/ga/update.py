@@ -368,6 +368,7 @@ class UpdateHandler(object):
 
             agent_update_handler = get_agent_update_handler(protocol)
 
+            write_signing_certificates()
             self._ensure_no_orphans()
             self._emit_restart_event()
             self._emit_changes_in_default_configuration()
@@ -375,7 +376,6 @@ class UpdateHandler(object):
             self._ensure_cgroups_initialized()
             self._ensure_extension_telemetry_state_configured_properly(protocol)
             self._cleanup_legacy_goal_state_history()
-            write_signing_certificates()
 
             # Get all thread handlers
             telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)

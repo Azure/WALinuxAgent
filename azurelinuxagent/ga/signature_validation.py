@@ -53,7 +53,7 @@ def validate_signature(package_path, signature):
     """
 
     event.info(WALAEventOperation.SignatureValidation, "Validating signature of package '{0}'".format(package_path))
-    signature_file_name = os.path.basename(package_path).rstrip(".zip") + "_signature.pem"
+    signature_file_name = os.path.basename(package_path) + "_signature.pem"
     signature_path = os.path.join(conf.get_lib_dir(), str(signature_file_name))
 
     try:

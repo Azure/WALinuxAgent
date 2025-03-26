@@ -20,7 +20,7 @@ import os
 from azurelinuxagent.common import logger
 from azurelinuxagent.common import conf
 
-MICROSOFT_ROOT_CERT_2011_03_22 = """-----BEGIN CERTIFICATE-----
+_MICROSOFT_ROOT_CERT_2011_03_22 = """-----BEGIN CERTIFICATE-----
 MIIF7TCCA9WgAwIBAgIQP4vItfyfspZDtWnWbELhRDANBgkqhkiG9w0BAQsFADCB
 iDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCldhc2hpbmd0b24xEDAOBgNVBAcTB1Jl
 ZG1vbmQxHjAcBgNVBAoTFU1pY3Jvc29mdCBDb3Jwb3JhdGlvbjEyMDAGA1UEAxMp
@@ -66,13 +66,8 @@ def _write_certificate(cert_string, output_path):
     """
     umask = None
     try:
-        # If file already exists, delete and re-write it (grant write permissions before deletion).
-        if os.path.exists(output_path):
-            os.chmod(output_path, 0o644)
-            os.remove(output_path)
-
-        # File should have read-only permissions on creation
-        umask = os.umask(0o222)
+        # Only owner should have read-write permissions on file creation (600)
+        umask = os.umask(0o077)
         with open(output_path, "w") as cert_file:
             cert_file.write(cert_string)
         logger.info("Certificate written to {0}".format(output_path))
@@ -88,4 +83,4 @@ def write_signing_certificates():
     We store root certificates as strings and then write them to a file on agent init. Both the baked-in and
     self-update agent can use the same file path for the certificates.
     """
-    _write_certificate(MICROSOFT_ROOT_CERT_2011_03_22, get_microsoft_signing_certificate_path())
+    _write_certificate(_MICROSOFT_ROOT_CERT_2011_03_22, get_microsoft_signing_certificate_path())
