@@ -473,7 +473,7 @@ def http_request(method,
 
             if request_failed(resp):
                 if _is_retry_status(resp.status, retry_codes=retry_codes):
-                    msg = '[HTTP Retry] {0} {1} -- Status Code {2}'.format(method, url, resp.status)
+                    msg = '[HTTP Retry] {0} {1} -- Status Code {2}'.format(method, redact_sas_tokens_in_urls(url), resp.status)
                     # Note if throttled and ensure a safe, minimum number of
                     # retry attempts
                     if _is_throttle_status(resp.status):
@@ -503,7 +503,7 @@ def http_request(method,
             if return_raw_response:  # skip all error handling
                 raise
             clean_url = _trim_url_parameters(url)
-            msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(method, clean_url, e)
+            msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(method, redact_sas_tokens_in_urls(clean_url), e)
             if _is_retry_exception(e):
                 continue
             break
@@ -513,7 +513,7 @@ def http_request(method,
                 raise
             IOErrorCounter.increment(host=host, port=port)
             clean_url = _trim_url_parameters(url)
-            msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(method, clean_url, e)
+            msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(method, redact_sas_tokens_in_urls(clean_url), e)
             continue
 
     raise HttpError("{0} -- {1} attempts made".format(msg, attempt))

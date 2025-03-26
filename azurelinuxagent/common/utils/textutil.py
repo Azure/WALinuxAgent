@@ -445,3 +445,14 @@ def format_exception(exception):
 
     return msg
 
+
+SAS_TOKEN_RE = re.compile(r'(https://\S+\?)((sv|st|se|sr|sp|sip|spr|sig)=\S+)+', flags=re.IGNORECASE)
+
+
+def redact_sas_token(msg):
+    """
+    Redact SAS tokens from the message
+    """
+    return SAS_TOKEN_RE.sub(r'\1<redacted>', msg)
+
+

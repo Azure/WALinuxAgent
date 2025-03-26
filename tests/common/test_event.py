@@ -447,6 +447,15 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         self.assertEqual(len(event_list), 1)
         self.assertEqual(TestEvent._get_event_message(event_list[0]), u'World\u05e2\u05d9\u05d5\u05ea \u05d0\u05d7\u05e8\u05d5\u05ea\u0906\u091c')
 
+    def test_collect_events_should_redact_message(self):
+        self._create_test_event_file("event_with_sas_token.tld")
+
+        event_list = self._collect_events()
+
+        self.assertEqual(len(event_list), 1)
+
+        self.assertIn('<redacted>', TestEvent._get_event_message(event_list[0]))
+
     def test_collect_events_should_ignore_invalid_event_files(self):
         self._create_test_event_file("custom_script_1.tld")  # a valid event
         self._create_test_event_file("custom_script_utf-16.tld")

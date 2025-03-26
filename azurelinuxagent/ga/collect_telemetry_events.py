@@ -32,6 +32,7 @@ from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_I
     CollectOrReportEventDebugInfo, EVENT_FILE_REGEX, parse_event
 from azurelinuxagent.common.exception import InvalidExtensionEventError, ServiceStoppedError, EventError
 from azurelinuxagent.common.future import ustr, is_file_not_found_error
+from azurelinuxagent.common.utils.textutil import redact_sas_token
 from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
     GuestAgentGenericLogsSchema, GuestAgentExtensionEventsSchema
@@ -357,7 +358,9 @@ class _ProcessExtensionEvents(PeriodicOperation):
                 if isinstance(v, int):
                     if k.lower() in [ExtensionEventSchema.EventPid.lower(), ExtensionEventSchema.EventTid.lower()]:
                         return str(v)
-                return v.strip()
+                unredacted = v.strip()
+                # redact the sas token from the event
+                return redact_sas_token(unredacted)
             return v
 
         event_size = 0
@@ -459,6 +462,7 @@ class _CollectAndEnqueueEvents(PeriodicOperation):
                     logger.verbose("Processing event file: {0}", event_file_path)
 
                     event = self._read_and_parse_event_file(event_file_path)
+                    _CollectAndEnqueueEvents._redact_event_msg(event)
 
                     # "legacy" events are events produced by previous versions of the agent (<= 2.2.46) and extensions;
                     # they do not include all the telemetry fields, so we add them here
@@ -563,6 +567,15 @@ class _CollectAndEnqueueEvents(PeriodicOperation):
                 trimmed_params.append(param)
 
         event.parameters = trimmed_params
+
+    @staticmethod
+    def _redact_event_msg(event):
+        """
+        redact sas tokens from message
+        """
+        for param in event.parameters:
+            if param.name == GuestAgentExtensionEventsSchema.Message:
+                param.value = redact_sas_token(param.value)
 
 
 class CollectTelemetryEventsHandler(ThreadHandlerInterface):
