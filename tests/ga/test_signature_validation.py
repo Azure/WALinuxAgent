@@ -28,8 +28,8 @@ class TestSignatureValidation(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
         write_signing_certificates()
-        self.null_ext_zip_path = os.path.join(data_dir, "signing/NullExtension.zip")
-        null_ext_sig_path = os.path.join(data_dir, "signing/NullExtensionSignature.txt")
+        self.null_ext_zip_path = os.path.join(data_dir, "signing/null_extension.zip")
+        null_ext_sig_path = os.path.join(data_dir, "signing/null_extension_signature.txt")
         with open(null_ext_sig_path, 'r') as f:
             self.null_ext_signature = f.read()
 
@@ -38,8 +38,18 @@ class TestSignatureValidation(AgentTestCase):
         AgentTestCase.tearDown(self)
 
     def test_should_validate_signature_successfully(self):
-        # Test that signature can be validated with no exception thrown
+        # Test that the signature can be validated successfully without raising an exception
+        # Note: the test extension was signed with an expired cert - should still validate successfully
         validate_signature(self.null_ext_zip_path, self.null_ext_signature)
+
+    def test_should_validate_signature_for_package_signed_with_expired_cert(self):
+        # Test that signature validates successfully for a package signed with an expired root certificate
+        expired_cert_path = os.path.join(data_dir, "signing/expired_root_cert.pem")
+        with patch("azurelinuxagent.ga.signature_validation.get_microsoft_signing_certificate_path",
+                   return_value=expired_cert_path):
+            with open(os.path.join(data_dir, "signing/null_extension_signature_from_expired_root_cert.txt"), 'r') as f:
+                signature = f.read()
+                validate_signature(self.null_ext_zip_path, signature)
 
     def test_should_raise_error_if_signature_is_invalid(self):
         # This signature is correctly formatted but belongs to a different extension (CSE),
@@ -51,7 +61,7 @@ class TestSignatureValidation(AgentTestCase):
 
     def test_should_raise_error_if_package_is_invalid(self):
         # This is the null extension zip package with one byte modified, signature validation should fail
-        modified_ext = os.path.join(data_dir, "signing/NullExtensionModified.zip")
+        modified_ext = os.path.join(data_dir, "signing/null_extension_modified.zip")
         with self.assertRaises(SignatureValidationError, msg="Zip package does not match signature, should have raised error"):
             validate_signature(modified_ext, self.null_ext_signature)
 
