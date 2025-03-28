@@ -423,10 +423,10 @@ class AgentLog(object):
             #
             # If agent is not mounted at the expected path, we log this message in v2 machines. This is not an error.
             # 2025-03-03T09:19:03.145557Z INFO ExtHandler ExtHandler [CGW] The walinuxagent.service cgroup is not mounted at the expected path; will not track. Actual cgroup path:[/sys/fs/cgroup/system.slice/walinuxagent.service] Expected:[/sys/fs/cgroup/azure.slice/walinuxagent.service]
+            # 2025-03-12T22:03:04.095141Z INFO ExtHandler ExtHandler [CGW] The cpu,cpuacct controller is not mounted at the expected path for the walinuxagent.service cgroup; will not track. Actual cgroup path:[/sys/fs/cgroup/cpu,cpuacct/system.slice/walinuxagent.service] Expected:[/sys/fs/cgroup/cpu,cpuacct/azure.slice/walinuxagent.service]
             #
             {
-                'message': r"The walinuxagent.service cgroup is not mounted at the expected path; will not track. Actual cgroup path:\[.*\] Expected:\[.*\]",
-                'if': lambda r: DISTRO_NAME == 'ubuntu' and DISTRO_VERSION >= '22.04'
+                'message': r"(The walinuxagent.service cgroup is not mounted at the expected path|controller is not mounted at the expected path for the walinuxagent.service cgroup); will not track. Actual cgroup path:\[.*\] Expected:\[.*\]",
             },
         ]
 
