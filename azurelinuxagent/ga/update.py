@@ -377,7 +377,6 @@ class UpdateHandler(object):
             self._cleanup_legacy_goal_state_history()
             write_signing_certificates()
 
-
             # Get all thread handlers
             telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)
             all_thread_handlers = [

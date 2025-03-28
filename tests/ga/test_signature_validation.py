@@ -95,19 +95,17 @@ class TestSignatureValidation(AgentTestCase):
                 signing_errors = [kw for _, kw in report_err.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation]
                 self.assertEqual(1, len(signing_errors), "Error writing signing certificates not logged or sent as telemetry")
 
-    @unittest.skip("This test has not been implemented.")
     def test_should_raise_error_if_root_cert_was_expired_at_signing_time(self):
         # TODO: Test is skipped because it requires timestamp validation implementation. Write this test after
         # timestamp validation has been implemented.
-        self.fail()
+        self.skipTest("This test has not been implemented")
 
-    @unittest.skip("This test has not been implemented.")
     def test_should_raise_error_if_intermediate_cert_was_expired_at_signing_time(self):
         # TODO: Test is skipped because it requires timestamp validation implementation. Write this test after
         # timestamp validation has been implemented.
-        self.fail()
-    @unittest.skip("This test has not been implemented.")
+        self.skipTest("This test has not been implemented")
+
     def test_should_raise_error_if_leaf_cert_was_expired_at_signing_time(self):
         # TODO: Test is skipped because it requires timestamp validation implementation. Write this test after
         # timestamp validation has been implemented.
-        self.fail()
+        self.skipTest("This test has not been implemented")

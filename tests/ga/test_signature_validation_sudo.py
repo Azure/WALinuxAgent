@@ -66,4 +66,4 @@ class TestSignatureValidationSudo(AgentTestCase):
         # Signature validation should still pass, because the signature was generated when the root certificate was unexpired.
         self.assertTrue(i_am_root(), "Test does not run when non-root")
         TestSignatureValidationSudo._validate_signature_in_another_year(2027, self.null_ext_zip_path, self.null_ext_signature)
-    
+
