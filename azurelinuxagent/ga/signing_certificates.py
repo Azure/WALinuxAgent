@@ -19,6 +19,9 @@
 import os
 from azurelinuxagent.common import logger
 from azurelinuxagent.common import conf
+from azurelinuxagent.common import event
+from azurelinuxagent.common.event import WALAEventOperation
+
 
 _MICROSOFT_ROOT_CERT_2011_03_22 = """-----BEGIN CERTIFICATE-----
 MIIF7TCCA9WgAwIBAgIQP4vItfyfspZDtWnWbELhRDANBgkqhkiG9w0BAQsFADCB
@@ -72,6 +75,10 @@ def _write_certificate(cert_string, output_path):
             cert_file.write(cert_string)
         logger.info("Certificate written to {0}".format(output_path))
 
+    except Exception as err:
+        msg = "Failed to write signing certificate to file ('{0}'). Error details:\n{1}".format(output_path, err)
+        event.error(op=WALAEventOperation.SignatureValidation, fmt=msg)
+
     finally:
         if umask is not None:
             os.umask(umask)
@@ -79,7 +86,7 @@ def _write_certificate(cert_string, output_path):
 
 def write_signing_certificates():
     """
-    Write root certificates to the file location specified in conf.py.
+    Write root certificates to the library directory (directory specified in conf.py).
     We store root certificates as strings and then write them to a file on agent init. Both the baked-in and
     self-update agent can use the same file path for the certificates.
     """

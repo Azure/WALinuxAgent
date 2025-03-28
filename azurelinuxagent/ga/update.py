@@ -62,7 +62,7 @@ from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, list_agent_lib_di
 from azurelinuxagent.ga.guestagent import GuestAgent
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
-from azurelinuxagent.ga.signing_certificates import write_signing_certificates
+from azurelinuxagent.ga.signing_certificates import write_signing_certificates, get_microsoft_signing_certificate_path
 
 CHILD_HEALTH_INTERVAL = 15 * 60
 CHILD_LAUNCH_INTERVAL = 5 * 60
@@ -368,7 +368,6 @@ class UpdateHandler(object):
 
             agent_update_handler = get_agent_update_handler(protocol)
 
-            write_signing_certificates()
             self._ensure_no_orphans()
             self._emit_restart_event()
             self._emit_changes_in_default_configuration()
@@ -376,6 +375,8 @@ class UpdateHandler(object):
             self._ensure_cgroups_initialized()
             self._ensure_extension_telemetry_state_configured_properly(protocol)
             self._cleanup_legacy_goal_state_history()
+            write_signing_certificates()
+
 
             # Get all thread handlers
             telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)
@@ -864,6 +865,9 @@ class UpdateHandler(object):
     def _ensure_readonly_files(self):
         for g in READONLY_FILE_GLOBS:
             for path in glob.iglob(os.path.join(conf.get_lib_dir(), g)):
+                # Owner should retain write permissions for signing certificate
+                if path == get_microsoft_signing_certificate_path():
+                    continue
                 os.chmod(path, stat.S_IRUSR)
 
     def _ensure_cgroups_initialized(self):

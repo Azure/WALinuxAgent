@@ -60,6 +60,14 @@ def validate_signature(package_path, signature):
         _write_signature_to_file(signature, signature_path)
         microsoft_root_cert_file = get_microsoft_signing_certificate_path()
 
+        if not os.path.isfile(microsoft_root_cert_file):
+            msg = (
+                "Signature validation failed for package '{0}': "
+                "signing certificate was not found at expected location ('{1}'). "
+                "Try restarting the agent, or see log ('{2}') for additional details."
+            ).format(package_path, microsoft_root_cert_file, conf.get_agent_log_file())
+            raise SignatureValidationError(msg=msg, code=ExtensionErrorCodes.PluginPackageExtractionFailed)
+
         # Use OpenSSL CLI to verify that the provided signature file correctly signs the package. The verification
         # process checks the certificate chain against the specified root certificate file, but the certificate's
         # expiration date is not enforced due to the `-no_check_time` flag. This allows the signature to be validated
