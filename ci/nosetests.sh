@@ -16,7 +16,7 @@ echo EXIT_CODE no_sudo nosetests = $EXIT_CODE
 echo "========================================="
 echo "****      nosetests sudo tests       ****"
 echo "========================================="
-sudo env "PATH=$PATH" nosetests tests/ga/test_cgroupconfigurator_sudo.py test_signature_validation_sudo.py $NOSEOPTS || EXIT_CODE=$(($EXIT_CODE || $?))
+sudo env "PATH=$PATH" nosetests tests/ga/test_cgroupconfigurator_sudo.py tests/ga/test_signature_validation_sudo.py $NOSEOPTS || EXIT_CODE=$(($EXIT_CODE || $?))
 echo EXIT_CODE with_sudo nosetests = $EXIT_CODE
 
 [[ -f .coverage ]] && \
