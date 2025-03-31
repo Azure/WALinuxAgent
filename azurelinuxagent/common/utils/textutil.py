@@ -453,6 +453,8 @@ def redact_sas_token(msg):
     """
     Redact SAS tokens from the message
     """
+    if msg is None:
+        return msg
     return SAS_TOKEN_RE.sub(r'\1<redacted>', msg)
 
 

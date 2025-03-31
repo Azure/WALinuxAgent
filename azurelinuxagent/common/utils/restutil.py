@@ -44,9 +44,6 @@ TELEMETRY_THROTTLE_DELAY_IN_SECONDS = 8
 # Considering short delay for telemetry flush imp events
 TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS = 2
 
-REDACTED_TEXT = "<SAS_SIGNATURE>"
-SAS_TOKEN_RETRIEVAL_REGEX = re.compile(r'^(https?://[a-zA-Z0-9.].*sig=)([a-zA-Z0-9%-]*)(.*)$')
-
 RETRY_CODES = [
     httpclient.RESET_CONTENT,
     httpclient.PARTIAL_CONTENT,
@@ -314,10 +311,6 @@ def _get_http_proxy(secure=False):
     return host, port
 
 
-def redact_sas_tokens_in_urls(url):
-    return SAS_TOKEN_RETRIEVAL_REGEX.sub(r"\1" + REDACTED_TEXT + r"\3", url)
-
-
 def _http_request(method, host, rel_uri, timeout, port=None, data=None, secure=False,
                   headers=None, proxy_host=None, proxy_port=None, redact_data=False):
 
@@ -358,7 +351,7 @@ def _http_request(method, host, rel_uri, timeout, port=None, data=None, secure=F
     # Logger requires the msg to be a ustr to log properly, ensuring that the data string that we log is always ustr
     logger.verbose("HTTP connection [{0}] [{1}] [{2}] [{3}]",
                    method,
-                   redact_sas_tokens_in_urls(url),
+                   url,
                    textutil.str_to_encoded_ustr(payload),
                    headers)
 
@@ -473,7 +466,7 @@ def http_request(method,
 
             if request_failed(resp):
                 if _is_retry_status(resp.status, retry_codes=retry_codes):
-                    msg = '[HTTP Retry] {0} {1} -- Status Code {2}'.format(method, redact_sas_tokens_in_urls(url), resp.status)
+                    msg = '[HTTP Retry] {0} {1} -- Status Code {2}'.format(method, url, resp.status)
                     # Note if throttled and ensure a safe, minimum number of
                     # retry attempts
                     if _is_throttle_status(resp.status):
@@ -503,7 +496,7 @@ def http_request(method,
             if return_raw_response:  # skip all error handling
                 raise
             clean_url = _trim_url_parameters(url)
-            msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(method, redact_sas_tokens_in_urls(clean_url), e)
+            msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(method, clean_url, e)
             if _is_retry_exception(e):
                 continue
             break
@@ -513,7 +506,7 @@ def http_request(method,
                 raise
             IOErrorCounter.increment(host=host, port=port)
             clean_url = _trim_url_parameters(url)
-            msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(method, redact_sas_tokens_in_urls(clean_url), e)
+            msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(method, clean_url, e)
             continue
 
     raise HttpError("{0} -- {1} attempts made".format(msg, attempt))
