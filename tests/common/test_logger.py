@@ -327,6 +327,13 @@ class TestLogger(AgentTestCase):
         self.assertRegex(mock_telem_write.call_args[0][1], r"ERROR.*redacted")
         self.assertRegex(mock_stdout_write.call_args[0][1], r"ERROR.*redacted")
 
+        lg.verbose("Test blob {0}", sas_token)
+
+        self.assertRegex(mock_file_write.call_args[0][1], r"VERBOSE.*redacted")
+        self.assertRegex(mock_console_write.call_args[0][1], r"VERBOSE.*redacted")
+        self.assertRegex(mock_telem_write.call_args[0][1], r"VERBOSE.*redacted")
+        self.assertRegex(mock_stdout_write.call_args[0][1], r"VERBOSE.*redacted")
+
     @patch("azurelinuxagent.common.logger.StdoutAppender.write")
     @patch("azurelinuxagent.common.logger.TelemetryAppender.write")
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
