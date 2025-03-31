@@ -248,6 +248,15 @@ def parse_xml_event(data_str):
         raise ValueError(ustr(e))
 
 
+def redact_event_msg(event):
+    """
+    Redact the message in the event if it contains SAS tokens.
+    """
+    for param in event.parameters:
+        if param.name == GuestAgentExtensionEventsSchema.Message:
+            param.value = redact_sas_token(param.value)
+
+
 def _encode_message(op, message):
     """
     Gzip and base64 encode a message based on the operation.
@@ -556,7 +565,7 @@ class EventLogger(object):
         TODO: pickup as many events as possible and send them in one go.
         """
         # redact message before save it to disk
-        self._redact_event_msg(event)
+        redact_event_msg(event)
 
         report_success = False
         if flush and self.protocol is not None:
@@ -569,14 +578,6 @@ class EventLogger(object):
             except EventError as e:
                 logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, "[PERIODIC] {0}".format(ustr(e)))
 
-    @staticmethod
-    def _redact_event_msg(event):
-        """
-        Redact the message in the event if it contains SAS tokens.
-        """
-        for param in event.parameters:
-            if param.name == GuestAgentExtensionEventsSchema.Message:
-                param.value = redact_sas_token(param.value)
 
     @staticmethod
     def _clean_up_message(message):
