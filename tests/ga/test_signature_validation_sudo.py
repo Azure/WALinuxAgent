@@ -19,7 +19,7 @@
 import os
 
 from tests.lib.tools import AgentTestCase, data_dir, patch, i_am_root
-from azurelinuxagent.ga.signing_certificates import write_signing_certificates
+from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 from azurelinuxagent.ga.signature_validation import validate_signature
 from azurelinuxagent.common.utils import shellutil
 

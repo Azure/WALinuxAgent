@@ -20,7 +20,7 @@ import os
 import sys
 
 from tests.lib.tools import AgentTestCase, data_dir, patch, skip_if_predicate_true
-from azurelinuxagent.ga.signing_certificates import write_signing_certificates
+from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 from azurelinuxagent.ga.signature_validation import validate_signature, SignatureValidationError
 from azurelinuxagent.common.event import WALAEventOperation
 
@@ -87,7 +87,7 @@ class TestSignatureValidation(AgentTestCase):
     def test_should_handle_and_report_error_raised_when_writing_signing_certificate(self):
         # If an error is raised when writing signing certificates, the error should be handled/swallowed but reported
         # via telemetry and log.
-        with patch('azurelinuxagent.ga.signing_certificates.event.error') as report_err:
+        with patch('azurelinuxagent.ga.signing_certificate_util.event.error') as report_err:
             open_target = "builtins.open" if sys.version_info[0] >= 3 else "__builtin__.open"
             with patch(open_target, side_effect=OSError):
                 write_signing_certificates()

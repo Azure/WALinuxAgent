@@ -25,7 +25,7 @@ from azurelinuxagent.common.exception import ExtensionError
 from azurelinuxagent.common import event
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionErrorCodes
-from azurelinuxagent.ga.signing_certificates import get_microsoft_signing_certificate_path
+from azurelinuxagent.ga.signing_certificate_util import get_microsoft_signing_certificate_path
 
 
 class SignatureValidationError(ExtensionError):
@@ -36,7 +36,7 @@ class SignatureValidationError(ExtensionError):
 
 def _write_signature_to_file(sig_string, output_file):
     """
-    Convert the signature string to a binary, and write to the output file.
+    Convert the base64-encoded signature string to binary, and write to the output file.
     """
     binary_signature = base64.b64decode(sig_string.strip())
     with open(output_file, "wb") as f:
