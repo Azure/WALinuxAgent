@@ -25,6 +25,10 @@ from azurelinuxagent.common.utils import shellutil
 
 
 class TestSignatureValidationSudo(AgentTestCase):
+    """
+    Tests signature validation scenarios involving certificate expiry, simulated by moving the system clock forward.
+    Since modifying system time requires admin privileges, tests in this suite must be run with sudo.
+    """
     def setUp(self):
         AgentTestCase.setUp(self)
         write_signing_certificates()
@@ -47,7 +51,7 @@ class TestSignatureValidationSudo(AgentTestCase):
                 shellutil.run_command(["sudo", "date", "-s", "{0} years".format(delta)])
             validate_signature(package_path, signature)
         except shellutil.CommandError as ex:
-            raise Exception("Failed to retrieve or update system time. Error details: {0}".format(ex.stderr))
+            raise Exception("Failed to retrieve or update system time.\nExit code: {0}\nError details: {1}".format(ex.returncode, ex.stderr))
         finally:
             if original_system_year is not None:
                 current_system_year = shellutil.run_command(["date", "+%Y"]).strip()

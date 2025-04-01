@@ -65,8 +65,9 @@ class TestSignatureValidation(AgentTestCase):
             validate_signature(modified_ext, self.null_ext_signature)
 
     def test_should_raise_error_on_incorrect_signing_certificate(self):
-        # This certificate (unexpired) does not match the one used for signing - signature validation should fail
-        incorrect_root_cert_path = os.path.join(data_dir, "signing/incorrect_root_cert.pem")
+        # The root certificate used here is valid (unexpired) and issued by the Microsoft CA, but it does not match the
+        # one that signed the package - signature validation should fail.
+        incorrect_root_cert_path = os.path.join(data_dir, "signing/incorrect_microsoft_root_cert.pem")
         with patch("azurelinuxagent.ga.signature_validation.get_microsoft_signing_certificate_path", return_value=incorrect_root_cert_path):
             with self.assertRaises(SignatureValidationError, msg="Signing certificate does not match, should have raised error") as ex:
                 validate_signature(self.null_ext_zip_path, self.null_ext_signature)
@@ -76,9 +77,6 @@ class TestSignatureValidation(AgentTestCase):
 
     def test_should_raise_error_on_missing_signing_certificate(self):
         root_cert_path = os.path.join(self.tmp_dir, "missing_root_cert.pem")
-        if os.path.exists(root_cert_path):
-            os.remove(root_cert_path)
-
         with patch("azurelinuxagent.ga.signature_validation.get_microsoft_signing_certificate_path", return_value=root_cert_path):
             with self.assertRaises(SignatureValidationError, msg="Signing certificate missing, should have raised error") as ex:
                 validate_signature(self.null_ext_zip_path, self.null_ext_signature)
