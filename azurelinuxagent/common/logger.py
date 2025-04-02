@@ -21,7 +21,8 @@ import sys
 from datetime import datetime, timedelta
 from threading import current_thread
 
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, UTC
+from azurelinuxagent.common.utils import timeutil
 
 EVERY_DAY = timedelta(days=1)
 EVERY_HALF_DAY = timedelta(hours=12)
@@ -36,10 +37,6 @@ class Logger(object):
     """
     Logger class
     """
-
-    # This format is based on ISO-8601, Z represents UTC (Zero offset)
-    LogTimeFormatInUTC = u'%Y-%m-%dT%H:%M:%S.%fZ'
-
     def __init__(self, logger=None, prefix=None):
         self.appenders = []
         self.logger = self if logger is None else logger
@@ -55,13 +52,13 @@ class Logger(object):
 
     def _is_period_elapsed(self, delta, h):
         return h not in self.logger.periodic_messages or \
-            (self.logger.periodic_messages[h] + delta) <= datetime.now()
+            (self.logger.periodic_messages[h] + delta) <= datetime.now(UTC)
 
     def _periodic(self, delta, log_level_op, msg_format, *args):
         h = hash(msg_format)
         if self._is_period_elapsed(delta, h):
             log_level_op(msg_format, *args)
-            self.logger.periodic_messages[h] = datetime.now()
+            self.logger.periodic_messages[h] = datetime.now(UTC)
 
     def periodic_info(self, delta, msg_format, *args):
         self._periodic(delta, self.info, msg_format, *args)
@@ -135,7 +132,7 @@ class Logger(object):
             msg = msg_format.format(*args)
         else:
             msg = msg_format
-        time = datetime.utcnow().strftime(Logger.LogTimeFormatInUTC)
+        time = timeutil.create_utc_timestamp(datetime.now(UTC))
         level_str = LogLevel.STRINGS[level]
         thread_name = current_thread().name
         if self.prefix is not None:

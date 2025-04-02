@@ -29,14 +29,14 @@ from datetime import datetime, timedelta
 
 from mock import MagicMock
 
-from azurelinuxagent.common.utils import textutil, fileutil
+from azurelinuxagent.common.utils import textutil, fileutil, timeutil
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.event import add_event, add_periodic, add_log_event, elapsed_milliseconds, \
     WALAEventOperation, parse_xml_event, parse_json_event, AGENT_EVENT_FILE_EXTENSION, EVENTS_DIRECTORY, \
     TELEMETRY_EVENT_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID, TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID, \
     report_metric
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, UTC
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.telemetryevent import CommonTelemetryEventSchema, GuestAgentGenericLogsSchema, \
     GuestAgentExtensionEventsSchema, GuestAgentPerfCounterEventsSchema
@@ -349,7 +349,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
         h = hash("FauxEvent"+WALAEventOperation.Unknown+ustr(True))
         event.__event_logger__.periodic_events[h] = \
-            datetime.now() - logger.EVERY_DAY - logger.EVERY_HOUR
+            datetime.now(UTC) - logger.EVERY_DAY - logger.EVERY_HOUR
         event.add_periodic(logger.EVERY_DAY, "FauxEvent")
         self.assertEqual(2, mock_event.call_count)
 
@@ -532,7 +532,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         self.assertTrue(len(events) == 1000, "{0} events found, 1000 expected".format(len(events)))
 
     def test_elapsed_milliseconds(self):
-        utc_start = datetime.utcnow() + timedelta(days=1)
+        utc_start = datetime.now(UTC) + timedelta(days=1)
         self.assertEqual(0, elapsed_milliseconds(utc_start))
 
     def _assert_event_includes_all_parameters_in_the_telemetry_schema(self, actual_event, expected_parameters, assert_timestamp):
@@ -564,18 +564,14 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         self.assertIsNotNone(timestamp, "The event does not have a timestamp (Opcode)")
         assert_timestamp(timestamp)
 
-    @staticmethod
-    def _datetime_to_event_timestamp(dt):
-        return dt.strftime(logger.Logger.LogTimeFormatInUTC)
-
     def _test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(self, create_event_function, expected_parameters):
         """
         Helper to tests methods that create events (e.g. add_event, add_log_event, etc).
         """
         # execute the method that creates the event, capturing the time range of the execution
-        timestamp_lower = TestEvent._datetime_to_event_timestamp(datetime.utcnow())
+        timestamp_lower = timeutil.create_utc_timestamp(datetime.now(UTC))
         create_event_function()
-        timestamp_upper = TestEvent._datetime_to_event_timestamp(datetime.utcnow())
+        timestamp_upper = timeutil.create_utc_timestamp(datetime.now(UTC))
 
         event_list = self._collect_events()
 
@@ -676,7 +672,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
     @staticmethod
     def _get_file_creation_timestamp(file):  # pylint: disable=redefined-builtin
-        return  TestEvent._datetime_to_event_timestamp(datetime.fromtimestamp(os.path.getmtime(file)))
+        return  timeutil.create_utc_timestamp(datetime.fromtimestamp(os.path.getmtime(file)))
 
     def test_collect_events_should_add_all_the_parameters_in_the_telemetry_schema_to_legacy_agent_events(self):
         # Agents <= 2.2.46 use *.tld as the extension for event files (newer agents use "*.waagent.tld") and they populate

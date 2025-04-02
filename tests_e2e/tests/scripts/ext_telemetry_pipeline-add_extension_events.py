@@ -31,6 +31,8 @@ from datetime import datetime, timedelta
 from random import choice
 from typing import List
 
+from azurelinuxagent.common.future import UTC
+
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.logging import log
 
@@ -123,7 +125,7 @@ def add_extension_events(extensions: List[str], bad_event_count=0, no_of_events_
         for _ in range(no_of_events_per_extension):
             event = sample_ext_event.copy()
             event["OperationId"] = new_opr_id
-            event["TimeStamp"] = datetime.utcnow().strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
+            event["TimeStamp"] = datetime.now(UTC).strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
             event["Message"] = choice(sample_messages)
 
             if bad_count != 0:
@@ -148,11 +150,11 @@ def add_extension_events(extensions: List[str], bad_event_count=0, no_of_events_
 
 def wait_for_extension_events_dir_empty(extensions: List[str]):
     # By ensuring events dir to be empty, we verify that the telemetry events collector has completed its run
-    start_time = datetime.now()
+    start_time = datetime.now(UTC)
     timeout = timedelta(minutes=2)
     ext_event_dirs = [os.path.join("/var/log/azure/", ext, "events") for ext in extensions]
 
-    while (start_time + timeout) >= datetime.now():
+    while (start_time + timeout) >= datetime.now(UTC):
         log.info("")
         log.info("Waiting for extension event directories to be empty...")
         all_dir_empty = True

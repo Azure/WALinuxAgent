@@ -22,7 +22,9 @@ import random
 from azurelinuxagent.common import conf, logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import AgentUpgradeExitException, AgentUpdateError
+from azurelinuxagent.common.future import UTC, datetime_min_utc
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.utils import timeutil
 from azurelinuxagent.common.version import CURRENT_VERSION
 from azurelinuxagent.ga.ga_version_updater import GAVersionUpdater
 from azurelinuxagent.ga.guestagent import GuestAgentUpdateUtil
@@ -39,8 +41,8 @@ class SelfUpdateType(object):
 class SelfUpdateVersionUpdater(GAVersionUpdater):
     def __init__(self, gs_id):
         super(SelfUpdateVersionUpdater, self).__init__(gs_id)
-        self._last_attempted_manifest_download_time = datetime.datetime.min
-        self._next_update_time = datetime.datetime.min
+        self._last_attempted_manifest_download_time = datetime_min_utc
+        self._next_update_time = datetime_min_utc
 
     @staticmethod
     def _get_largest_version(agent_manifest):
@@ -80,18 +82,18 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         We use default value(datetime.datetime.min) to ensure the computation happens only once. This next_update_time will reset to default value(datetime.min) when agent allowed to update.
         So that, in case the update fails due to an issue, such as a package download error, the same default value used to recompute the next update time.
         """
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(UTC)
         upgrade_type = self._get_agent_upgrade_type(self._version)
 
-        if self._next_update_time == datetime.datetime.min:
+        if self._next_update_time == datetime_min_utc:
             self._next_update_time = self._get_next_process_time(upgrade_type, now)
         message = "Self-update discovered new {0} upgrade WALinuxAgent-{1}; Will upgrade on or after {2}".format(
-            upgrade_type, str(self._version), self._next_update_time.strftime(logger.Logger.LogTimeFormatInUTC))
+            upgrade_type, str(self._version), timeutil.create_utc_timestamp(self._next_update_time))
         logger.info(message)
         add_event(op=WALAEventOperation.AgentUpgrade, message=message, log_event=False)
 
         if self._next_update_time <= now:
-            self._next_update_time = datetime.datetime.min
+            self._next_update_time = datetime_min_utc
             return True
         return False
 
@@ -101,9 +103,9 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         the agent has not attempted to download the manifest in the last 1 hour
         If we allow update, we update the last attempted manifest download time
         """
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(UTC)
 
-        if self._last_attempted_manifest_download_time != datetime.datetime.min:
+        if self._last_attempted_manifest_download_time != datetime_min_utc:
             next_attempt_time = self._last_attempted_manifest_download_time + datetime.timedelta(
                 seconds=conf.get_autoupdate_frequency())
         else:

@@ -23,7 +23,7 @@ import time
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ServiceStoppedError
-from azurelinuxagent.common.future import ustr, Queue, Empty
+from azurelinuxagent.common.future import ustr, UTC, Queue, Empty
 from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.utils import textutil
 
@@ -141,14 +141,14 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
 
     def _send_events_in_queue(self, first_event):
         # Process everything in Queue
-        start_time = datetime.datetime.utcnow()
+        start_time = datetime.datetime.now(UTC)
         while not self.stopped() and (self._queue.qsize() + 1) < self._MIN_EVENTS_TO_BATCH and (
-                start_time + self._MIN_BATCH_WAIT_TIME) > datetime.datetime.utcnow():
+                start_time + self._MIN_BATCH_WAIT_TIME) > datetime.datetime.now(UTC):
             # To promote batching, we either wait for atleast _MIN_EVENTS_TO_BATCH events or _MIN_BATCH_WAIT_TIME secs
             # before sending out the first request to wireserver.
             # If the thread is requested to stop midway, we skip batching and send whatever we have in the queue.
             logger.verbose("Waiting for events to batch. Total events so far: {0}, Time elapsed: {1} secs",
-                           self._queue.qsize()+1, (datetime.datetime.utcnow() - start_time).seconds)
+                           self._queue.qsize()+1, (datetime.datetime.now(UTC) - start_time).seconds)
             time.sleep(1)
         # Delete files after sending the data rather than deleting and sending
         self._protocol.report_event(self._get_events_in_queue(first_event))

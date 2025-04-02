@@ -27,7 +27,7 @@ from azurelinuxagent.common.protocol import hostplugin, restapi, wire
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError, ProtocolError
-from azurelinuxagent.common.future import ustr, httpclient
+from azurelinuxagent.common.future import ustr, UTC, httpclient
 from azurelinuxagent.common.osutil.default import UUID_PATTERN
 from azurelinuxagent.common.protocol.hostplugin import API_VERSION, _VmSettingsErrorReporter, VmSettingsNotSupported, VmSettingsSupportStopped
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource
@@ -807,7 +807,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         self.assertEqual(True, actual)
 
         # second measurement at 30s, should not report
-        last_timestamp = datetime.datetime.utcnow() - datetime.timedelta(seconds=30)
+        last_timestamp = datetime.datetime.now(UTC) - datetime.timedelta(seconds=30)
         actual = host_plugin.should_report(is_healthy,
                                            error_state,
                                            last_timestamp,
@@ -815,7 +815,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         self.assertEqual(False, actual)
 
         # third measurement at 60s, should report
-        last_timestamp = datetime.datetime.utcnow() - datetime.timedelta(seconds=60)
+        last_timestamp = datetime.datetime.now(UTC) - datetime.timedelta(seconds=60)
         actual = host_plugin.should_report(is_healthy,
                                            error_state,
                                            last_timestamp,
@@ -834,7 +834,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
 
         # fifth measurement, should not report and reset counter
         is_healthy = True
-        last_timestamp = datetime.datetime.utcnow() - datetime.timedelta(seconds=30)
+        last_timestamp = datetime.datetime.now(UTC) - datetime.timedelta(seconds=30)
         self.assertEqual(1, error_state.count)
         actual = host_plugin.should_report(is_healthy,
                                            error_state,
@@ -892,7 +892,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
             # force the summary by resetting its period and calling update_goal_state
             with patch("azurelinuxagent.common.protocol.hostplugin.add_event") as add_event:
                 mock_response = None  # stop producing errors
-                protocol.client._host_plugin._vm_settings_error_reporter._next_period = datetime.datetime.now()
+                protocol.client._host_plugin._vm_settings_error_reporter._next_period = datetime.datetime.now(UTC)
                 self._fetch_vm_settings_ignoring_errors(protocol)
             summary_text = [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettingsSummary"]
 
@@ -930,7 +930,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
                 self.assertEqual(_VmSettingsErrorReporter._MaxErrors, len(telemetry_messages), "The number of errors reported to telemetry is not the max allowed (got: {0})".format(telemetry_messages))
 
             # Reset the error reporter and verify that additional errors are reported
-            protocol.client.get_host_plugin()._vm_settings_error_reporter._next_period = datetime.datetime.now()
+            protocol.client.get_host_plugin()._vm_settings_error_reporter._next_period = datetime.datetime.now(UTC)
             self._fetch_vm_settings_ignoring_errors(protocol)  # this triggers the reset
 
             with patch("azurelinuxagent.common.protocol.hostplugin.add_event") as add_event:
@@ -958,7 +958,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
             self.assertEqual(1, get_vm_settings_call_count(), "Additional calls to update_goal_state should not have produced extra calls to vmSettings.")
 
             # reset the vmSettings check period; this should restart the calls to the API
-            protocol.client._host_plugin._supports_vm_settings_next_check = datetime.datetime.now()
+            protocol.client._host_plugin._supports_vm_settings_next_check = datetime.datetime.now(UTC)
             protocol.client.update_goal_state()
             self.assertEqual(2, get_vm_settings_call_count(), "A second call to vmSettings was expecting after the check period has elapsed.")
 

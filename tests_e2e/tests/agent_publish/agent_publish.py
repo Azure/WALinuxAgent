@@ -18,6 +18,8 @@
 import uuid
 from datetime import datetime
 
+from azurelinuxagent.common.future import UTC
+
 from tests_e2e.tests.lib.agent_setup_helpers import wait_for_agent_to_complete_provisioning
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
@@ -75,7 +77,7 @@ class AgentPublishTest(AgentVmTest):
 
     def get_ignore_errors_before_timestamp(self) -> datetime:
         timestamp = self._ssh_client.run_command("agent_publish-get_agent_log_record_timestamp.py")
-        return datetime.strptime(timestamp.strip(), u'%Y-%m-%d %H:%M:%S.%f')
+        return datetime.strptime(timestamp.strip(), u'%Y-%m-%d %H:%M:%S.%f').replace(tzinfo=UTC)
 
     def _get_published_version(self):
         """

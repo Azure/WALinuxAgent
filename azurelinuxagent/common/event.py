@@ -30,12 +30,12 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import EventError, OSUtilError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, UTC
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent, CommonTelemetryEventSchema, \
     GuestAgentGenericLogsSchema, GuestAgentExtensionEventsSchema, GuestAgentPerfCounterEventsSchema
-from azurelinuxagent.common.utils import fileutil, textutil
+from azurelinuxagent.common.utils import fileutil, textutil, timeutil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, str_to_encoded_ustr
 from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, AGENT_NAME, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
 from azurelinuxagent.common.protocol.imds import get_imds_client
@@ -484,7 +484,7 @@ class EventLogger(object):
 
     def is_period_elapsed(self, delta, h):
         return h not in self.periodic_events or \
-            (self.periodic_events[h] + delta) <= datetime.now()
+            (self.periodic_events[h] + delta) <= datetime.now(UTC)
 
     def add_periodic(self, delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
                      version=str(CURRENT_VERSION), message="", log_event=True, force=False):
@@ -493,7 +493,7 @@ class EventLogger(object):
         if force or self.is_period_elapsed(delta, h):
             self.add_event(name, op=op, is_success=is_success, duration=duration,
                            version=version, message=message, log_event=log_event)
-            self.periodic_events[h] = datetime.now()
+            self.periodic_events[h] = datetime.now(UTC)
 
     def add_event(self, name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
                   message="", log_event=True, flush=False):
@@ -511,7 +511,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.OperationSuccess, bool(is_success)))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Message, str_to_encoded_ustr(message)))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, int(duration)))
-        self.add_common_event_parameters(event, datetime.utcnow())
+        self.add_common_event_parameters(event, datetime.now(UTC))
 
         self.report_or_save_event(event, flush)
 
@@ -520,9 +520,9 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.EventName, WALAEventOperation.Log))
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.CapabilityUsed, logger.LogLevel.STRINGS[level]))
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context1, str_to_encoded_ustr(self._clean_up_message(message))))
-        event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context2, datetime.utcnow().strftime(logger.Logger.LogTimeFormatInUTC)))
+        event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context2, timeutil.create_utc_timestamp(datetime.now(UTC))))
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context3, ''))
-        self.add_common_event_parameters(event, datetime.utcnow())
+        self.add_common_event_parameters(event, datetime.now(UTC))
 
         self.report_or_save_event(event)
 
@@ -545,7 +545,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Counter, str_to_encoded_ustr(counter)))
         event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Instance, str_to_encoded_ustr(instance)))
         event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Value, float(value)))
-        self.add_common_event_parameters(event, datetime.utcnow())
+        self.add_common_event_parameters(event, datetime.now(UTC))
 
         self.report_or_save_event(event)
 
@@ -615,7 +615,7 @@ class EventLogger(object):
         """
         common_params = [TelemetryEventParam(CommonTelemetryEventSchema.GAVersion, CURRENT_AGENT),
                          TelemetryEventParam(CommonTelemetryEventSchema.ContainerId, AgentGlobals.get_container_id()),
-                         TelemetryEventParam(CommonTelemetryEventSchema.OpcodeName, event_timestamp.strftime(logger.Logger.LogTimeFormatInUTC)),
+                         TelemetryEventParam(CommonTelemetryEventSchema.OpcodeName, timeutil.create_utc_timestamp(event_timestamp)),
                          TelemetryEventParam(CommonTelemetryEventSchema.EventTid, threading.current_thread().ident),
                          TelemetryEventParam(CommonTelemetryEventSchema.EventPid, os.getpid()),
                          TelemetryEventParam(CommonTelemetryEventSchema.TaskName, threading.current_thread().name)]
@@ -637,7 +637,7 @@ def get_event_logger():
 
 
 def elapsed_milliseconds(utc_start):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     if now < utc_start:
         return 0
 

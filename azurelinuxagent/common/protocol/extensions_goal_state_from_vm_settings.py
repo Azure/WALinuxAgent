@@ -15,7 +15,6 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
-import datetime
 import json
 import sys
 
@@ -29,8 +28,6 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 
 class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
-    _MINIMUM_TIMESTAMP = datetime.datetime(1900, 1, 1, 0, 0)  # min value accepted by datetime.strftime()
-
     def __init__(self, etag, json_text, correlation_id):
         super(ExtensionsGoalStateFromVmSettings, self).__init__()
         self._id = "etag_{0}".format(etag)

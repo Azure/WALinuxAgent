@@ -27,6 +27,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common import event
 from azurelinuxagent.common.event import WALAEventOperation, add_event
+from azurelinuxagent.common.future import UTC
 from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
@@ -105,7 +106,7 @@ class EnableFirewall(PeriodicOperation):
         self._wire_server_address = wire_server_address
         self._firewall_manager = None  # initialized on demand in the _operation method
         self._message_count = 0
-        self._report_after = datetime.datetime.now()
+        self._report_after = datetime.datetime.now(UTC)
 
     def _operation(self):
         try:
@@ -126,12 +127,12 @@ class EnableFirewall(PeriodicOperation):
 
     def _report(self, report_function, message, *args):
         # Report the first 3 messages, then stop reporting for 12 hours
-        if datetime.datetime.now() < self._report_after:
+        if datetime.datetime.now(UTC) < self._report_after:
             return
 
         self._message_count += 1
         if self._message_count > 3:
-            self._report_after = datetime.datetime.now() + datetime.timedelta(hours=12)
+            self._report_after = datetime.datetime.now(UTC) + datetime.timedelta(hours=12)
             self._message_count = 0
             return
 
