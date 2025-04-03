@@ -407,13 +407,10 @@ def str_to_encoded_ustr(s, encoding='utf-8'):
     :return: Returns the corresponding ustr string. Returns None if input is None.
     """
 
-    # TODO: Import at the top of the file instead of a local import (using local import here to avoid cyclic dependency)
-    from azurelinuxagent.common.version import PY_VERSION_MAJOR
-
     if s is None or type(s) is ustr:
         # If its already a ustr/None then return as is
         return s
-    if PY_VERSION_MAJOR > 2:
+    if sys.version_info[0] > 2:
         try:
             # For py3+, str() is unicode by default
             if isinstance(s, bytes):

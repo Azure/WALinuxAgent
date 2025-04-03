@@ -26,7 +26,6 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common.exception import ExtensionErrorCodes, ExtensionOperationError, ExtensionError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.utils.textutil import redact_sas_token
 
 TELEMETRY_MESSAGE_MAX_LEN = 3200
 
@@ -156,7 +155,7 @@ def read_output(stdout, stderr):
         stderr = ustr(stderr.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8',
                       errors='backslashreplace')
 
-        return format_stdout_stderr(redact_sas_token(stdout), redact_sas_token(stderr))
+        return format_stdout_stderr(stdout, stderr)
     except Exception as e:
         return format_stdout_stderr("", "Cannot read stdout/stderr: {0}".format(ustr(e)))
 

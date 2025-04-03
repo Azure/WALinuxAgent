@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 from threading import current_thread
 
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.utils.textutil import redact_sas_token
 
 EVERY_DAY = timedelta(days=1)
 EVERY_HALF_DAY = timedelta(hours=12)
@@ -31,8 +32,6 @@ EVERY_HOUR = timedelta(hours=1)
 EVERY_HALF_HOUR = timedelta(minutes=30)
 EVERY_FIFTEEN_MINUTES = timedelta(minutes=15)
 EVERY_MINUTE = timedelta(minutes=1)
-
-SAS_TOKEN_RE = re.compile(r'(https://\S+\?)((sv|st|se|sr|sp|sip|spr|sig)=\S+)+', flags=re.IGNORECASE)
 
 
 class Logger(object):
@@ -139,14 +138,8 @@ class Logger(object):
         else:
             msg = msg_format
 
-        # using local method here to avoid import textutil cyclic dependency
-        def _redact_sas_token(msg):
-            if msg is None:
-                return msg
-            return SAS_TOKEN_RE.sub(r'\1<redacted>', msg)
-
         # redact the sas token from the message before logging
-        redacted_msg = _redact_sas_token(msg)
+        redacted_msg = redact_sas_token(msg)
 
         time = datetime.utcnow().strftime(Logger.LogTimeFormatInUTC)
         level_str = LogLevel.STRINGS[level]

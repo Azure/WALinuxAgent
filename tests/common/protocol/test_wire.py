@@ -351,9 +351,10 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
         with mock_wire_protocol(DATA_FILE) as protocol:
 
             def mock_http_put(url, *args, **__):
-                if not HttpRequestPredicates.is_host_plugin_status_request(url):
+                if HttpRequestPredicates.is_host_plugin_status_request(url):
                     # Skip reading the HostGA request data as its encoded
-                    protocol.aggregate_status = json.loads(args[0])
+                    return MockHttpResponse(status=500)
+                protocol.aggregate_status = json.loads(args[0])
 
             protocol.aggregate_status = {}
             protocol.set_http_handlers(http_put_handler=mock_http_put)
