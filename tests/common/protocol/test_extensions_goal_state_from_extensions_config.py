@@ -21,14 +21,14 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
             self.assertEqual(AgentGlobals.GUID_ZERO, extensions_goal_state.activity_id, "Incorrect activity Id")
             self.assertEqual(AgentGlobals.GUID_ZERO, extensions_goal_state.correlation_id, "Incorrect correlation Id")
-            self.assertEqual('1900-01-01T00:00:00.000000Z', extensions_goal_state.created_on_timestamp, "Incorrect GS Creation time")
+            self.assertEqual('0001-01-01T00:00:00.000000Z', extensions_goal_state.created_on_timestamp, "Incorrect GS Creation time")
 
     def test_it_should_use_default_values_when_in_vm_metadata_is_invalid(self):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE_INVALID_VM_META_DATA) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
             self.assertEqual(AgentGlobals.GUID_ZERO, extensions_goal_state.activity_id, "Incorrect activity Id")
             self.assertEqual(AgentGlobals.GUID_ZERO, extensions_goal_state.correlation_id, "Incorrect correlation Id")
-            self.assertEqual('1900-01-01T00:00:00.000000Z', extensions_goal_state.created_on_timestamp, "Incorrect GS Creation time")
+            self.assertEqual('0001-01-01T00:00:00.000000Z', extensions_goal_state.created_on_timestamp, "Incorrect GS Creation time")
 
     def test_it_should_parse_missing_status_upload_blob_as_none(self):
         data_file = wire_protocol_data.DATA_FILE.copy()

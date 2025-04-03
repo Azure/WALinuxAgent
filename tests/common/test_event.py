@@ -672,7 +672,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
     @staticmethod
     def _get_file_creation_timestamp(file):  # pylint: disable=redefined-builtin
-        return  timeutil.create_utc_timestamp(datetime.fromtimestamp(os.path.getmtime(file)))
+        return  timeutil.create_utc_timestamp(datetime.fromtimestamp(os.path.getmtime(file)).replace(tzinfo=UTC))
 
     def test_collect_events_should_add_all_the_parameters_in_the_telemetry_schema_to_legacy_agent_events(self):
         # Agents <= 2.2.46 use *.tld as the extension for event files (newer agents use "*.waagent.tld") and they populate

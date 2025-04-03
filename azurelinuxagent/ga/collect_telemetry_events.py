@@ -31,7 +31,7 @@ from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_I
     TELEMETRY_LOG_PROVIDER_ID, add_event, WALAEventOperation, add_log_event, get_event_logger, \
     CollectOrReportEventDebugInfo, EVENT_FILE_REGEX, parse_event
 from azurelinuxagent.common.exception import InvalidExtensionEventError, ServiceStoppedError, EventError
-from azurelinuxagent.common.future import ustr, is_file_not_found_error
+from azurelinuxagent.common.future import ustr, is_file_not_found_error, UTC
 from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
     GuestAgentGenericLogsSchema, GuestAgentExtensionEventsSchema
@@ -283,7 +283,7 @@ class _ProcessExtensionEvents(PeriodicOperation):
     def _enqueue_events_and_get_count(self, handler_name, event_file_path, captured_events_count,
                                       dropped_events_with_error_count):
 
-        event_file_time = datetime.datetime.fromtimestamp(os.path.getmtime(event_file_path))
+        event_file_time = datetime.datetime.fromtimestamp(os.path.getmtime(event_file_path)).replace(tzinfo=UTC)
 
         events = self._read_event_file(event_file_path)
 
@@ -467,7 +467,7 @@ class _CollectAndEnqueueEvents(PeriodicOperation):
                     if is_legacy_event:
                         # We'll use the file creation time for the event's timestamp
                         event_file_creation_time_epoch = os.path.getmtime(event_file_path)
-                        event_file_creation_time = datetime.datetime.fromtimestamp(event_file_creation_time_epoch)
+                        event_file_creation_time = datetime.datetime.fromtimestamp(event_file_creation_time_epoch).replace(tzinfo=UTC)
 
                         if event.is_extension_event():
                             _CollectAndEnqueueEvents._trim_legacy_extension_event_parameters(event)

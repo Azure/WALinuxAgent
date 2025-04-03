@@ -28,7 +28,7 @@ from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_HOST_PLUGI
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common.exception import HttpError, ProtocolError, ResourceGoneError
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.future import ustr, httpclient, UTC
+from azurelinuxagent.common.future import ustr, httpclient, UTC, datetime_min_utc
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.extensions_goal_state import VmSettingsParseError, GoalStateSource
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
@@ -451,7 +451,7 @@ class HostPluginProtocol(object):
         with HostPluginProtocol._fast_track_state_lock:
             state_file = HostPluginProtocol._get_fast_track_state_file()
             if not os.path.exists(state_file):
-                return timeutil.create_utc_timestamp(datetime.datetime.min)
+                return timeutil.create_utc_timestamp(datetime_min_utc)
 
             try:
                 with open(state_file, "r") as file_:

@@ -330,7 +330,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
             self._create_extension_event(message="Message-Test")
 
             test_mtime = 1000  # epoch time, in ms
-            test_opcodename = timeutil.create_utc_timestamp(datetime.fromtimestamp(test_mtime))
+            test_opcodename = timeutil.create_utc_timestamp(datetime.fromtimestamp(test_mtime).replace(tzinfo=UTC))
             test_eventtid = 42
             test_eventpid = 24
             test_taskname = "TEST_TaskName"

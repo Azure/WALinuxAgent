@@ -27,7 +27,7 @@ from azurelinuxagent.common.logger import LogLevel
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
 from azurelinuxagent.common.exception import HttpError, \
     ExitException, AgentMemoryExceededException
-from azurelinuxagent.common.future import ustr, UTC, httpclient
+from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc, httpclient
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentFamily, \
     ExtHandlerPackage, ExtHandlerPackageList, Extension, VMStatus, ExtHandlerStatus, ExtensionStatus, \
@@ -2287,7 +2287,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
     def test_it_should_clear_the_timestamp_for_the_most_recent_fast_track_goal_state(self):
         data_file = self._prepare_fast_track_goal_state()
 
-        if HostPluginProtocol.get_fast_track_timestamp() == timeutil.create_utc_timestamp(datetime.min):
+        if HostPluginProtocol.get_fast_track_timestamp() == timeutil.create_utc_timestamp(datetime_min_utc):
             raise Exception("The test setup did not save the Fast Track state")
 
         with patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=False):
@@ -2297,7 +2297,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
                     with mock_update_handler(protocol) as update_handler:
                         update_handler.run()
 
-        self.assertEqual(HostPluginProtocol.get_fast_track_timestamp(), timeutil.create_utc_timestamp(datetime.min),
+        self.assertEqual(HostPluginProtocol.get_fast_track_timestamp(), timeutil.create_utc_timestamp(datetime_min_utc),
             "The Fast Track state was not cleared")
 
     def test_it_should_default_fast_track_timestamp_to_datetime_min(self):
@@ -2344,8 +2344,8 @@ class ProcessGoalStateTestCase(AgentTestCase):
                     check_for_errors()
 
             timestamp = protocol.client.get_host_plugin()._fast_track_timestamp
-            self.assertEqual(timestamp, timeutil.create_utc_timestamp(datetime.min),
-                "Expected fast track time stamp to be set to {0}, got {1}".format(datetime.min, timestamp))
+            self.assertEqual(timestamp, timeutil.create_utc_timestamp(datetime_min_utc),
+                "Expected fast track time stamp to be set to {0}, got {1}".format(datetime_min_utc, timestamp))
 
 class HeartbeatTestCase(AgentTestCase):
 

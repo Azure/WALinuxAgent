@@ -23,7 +23,7 @@ from azurelinuxagent.common.event import __event_logger__, add_log_event, MAX_NU
 
 from azurelinuxagent.common.future import UTC
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.utils import fileutil, timeutil
+from azurelinuxagent.common.utils import fileutil
 from tests.lib.tools import AgentTestCase, MagicMock, patch, skip_if_predicate_true
 
 _MSG_INFO = "This is our test info logging message {0} {1}"
@@ -172,6 +172,8 @@ class TestLogger(AgentTestCase):
         logger.periodic_verbose(logger.EVERY_DAY, _MSG_VERBOSE, *_DATA)
         mock_verbose.assert_called_once_with(_MSG_VERBOSE, *_DATA)
 
+    _UTCTimestampFormat = u"%Y-%m-%dT%H:%M:%S.%fZ"
+
     def test_logger_should_log_in_utc(self):
         file_name = "test.log"
         file_path = os.path.join(self.tmp_dir, file_name)
@@ -184,7 +186,7 @@ class TestLogger(AgentTestCase):
         with open(file_path, "r") as log_file:
             log = log_file.read()
             try:
-                time_in_file = datetime.strptime(log.split(logger.LogLevel.STRINGS[logger.LogLevel.INFO])[0].strip(), timeutil.UTCTimestampFormat).replace(tzinfo=UTC)
+                time_in_file = datetime.strptime(log.split(logger.LogLevel.STRINGS[logger.LogLevel.INFO])[0].strip(), self._UTCTimestampFormat).replace(tzinfo=UTC)
             except ValueError:
                 self.fail("Ensure timestamp follows ISO-8601 format + 'Z' for UTC")
 
@@ -208,7 +210,7 @@ class TestLogger(AgentTestCase):
         with open(file_path, "r") as log_file:
             log = log_file.read()
             try:
-                time_in_file = datetime.strptime(log.split(logger.LogLevel.STRINGS[logger.LogLevel.INFO])[0].strip(), timeutil.UTCTimestampFormat).replace(tzinfo=UTC)
+                time_in_file = datetime.strptime(log.split(logger.LogLevel.STRINGS[logger.LogLevel.INFO])[0].strip(), self._UTCTimestampFormat).replace(tzinfo=UTC)
             except ValueError:
                 self.fail("Ensure timestamp follows ISO-8601 format and has micro seconds in it")
 
