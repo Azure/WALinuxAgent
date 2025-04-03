@@ -323,30 +323,26 @@ def compress(s):
     the contents of a file. The output of this method is suitable for
     embedding in log statements.
     """
-    from azurelinuxagent.common.version import PY_VERSION_MAJOR
-    if PY_VERSION_MAJOR > 2:
+    if sys.version_info[0] > 2:
         return base64.b64encode(zlib.compress(bytes(s, 'utf-8'))).decode('utf-8')
     return base64.b64encode(zlib.compress(s))
 
 
 def b64encode(s):
-    from azurelinuxagent.common.version import PY_VERSION_MAJOR
-    if PY_VERSION_MAJOR > 2:
+    if sys.version_info[0] > 2:
         return base64.b64encode(bytes(s, 'utf-8')).decode('utf-8')
     return base64.b64encode(s)
 
 
 def b64decode(s):
-    from azurelinuxagent.common.version import PY_VERSION_MAJOR
-    if PY_VERSION_MAJOR > 2:
+    if sys.version_info[0] > 2:
         return base64.b64decode(s).decode('utf-8')
     return base64.b64decode(s)
 
 
 def safe_shlex_split(s):
     import shlex
-    from azurelinuxagent.common.version import PY_VERSION
-    if PY_VERSION[:2] == (2, 6):
+    if sys.version_info[:2] == (2, 6):
         return shlex.split(s.encode('utf-8'))
     return shlex.split(s)
 
