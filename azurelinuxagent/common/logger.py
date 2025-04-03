@@ -17,7 +17,6 @@
 """
 Log utils
 """
-import re
 import sys
 from datetime import datetime, timedelta
 from threading import current_thread

@@ -345,7 +345,7 @@ class WireProtocolData(object):
     def get_status_blob_from_hostgaplugin_put_status_request(data):
         status_object = json.loads(data)
         content = status_object["content"]
-        return base64.b64decode(content)
+        return base64.b64decode(content).decode("utf-8")
 
     def get_no_of_plugins_in_extension_config(self):
         if self.ext_conf is None:

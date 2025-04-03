@@ -355,6 +355,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
                     # Skip reading the HostGA request data as its encoded
                     return MockHttpResponse(status=500)
                 protocol.aggregate_status = json.loads(args[0])
+                return MockHttpResponse(status=201)
 
             protocol.aggregate_status = {}
             protocol.set_http_handlers(http_put_handler=mock_http_put)
