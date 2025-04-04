@@ -254,6 +254,15 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_logrotate_files(data_files)
         set_udev_files(data_files)
         set_systemd_files(data_files, dest=systemd_dir_path)
+    elif name == 'chainguard':
+        set_bin_files(data_files, dest=agent_bin_path, src=["bin/py3/waagent"])
+        set_conf_files(data_files, src=["config/chainguard/waagent.conf"])
+        set_systemd_files(data_files, dest=systemd_dir_path, src=["init/chainguard/waagent.service",
+                              "init/chainguard/90-waagent.preset",
+                              "init/azure.slice",
+                              "init/azure-vmextensions.slice"
+                                   ])
+        set_udev_files(data_files)
     else:
         # Use default setting
         set_bin_files(data_files, dest=agent_bin_path)
