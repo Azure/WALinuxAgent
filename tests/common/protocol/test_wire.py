@@ -37,6 +37,7 @@ from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema, \
     TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
 from tests.ga.test_monitor import random_generator
@@ -502,6 +503,21 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
             headers = protocol.client.get_header_for_remote_access()
             self.assertIn("x-ms-cipher-name", headers)
             self.assertEqual(headers["x-ms-cipher-name"], "AES128_CBC", "Unexpected x-ms-cipher-name")
+
+    def test_detect_sends_event_if_known_wireserver_ip_not_used(self, *_):
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            with patch('azurelinuxagent.common.event.EventLogger.add_event') as patch_add_event:
+                self.assertEqual(protocol.get_endpoint(), KNOWN_WIRESERVER_IP)
+                protocol.detect()
+                protocol_endpoint_events = [kwargs for _, kwargs in patch_add_event.call_args_list if kwargs['op'] == 'ProtocolEndpoint']
+                # Agent should not send ProtocolEndpoint event if endpoint is known wireserver IP
+                self.assertTrue(len(protocol_endpoint_events) == 0)
+
+                with patch('azurelinuxagent.common.protocol.wire.WireProtocol.get_endpoint', return_value='1.1.1.1'):
+                    protocol.detect()
+                    protocol_endpoint_events = [kwargs for _, kwargs in patch_add_event.call_args_list if kwargs['op'] == 'ProtocolEndpoint']
+                    # Agent should send ProtocolEndpoint event if endpoint is not known wireserver IP
+                    self.assertTrue(len(protocol_endpoint_events) == 1)
 
 
 class TestWireClient(HttpRequestPredicates, AgentTestCase):

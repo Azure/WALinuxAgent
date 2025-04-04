@@ -653,6 +653,15 @@ _Default: customscript,runcommand_
 
 The list of extensions which will be excluded from cgroups limits. This should be comma separated. 
 
+#### __Protocol.EndpointDiscovery__
+
+_Type: String_  
+_Default: dhcp_
+
+Determines how the agent will discover the protocol endpoint. Agent will use DHCP by default to discover 
+the wire server endpoint, but if this setting is 'hardcoded' the agent will use the known wireserver ip. 
+Possible options are "dhcp" (default) or "hardcoded".
+
 ### Telemetry
 
 WALinuxAgent collects usage data and sends it to Microsoft to help improve our products and services. The data collected is used to track service health and

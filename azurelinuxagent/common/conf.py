@@ -171,7 +171,8 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.MountOptions": None,
     "ResourceDisk.Filesystem": "ext3",
     "AutoUpdate.GAFamily": "Prod",
-    "Policy.PolicyFilePath": "/etc/waagent_policy.json"
+    "Policy.PolicyFilePath": "/etc/waagent_policy.json",
+    "Protocol.EndpointDiscovery": "dhcp"
 }
 
 
@@ -547,6 +548,19 @@ def get_auto_update_to_latest_version(conf=__conf__):
     return conf.get_switch("AutoUpdate.UpdateToLatestVersion", default)
 
 
+def get_protocol_endpoint_discovery(conf=__conf__):
+    return conf.get("Protocol.EndpointDiscovery", "dhcp")
+
+
+def get_dhcp_discovery_enabled(conf=__conf__):
+    """
+    Determines how the agent will discover the protocol endpoint.
+    If set to 'dhcp', the agent will use DHCP to get the protocol endpoint.
+    Otherwise, the agent will use the hardcoded wireserver endpoint.
+    """
+    return get_protocol_endpoint_discovery(conf) == "dhcp"
+
+
 def get_cgroup_check_period(conf=__conf__):
     """
     How often to perform checks on cgroups (are the processes in the cgroups as expected,
@@ -618,6 +632,7 @@ def get_enable_agent_memory_usage_check(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_switch("Debug.EnableAgentMemoryUsageCheck", False)
+
 
 def get_enable_fast_track(conf=__conf__):
     """

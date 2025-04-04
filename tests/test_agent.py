@@ -87,6 +87,7 @@ OS.SudoersDir = /etc/sudoers.d
 OS.UpdateRdmaDriver = False
 Pid.File = /var/run/waagent.pid
 Policy.PolicyFilePath = /etc/waagent_policy.json
+Protocol.EndpointDiscovery = dhcp
 Provisioning.Agent = auto
 Provisioning.AllowResetSysUser = False
 Provisioning.DecodeCustomData = False

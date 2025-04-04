@@ -111,7 +111,7 @@ class TestProtocolUtil(AgentTestCase):
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
-    def test_detect_protocol_no_dhcp(self, WireProtocol, mock_get_lib_dir, _):
+    def test_detect_protocol_dhcp_unavailable(self, WireProtocol, mock_get_lib_dir, _):
         WireProtocol.return_value.detect = Mock()
         mock_get_lib_dir.return_value = self.tmp_dir
 
@@ -135,6 +135,25 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util.dhcp_handler.run.side_effect = DhcpError()
 
         self.assertRaises(ProtocolError, lambda: protocol_util._detect_protocol(save_to_history=False))
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    @patch("azurelinuxagent.common.protocol.util.WireProtocol")
+    @patch("azurelinuxagent.common.conf.get_dhcp_discovery_enabled")
+    def test_detect_protocol_dhcp_discovery_disabled(self, mock_get_dhcp_discovery_enabled, WireProtocol, mock_get_lib_dir, _):
+        mock_get_dhcp_discovery_enabled.return_value = False
+        WireProtocol.return_value.detect = Mock()
+        mock_get_lib_dir.return_value = self.tmp_dir
+
+        protocol_util = get_protocol_util()
+
+        protocol_util.dhcp_handler = MagicMock()
+        protocol_util.dhcp_handler.endpoint = None
+        protocol_util.dhcp_handler.run = Mock()
+
+        # Test wire protocol when no endpoint file has been written, dhcp handler should not be called
+        protocol_util._detect_protocol(save_to_history=False)
+        self.assertEqual(KNOWN_WIRESERVER_IP, protocol_util.get_wireserver_endpoint())
+        self.assertTrue(protocol_util.dhcp_handler.run.call_count == 0)
 
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
     def test_get_protocol(self, WireProtocol, _):
