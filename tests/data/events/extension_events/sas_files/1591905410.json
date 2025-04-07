@@ -1,0 +1,22 @@
+[
+    {
+        "EventLevel": "INFO",
+        "Message": "SAS TOKEN https://abc.def.xyz.123.net/functiontest/yokawasa.png?sig=sXBjML1Fpk9UnTBtajo05ZTFSk0LWFGvARZ6WlVcAog%3D&srt=o&ss=b&spr=https&sp=rl&sv=2016-05-31&se=2017-07-01T00%3A21%3A38Z&st=2017-07-01T23%3A16%3A38Z",
+        "Version": "1",
+        "TaskName": "Extension Info",
+        "EventPid": "3228",
+        "EventTid": "1",
+        "OperationId": "519e4beb-018a-4bd9-8d8e-c5226cf7f56e",
+        "TimeStamp": "2019-12-12T01:20:05.0950244Z"
+    },
+    {
+        "EventLevel": "INFO",
+        "Message": "SAS TOKEN <redacted>",
+        "Version": "1",
+        "TaskName": "Extension Info",
+        "EventPid": "3228",
+        "EventTid": "1",
+        "OperationId": "519e4beb-018a-4bd9-8d8e-c5226cf7f56e",
+        "TimeStamp": "2019-12-12T01:20:05.0950244Z"
+    }
+]

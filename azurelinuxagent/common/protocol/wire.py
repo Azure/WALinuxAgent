@@ -46,7 +46,7 @@ from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.restutil import TELEMETRY_THROTTLE_DELAY_IN_SECONDS, \
     TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS, TELEMETRY_DATA
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
-    findtext, gettext, remove_bom, get_bytes_from_pem, parse_json
+    findtext, gettext, remove_bom, get_bytes_from_pem, parse_json, redact_sas_token
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
@@ -235,7 +235,7 @@ def ga_status_to_guest_info(ga_status):
 def __get_formatted_msg_for_status_reporting(msg, lang="en-US"):
     return {
         'lang': lang,
-        'message': msg
+        'message': redact_sas_token(msg)
     }
 
 

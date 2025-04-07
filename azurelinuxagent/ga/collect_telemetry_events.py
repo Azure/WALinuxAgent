@@ -29,9 +29,10 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_ID, \
     TELEMETRY_LOG_PROVIDER_ID, add_event, WALAEventOperation, add_log_event, get_event_logger, \
-    CollectOrReportEventDebugInfo, EVENT_FILE_REGEX, parse_event
+    CollectOrReportEventDebugInfo, EVENT_FILE_REGEX, parse_event, redact_event_msg
 from azurelinuxagent.common.exception import InvalidExtensionEventError, ServiceStoppedError, EventError
 from azurelinuxagent.common.future import ustr, is_file_not_found_error
+from azurelinuxagent.common.utils.textutil import redact_sas_token
 from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
     GuestAgentGenericLogsSchema, GuestAgentExtensionEventsSchema
@@ -357,7 +358,9 @@ class _ProcessExtensionEvents(PeriodicOperation):
                 if isinstance(v, int):
                     if k.lower() in [ExtensionEventSchema.EventPid.lower(), ExtensionEventSchema.EventTid.lower()]:
                         return str(v)
-                return v.strip()
+                unredacted = v.strip()
+                # redact the sas token from the event
+                return redact_sas_token(unredacted)
             return v
 
         event_size = 0
@@ -459,6 +462,7 @@ class _CollectAndEnqueueEvents(PeriodicOperation):
                     logger.verbose("Processing event file: {0}", event_file_path)
 
                     event = self._read_and_parse_event_file(event_file_path)
+                    redact_event_msg(event)
 
                     # "legacy" events are events produced by previous versions of the agent (<= 2.2.46) and extensions;
                     # they do not include all the telemetry fields, so we add them here

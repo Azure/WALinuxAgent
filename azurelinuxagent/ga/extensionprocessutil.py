@@ -18,7 +18,6 @@
 #
 
 import os
-import re
 import signal
 import time
 
@@ -140,9 +139,6 @@ def _check_noexec():
     return None
 
 
-SAS_TOKEN_RE = re.compile(r'(https://\S+\?)((sv|st|se|sr|sp|sip|spr|sig)=\S+)+', flags=re.IGNORECASE)
-
-
 def read_output(stdout, stderr):
     """
     Read the output of the process sent to stdout and stderr and trim them to the max appropriate length.
@@ -159,11 +155,7 @@ def read_output(stdout, stderr):
         stderr = ustr(stderr.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8',
                       errors='backslashreplace')
 
-        def redact(s):
-            # redact query strings that look like SAS tokens
-            return SAS_TOKEN_RE.sub(r'\1<redacted>', s)
-
-        return format_stdout_stderr(redact(stdout), redact(stderr))
+        return format_stdout_stderr(stdout, stderr)
     except Exception as e:
         return format_stdout_stderr("", "Cannot read stdout/stderr: {0}".format(ustr(e)))
 
