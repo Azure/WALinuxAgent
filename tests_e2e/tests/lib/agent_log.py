@@ -407,8 +407,9 @@ class AgentLog(object):
             # 'systemctl show azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice --property CPUAccounting' failed: 1 (Failed to get properties: Connection reset by peer)
             #
             # 2025-03-12T08:48:02.186772Z INFO ExtHandler ExtHandler [CGW] Error parsing current CPUQuotaPerSecUSec: 'systemctl show azure-vmextensions-Microsoft.Azure.Extensions.Edp.GATestExtGo.slice --property CPUQuotaPerSecUSec' failed: 1 (Failed to get properties: Connection reset by peer)
+            # 2025-03-31T08:46:39.253900Z INFO ExtHandler ExtHandler [CGW] Failed to set the extension azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice slice and quotas: Can't set properties ['CPUQuota='] of azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice: 'systemctl set-property azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice CPUQuota= --runtime' failed: 1 (Failed to set unit properties on azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice: Message recipient disconnected from message bus without replying)
             {
-                'message': r"(Failed to set the extension|Error parsing).*systemctl show.*--property.*failed: 1.*(Message recipient disconnected from message bus without replying|Connection reset by peer)",
+                'message': r"(Failed to set the extension|Error parsing).*systemctl (show|set-property).*failed: 1.*(Message recipient disconnected from message bus without replying|Connection reset by peer)",
             },
             #
             # 2025-01-06T09:32:44.641948Z INFO ExtHandler ExtHandler [CGW] Disabling resource usage monitoring. Reason: Failed to start Microsoft.Azure.Extensions.CustomScript-2.1.10 using systemd-run, will try invoking the extension directly. Error: [SystemdRunError] Systemd process exited with code 1 and output [stdout]
@@ -423,10 +424,10 @@ class AgentLog(object):
             #
             # If agent is not mounted at the expected path, we log this message in v2 machines. This is not an error.
             # 2025-03-03T09:19:03.145557Z INFO ExtHandler ExtHandler [CGW] The walinuxagent.service cgroup is not mounted at the expected path; will not track. Actual cgroup path:[/sys/fs/cgroup/system.slice/walinuxagent.service] Expected:[/sys/fs/cgroup/azure.slice/walinuxagent.service]
+            # 2025-03-12T22:03:04.095141Z INFO ExtHandler ExtHandler [CGW] The cpu,cpuacct controller is not mounted at the expected path for the walinuxagent.service cgroup; will not track. Actual cgroup path:[/sys/fs/cgroup/cpu,cpuacct/system.slice/walinuxagent.service] Expected:[/sys/fs/cgroup/cpu,cpuacct/azure.slice/walinuxagent.service]
             #
             {
-                'message': r"The walinuxagent.service cgroup is not mounted at the expected path; will not track. Actual cgroup path:\[.*\] Expected:\[.*\]",
-                'if': lambda r: DISTRO_NAME == 'ubuntu' and DISTRO_VERSION >= '22.04'
+                'message': r"(The walinuxagent.service cgroup is not mounted at the expected path|controller is not mounted at the expected path for the walinuxagent.service cgroup); will not track. Actual cgroup path:\[.*\] Expected:\[.*\]",
             },
         ]
 

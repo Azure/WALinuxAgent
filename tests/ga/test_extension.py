@@ -3514,6 +3514,8 @@ class TestExtensionHandlerManifest(AgentTestCase):
 class TestExtensionPolicy(TestExtensionBase):
     def setUp(self):
         AgentTestCase.setUp(self)
+        self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.01))
+        self.mock_sleep.start()
         self.policy_path = os.path.join(self.tmp_dir, "waagent_policy.json")
 
         # Patch attributes to enable policy feature

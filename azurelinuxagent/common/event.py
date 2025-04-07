@@ -129,6 +129,7 @@ class WALAEventOperation:
     RequestedVersionMismatch = "RequestedVersionMismatch"
     ResetFirewall = "ResetFirewall"
     Restart = "Restart"
+    SignatureValidation = "SignatureValidation"
     SetCGroupsLimits = "SetCGroupsLimits"
     SkipUpdate = "SkipUpdate"
     StatusProcessing = "StatusProcessing"
