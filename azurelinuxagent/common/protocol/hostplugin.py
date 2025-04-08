@@ -97,8 +97,6 @@ class HostPluginProtocol(object):
         self._supports_vm_settings = os.path.exists(self._get_fast_track_state_file())
         self._fast_track_timestamp = HostPluginProtocol.get_fast_track_timestamp()
 
-        self._supports_vm_settings_next_check = datetime.datetime.now(UTC)
-
     @staticmethod
     def _extract_deployment_id(role_config_name):
         # Role config name consists of: <deployment id>.<incarnation>(...)

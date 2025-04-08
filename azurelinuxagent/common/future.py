@@ -74,7 +74,7 @@ else:
 # datetime.utcnow triggers a DeprecationWarning on 3.12 and will be removed in a future version; to work around this,
 # use datetime.UTC, which was introduced on Python 3.11.
 #
-if sys.version_info[0] == 3 and sys.version_info[1] >= 11:
+if sys.version_info[0] > 3 or sys.version_info[0] == 3 and sys.version_info[1] >= 11:
     # E1101: Module 'datetime' has no 'UTC' member (no-member)
     UTC = datetime.UTC  # pylint: disable=E1101
 else:
