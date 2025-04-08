@@ -22,6 +22,7 @@ from datetime import datetime, timedelta
 from threading import current_thread
 
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.utils.textutil import redact_sas_token
 
 EVERY_DAY = timedelta(days=1)
 EVERY_HALF_DAY = timedelta(hours=12)
@@ -135,13 +136,17 @@ class Logger(object):
             msg = msg_format.format(*args)
         else:
             msg = msg_format
+
+        # redact the sas token from the message before logging
+        redacted_msg = redact_sas_token(msg)
+
         time = datetime.utcnow().strftime(Logger.LogTimeFormatInUTC)
         level_str = LogLevel.STRINGS[level]
         thread_name = current_thread().name
         if self.prefix is not None:
-            log_item = u"{0} {1} {2} {3} {4}\n".format(time, level_str, thread_name, self.prefix, msg)
+            log_item = u"{0} {1} {2} {3} {4}\n".format(time, level_str, thread_name, self.prefix, redacted_msg)
         else:
-            log_item = u"{0} {1} {2} {3}\n".format(time, level_str, thread_name, msg)
+            log_item = u"{0} {1} {2} {3}\n".format(time, level_str, thread_name, redacted_msg)
 
         log_item = ustr(log_item.encode('ascii', "backslashreplace"), 
                         encoding="ascii")

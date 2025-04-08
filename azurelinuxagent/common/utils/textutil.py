@@ -323,30 +323,26 @@ def compress(s):
     the contents of a file. The output of this method is suitable for
     embedding in log statements.
     """
-    from azurelinuxagent.common.version import PY_VERSION_MAJOR
-    if PY_VERSION_MAJOR > 2:
+    if sys.version_info[0] > 2:
         return base64.b64encode(zlib.compress(bytes(s, 'utf-8'))).decode('utf-8')
     return base64.b64encode(zlib.compress(s))
 
 
 def b64encode(s):
-    from azurelinuxagent.common.version import PY_VERSION_MAJOR
-    if PY_VERSION_MAJOR > 2:
+    if sys.version_info[0] > 2:
         return base64.b64encode(bytes(s, 'utf-8')).decode('utf-8')
     return base64.b64encode(s)
 
 
 def b64decode(s):
-    from azurelinuxagent.common.version import PY_VERSION_MAJOR
-    if PY_VERSION_MAJOR > 2:
+    if sys.version_info[0] > 2:
         return base64.b64decode(s).decode('utf-8')
     return base64.b64decode(s)
 
 
 def safe_shlex_split(s):
     import shlex
-    from azurelinuxagent.common.version import PY_VERSION
-    if PY_VERSION[:2] == (2, 6):
+    if sys.version_info[:2] == (2, 6):
         return shlex.split(s.encode('utf-8'))
     return shlex.split(s)
 
@@ -407,13 +403,10 @@ def str_to_encoded_ustr(s, encoding='utf-8'):
     :return: Returns the corresponding ustr string. Returns None if input is None.
     """
 
-    # TODO: Import at the top of the file instead of a local import (using local import here to avoid cyclic dependency)
-    from azurelinuxagent.common.version import PY_VERSION_MAJOR
-
     if s is None or type(s) is ustr:
         # If its already a ustr/None then return as is
         return s
-    if PY_VERSION_MAJOR > 2:
+    if sys.version_info[0] > 2:
         try:
             # For py3+, str() is unicode by default
             if isinstance(s, bytes):
@@ -444,4 +437,17 @@ def format_exception(exception):
         msg += ''.join(traceback.format_exception(type(exception), value=exception, tb=tb))
 
     return msg
+
+
+SAS_TOKEN_RE = re.compile(r'(https://\S+\?)((sv|st|se|sr|sp|sip|spr|sig)=\S+)+', flags=re.IGNORECASE)
+
+
+def redact_sas_token(msg):
+    """
+    Redact SAS tokens from the message
+    """
+    if msg is None:
+        return msg
+    return SAS_TOKEN_RE.sub(r'\1<redacted>', msg)
+
 

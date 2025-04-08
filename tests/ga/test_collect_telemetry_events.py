@@ -46,6 +46,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
     _WELL_FORMED_FILES = os.path.join(_TEST_DATA_DIR, "well_formed_files")
     _MALFORMED_FILES = os.path.join(_TEST_DATA_DIR, "malformed_files")
     _MIX_FILES = os.path.join(_TEST_DATA_DIR, "mix_files")
+    _SAS_FILES = os.path.join(_TEST_DATA_DIR, "sas_files")
 
     # To make tests more versatile, include this key in a test event to mark that event as a bad event.
     # This event will then be skipped and will not be counted as a good event. This is purely for testing purposes,
@@ -224,6 +225,21 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
 
             self._assert_handler_data_in_event_list(telemetry_events, bad_name_ext_with_count, expected_count=0)
             self._assert_handler_data_in_event_list(telemetry_events, bad_json_ext_with_count, expected_count=0)
+
+    def test_it_should_redact_extension_events(self):
+        with self._create_extension_telemetry_processor() as extension_telemetry_processor:
+            ext_names_with_count = self._create_random_extension_events_dir_with_events(2, self._SAS_FILES)
+            extension_telemetry_processor.run()
+
+            telemetry_events = self._get_handlers_with_version(extension_telemetry_processor.event_list)
+
+            self._assert_handler_data_in_event_list(telemetry_events, ext_names_with_count)
+
+            context1_vals = self._get_param_value_from_event_body_if_exists(extension_telemetry_processor.event_list,
+                                                                            GuestAgentGenericLogsSchema.Context1)
+            self.assertEqual(4, len(context1_vals), "There should be 4 Context1 values")
+            for val in context1_vals:
+                self.assertIn("<redacted>", val, "sasToken should be redacted")
 
     def test_it_should_capture_and_send_correct_events(self):
 
