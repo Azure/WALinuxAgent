@@ -157,10 +157,10 @@ class DhcpHandler(object):
         # use the hardcoded wire server ip instead.
         use_dhcp = conf.get_dhcp_discovery_enabled()
         if not dhcp_available or not use_dhcp:
-            if not dhcp_available:
-                logger.info("send_dhcp_req: DHCP not available")
             if not use_dhcp:
-                logger.info("send_dhcp_req: DHCP usage for endpoint discovery is disabled (Protocol.EndpointDiscovery={0}). Will use hardcoded wireserver endpoint.".format(conf.get_protocol_endpoint_discovery()))
+                logger.info("send_dhcp_req: DHCP usage for endpoint discovery is disabled (Protocol.EndpointDiscovery={0}). Will use known wireserver endpoint.".format(conf.get_protocol_endpoint_discovery()))
+            elif not dhcp_available:
+                logger.info("send_dhcp_req: DHCP not available")
             self.endpoint = KNOWN_WIRESERVER_IP
             return
 

@@ -205,7 +205,7 @@ class ProtocolUtil(SingletonPerThread):
                     # pylint: enable=W0105
                     dhcp_available = self.osutil.is_dhcp_available()
                     # If user has DHCP disabled for their VM then the agent may enter a loop of failed dhcp requests.
-                    # The user can configure the agent to use the hardcoded wire server ip instead.
+                    # The user can configure the agent to use the known wire server ip instead.
                     use_dhcp = conf.get_dhcp_discovery_enabled()
                     if dhcp_available and use_dhcp:
                         logger.info("WireServer endpoint is not found. Rerun dhcp handler")
