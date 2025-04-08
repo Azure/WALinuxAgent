@@ -77,13 +77,6 @@ class WireProtocol(DataContract):
     def detect(self, init_goal_state=True, save_to_history=False):
         self.client.check_wire_protocol_version()
 
-        # Send telemetry if protocol endpoint is not the known WireServer endpoint.
-        endpoint = self.get_endpoint()
-        if endpoint is not None and endpoint != KNOWN_WIRESERVER_IP:
-            message = 'Protocol endpoint is not known wireserver ip: {0}'.format(endpoint)
-            logger.info(message)
-            add_event(op=WALAEventOperation.ProtocolEndpoint, message=message)
-
         trans_prv_file = os.path.join(conf.get_lib_dir(),
                                       TRANSPORT_PRV_FILE_NAME)
         trans_cert_file = os.path.join(conf.get_lib_dir(),

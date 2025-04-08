@@ -554,9 +554,9 @@ def get_protocol_endpoint_discovery(conf=__conf__):
 
 def get_dhcp_discovery_enabled(conf=__conf__):
     """
-    Determines how the agent will discover the protocol endpoint.
-    If set to 'dhcp', the agent will use DHCP to get the protocol endpoint.
-    Otherwise, the agent will use the hardcoded wireserver endpoint.
+    Determines how the agent will discover the wireserver endpoint.
+    If set to 'dhcp', the agent will use DHCP to get the wireserver endpoint.
+    Otherwise, the agent will use the known wireserver endpoint (168.63.129.16).
     """
     return get_protocol_endpoint_discovery(conf) == "dhcp"
 

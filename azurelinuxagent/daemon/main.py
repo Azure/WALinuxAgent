@@ -30,6 +30,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateProperties
 from azurelinuxagent.common.protocol.util import get_protocol_util
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.pa.rdma.rdma import setup_rdma_device
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_NAME, \
@@ -146,6 +147,13 @@ class DaemonHandler(object):
         # Once we have the protocol, complete initialization of the telemetry fields
         # that require the goal state and IMDS
         self._initialize_telemetry()
+
+        # Send telemetry if protocol endpoint is not the known WireServer endpoint.
+        endpoint = self.protocol_util.get_protocol()
+        if endpoint is not None and endpoint != KNOWN_WIRESERVER_IP:
+            message = 'Protocol endpoint is not known wireserver ip: {0}'.format(endpoint)
+            logger.info(message)
+            add_event(op=WALAEventOperation.ProtocolEndpoint, message=message)
 
         # Enable RDMA, continue in errors
         if conf.enable_rdma():

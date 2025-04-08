@@ -215,10 +215,10 @@ class ProtocolUtil(SingletonPerThread):
                             raise ProtocolError(ustr(e))
                         endpoint = self.dhcp_handler.endpoint
                     else:
-                        if not dhcp_available:
-                            logger.info("_detect_protocol: DHCP not available")
                         if not use_dhcp:
-                            logger.info("_detect_protocol: DHCP usage for endpoint discovery is disabled (Protocol.EndpointDiscovery={0}). Will use hardcoded wireserver endpoint.".format(conf.get_protocol_endpoint_discovery()))
+                            logger.info("_detect_protocol: DHCP usage for endpoint discovery is disabled (Protocol.EndpointDiscovery={0}). Will use known wireserver endpoint.".format(conf.get_protocol_endpoint_discovery()))
+                        elif not dhcp_available:
+                            logger.info("_detect_protocol: DHCP not available")
                         endpoint = self.get_wireserver_endpoint()
 
                 try:
