@@ -98,21 +98,20 @@ class TestDaemon(AgentTestCase):
         Agent should run normally when no disable_agent is found
         """
         with patch('azurelinuxagent.pa.provision.get_provision_handler', return_value=ProvisionHandler()):
-            # DaemonHandler._initialize_telemetry and get_protocol require communication with WireServer and IMDS; since
-            # we are not using telemetry in this test we mock it out
+            # DaemonHandler._initialize_telemetry requires communication with WireServer and IMDS; since we
+            # are not using telemetry in this test we mock it out
             with patch('azurelinuxagent.daemon.main.DaemonHandler._initialize_telemetry'):
-                with patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol'):
-                    self.assertFalse(os.path.exists(conf.get_disable_agent_file_path()))
-                    daemon_handler = get_daemon_handler()
+                self.assertFalse(os.path.exists(conf.get_disable_agent_file_path()))
+                daemon_handler = get_daemon_handler()
 
-                    def stop_daemon(child_args):  # pylint: disable=unused-argument
-                        daemon_handler.running = False
+                def stop_daemon(child_args):  # pylint: disable=unused-argument
+                    daemon_handler.running = False
 
-                    patch_run_latest.side_effect = stop_daemon
-                    daemon_handler.run()
+                patch_run_latest.side_effect = stop_daemon
+                daemon_handler.run()
 
-                    self.assertEqual(1, patch_run_provision.call_count)
-                    self.assertEqual(1, patch_run_latest.call_count)
+                self.assertEqual(1, patch_run_provision.call_count)
+                self.assertEqual(1, patch_run_latest.call_count)
 
     @patch('azurelinuxagent.common.conf.get_provisioning_agent', return_value='waagent')
     @patch('azurelinuxagent.ga.update.UpdateHandler.run_latest', side_effect=AgentTestCase.fail)
@@ -158,26 +157,6 @@ class TestDaemon(AgentTestCase):
                     protocol_endpoint_events = [kwargs for _, kwargs in patch_add_event.call_args_list if kwargs['op'] == 'ProtocolEndpoint']
                     # Daemon should not send ProtocolEndpoint event if endpoint is known wireserver IP
                     self.assertTrue(len(protocol_endpoint_events) == 0)
-
-    @patch('azurelinuxagent.common.conf.get_provisioning_agent', return_value='waagent')
-    @patch('azurelinuxagent.ga.update.UpdateHandler.run_latest')
-    @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.run')
-    def test_daemon_should_send_event_if_known_wireserver_ip_not_used(self, _, patch_run_latest, gpa):  # pylint: disable=unused-argument
-        with patch('azurelinuxagent.daemon.main.DaemonHandler._initialize_telemetry'):
-            # Mock WireProtocol with unknown wireserver ip
-            with patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=WireProtocol('1.1.1.1')):
-                with patch('azurelinuxagent.common.event.EventLogger.add_event') as patch_add_event:
-                    daemon_handler = get_daemon_handler()
-
-                    def stop_daemon(child_args):  # pylint: disable=unused-argument
-                        daemon_handler.running = False
-
-                    patch_run_latest.side_effect = stop_daemon
-                    daemon_handler.run()
-
-                    protocol_endpoint_events = [kwargs for _, kwargs in patch_add_event.call_args_list if kwargs['op'] == 'ProtocolEndpoint']
-                    # Daemon should send ProtocolEndpoint event if endpoint is not known wireserver IP
-                    self.assertTrue(len(protocol_endpoint_events) == 1)
 
 
 if __name__ == '__main__':

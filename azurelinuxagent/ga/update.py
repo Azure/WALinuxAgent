@@ -35,6 +35,7 @@ from azurelinuxagent.common import event
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames, \
     get_agent_supported_features_list_for_crp
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters_and_protocol, \
     WALAEventOperation, EVENTS_DIRECTORY
@@ -349,6 +350,13 @@ class UpdateHandler(object):
 
             # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters_and_protocol(protocol)
+
+            # Send telemetry if protocol endpoint is not the known WireServer endpoint.
+            endpoint = protocol.get_endpoint()
+            if endpoint is not None and endpoint != KNOWN_WIRESERVER_IP:
+                message = 'Protocol endpoint ({0}) is not known wireserver ip: {1}'.format(endpoint, KNOWN_WIRESERVER_IP)
+                logger.info(message)
+                add_event(op=WALAEventOperation.ProtocolEndpoint, message=message)
 
             # Send telemetry for the OS-specific info.
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)

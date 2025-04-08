@@ -21,6 +21,7 @@ import zipfile
 from datetime import datetime, timedelta
 from threading import current_thread
 
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, AGENT_ERROR_FILE, INITIAL_UPDATE_STATE_FILE
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.logger import LogLevel
@@ -1196,6 +1197,28 @@ class TestUpdate(UpdateTestCase):
             self.assertTrue(os.path.isfile(cert_path))
             with open(cert_path, 'r') as f:
                 self.assertEqual(f.read(), _MICROSOFT_ROOT_CERT_2011_03_22, msg="Signing certificate was not correctly written to expected file location")
+
+    def test_agent_should_send_event_if_known_wireserver_ip_not_used(self):
+        with _get_update_handler() as (update_handler, _):
+            # Mock WireProtocol endpoint with known wireserver ip
+            with patch('azurelinuxagent.common.protocol.wire.WireProtocol.get_endpoint', return_value=KNOWN_WIRESERVER_IP):
+                with patch('azurelinuxagent.common.event.EventLogger.add_event') as patch_add_event:
+                    update_handler.run(debug=True)
+
+                    # Get any events for ProtocolEndpoint operation
+                    protocol_endpoint_events = [kwargs for _, kwargs in patch_add_event.call_args_list if kwargs['op'] == 'ProtocolEndpoint']
+                    # Daemon should not send ProtocolEndpoint event if endpoint is known wireserver IP
+                    self.assertTrue(len(protocol_endpoint_events) == 0)
+
+            # Mock WireProtocol endpoint with unknown ip
+            with patch('azurelinuxagent.common.protocol.wire.WireProtocol.get_endpoint', return_value='1.1.1.1'):
+                with patch('azurelinuxagent.common.event.EventLogger.add_event') as patch_add_event:
+                    update_handler.run(debug=True)
+
+                    # Get any events for ProtocolEndpoint operation
+                    protocol_endpoint_events = [kwargs for _, kwargs in patch_add_event.call_args_list if kwargs['op'] == 'ProtocolEndpoint']
+                    # Daemon should send ProtocolEndpoint event if endpoint is not known wireserver IP
+                    self.assertTrue(len(protocol_endpoint_events) == 1)
 
 
 class TestUpdateWaitForCloudInit(AgentTestCase):
