@@ -71,6 +71,7 @@ def verify_agent_cgroup_created_on_file_system():
         missing_agent_cgroup_controllers_path.clear()
         verified_agent_cgroup_controllers_path.clear()
         for agenet_cgroup in agent_cgroup_mount_path:
+            all_controllers_path_exist = True
             for controller in get_mounted_controller_list():
                 agent_controller_path = os.path.join(BASE_CGROUP, controller, agenet_cgroup[1:])
 
