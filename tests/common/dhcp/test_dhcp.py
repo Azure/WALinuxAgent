@@ -91,7 +91,7 @@ class TestDHCP(AgentTestCase):
         handler = dhcp.get_dhcp_handler()
         handler.osutil = osutil.DefaultOSUtil()
 
-        open_file_mock = mock.mock_open(read_data=TestDHCP.DEFAULT_ROUTING_TABLE)
+        open_file_mock = mock.mock_open(read_data=TestDHCP.DEFAULT_ROUTING_TABLE) 
 
         with patch('os.path.exists', return_value=False):
             with patch.object(osutil.DefaultOSUtil, 'get_dhcp_lease_endpoint')\
