@@ -39,6 +39,7 @@ from azurelinuxagent.common import version
 from azurelinuxagent.common import event
 from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions, \
     SupportedFeatureNames, get_supported_feature_by_name, get_agent_supported_features_list_for_crp
+from azurelinuxagent.common.utils.textutil import redact_sas_token
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine
 from azurelinuxagent.common.datacontract import get_properties, set_properties
@@ -1475,7 +1476,7 @@ class ExtHandlerInstance(object):
                         "code": code,
                         "formattedMessage": {
                             "lang": "en-US",
-                            "message": message
+                            "message": redact_sas_token(message)
                         }
                     }
                 }
@@ -2183,7 +2184,7 @@ class ExtHandlerInstance(object):
         handler_status = ExtHandlerStatus()
         handler_status.name = self.ext_handler.name
         handler_status.version = str(self.ext_handler.version)
-        handler_status.message = message
+        handler_status.message = redact_sas_token(message)
         handler_status.code = code
         handler_status.status = status
         handler_status.supports_multi_config = self.ext_handler.supports_multi_config

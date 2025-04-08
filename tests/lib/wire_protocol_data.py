@@ -310,7 +310,6 @@ class WireProtocolData(object):
         return resp
 
     def mock_http_put(self, url, data, **_):
-        content = ''
 
         resp = MagicMock()
         resp.status = httpclient.OK
@@ -320,10 +319,11 @@ class WireProtocolData(object):
         elif HttpRequestPredicates.is_storage_status_request(url):
             self.status_blobs.append(data)
         elif HttpRequestPredicates.is_host_plugin_status_request(url):
-            self.status_blobs.append(WireProtocolData.get_status_blob_from_hostgaplugin_put_status_request(content))
+            self.status_blobs.append(WireProtocolData.get_status_blob_from_hostgaplugin_put_status_request(data))
         else:
             raise NotImplementedError(url)
 
+        content = ''
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
 
@@ -344,7 +344,7 @@ class WireProtocolData(object):
     def get_status_blob_from_hostgaplugin_put_status_request(data):
         status_object = json.loads(data)
         content = status_object["content"]
-        return base64.b64decode(content)
+        return base64.b64decode(content).decode("utf-8")
 
     def get_no_of_plugins_in_extension_config(self):
         if self.ext_conf is None:

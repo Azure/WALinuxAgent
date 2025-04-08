@@ -298,6 +298,47 @@ class TestLogger(AgentTestCase):
     @patch("azurelinuxagent.common.logger.TelemetryAppender.write")
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.logger.FileAppender.write")
+    def test_log_should_redact_sas_tokens(self, mock_file_write, mock_console_write, mock_telem_write, mock_stdout_write):
+        lg = logger.Logger(logger.DEFAULT_LOGGER)
+
+        lg.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
+        lg.add_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
+        lg.add_appender(logger.AppenderType.CONSOLE, logger.LogLevel.WARNING, path="/dev/null")
+        lg.add_appender(logger.AppenderType.STDOUT, logger.LogLevel.WARNING, path=None)
+
+        sas_token = "https://test.blob.core.windows.net/$system/lrwinmcdn_0.0f3bfecf-f14f-4c7d-8275-9dee7310fe8c.vmSettings?sv=2018-03-28&amp;sr=b&amp;sk=system-1&amp;sig=8YHwmibhasT0r9MZgL09QmFwL7ZV%2bg%2b49QP5Zwe4ksY%3d&amp;se=9999-01-01T00%3a00%3a00Z&amp;sp=r"
+        lg.info("Test blob {0}", sas_token)
+
+        self.assertRegex(mock_file_write.call_args[0][1], r"INFO.*redacted")
+        self.assertRegex(mock_console_write.call_args[0][1], r"INFO.*redacted")
+        self.assertRegex(mock_telem_write.call_args[0][1], r"INFO.*redacted")
+        self.assertRegex(mock_stdout_write.call_args[0][1], r"INFO.*redacted")
+
+        lg.warn("Test blob {0}", sas_token)
+
+        self.assertRegex(mock_file_write.call_args[0][1], r"WARNING.*redacted")
+        self.assertRegex(mock_console_write.call_args[0][1], r"WARNING.*redacted")
+        self.assertRegex(mock_telem_write.call_args[0][1], r"WARNING.*redacted")
+        self.assertRegex(mock_stdout_write.call_args[0][1], r"WARNING.*redacted")
+
+        lg.error("Test blob {0}", sas_token)
+
+        self.assertRegex(mock_file_write.call_args[0][1], r"ERROR.*redacted")
+        self.assertRegex(mock_console_write.call_args[0][1], r"ERROR.*redacted")
+        self.assertRegex(mock_telem_write.call_args[0][1], r"ERROR.*redacted")
+        self.assertRegex(mock_stdout_write.call_args[0][1], r"ERROR.*redacted")
+
+        lg.verbose("Test blob {0}", sas_token)
+
+        self.assertRegex(mock_file_write.call_args[0][1], r"VERBOSE.*redacted")
+        self.assertRegex(mock_console_write.call_args[0][1], r"VERBOSE.*redacted")
+        self.assertRegex(mock_telem_write.call_args[0][1], r"VERBOSE.*redacted")
+        self.assertRegex(mock_stdout_write.call_args[0][1], r"VERBOSE.*redacted")
+
+    @patch("azurelinuxagent.common.logger.StdoutAppender.write")
+    @patch("azurelinuxagent.common.logger.TelemetryAppender.write")
+    @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
+    @patch("azurelinuxagent.common.logger.FileAppender.write")
     def test_set_prefix(self, mock_file_write, mock_console_write, mock_telem_write, mock_stdout_write):
         lg = logger.Logger(logger.DEFAULT_LOGGER)
         prefix = "YoloLogger"

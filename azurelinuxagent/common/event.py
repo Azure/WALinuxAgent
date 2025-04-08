@@ -36,7 +36,8 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent, CommonTelemetryEventSchema, \
     GuestAgentGenericLogsSchema, GuestAgentExtensionEventsSchema, GuestAgentPerfCounterEventsSchema
 from azurelinuxagent.common.utils import fileutil, textutil, timeutil
-from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, str_to_encoded_ustr
+from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, str_to_encoded_ustr, \
+    redact_sas_token
 from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, AGENT_NAME, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
 from azurelinuxagent.common.protocol.imds import get_imds_client
 
@@ -246,6 +247,15 @@ def parse_xml_event(data_str):
         return event
     except Exception as e:
         raise ValueError(ustr(e))
+
+
+def redact_event_msg(event):
+    """
+    Redact the message in the event if it contains SAS tokens.
+    """
+    for param in event.parameters:
+        if param.name == GuestAgentExtensionEventsSchema.Message:
+            param.value = redact_sas_token(param.value)
 
 
 def _encode_message(op, message):
@@ -555,6 +565,9 @@ class EventLogger(object):
         save it disk if we fail to send or not required to flush immediately.
         TODO: pickup as many events as possible and send them in one go.
         """
+        # redact message before save it to disk
+        redact_event_msg(event)
+
         report_success = False
         if flush and self.protocol is not None:
             report_success = self.protocol.report_event([event], flush)

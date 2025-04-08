@@ -399,6 +399,16 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(filename.endswith(AGENT_EVENT_FILE_EXTENSION),
                 'Event file does not have the correct extension ({0}): {1}'.format(AGENT_EVENT_FILE_EXTENSION, filename))
 
+    def test_save_event_redact_sas_token(self):
+        add_event('test', message='test event with sas token: https://test.blob.core.windows.net/$system/lrwinmcdn_0.0f3bfecf-f14f-4c7d-8275-9dee7310fe8c.vmSettings?sv=2018-03-28&amp;sr=b&amp;sk=system-1&amp;sig=8YHwmibhasT0r9MZgL09QmFwL7ZV%2bg%2b49QP5Zwe4ksY%3d&amp;se=9999-01-01T00%3a00%3a00Z&amp;sp=r', op=TestEvent._Operation)
+        event_files = self._collect_event_files()
+        self.assertTrue(len(event_files) == 1)
+
+        first_event = event_files[0]
+        with open(first_event) as first_fh:
+            first_event_text = first_fh.read()
+            self.assertTrue('<redacted>' in first_event_text)
+
     def test_add_event_flush_immediately(self):
         def http_post_handler(url, body, **__):
             if self.is_telemetry_request(url):
@@ -446,6 +456,15 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
         self.assertEqual(len(event_list), 1)
         self.assertEqual(TestEvent._get_event_message(event_list[0]), u'World\u05e2\u05d9\u05d5\u05ea \u05d0\u05d7\u05e8\u05d5\u05ea\u0906\u091c')
+
+    def test_collect_events_should_redact_message(self):
+        self._create_test_event_file("event_with_sas_token.tld")
+
+        event_list = self._collect_events()
+
+        self.assertEqual(len(event_list), 1)
+
+        self.assertIn('<redacted>', TestEvent._get_event_message(event_list[0]))
 
     def test_collect_events_should_ignore_invalid_event_files(self):
         self._create_test_event_file("custom_script_1.tld")  # a valid event

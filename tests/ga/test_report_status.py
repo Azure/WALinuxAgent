@@ -3,6 +3,7 @@
 
 import json
 
+from azurelinuxagent.common.protocol.restapi import VMStatus, ExtHandlerStatus, ExtensionStatus
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.ga.agent_update_handler import get_agent_update_handler
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler
@@ -99,6 +100,39 @@ class ReportStatusTestCase(AgentTestCase):
                             update_handler._try_update_goal_state(exthandlers_handler.protocol)
                             update_handler._report_status(exthandlers_handler, agent_update_handler)
                             self.assertEqual(2, len(get_warnings()), "UpdateHandler._report_status() should continue reporting errors after a new goal state")
+
+    def test_report_status_should_redact_sas_tokens(self):
+        original = r'''ONE https://foo.blob.core.windows.net/bar?sv=2000&ss=bfqt&srt=sco&sp=rw&se=2025&st=2022&spr=https&sig=SI%3D
+            TWO:HTTPS://bar.blob.core.com/foo/bar/foo.txt?sv=2018&sr=b&sig=Yx%3D&st=2023%3A52Z&se=9999%3A59%3A59Z&sp=r TWO
+            https://bar.com/foo?uid=2018&sr=b THREE'''
+        expected = r'''ONE https://foo.blob.core.windows.net/bar?<redacted>
+            TWO:HTTPS://bar.blob.core.com/foo/bar/foo.txt?<redacted> TWO
+            https://bar.com/foo?uid=2018&sr=b THREE'''
+        def create_vm_status():
+            vm_status = VMStatus(status="Ready", message="Ready")
+            vm_status.vmAgent.extensionHandlers = [ExtHandlerStatus(name="TestHandler", message=original)]
+            vm_status.vmAgent.extensionHandlers[0].extension_status = ExtensionStatus(name="TestExtension", message=original)
+            vm_status.vmAgent.extensionHandlers[0].extension_status.status = "Ready"
+            return vm_status
+
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            protocol.client.status_blob.vm_status = create_vm_status()
+
+            protocol.client.upload_status_blob()
+
+            first_status = json.loads(protocol.mock_wire_data.status_blobs[0])
+
+            handler_aggregate_status = first_status.get('aggregateStatus', {}).get("handlerAggregateStatus")
+            self.assertIsNotNone(handler_aggregate_status, "Could not find the handlerAggregateStatus")
+            self.assertEqual(1, len(handler_aggregate_status),
+                             "Expected 1 extension status. Got:  {0}".format(handler_aggregate_status))
+            self.assertEqual(expected, handler_aggregate_status[0]['formattedMessage']['message'], "sas tokens not redacted in handler status")
+
+            runtime_settings_status = handler_aggregate_status[0].get("runtimeSettingsStatus")
+            self.assertIsNotNone(runtime_settings_status, "Could not find the runtimeSettingsStatus")
+            settings_status = runtime_settings_status.get("settingsStatus", {}).get('status')
+            self.assertIsNotNone(runtime_settings_status, "Could not find the settingsStatus")
+            self.assertEqual(expected, settings_status['formattedMessage']['message'], "sas tokens not redacted in extension status")
 
     def test_update_handler_should_add_fast_track_to_supported_features_when_it_is_supported(self):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
