@@ -72,9 +72,8 @@ class TestSignatureValidation(AgentTestCase):
         with patch("azurelinuxagent.ga.signature_validation.get_microsoft_signing_certificate_path", return_value=incorrect_root_cert_path):
             with self.assertRaises(SignatureValidationError, msg="Signing certificate does not match, should have raised error") as ex:
                 validate_signature(self.null_ext_zip_path, self.null_ext_signature)
-            expected_error_regex = r"verify\s*error\s*:\s*unable\s*to\s*get\s*local\s*issuer\s*certificate"
-            match = re.search(expected_error_regex, ex.exception.args[0], re.IGNORECASE)
-            self.assertIsNotNone(match, msg="Raised SignatureValidationError but error did not indicate certificate failure")
+            expected_error_regex = r"Verify\s*error\s*:\s*unable\s*to\s*get\s*local\s*issuer\s*certificate"
+            self.assertRegex(ex.exception.args[0], expected_error_regex, msg="Raised SignatureValidationError but error did not indicate certificate failure")
 
     def test_should_raise_error_on_missing_signing_certificate(self):
         root_cert_path = os.path.join(self.tmp_dir, "missing_root_cert.pem")
