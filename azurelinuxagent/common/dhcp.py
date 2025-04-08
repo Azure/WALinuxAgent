@@ -154,7 +154,7 @@ class DhcpHandler(object):
         """
         dhcp_available = self.osutil.is_dhcp_available()
         # If user has DHCP disabled for their VM then the dhcp request will fail. The user can configure the agent to
-        # use the hardcoded wire server ip instead.
+        # use the known wire server ip instead.
         use_dhcp = conf.get_dhcp_discovery_enabled()
         if not dhcp_available or not use_dhcp:
             if not use_dhcp:
