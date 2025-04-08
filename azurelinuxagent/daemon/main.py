@@ -149,9 +149,9 @@ class DaemonHandler(object):
         self._initialize_telemetry()
 
         # Send telemetry if protocol endpoint is not the known WireServer endpoint.
-        endpoint = self.protocol_util.get_protocol()
+        endpoint = self.protocol_util.get_protocol().get_endpoint() if self.protocol_util.get_protocol() is not None else None
         if endpoint is not None and endpoint != KNOWN_WIRESERVER_IP:
-            message = 'Protocol endpoint is not known wireserver ip: {0}'.format(endpoint)
+            message = 'Protocol endpoint ({0}) is not known wireserver ip: {1}'.format(endpoint, KNOWN_WIRESERVER_IP)
             logger.info(message)
             add_event(op=WALAEventOperation.ProtocolEndpoint, message=message)
 
