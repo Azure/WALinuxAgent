@@ -330,18 +330,22 @@ class CGroupConfigurator(object):
         def _reset_agent_cgroup_setup(self):
             try:
                 agent_drop_in_path = systemd.get_agent_drop_in_path()
-                if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path):
+                if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path) and len(os.listdir(agent_drop_in_path)) > 0:
                     files_to_cleanup = []
                     agent_drop_in_file_slice = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_SLICE)
-                    files_to_cleanup.append(agent_drop_in_file_slice)
+                    if os.path.exists(agent_drop_in_file_slice):
+                        files_to_cleanup.append(agent_drop_in_file_slice)
                     agent_drop_in_file_cpu_accounting = os.path.join(agent_drop_in_path,
                                                                      _DROP_IN_FILE_CPU_ACCOUNTING)
-                    files_to_cleanup.append(agent_drop_in_file_cpu_accounting)
+                    if os.path.exists(agent_drop_in_file_cpu_accounting):
+                        files_to_cleanup.append(agent_drop_in_file_cpu_accounting)
                     agent_drop_in_file_memory_accounting = os.path.join(agent_drop_in_path,
                                                                         _DROP_IN_FILE_MEMORY_ACCOUNTING)
-                    files_to_cleanup.append(agent_drop_in_file_memory_accounting)
+                    if os.path.exists(agent_drop_in_file_memory_accounting):
+                        files_to_cleanup.append(agent_drop_in_file_memory_accounting)
                     agent_drop_in_file_cpu_quota = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
-                    files_to_cleanup.append(agent_drop_in_file_cpu_quota)
+                    if os.path.exists(agent_drop_in_file_cpu_quota):
+                        files_to_cleanup.append(agent_drop_in_file_cpu_quota)
 
                     if len(files_to_cleanup) > 0:
                         log_cgroup_info("Found drop-in files; attempting agent cgroup setup cleanup", send_event=False)
