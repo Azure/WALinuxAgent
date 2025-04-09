@@ -653,6 +653,15 @@ _Default: customscript,runcommand_
 
 The list of extensions which will be excluded from cgroups limits. This should be comma separated. 
 
+#### __Protocol.EndpointDiscovery__
+
+_Type: String_  
+_Default: dhcp_
+
+Determines how the agent will discover the [WireServer endpoint](https://learn.microsoft.com/en-us/azure/virtual-network/what-is-ip-address-168-63-129-16). 
+Agent will use DHCP by default to discover the WireServer endpoint, but if this setting is 'static' the agent will use the known WireServer address (168.63.129.16).
+Possible options are "dhcp" (default) or "static".
+
 ### Telemetry
 
 WALinuxAgent collects usage data and sends it to Microsoft to help improve our products and services. The data collected is used to track service health and
