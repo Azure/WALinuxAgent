@@ -18,6 +18,7 @@
 import mock
 import azurelinuxagent.common.dhcp as dhcp
 import azurelinuxagent.common.osutil.default as osutil
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from tests.lib.tools import AgentTestCase, open_patch, patch
 
 
@@ -125,3 +126,43 @@ class TestDHCP(AgentTestCase):
                     
                     self.assertTrue(patch_dhcp_cache.call_count == 1)
                     self.assertTrue(patch_dhcp_send.call_count == 1)
+
+    def test_dhcp_send_req_dhcp_unavailable(self):
+        handler = dhcp.get_dhcp_handler()
+        handler.skip_cache = True   # Force test to skip cache and get to send_dhcp_req
+        handler.osutil = osutil.DefaultOSUtil()
+
+        # Mock routing table so that it doesn't have wireserver route
+        with patch("os.path.exists", return_value=True):
+            open_file_mock = mock.mock_open(read_data=TestDHCP.DEFAULT_ROUTING_TABLE)
+            with patch(open_patch(), open_file_mock):
+                # Mock osutil so dhcp is not available
+                with patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.is_dhcp_available', return_value=False):
+                    with patch.object(dhcp.DhcpHandler, '_send_dhcp_req') as patch_dhcp_send:
+                        handler.run()
+
+                        # Assert that endpoint is set to known wireserver ip
+                        self.assertEqual(handler.endpoint, KNOWN_WIRESERVER_IP)
+
+                        # Assert that the dhcp request did not get sent, because dhcp is not available
+                        self.assertTrue(patch_dhcp_send.call_count == 0)
+
+    def test_dhcp_send_req_dhcp_discovery_disabled(self):
+        handler = dhcp.get_dhcp_handler()
+        handler.skip_cache = True  # Force test to skip cache and get to send_dhcp_req
+        handler.osutil = osutil.DefaultOSUtil()
+
+        # Mock routing table so that it doesn't have wireserver route
+        with patch("os.path.exists", return_value=True):
+            open_file_mock = mock.mock_open(read_data=TestDHCP.DEFAULT_ROUTING_TABLE)
+            with patch(open_patch(), open_file_mock):
+                # Mock osutil so dhcp is not available
+                with patch('azurelinuxagent.common.conf.get_dhcp_discovery_enabled', return_value=False):
+                    with patch.object(dhcp.DhcpHandler, '_send_dhcp_req') as patch_dhcp_send:
+                        handler.run()
+
+                        # Assert that endpoint is set to known wireserver ip
+                        self.assertEqual(handler.endpoint, KNOWN_WIRESERVER_IP)
+
+                        # Assert that the dhcp request did not get sent, because dhcp discovery is disabled
+                        self.assertTrue(patch_dhcp_send.call_count == 0)
