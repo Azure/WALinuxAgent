@@ -18,7 +18,6 @@
 #
 import os
 import sys
-import re
 
 from tests.lib.tools import AgentTestCase, data_dir, patch, skip_if_predicate_true
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
