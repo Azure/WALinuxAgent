@@ -118,6 +118,7 @@ class WALAEventOperation:
     ProvisionAfterExtensions = "ProvisionAfterExtensions"
     PluginSettingsVersionMismatch = "PluginSettingsVersionMismatch"
     InvalidExtensionConfig = "InvalidExtensionConfig"
+    ProtocolEndpoint = "ProtocolEndpoint"
     Provision = "Provision"
     ProvisionGuestAgent = "ProvisionGuestAgent"
     RemoteAccessHandling = "RemoteAccessHandling"
