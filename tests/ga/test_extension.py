@@ -3804,7 +3804,6 @@ class TestExtensionPolicy(TestExtensionBase):
             with open(file_path, mode='r') as f:
                 self.assertEqual(policy, json.load(f))
 
-
 class TestSignatureValidationNotEnforced(TestExtensionBase):
     """
     This tests expected behavior when extension package signature validation is enabled, but not enforced.

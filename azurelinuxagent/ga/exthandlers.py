@@ -1411,7 +1411,7 @@ class ExtHandlerInstance(object):
         if not package_exists:
             is_fast_track_goal_state = self.protocol.get_goal_state().extensions_goal_state.source == GoalStateSource.FastTrack
             self.protocol.client.download_zip_package("extension package", self.pkg.uris, package_file, self.get_base_dir(), use_verify_header=is_fast_track_goal_state,
-                                                      validate_signature=validate_extension_package_signature())
+                                                      validate_signature=validate_extension_package_signature)
             self.report_event(message="Download succeeded", duration=elapsed_milliseconds(begin_utc))
 
         self.pkg_file = package_file
