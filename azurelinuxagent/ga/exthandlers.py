@@ -56,7 +56,7 @@ from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
-from azurelinuxagent.ga.signature_validation import validate_signature, validate_handler_manifest_signing_info
+from azurelinuxagent.ga.signature_validation import validate_signature, validate_handler_manifest_signing_info, OpenSSLVersionError
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
 _HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
@@ -1393,6 +1393,12 @@ class ExtHandlerInstance(object):
                     event.info(op=WALAEventOperation.SignatureValidation,
                                fmt="Successfully validated package signature for extension '{0}'".format(
                                    self.ext_handler.name))
+
+                except OpenSSLVersionError:
+                    # OpenSSLVersionError is only raised if the OpenSSL version does not meet the minimum requirement
+                    # for signature validation. We already send telemetry for OpenSSL version in UpdateHandler, so
+                    # we do not need to send telemetry again here.
+                    pass
 
                 except Exception as ex:
                     event.error(op=WALAEventOperation.SignatureValidation,

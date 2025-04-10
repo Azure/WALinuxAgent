@@ -135,9 +135,10 @@ class ExtSignatureValidation(AgentVmTest):
                 if ext.extension._resource_name in extension_names_on_vm:
                     ext.extension.delete()
 
+            # This set of test cases will test behavior when signature is validated, but not enforced (telemetry only).
+            # Both signed and unsigned extensions should succeed.
             log.info("")
             log.info("*** Begin test cases for signature validation without enforcement. All operations should succeed.")
-
             # Test unsigned, single-config extension (CustomScript). Extension should be enabled and uninstalled with no errors.
             log.info("")
             log.info("*** Test case 1: should enable and uninstall unsigned single-config extension (CustomScript) successfully")

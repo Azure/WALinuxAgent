@@ -22,7 +22,7 @@ import sys
 from tests.lib.tools import AgentTestCase, data_dir, patch, skip_if_predicate_true
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 from azurelinuxagent.ga.signature_validation import validate_signature, SignatureValidationError, validate_handler_manifest_signing_info, \
-    HandlerManifestError
+    HandlerManifestError, OpenSSLVersionError
 from azurelinuxagent.ga.exthandlers import HandlerManifest
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.protocol.restapi import Extension
@@ -92,6 +92,11 @@ class TestSignatureValidation(AgentTestCase):
                 write_signing_certificates()
                 signing_errors = [kw for _, kw in report_err.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation]
                 self.assertEqual(1, len(signing_errors), "Error writing signing certificates not logged or sent as telemetry")
+
+    def test_should_raise_error_if_openssl_version_is_unsupported(self):
+        with patch("azurelinuxagent.ga.signature_validation._get_openssl_version", return_value="1.0.2"):
+            with self.assertRaises(OpenSSLVersionError, msg="OpenSSL version is unsupported, should have raised error") as ex:
+                validate_signature(self.vm_access_zip_path, self.vm_access_signature)
 
     @skip_if_predicate_true(lambda: True, "Enable this test when timestamp validation has been implemented.")
     def test_should_raise_error_if_root_cert_was_expired_at_signing_time(self):

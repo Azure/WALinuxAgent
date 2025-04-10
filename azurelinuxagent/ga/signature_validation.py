@@ -22,7 +22,7 @@ import re
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.utils.shellutil import run_command, CommandError
-from azurelinuxagent.common.exception import ExtensionError
+from azurelinuxagent.common.exception import ExtensionError, AgentError
 from azurelinuxagent.common import event
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionErrorCodes
@@ -44,6 +44,12 @@ class SignatureValidationError(ExtensionError):
 class HandlerManifestError(ExtensionError):
     """
     Error raised when handler manifest 'signingInfo' validation fails for an extension.
+    """
+
+
+class OpenSSLVersionError(AgentError):
+    """
+    Error raised when OpenSSL version is less than the supported version.
     """
 
 
@@ -88,7 +94,7 @@ def validate_signature(package_path, signature):
         msg = ("Signature validation requires OpenSSL version {0}, but the current version is {1}. "
                "To validate signature, please upgrade OpenSSL to version {0} or higher.").format(
             _MIN_OPENSSL_VERSION_FOR_SIG_VALIDATION, openssl_version)
-        raise SignatureValidationError(msg=msg, code=ExtensionErrorCodes.PluginPackageExtractionFailed)
+        raise OpenSSLVersionError(msg=msg)
 
     event.info(op=WALAEventOperation.SignatureValidation, fmt="Validating signature of package '{0}'".format(package_path))
     signature_file_name = os.path.basename(package_path) + "_signature.pem"
