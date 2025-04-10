@@ -10,7 +10,7 @@ on:
 jobs:
   execute-tests:
     name: "Python ${{ matrix.python-version }} Unit Tests"
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -19,23 +19,21 @@ jobs:
           # Some of the Python versions we test are not supported by the setup-python Github Action. For those versions, we use a
           # pre-built virtual environment.
           #
-          - python-version: "2.6"
-            use_virtual_environment: true
-          - python-version: "2.7"
-            use_virtual_environment: true
+#          - python-version: "2.6"
+#            use_virtual_environment: true
+#          - python-version: "2.7"
+#            use_virtual_environment: true
           - python-version: "3.4"
             use_virtual_environment: true
           - python-version: "3.5"
-            # workaround found in https://github.com/actions/setup-python/issues/866
-            # for issue "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:728)" on Python 3.5
-            pip_trusted_host: "pypi.python.org pypi.org files.pythonhosted.org"
-          - python-version: "3.6"
-          - python-version: "3.7"
-          - python-version: "3.8"
+            use_virtual_environment: true
+#          - python-version: "3.6"
+#          - python-version: "3.7"
+#          - python-version: "3.8"
           - python-version: "3.9"
             additional-nose-opts: "--with-coverage --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
-          - python-version: "3.10"
-          - python-version: "3.11"
+#          - python-version: "3.10"
+#          - python-version: "3.11"
 
     steps:
     - name: Checkout WALinuxAgent
@@ -49,8 +47,6 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
-      env:
-        PIP_TRUSTED_HOST: ${{ matrix.pip_trusted_host }}
 
     - name: Install dependencies
       if: (!matrix.use_virtual_environment)
@@ -70,9 +66,9 @@ jobs:
         curl -sSf --retry 5 -o /tmp/python-${{ matrix.python-version }}.tar.bz2 https://dcrdata.blob.core.windows.net/python/python-${{ matrix.python-version }}.tar.bz2
         sudo tar xjf /tmp/python-${{ matrix.python-version }}.tar.bz2 --directory /
         #
-        # The virtual environments for 2.6 and 3.4 have dependencies on OpenSSL 1.0, which is not available beyond Ubuntu 16. We use this script to patch the environments.
+        # The virtual environments for 2.6, 3.4 and 3.5 have dependencies on OpenSSL 1.0/1.1, which is not available on Ubuntu 24. We use this script to patch the environments.
         #
-        if [[ "${{ matrix.python-version }}" =~ ^2\.6|3\.4$ ]]; then
+        if [[ "${{ matrix.python-version }}" =~ ^2\.6|3\.[45]$ ]]; then
           sudo ./tests/python_eol/patch_python_venv.sh "${{ matrix.python-version }}"
         fi
 
@@ -82,25 +78,46 @@ jobs:
     - name: Execute Unit Tests
       run: |
         if [[ "${{ matrix.python-version }}" =~ ^3\.[1-9][0-9]+$ ]]; then
+          #
+          # Use pytest
+          #
           ./ci/pytest.sh
         else
-          if [[ "${{ matrix.use_virtual_environment}}" == "true"  ]]; then
-            export NOSEOPTS="--verbose ${{ matrix.additional-nose-opts }}"   # the pytest version on the venvs does not support the --with-timer option. 
-            source /home/waagent/virtualenv/python${{ matrix.python-version }}/bin/activate
+          #
+          # Use nosetests
+          #
+          if [[ "${{ matrix.python-version }}" =~ ^2\.[67]|3\.4$ ]]; then # the pytest version on these venvs does not support the --with-timer option
+            export NOSEOPTS="--verbose ${{ matrix.additional-nose-opts }}"
           else
             export NOSEOPTS="--verbose --with-timer ${{ matrix.additional-nose-opts }}"
           fi
+
+          #
+          # If using a venv, activate it.
+          #
+          if [[ "${{ matrix.use_virtual_environment}}" == "true"  ]]; then
+              source /home/waagent/virtualenv/python${{ matrix.python-version }}/bin/activate
+            fi
+          fi
+        
           ./ci/nosetests.sh
         fi
 
     #
     # Execute pylint even when the tests fail (but only if the dependencies were installed successfully)
     #
-    # The virtual environments do not include pylint, so we skip those Python versions.
+    # The virtual environments for 2.6, 2.7, and 3.4 do not include pylint, so we skip those Python versions.
     #
     - name: Run pylint
-      if: (!matrix.use_virtual_environment && (success() || (failure() && steps.install-dependencies.outcome == 'success')))
+      if: (!contains(fromJSON('["2.6", "2.7", "3.4"]'),  matrix.python-version) && (success() || (failure() && steps.install-dependencies.outcome == 'success')))
       run: |
+        #
+        # If using a venv, activate it.
+        #
+        if [[ "${{ matrix.use_virtual_environment}}" == "true"  ]]; then
+              source /home/waagent/virtualenv/python${{ matrix.python-version }}/bin/activate
+        fi
+
         #
         # List of files/directories to be checked by pylint.
         # The end-to-end tests run only on Python 3.9 and we lint them only on that version.

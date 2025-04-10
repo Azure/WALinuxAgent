@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# The python 2.6, 2.7, and 3.4 virtual environments have hard dependencies on some of the shared libraries in Open SSL 1.0 (e.g libssl.so.1.0.0), which is not available beyond Ubuntu 16.
-# Modules like hashlib and ssl will fail to import on more recent versions of Ubuntu. The Agent uses classes HTTPSConnection and HTTPS, which depend on the ssl module. Those classes
-# are added conditionally on the import of ssl on httplib.py and http/client.py with code similar to:
+# The pre-built Python virtual environments have hard dependencies on some of the shared libraries in Open SSL 1.0/1.1 (e.g libssl.so.1.0.0), which are not available on current Ubuntu versions.
+# Modules like hashlib and ssl will fail to import. The Agent uses classes HTTPSConnection and HTTPS, which depend on the ssl module. Those classes are added conditionally on the
+# import of ssl on httplib.py and http/client.py with code similar to:
 #
 #     try:
 #        import ssl
@@ -18,14 +18,16 @@
 #
 set -euo pipefail
 
-if [[ "$#" -ne 1 || ! "$1" =~ ^2\.6|2\.7|3\.4$ ]]; then
-  echo "Usage: patch_python_venv.sh 2.6|2.7|3.4"
+if [[ "$#" -ne 1 || ! "$1" =~ ^2\.6|2\.7|3\.[45]$ ]]; then
+  echo "Usage: patch_python_venv.sh 2.6|2.7|3.4|3.5"
   exit 1
 fi
 
 PYTHON_VERSION=$1
 
-if [[ "${PYTHON_VERSION}" =~ ^2\.6|2\.7$ ]]; then
+if [[ "${PYTHON_VERSION}" =~ ^2\.[0-9]$ ]]; then
+  # Patch httplib.py on Python 2
+  httplib="$(find /opt -wholename '*/lib/python${PYTHON_VERSION}/http/client.py')"
   cat >> /opt/python/${PYTHON_VERSION}/lib/python${PYTHON_VERSION}/httplib.py << ...
 
 # Added by WALinuxAgent dev team to work around the lack of OpenSSL 1.0 shared libraries
@@ -50,8 +52,10 @@ def FakeSocket (sock, sslobj):
     raise NotImplementedError()
 ...
 
-elif [[ "${PYTHON_VERSION}" == "3.4" ]]; then
-  cat >> /opt/python/3.4.8/lib/python3.4/http/client.py << ...
+elif [[ "${PYTHON_VERSION}" =~ ^3\.[0-9]$ ]]; then
+  # Patch http/client.py on Python 3
+  path='*/lib/python'${PYTHON_VERSION}'/http/client.py'
+  cat >> "$(find /opt -wholename $path)" << ...
 
 # Added by WALinuxAgent dev team to work around the lack of OpenSSL 1.0 shared libraries
 class HTTPSConnection(HTTPConnection):
