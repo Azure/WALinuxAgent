@@ -95,7 +95,7 @@ class TestSignatureValidation(AgentTestCase):
 
     def test_should_raise_error_if_openssl_version_is_unsupported(self):
         with patch("azurelinuxagent.ga.signature_validation._get_openssl_version", return_value="1.0.2"):
-            with self.assertRaises(OpenSSLVersionError, msg="OpenSSL version is unsupported, should have raised error") as ex:
+            with self.assertRaises(OpenSSLVersionError, msg="OpenSSL version is unsupported, should have raised error"):
                 validate_signature(self.vm_access_zip_path, self.vm_access_signature)
 
     @skip_if_predicate_true(lambda: True, "Enable this test when timestamp validation has been implemented.")

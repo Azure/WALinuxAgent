@@ -3958,6 +3958,28 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
             self.assertEqual(0, len(errors),
                              "Signature validation should have completed without errors. Errors: {0}".format(errors))
 
+    def test_enable_should_succeed_and_not_save_state_file_if_openssl_version_is_unsupported(self):
+        data_file = wire_protocol_data.DATA_FILE.copy()
+        data_file["test_ext"] = "signing/vm_access.zip"
+        data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
+        data_file["manifest"] = "wire/manifest_vm_access.xml"
+
+        with patch("azurelinuxagent.ga.signature_validation._get_openssl_version", return_value="1.0.2"):
+            with patch('azurelinuxagent.ga.exthandlers.event.error') as report_err:
+                self._test_enable_extension(data_file=data_file, expected_status_code=0, expected_handler_status='Ready',
+                                            expected_ext_count=1, expected_status_msg='Plugin enabled',
+                                            expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
+                                            expected_version="1.7.0")
+
+                # The signature validation state file should NOT have been created
+                base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0')
+                state_file = os.path.join(base_dir, _SIGNATURE_VALIDATION_STATE_FILE)
+                self.assertFalse(os.path.exists(state_file))
+
+                # Should not have sent any telemetry
+                errors = [kw for _, kw in report_err.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation]
+                self.assertEqual(0, len(errors), "Should not have sent any telemetry for OpenSSL version mismatch")
+
     def test_uninstall_should_succeed_for_unsigned_extension(self):
         data_file = DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf-no_encoded_signature.xml"
