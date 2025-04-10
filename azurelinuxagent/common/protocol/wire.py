@@ -612,7 +612,7 @@ class WireClient(object):
 
         return self._download_with_fallback_channel(download_type, uris, direct_download=direct_download, hgap_download=hgap_download)
 
-    def download_zip_package(self, package_type, uris, target_file, target_directory, use_verify_header):
+    def download_zip_package(self, package_type, uris, target_file, target_directory, use_verify_header, validate_signature=None):
         """
         Downloads the ZIP package specified in 'uris' (which is a list of alternate locations for the ZIP), saving it to 'target_file' and then expanding
         its contents to 'target_directory'. Deletes the target file after it has been expanded.
@@ -621,6 +621,9 @@ class WireClient(object):
         or "agent package"
 
         The 'use_verify_header' parameter indicates whether the verify header should be added when using the extensionArtifact API of the HostGAPlugin.
+
+        The 'validate_signature' parameter should be a callable function that validates package signature. If specified, it will be called immediately
+        after downloading the package but before expanding it.
         """
         host_ga_plugin = self.get_host_plugin()
 
@@ -630,7 +633,10 @@ class WireClient(object):
             request_uri, request_headers = host_ga_plugin.get_artifact_request(uri, use_verify_header=use_verify_header, artifact_manifest_url=host_ga_plugin.manifest_uri)
             return self.stream(request_uri, target_file, headers=request_headers, use_proxy=False)
 
-        on_downloaded = lambda: WireClient._try_expand_zip_package(package_type, target_file, target_directory)
+        def on_downloaded():
+            if validate_signature is not None:
+                validate_signature()
+            WireClient._try_expand_zip_package(package_type, target_file, target_directory)
 
         self._download_with_fallback_channel(package_type, uris, direct_download=direct_download, hgap_download=hgap_download, on_downloaded=on_downloaded)
 

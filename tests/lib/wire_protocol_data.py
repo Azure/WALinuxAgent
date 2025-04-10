@@ -285,6 +285,10 @@ class WireProtocolData(object):
                 self.call_counts["ExampleHandlerLinux"] += 1
                 resp.read = Mock(return_value=content)
                 return resp
+            elif "VMAccess" in url:
+                content = self.ext
+                resp.read = Mock(return_value=content)
+                return resp
             elif ".vmSettings" in url or ".settings" in url:
                 content = self.in_vm_artifacts_profile
                 self.call_counts["in_vm_artifacts_profile"] += 1

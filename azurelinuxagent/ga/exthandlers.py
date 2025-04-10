@@ -56,6 +56,7 @@ from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
+from azurelinuxagent.ga.signature_validation import validate_signature, validate_handler_manifest_signing_info
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
 _HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
@@ -107,6 +108,9 @@ _EXT_DISALLOWED_ERROR_MAP = \
         # "Disable" is an internal operation, users are unaware of it. We surface the term "uninstall" instead.
         ExtensionRequestedState.Disabled: ('uninstall', ExtensionErrorCodes.PluginDisableProcessingFailed),
     }
+
+# The presence of this file in an extension directory indicates that the signature was validated for the extension package.
+_SIGNATURE_VALIDATION_STATE_FILE = "signature_validated"
 
 
 class ExtHandlerStatusValue(object):
@@ -1377,9 +1381,28 @@ class ExtHandlerInstance(object):
 
         package_file = os.path.join(conf.get_lib_dir(), self.get_extension_package_zipfile_name())
 
+        def validate_extension_package_signature():
+            # If extension signature is present, validate extension signature. If validation fails, handle the error
+            # and report telemetry; do not block extension execution. Blocking will be enforced once we gain confidence
+            # in the validation process.
+            #
+            # TODO: allow users to opt-in to validation enforcement using policy (as a temporary work-around)
+            if conf.get_signature_validation_enabled() and self.ext_handler.encoded_signature is not None:
+                try:
+                    validate_signature(package_file, self.ext_handler.encoded_signature)
+                    event.info(op=WALAEventOperation.SignatureValidation,
+                               fmt="Successfully validated package signature for extension '{0}'".format(
+                                   self.ext_handler.name))
+
+                except Exception as ex:
+                    event.error(op=WALAEventOperation.SignatureValidation,
+                                fmt="Error during extension package signature validation for '{0}': {1}"
+                                .format(self.ext_handler.name, ex))
+
         package_exists = False
         if os.path.exists(package_file):
             self.logger.info("Using existing extension package: {0}", package_file)
+            validate_extension_package_signature()
             if self._unzip_extension_package(package_file, self.get_base_dir()):
                 package_exists = True
             else:
@@ -1387,7 +1410,8 @@ class ExtHandlerInstance(object):
 
         if not package_exists:
             is_fast_track_goal_state = self.protocol.get_goal_state().extensions_goal_state.source == GoalStateSource.FastTrack
-            self.protocol.client.download_zip_package("extension package", self.pkg.uris, package_file, self.get_base_dir(), use_verify_header=is_fast_track_goal_state)
+            self.protocol.client.download_zip_package("extension package", self.pkg.uris, package_file, self.get_base_dir(), use_verify_header=is_fast_track_goal_state,
+                                                      validate_signature=validate_extension_package_signature())
             self.report_event(message="Download succeeded", duration=elapsed_milliseconds(begin_utc))
 
         self.pkg_file = package_file
@@ -1427,6 +1451,23 @@ class ExtHandlerInstance(object):
         man.report_invalid_boolean_properties(ext_name=self.get_full_name())
 
         self.ensure_consistent_data_for_mc()
+
+        # Validate the "signingInfo" section of the handler manifest against the goal state, for signed extensions.
+        # This is done to verify that the signed package has the expected type, publisher, and version.
+        # If validation succeeds, save state file to indicate that extension signature has been fully validated.
+        # If validation fails, handle the error and report telemetry; do not block extension execution.
+        # Blocking will be enforced once we gain confidence in the validation process.
+        #
+        # TODO: allow users to opt-in to validation enforcement using policy (as a temporary work-around)
+        if conf.get_signature_validation_enabled() and self.ext_handler.encoded_signature is not None:
+            try:
+                validate_handler_manifest_signing_info(man, self.ext_handler)
+                event.info(op=WALAEventOperation.SignatureValidation,
+                           fmt="Successfully validated handler manifest 'signingInfo' for extension '{0}'".format(self.ext_handler.name))
+                self.save_signature_validation_state_file()
+            except Exception as e:
+                event.error(op=WALAEventOperation.SignatureValidation,
+                            fmt="Error during extension package signature validation for '{0}': {1}".format(self.ext_handler.name, e))
 
         # Create status and config dir
         try:
@@ -2317,6 +2358,31 @@ class ExtHandlerInstance(object):
         else:
             truncated_field = field if len(field) < truncate_size else field[:truncate_size] + _TRUNCATED_SUFFIX
             return truncated_field, len(truncated_field)
+
+    def get_signature_validation_state_file(self):
+        """
+        This file tracks whether the extension package signature was validated (including handler manifest 'signingInfo' validation).
+        """
+        return os.path.join(self.get_base_dir(), _SIGNATURE_VALIDATION_STATE_FILE)
+
+    def save_signature_validation_state_file(self):
+        """
+        Save the file if agent validated extension package signature and handler manifest 'signingInfo' successfully
+        """
+        try:
+            with open(self.get_signature_validation_state_file(), "w"):
+                pass
+        except Exception as e:
+            msg = "Error creating the signature validation state file ({0}): {1}".format(
+                self.get_signature_validation_state_file(), ustr(e))
+            self.logger.warn(msg)
+            add_event(op=WALAEventOperation.SignatureValidation, message=msg, log_event=False)
+
+    def signature_has_been_validated(self):
+        """
+        Returns True if the signature validation state file exists, as the presence of the file indicates that signature has been validated.
+        """
+        return os.path.exists(self.get_signature_validation_state_file())
 
 
 class HandlerEnvironment(object):

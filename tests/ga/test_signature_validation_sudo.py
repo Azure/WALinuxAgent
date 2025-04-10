@@ -32,10 +32,10 @@ class TestSignatureValidationSudo(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
         write_signing_certificates()
-        self.null_ext_zip_path = os.path.join(data_dir, "signing/null_extension.zip")
-        null_ext_sig_path = os.path.join(data_dir, "signing/null_extension_signature.txt")
-        with open(null_ext_sig_path, 'r') as f:
-            self.null_ext_signature = f.read()
+        self.vm_access_zip_path = os.path.join(data_dir, "signing/vm_access.zip")
+        vm_access_signature_path = os.path.join(data_dir, "signing/vm_access_signature.txt")
+        with open(vm_access_signature_path, 'r') as f:
+            self.vm_access_signature = f.read()
 
     def tearDown(self):
         patch.stopall()
@@ -63,11 +63,16 @@ class TestSignatureValidationSudo(AgentTestCase):
         # Root certificate expires in 2036. This test changes system time to 2037 to simulate root cert expiry.
         # Signature validation should still pass, because the signature was generated when the root certificate was unexpired.
         self.assertTrue(i_am_root(), "Test does not run when non-root")
-        TestSignatureValidationSudo._validate_signature_in_another_year(2037, self.null_ext_zip_path, self.null_ext_signature)
+        TestSignatureValidationSudo._validate_signature_in_another_year(2037, self.vm_access_zip_path, self.vm_access_signature)
 
     def test_should_validate_signature_for_package_signed_with_expired_intermediate_cert(self):
         # Root certificate expires in 2036. This test changes system time to 2037 to simulate root cert expiry.
         # Signature validation should still pass, because the signature was generated when the root certificate was unexpired.
         self.assertTrue(i_am_root(), "Test does not run when non-root")
-        TestSignatureValidationSudo._validate_signature_in_another_year(2027, self.null_ext_zip_path, self.null_ext_signature)
+        TestSignatureValidationSudo._validate_signature_in_another_year(2027, self.vm_access_zip_path, self.vm_access_signature)
 
+    def test_should_validate_signature_for_package_signed_with_leaf_root_cert(self):
+        # Leaf certificate expires in September 2025. This test changes system time to 2026 to simulate root cert expiry.
+        # Signature validation should still pass, because the signature was generated when the root certificate was unexpired.
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+        TestSignatureValidationSudo._validate_signature_in_another_year(2026, self.vm_access_zip_path, self.vm_access_signature)

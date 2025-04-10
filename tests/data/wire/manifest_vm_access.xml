@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PluginVersionManifest xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+    <Plugins>
+        <Plugin>
+            <Version>1.7.0</Version>
+            <Uris>
+                <Uri>http://mock-goal-state/foo.bar/zar/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0</Uri>
+            </Uris>
+        </Plugin>
+    </Plugins>
+</PluginVersionManifest>

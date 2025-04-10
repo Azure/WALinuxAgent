@@ -1,0 +1,9 @@
+#
+# The test suite verifies that extension package signature and handler manifest 'signingInfo' is validated.
+#
+name: "ExtSignatureValidation"
+tests:
+  - "signature_validation/ext_signature_validation.py"
+images: "signature-validation-endorsed"
+locations: "AzureCloud:centraluseuap"
+owns_vm: false
