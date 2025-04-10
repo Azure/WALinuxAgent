@@ -96,8 +96,7 @@ jobs:
           # If using a venv, activate it.
           #
           if [[ "${{ matrix.use_virtual_environment}}" == "true"  ]]; then
-              source /home/waagent/virtualenv/python${{ matrix.python-version }}/bin/activate
-            fi
+            source /home/waagent/virtualenv/python${{ matrix.python-version }}/bin/activate
           fi
         
           ./ci/nosetests.sh
