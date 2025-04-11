@@ -54,13 +54,18 @@ class OpenSSLVersionError(AgentError):
 
 
 def _get_openssl_version():
+    """
+    Calls 'openssl version' via subprocess and extracts the version from its output.
+    Raises SignatureValidationError if the version cannot be found, extracted, or if the command fails.
+    Returns OpenSSL version string in major.minor.patch format. Any letter suffix is ignored (e.g., '1.1.1f' and '1.1.1wa-fips' will both return '1.1.1').
+    """
     try:
         command = [conf.get_openssl_cmd(), 'version']
         output = run_command(command)
         if output is None:
             raise SignatureValidationError(msg="Failed to get OpenSSL version. '{0}' returned no output.".format(command))
 
-        match = re.match(r"OpenSSL (\d+\.\d+\.\d+)", output)
+        match = re.search(r"OpenSSL (\d+\.\d+\.\d+)", output)
         if match is not None:
             return match.group(1)
         else:
@@ -156,7 +161,7 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
     if man_signing_info is None:
         raise HandlerManifestError(msg="HandlerManifest.json does not contain 'signingInfo'", code=ExtensionErrorCodes.PluginInstallProcessingFailed)
 
-    # Validate extension name (publisher + type). This comparison should be case-insensitive.
+    # Validate extension name (publisher + type). This comparison should be case-insensitive, because CRP ignores case for extension name.
     gs_publisher, gs_type = ext_handler.name.rsplit(".", 1)
 
     signing_info_type = man_signing_info.get("type")

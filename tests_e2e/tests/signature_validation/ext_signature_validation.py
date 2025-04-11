@@ -38,7 +38,12 @@ class ExtSignatureValidation(AgentVmTest):
         super().__init__(context)
         self._ssh_client: SshClient = self._context.create_ssh_client()
 
-    def _should_enable_extension(self, extension_case, is_signed):
+    def _should_enable_extension(self, extension_case, should_validate_signature):
+        """
+        Enable extension, and assert that extension is present in instance view.
+        If 'should_validate_signature' is true, check that log indicates successful signature and manifest validation,
+        and that the validation state is saved.
+        """
         log.info("")
         log.info(f"Enabling extension {extension_case.extension}, should succeed")
         enable_start_time = self._ssh_client.run_command("date '+%Y-%m-%d %T'").rstrip()
@@ -49,23 +54,22 @@ class ExtSignatureValidation(AgentVmTest):
         extension_case.extension.assert_instance_view()
         log.info("")
 
-        if is_signed:
+        if should_validate_signature:
             # Confirm that agent logs successful signature validation and handler manifest validation
             log.info("Checking agent log to confirm that package signature was validated successfully.")
             signature_log_msg = "Successfully validated package signature for extension"
             self._ssh_client.run_command(f"agent_ext_workflow-check_data_in_agent_log.py --data '{signature_log_msg}' "
                                          f"--after-timestamp '{enable_start_time}'", use_sudo=True)
 
-            log.info("")
             log.info("Checking agent log to confirm that handler manifest was validated successfully.")
             manifest_log_msg = "Successfully validated handler manifest"
             self._ssh_client.run_command(f"agent_ext_workflow-check_data_in_agent_log.py --data '{manifest_log_msg}' "
                                          f"--after-timestamp '{enable_start_time}'", use_sudo=True)
 
-            # Check that state file was created
-            log.info("Checking that signature validated state file was created.")
+            # Check signature validation state
+            log.info("Checking that signature validation state was set to 'SignatureAndManifestValidated'.")
             self._ssh_client.run_command(
-                f"agent_ext_signature_validation-verify_state_file_exists.py --extension-name {extension_case.extension._identifier.type}",
+                f"agent_ext_signature_validation-verify_state.py --extension-name '{extension_case.extension._identifier.type}'",
                 use_sudo=True
             )
         log.info(f"Enable succeeded for {extension_case.extension} as expected")
@@ -142,13 +146,13 @@ class ExtSignatureValidation(AgentVmTest):
             # Test unsigned, single-config extension (CustomScript). Extension should be enabled and uninstalled with no errors.
             log.info("")
             log.info("*** Test case 1: should enable and uninstall unsigned single-config extension (CustomScript) successfully")
-            self._should_enable_extension(custom_script_unsigned, is_signed=False)
+            self._should_enable_extension(custom_script_unsigned, should_validate_signature=False)
             self._should_uninstall_extension(custom_script_unsigned)
 
             # Test signed, single-config extension (CustomScript). Extension signature should be validated, and extension should be enabled and uninstalled with no errors.
             log.info("")
-            log.info("Test case 2: should validate signature, enable, and uninstall signed single-config extension (CustomScript) successfully")
-            self._should_enable_extension(custom_script_signed, is_signed=True)
+            log.info("*** Test case 2: should validate signature, enable, and uninstall signed single-config extension (CustomScript) successfully")
+            self._should_enable_extension(custom_script_signed, should_validate_signature=True)
             self._should_uninstall_extension(custom_script_signed)
 
             # Test signed, multi-config extension (RunCommandHandler). Extension signature should be validated, and extension should be enabled and uninstalled with no errors.
@@ -157,21 +161,21 @@ class ExtSignatureValidation(AgentVmTest):
             # Therefore, we only test the signed version of RunCommandHandler for now.
             # TODO: Add tests for the unsigned version once the "ForceRunCommandV2Version" flag is fixed for VirtualMachineRunCommandClient
             log.info("")
-            log.info("Test case 3: should validate signature, enable, and uninstall signed multi-config extension (RunCommandHandler) successfully")
-            self._should_enable_extension(run_command_signed, is_signed=True)
+            log.info("*** Test case 3: should validate signature, enable, and uninstall signed multi-config extension (RunCommandHandler) successfully")
+            self._should_enable_extension(run_command_signed, should_validate_signature=True)
             self._should_uninstall_extension(run_command_signed)
 
             # Test unsigned, no-config extension (AzureMonitorLinuxAgent). Extension should be enabled and uninstalled with no errors.
             if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(distro):
                 log.info("")
-                log.info("Test case 4: should enable and uninstall unsigned no-config extension (AzureMonitorLinuxAgent) successfully")
-                self._should_enable_extension(azure_monitor_unsigned, is_signed=False)
+                log.info("*** Test case 4: should enable and uninstall unsigned no-config extension (AzureMonitorLinuxAgent) successfully")
+                self._should_enable_extension(azure_monitor_unsigned, should_validate_signature=False)
                 self._should_uninstall_extension(azure_monitor_unsigned)
 
             # Test signed, no-config extension (VMApplicationManagerLinux). Extension signature should be validated, and extension should be enabled and uninstalled with no errors.
             log.info("")
-            log.info("Test case 5: should validate signature, enable, and uninstall signed no-config extension (VMApplicationManagerLinux) successfully")
-            self._should_enable_extension(vm_app_signed, is_signed=True)
+            log.info("*** Test case 5: should validate signature, enable, and uninstall signed no-config extension (VMApplicationManagerLinux) successfully")
+            self._should_enable_extension(vm_app_signed, should_validate_signature=True)
             self._should_uninstall_extension(vm_app_signed)
 
         finally:

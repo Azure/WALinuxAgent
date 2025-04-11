@@ -49,7 +49,7 @@ from azurelinuxagent.ga.signing_certificate_util import write_signing_certificat
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, migrate_handler_state, \
     get_exthandlers_handler, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
     ExtensionStatusValue, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, GoalStateStatus, ExtHandlerState, \
-    _SIGNATURE_VALIDATION_STATE_FILE
+    _SIGNATURE_VALIDATION_STATE_FILE, SignatureValidationState
 
 from tests.lib import wire_protocol_data
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
@@ -3822,9 +3822,17 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
         patch.stopall()
         AgentTestCase.tearDown(self)
 
-    def _test_enable_extension(self, data_file, expected_status_code, expected_handler_status, expected_ext_count,
-                               expected_status_msg=None, expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
-                               expected_version="1.0.0"):
+    def _assert_signature_validation_state(self, state_file_path, value):
+        # If state file does not exist, that is equivalent to a NotValidated state
+        if not os.path.exists(state_file_path):
+            self.assertEqual(SignatureValidationState.NotValidated, value)
+        else:
+            with open(state_file_path, 'r') as f:
+                content = f.read()
+                self.assertEqual(content, value)
+
+    def _test_enable_extension(self, data_file, expected_signature_validation_state, expected_status_code, expected_handler_status,expected_ext_count,
+                               expected_status_msg=None, expected_handler_name="OSTCExtensions.ExampleHandlerLinux", expected_version="1.0.0"):
 
         # Set up a mock protocol instance.
         with mock_wire_protocol(data_file) as protocol:
@@ -3843,28 +3851,44 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
                                         version=expected_version, expected_handler_name=expected_handler_name,
                                         expected_msg=expected_status_msg, expected_code=expected_status_code)
 
-    def test_enable_should_succeed_but_send_telemetry_if_signature_validation_fails(self):
-        with patch('azurelinuxagent.ga.exthandlers.event.error') as report_err:
-            # The default extension configuration (ext_conf.xml) in DATA_FILE contains an encodedSignature,
-            # but it does not match the expected signature for OSTCExtensions.ExampleHandlerLinux.
-            # Since signature validation is not enforced, the enable operation should still succeed.
-            data_file = DATA_FILE
-            self._test_enable_extension(data_file=data_file, expected_status_code=0, expected_handler_status='Ready', expected_ext_count=1)
+            # Assert signature validation state
+            base_dir = os.path.join(conf.get_lib_dir(), '{0}-{1}'.format(expected_handler_name, expected_version))
+            validation_state_file = os.path.join(base_dir, _SIGNATURE_VALIDATION_STATE_FILE)
+            self._assert_signature_validation_state(validation_state_file, expected_signature_validation_state)
 
-            # Telemetry should report a signature validation failure and a handler manifest validation failure
-            signature_error_msg = "Verification failure"
-            manifest_error_msg = "HandlerManifest.json does not contain 'signingInfo'"
-            signing_errors = [kw for _, kw in report_err.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and signature_error_msg in kw['fmt']]
-            manifest_errors = [kw for _, kw in report_err.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and manifest_error_msg in kw['fmt']]
-            self.assertEqual(1, len(signing_errors), "Signature validation error not sent as telemetry")
-            self.assertEqual(1, len(manifest_errors), "Handler manifest validation error not sent as telemetry")
+    def test_enable_should_succeed_and_send_telemetry_if_signature_validation_fails(self):
+        # Signature validation fails, handler manifest validation is skipped -> enable, send telemetry, state should be NotValidated
 
-            # The signature validation state file should not be created
-            base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0')
-            state_file = os.path.join(base_dir, _SIGNATURE_VALIDATION_STATE_FILE)
-            self.assertFalse(os.path.exists(state_file))
+        data_file = wire_protocol_data.DATA_FILE.copy()
+        data_file["test_ext"] = "signing/vm_access.zip"
+        data_file["ext_conf"] = "wire/ext_conf-vm_access_with_invalid_signature.xml"
+        data_file["manifest"] = "wire/manifest_vm_access.xml"
 
-    def test_enable_should_succeed_but_send_telemetry_if_handler_manifest_validation_fails(self):
+        with patch('azurelinuxagent.ga.exthandlers.event.info') as report_info:
+            with patch('azurelinuxagent.ga.exthandlers.event.error') as report_err:
+                self._test_enable_extension(data_file=data_file,
+                                            expected_signature_validation_state=SignatureValidationState.NotValidated,
+                                            expected_status_code=0,
+                                            expected_handler_status='Ready',
+                                            expected_ext_count=1, expected_status_msg='Plugin enabled',
+                                            expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
+                                            expected_version="1.7.0")
+
+                # Telemetry should report signature validation failure
+                expected_msg = "Signature validation failed for package"
+                signing_errors = [kw for _, kw in report_err.call_args_list if
+                                  kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['fmt']]
+                self.assertEqual(1, len(signing_errors), "Signature validation error not sent as telemetry")
+
+                # Handler manifest validation should be skipped
+                expected_msg = "Skipping 'signingInfo' manifest validation for extension"
+                telemetry = [kw for _, kw in report_info.call_args_list if
+                             kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['fmt']]
+                self.assertEqual(1, len(telemetry), "Handler manifest validation not skipped")
+
+    def test_enable_should_succeed_and_send_telemetry_if_handler_manifest_validation_fails(self):
+        # Signature validation succeeds, handler manifest validation fails -> enable, send telemetry, state should be SignatureValidated
+
         data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["test_ext"] = "signing/vm_access.zip"
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
@@ -3894,9 +3918,14 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
         with patch('azurelinuxagent.ga.exthandlers.event.info') as report_info:
             with patch('azurelinuxagent.ga.exthandlers.event.error') as report_err:
                 with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.load_manifest', return_value=manifest):
-                    self._test_enable_extension(data_file=data_file, expected_status_code=0,
-                                                expected_handler_status='Ready', expected_ext_count=1, expected_status_msg='Plugin enabled',
-                                                expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux", expected_version="1.7.0")
+                    self._test_enable_extension(data_file=data_file,
+                                                expected_signature_validation_state=SignatureValidationState.SignatureValidated,
+                                                expected_status_code=0,
+                                                expected_handler_status='Ready',
+                                                expected_ext_count=1,
+                                                expected_status_msg='Plugin enabled',
+                                                expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
+                                                expected_version="1.7.0")
 
                 # Telemetry should report successful signature validation
                 expected_msg = "Successfully validated package signature for extension"
@@ -3906,13 +3935,10 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
                 # Telemetry should report failed handler manifest validation
                 expected_msg = "expected extension version '1.7.0' does not match downloaded package version '1.5.0'"
                 telemetry = [kw for _, kw in report_err.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['fmt']]
-                self.assertEqual(1, len(telemetry), "Manifest validation success not sent as telemetry")
+                self.assertEqual(1, len(telemetry), "Manifest validation error not reported")
 
-                # The signature validation state file should NOT have been created
-                base_dir = os.path.join(conf.get_lib_dir(), 'Microsoft.CPlat.Core.NullExtension-1.0.7')
-                self.assertFalse(os.path.exists(os.path.join(base_dir, _SIGNATURE_VALIDATION_STATE_FILE)))
-
-    def test_enable_should_succeed_and_save_state_file_if_signature_validation_succeeds(self):
+    def test_enable_should_succeed_if_signature_validation_succeeds(self):
+        # Signature validation succeeds, handler manifest validation succeeds -> enable, send telemetry, state should be SignatureAndManifestValidated
         data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["test_ext"] = "signing/vm_access.zip"
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
@@ -3920,8 +3946,12 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
         with patch('azurelinuxagent.ga.exthandlers.event.info') as report_info:
             with patch('azurelinuxagent.ga.exthandlers.event.error') as report_err:
-                self._test_enable_extension(data_file=data_file, expected_status_code=0, expected_handler_status='Ready',
-                                            expected_ext_count=1, expected_status_msg='Plugin enabled',
+                self._test_enable_extension(data_file=data_file,
+                                            expected_signature_validation_state=SignatureValidationState.SignatureAndManifestValidated,
+                                            expected_status_code=0,
+                                            expected_handler_status='Ready',
+                                            expected_ext_count=1,
+                                            expected_status_msg='Plugin enabled',
                                             expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
                                             expected_version="1.7.0")
 
@@ -3937,28 +3967,31 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
                 errors = [kw for _, kw in report_err.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation]
                 self.assertEqual(0, len(errors), "Signature validation should have completed without errors. Errors: {0}".format(errors))
 
-                # The signature validation state file should have been created
-                base_dir = os.path.join(conf.get_lib_dir(), 'Microsoft.OSTCExtensions.Edp.VMAccessForLinux-1.7.0')
-                self.assertTrue(os.path.exists(os.path.join(base_dir, _SIGNATURE_VALIDATION_STATE_FILE)))
+    def test_enable_should_succeed_if_extension_unsigned(self):
+        # Extension is unsigned, so signature is not validated -> enable, send telemetry, state should be NotValidated
 
-    def test_enable_should_succeed_and_not_save_state_file_if_extension_unsigned(self):
         data_file = DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf-no_encoded_signature.xml"
 
-        with patch('azurelinuxagent.ga.exthandlers.event.error') as report_err:
-            self._test_enable_extension(data_file=data_file, expected_status_code=0, expected_handler_status='Ready', expected_ext_count=1)
+        with patch('azurelinuxagent.ga.exthandlers.event.info') as report_info:
+            with patch('azurelinuxagent.ga.exthandlers.event.error') as report_err:
+                self._test_enable_extension(data_file=data_file, expected_signature_validation_state=SignatureValidationState.NotValidated,
+                                            expected_status_code=0, expected_handler_status='Ready', expected_ext_count=1)
 
-            # The signature validation state file should NOT have been created
-            base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0')
-            state_file = os.path.join(base_dir, _SIGNATURE_VALIDATION_STATE_FILE)
-            self.assertFalse(os.path.exists(state_file))
+                # Should have sent telemetry that extension is unsigned
+                expected_msg = "Extension 'OSTCExtensions.ExampleHandlerLinux' does not have 'encodedSignature' attribute"
+                telemetry = [kw for _, kw in report_info.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['fmt']]
+                self.assertEqual(1, len(telemetry), "Missing signature not sent as telemetry")
 
-            # Should not have reported any signature validation errors
-            errors = [kw for _, kw in report_err.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation]
-            self.assertEqual(0, len(errors),
-                             "Signature validation should have completed without errors. Errors: {0}".format(errors))
+                # Should not have reported any signature validation errors
+                errors = [kw for _, kw in report_err.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation]
+                self.assertEqual(0, len(errors),
+                                 "Signature validation should have completed without errors. Errors: {0}".format(errors))
 
     def test_enable_should_succeed_and_not_save_state_file_if_openssl_version_is_unsupported(self):
+        # If OpenSSL version is not supported for signature validation, we should not validate signature.
+        # Since signature validation is not being enforced, enable should succeed. We also do not send telemetry in this case,
+        # because OpenSSL version is sent elsewhere in telemetry.
         data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["test_ext"] = "signing/vm_access.zip"
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
@@ -3966,15 +3999,14 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
         with patch("azurelinuxagent.ga.signature_validation._get_openssl_version", return_value="1.0.2"):
             with patch('azurelinuxagent.ga.exthandlers.event.error') as report_err:
-                self._test_enable_extension(data_file=data_file, expected_status_code=0, expected_handler_status='Ready',
-                                            expected_ext_count=1, expected_status_msg='Plugin enabled',
+                self._test_enable_extension(data_file=data_file,
+                                            expected_signature_validation_state=SignatureValidationState.NotValidated,
+                                            expected_status_code=0,
+                                            expected_handler_status='Ready',
+                                            expected_ext_count=1,
+                                            expected_status_msg='Plugin enabled',
                                             expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
                                             expected_version="1.7.0")
-
-                # The signature validation state file should NOT have been created
-                base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0')
-                state_file = os.path.join(base_dir, _SIGNATURE_VALIDATION_STATE_FILE)
-                self.assertFalse(os.path.exists(state_file))
 
                 # Should not have sent any telemetry
                 errors = [kw for _, kw in report_err.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation]
@@ -3991,7 +4023,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
             protocol.report_vm_status = MagicMock()
             exthandlers_handler = get_exthandlers_handler(protocol)
 
-            # Enable extension - signature validation should fail and state file should not exist
+            # Enable extension - signature validation should fail and state should be NotValidated
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
             report_vm_status = protocol.report_vm_status
@@ -4000,9 +4032,11 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
                                         expected_ext_count=1,
                                         version="1.0.0", expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
                                         expected_msg="Plugin enabled", expected_code=0)
+
+            # Assert signature validation state
             base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0')
             state_file = os.path.join(base_dir, _SIGNATURE_VALIDATION_STATE_FILE)
-            self.assertFalse(os.path.exists(state_file))
+            self._assert_signature_validation_state(state_file, SignatureValidationState.NotValidated)
 
             # Generate a new mock goal state to uninstall the extension - increment the incarnation
             protocol.mock_wire_data.set_incarnation(2)
@@ -4035,9 +4069,11 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
                                         expected_ext_count=1,
                                         version="1.0.0", expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
                                         expected_msg="Plugin enabled", expected_code=0)
+
+            # Assert signature validation state
             base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0')
             state_file = os.path.join(base_dir, _SIGNATURE_VALIDATION_STATE_FILE)
-            self.assertFalse(os.path.exists(state_file))
+            self._assert_signature_validation_state(state_file, SignatureValidationState.NotValidated)
 
             # Generate a new mock goal state to uninstall the extension - increment the incarnation
             protocol.mock_wire_data.set_incarnation(2)
@@ -4052,6 +4088,111 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
             args, _ = report_vm_status.call_args
             vm_status = args[0]
             self.assertEqual(0, len(vm_status.vmAgent.extensionHandlers))
+
+    def test_uninstall_should_succeed_for_extension_with_signature_validated(self):
+        data_file = wire_protocol_data.DATA_FILE.copy()
+        data_file["test_ext"] = "signing/vm_access.zip"
+        data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
+        data_file["manifest"] = "wire/manifest_vm_access.xml"
+
+        with mock_wire_protocol(data_file) as protocol:
+            # Set up mock protocol
+            protocol.aggregate_status = None
+            protocol.report_vm_status = MagicMock()
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            # Enable extension - extension signature validation should succeed and create state file
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+            report_vm_status = protocol.report_vm_status
+            self.assertTrue(report_vm_status.called)
+            self._assert_handler_status(report_vm_status, "Ready",
+                                        expected_ext_count=1,
+                                        version="1.7.0", expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
+                                        expected_msg="Plugin enabled", expected_code=0)
+
+            # Assert signature validation state
+            base_dir = os.path.join(conf.get_lib_dir(), 'Microsoft.OSTCExtensions.Edp.VMAccessForLinux-1.7.0')
+            state_file = os.path.join(base_dir, _SIGNATURE_VALIDATION_STATE_FILE)
+            self._assert_signature_validation_state(state_file, SignatureValidationState.SignatureAndManifestValidated)
+
+            # Generate a new mock goal state to uninstall the extension - increment the incarnation
+            protocol.mock_wire_data.set_incarnation(2)
+            protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
+            protocol.client.update_goal_state()
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+
+            # Check that uninstall was successful and handler is no longer reporting status
+            report_vm_status = protocol.report_vm_status
+            self.assertTrue(report_vm_status.called)
+            args, _ = report_vm_status.call_args
+            vm_status = args[0]
+            self.assertEqual(0, len(vm_status.vmAgent.extensionHandlers))
+
+    def test_should_enable_existing_zip_package_if_signature_validation_succeeds(self):
+        # If an extension zip package already exists but has not been extracted, signature should be validated successfully,
+        # and extension should be enabled.
+        package_file = os.path.join(self.tmp_dir, "Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip")
+        test_zip = os.path.join(data_dir, "signing/vm_access.zip")
+        shutil.copy(test_zip, package_file)
+
+        data_file = wire_protocol_data.DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
+        data_file["manifest"] = "wire/manifest_vm_access.xml"
+
+        with patch('azurelinuxagent.ga.exthandlers.event.info') as report_info:
+            with patch('azurelinuxagent.ga.exthandlers.event.error') as report_err:
+                self._test_enable_extension(data_file=data_file,
+                                            expected_signature_validation_state=SignatureValidationState.SignatureAndManifestValidated,
+                                            expected_status_code=0,
+                                            expected_handler_status='Ready',
+                                            expected_ext_count=1,
+                                            expected_status_msg='Plugin enabled',
+                                            expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
+                                            expected_version="1.7.0")
+
+                # Telemetry should report successful signature validation and manifest validation
+                expected_msg = "Successfully validated package signature for extension"
+                telemetry = [kw for _, kw in report_info.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['fmt']]
+                self.assertEqual(1, len(telemetry), "Signature validation success not sent as telemetry")
+                expected_msg = "Successfully validated handler manifest 'signingInfo' for extension"
+                telemetry = [kw for _, kw in report_info.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['fmt']]
+                self.assertEqual(1, len(telemetry), "Handler manifest validation success not sent as telemetry")
+
+                # Should not have reported any signature validation errors
+                errors = [kw for _, kw in report_err.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation]
+                self.assertEqual(0, len(errors), "Signature validation should have completed without errors. Errors: {0}".format(errors))
+
+    def test_should_enable_existing_zip_package_if_signature_validation_fails(self):
+        # Signature validation should fail for existing zip package - extension should still be enabled because we are not enforcing signature.
+        package_file = os.path.join(self.tmp_dir, "Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip")
+        test_zip = os.path.join(data_dir, "signing/vm_access.zip")
+        shutil.copy(test_zip, package_file)
+
+        data_file = wire_protocol_data.DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf-vm_access_with_invalid_signature.xml"
+        data_file["manifest"] = "wire/manifest_vm_access.xml"
+
+        with patch('azurelinuxagent.ga.exthandlers.event.info') as report_info:
+            with patch('azurelinuxagent.ga.exthandlers.event.error') as report_err:
+                self._test_enable_extension(data_file=data_file,
+                                            expected_signature_validation_state=SignatureValidationState.NotValidated,
+                                            expected_status_code=0,
+                                            expected_handler_status='Ready',
+                                            expected_ext_count=1,
+                                            expected_status_msg='Plugin enabled',
+                                            expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
+                                            expected_version="1.7.0")
+
+                # Should  have reported any signature validation error
+                errors = [kw for _, kw in report_err.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation]
+                self.assertEqual(1, len(errors), "Signature validation error not reported")
+
+                # Should have skipped manifest validation
+                expected_msg = "Skipping 'signingInfo' manifest validation for extension"
+                telemetry = [kw for _, kw in report_info.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['fmt']]
+                self.assertEqual(1, len(telemetry), "Handler manifest validation should have been skipped")
 
 
 if __name__ == '__main__':

@@ -23,9 +23,11 @@ from tests.lib.tools import AgentTestCase, data_dir, patch, skip_if_predicate_tr
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 from azurelinuxagent.ga.signature_validation import validate_signature, SignatureValidationError, validate_handler_manifest_signing_info, \
     HandlerManifestError, OpenSSLVersionError
+from azurelinuxagent.ga.signature_validation import _get_openssl_version
 from azurelinuxagent.ga.exthandlers import HandlerManifest
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.protocol.restapi import Extension
+from azurelinuxagent.common.utils.shellutil import CommandError
 
 
 class TestSignatureValidation(AgentTestCase):
@@ -97,6 +99,33 @@ class TestSignatureValidation(AgentTestCase):
         with patch("azurelinuxagent.ga.signature_validation._get_openssl_version", return_value="1.0.2"):
             with self.assertRaises(OpenSSLVersionError, msg="OpenSSL version is unsupported, should have raised error"):
                 validate_signature(self.vm_access_zip_path, self.vm_access_signature)
+
+    def test_should_get_openssl_version(self):
+        # Tests cases in format (<'openssl version' output>, <expected version string>)
+        test_cases = [
+            ("OpenSSL version: OpenSSL 3.0.13 30 Jan 2024 (Library: OpenSSL 3.0.13 30 Jan 2024)", "3.0.13"),
+            ("OpenSSL version: OpenSSL 1.1.1f  31 Mar 2020", "1.1.1"),
+            ("OpenSSL version: OpenSSL 1.0.2zi-fips  1 Aug 2023", "1.0.2"),
+            ("OpenSSL 1.1.1  1 Aug 2023", "1.1.1")
+        ]
+        for case in test_cases:
+            with patch("azurelinuxagent.ga.signature_validation.run_command", return_value=case[0]):
+                version = _get_openssl_version()
+                self.assertEqual(version, case[1], "Returned incorrect openssl version")
+
+    def test_should_raise_error_if_fail_to_get_openssl_version(self):
+        with patch("azurelinuxagent.ga.signature_validation.run_command", side_effect=CommandError("cmd", 1, "", "error")):
+            with self.assertRaises(SignatureValidationError, msg="Failed to get openssl version, should have raised error"):
+                validate_signature(self.vm_access_zip_path, self.vm_access_signature)
+
+        with patch("azurelinuxagent.ga.signature_validation.run_command", return_value=None):
+            with self.assertRaises(SignatureValidationError, msg="Failed to get openssl version, should have raised error"):
+                validate_signature(self.vm_access_zip_path, self.vm_access_signature)
+
+        with patch("azurelinuxagent.ga.signature_validation.run_command", return_value="some junk output"):
+            with self.assertRaises(SignatureValidationError, msg="Failed to get openssl version, should have raised error"):
+                validate_signature(self.vm_access_zip_path, self.vm_access_signature)
+
 
     @skip_if_predicate_true(lambda: True, "Enable this test when timestamp validation has been implemented.")
     def test_should_raise_error_if_root_cert_was_expired_at_signing_time(self):
@@ -320,3 +349,4 @@ class TestHandlerManifestValidation(AgentTestCase):
         expected_error_msg = "HandlerManifest.json does not contain attribute 'signingInfo.version'"
         self.assertIn(expected_error_msg, str(ex.exception.args[0]),
                           msg="Raised HandlerManifestError but error did not indicate missing signingInfo.version")
+
