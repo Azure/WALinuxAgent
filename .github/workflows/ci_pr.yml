@@ -27,7 +27,8 @@ jobs:
             use_virtual_environment: true
           - python-version: "3.5"
             use_virtual_environment: true
-#          - python-version: "3.6"
+          - python-version: "3.6"
+            use_virtual_environment: true
 #          - python-version: "3.7"
 #          - python-version: "3.8"
           - python-version: "3.9"
@@ -66,9 +67,9 @@ jobs:
         curl -sSf --retry 5 -o /tmp/python-${{ matrix.python-version }}.tar.bz2 https://dcrdata.blob.core.windows.net/python/python-${{ matrix.python-version }}.tar.bz2
         sudo tar xjf /tmp/python-${{ matrix.python-version }}.tar.bz2 --directory /
         #
-        # The virtual environments for 2.6, 3.4 and 3.5 have dependencies on OpenSSL 1.0/1.1, which is not available on Ubuntu 24. We use this script to patch the environments.
+        # The virtual environments for 2.6 and 3.4-3.6 have dependencies on OpenSSL 1.0/1.1, which is not available on Ubuntu 24. We use this script to patch the environments.
         #
-        if [[ "${{ matrix.python-version }}" =~ ^2\.6|3\.[45]$ ]]; then
+        if [[ "${{ matrix.python-version }}" =~ ^2\.6|3\.[456]$ ]]; then
           sudo ./tests/python_eol/patch_python_venv.sh "${{ matrix.python-version }}"
         fi
 
@@ -86,7 +87,7 @@ jobs:
           #
           # Use nosetests
           #
-          if [[ "${{ matrix.python-version }}" =~ ^2\.[67]|3\.4$ ]]; then # the pytest version on these venvs does not support the --with-timer option
+          if [[ "${{ matrix.python-version }}" =~ ^2\.[67]|3\.[456]$ ]]; then # the pytest version on these venvs does not support the --with-timer option
             export NOSEOPTS="--verbose ${{ matrix.additional-nose-opts }}"
           else
             export NOSEOPTS="--verbose --with-timer ${{ matrix.additional-nose-opts }}"

@@ -18,8 +18,8 @@
 #
 set -euo pipefail
 
-if [[ "$#" -ne 1 || ! "$1" =~ ^2\.6|2\.7|3\.[45]$ ]]; then
-  echo "Usage: patch_python_venv.sh 2.6|2.7|3.4|3.5"
+if [[ "$#" -ne 1 || ! "$1" =~ ^2\.6|2\.7|3\.[456]$ ]]; then
+  echo "Usage: patch_python_venv.sh 2.6|2.7|3.4|3.5|3.6"
   exit 1
 fi
 
