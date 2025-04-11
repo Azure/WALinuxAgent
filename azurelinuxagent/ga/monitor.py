@@ -27,7 +27,7 @@ from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, UTC
 from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.healthservice import HealthService
@@ -59,9 +59,9 @@ class PollResourceUsage(PeriodicOperation):
 
         for metric in tracked_metrics:
             key = metric.category + metric.counter + metric.instance
-            if key not in self.__periodic_metrics or (self.__periodic_metrics[key] + metric.report_period) <= datetime.datetime.now():
+            if key not in self.__periodic_metrics or (self.__periodic_metrics[key] + metric.report_period) <= datetime.datetime.now(UTC):
                 report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
-                self.__periodic_metrics[key] = datetime.datetime.now()
+                self.__periodic_metrics[key] = datetime.datetime.now(UTC)
 
         CGroupConfigurator.get_instance().check_cgroups(tracked_metrics)
 

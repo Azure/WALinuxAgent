@@ -23,13 +23,14 @@
 #
 
 import datetime
-import pytz
 import uuid
 
 from assertpy import assert_that, fail
 from typing import List, Dict, Any
 
 from azure.mgmt.compute.models import VirtualMachineInstanceView
+
+from azurelinuxagent.common.future import UTC
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
@@ -52,7 +53,7 @@ class ExtensionsDisabled(AgentVmTest):
         log.info("Disabling extension processing on the test VM [%s]", self._context.vm.name)
         output = ssh_client.run_command("update-waagent-conf Extensions.Enabled=n", use_sudo=True)
         log.info("Disable completed:\n%s", output)
-        disabled_timestamp: datetime.datetime = datetime.datetime.utcnow() - datetime.timedelta(minutes=60)
+        disabled_timestamp: datetime.datetime = datetime.datetime.now(UTC) - datetime.timedelta(minutes=60)
 
         # Prepare test cases
         unique = str(uuid.uuid4())
@@ -116,7 +117,7 @@ class ExtensionsDisabled(AgentVmTest):
         # The time in the status is time zone aware and 'disabled_timestamp' is not; we need to make the latter time zone aware before comparing them
         assert_that(instance_view.vm_agent.statuses[0].time)\
             .described_as("The VM Agent should be have reported status even after extensions were disabled")\
-            .is_greater_than(pytz.utc.localize(disabled_timestamp))
+            .is_greater_than(disabled_timestamp)
         log.info("The VM Agent reported status after extensions were disabled, as expected.")
 
         #

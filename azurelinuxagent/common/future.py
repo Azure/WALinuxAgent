@@ -1,4 +1,5 @@
 import contextlib
+import datetime
 import platform
 import sys
 import os
@@ -68,6 +69,33 @@ elif sys.version_info[0] == 2:
 else:
     raise ImportError("Unknown python version: {0}".format(sys.version_info))
 
+
+#
+# datetime.utcnow triggers a DeprecationWarning on 3.12 and will be removed in a future version.
+#
+# To work around this, we use timezone.utc on 3.5-3.10 (it was introduced on 3.2, but currently we test from 3.5), and
+# datetime.UTC (introduced on Python 3.11) for >= 3.11.
+#
+if sys.version_info[0] > 3 or sys.version_info[0] == 3 and sys.version_info[1] >= 11:
+    # E1101: Module 'datetime' has no 'UTC' member (no-member)
+    UTC = datetime.UTC  # pylint: disable=E1101
+elif sys.version_info[0] == 3 and sys.version_info[1] >= 5:
+    UTC = datetime.timezone.utc
+else:
+    from datetime import tzinfo, timedelta
+
+    class _UTC(tzinfo):
+        def utcoffset(self, dt):
+            return timedelta(0)
+        def tzname(self, dt):
+            return "UTC"
+        def dst(self, dt):
+            return timedelta(0)
+
+    UTC = _UTC()
+
+datetime_max_utc = datetime.datetime.max.replace(tzinfo=UTC)
+datetime_min_utc = datetime.datetime.min.replace(tzinfo=UTC)
 
 def get_linux_distribution(get_full_name, supported_dists):
     """Abstract platform.linux_distribution() call which is deprecated as of

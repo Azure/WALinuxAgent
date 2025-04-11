@@ -6,8 +6,9 @@ import zipfile
 from datetime import datetime, timedelta
 
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.future import UTC
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.utils import fileutil, timeutil
+from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import GoalStateHistory, StateArchiver, _MAX_ARCHIVED_STATES, ARCHIVE_DIRECTORY_NAME
 from tests.lib.tools import AgentTestCase, patch
 
@@ -41,15 +42,6 @@ class TestArchive(AgentTestCase):
     def history_dir(self):
         return os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME)
 
-    @staticmethod
-    def _parse_archive_name(name):
-        # Name can be a directory or a zip
-        # '0000-00-00T00:00:00.000000_incarnation_0'
-        # '0000-00-00T00:00:00.000000_incarnation_0.zip'
-        timestamp_str, incarnation_ext = name.split("_incarnation_")
-        incarnation_no_ext = os.path.splitext(incarnation_ext)[0]
-        return timestamp_str, incarnation_no_ext
-
     def test_archive_should_zip_all_but_the_latest_goal_state_in_the_history_folder(self):
         test_files = [
             'GoalState.xml',
@@ -61,8 +53,8 @@ class TestArchive(AgentTestCase):
         # these directories match the pattern that StateArchiver.archive() searches for
         test_directories = []
         for i in range(0, 3):
-            timestamp = (datetime.utcnow() + timedelta(minutes=i)).isoformat()
-            directory = os.path.join(self.history_dir, "{0}_incarnation_{1}".format(timestamp, i))
+            timestamp = datetime.now(UTC) + timedelta(minutes=i)
+            directory = os.path.join(self.history_dir, "{0}__{1}".format(GoalStateHistory._create_timestamp(timestamp), i))
             for current_file in test_files:
                 self._write_file(os.path.join(directory, current_file))
             test_directories.append(directory)
@@ -97,7 +89,7 @@ class TestArchive(AgentTestCase):
         count = 6
         total = _MAX_ARCHIVED_STATES + count
 
-        start = datetime.now()
+        start = datetime.now(UTC)
         timestamps = []
 
         for i in range(0, total):
@@ -116,7 +108,7 @@ class TestArchive(AgentTestCase):
         # NOTE: The purge method sorts the items by creation time, but the test files are created too fast and the
         # time resolution is too coarse, so instead we mock getctime to simply return the path of the file
         with patch("azurelinuxagent.common.utils.archive.os.path.getctime", side_effect=lambda path: path):
-            GoalStateHistory(datetime.utcnow(), 'test')
+            GoalStateHistory(datetime.now(UTC), 'test')
 
         archived_entries = os.listdir(self.history_dir)
         self.assertEqual(_MAX_ARCHIVED_STATES, len(archived_entries))
@@ -158,27 +150,6 @@ class TestArchive(AgentTestCase):
 
             for f in legacy_files:
                 self.assertFalse(os.path.exists(f), "Legacy file {0} was not removed".format(f))
-
-    @staticmethod
-    def parse_isoformat(timestamp_str):
-        return datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S.%f')
-
-    @staticmethod
-    def assert_is_iso8601(timestamp_str):
-        try:
-            TestArchive.parse_isoformat(timestamp_str)
-        except:
-            raise AssertionError("the value '{0}' is not an ISO8601 formatted timestamp".format(timestamp_str))
-
-    def assert_datetime_close_to(self, time1, time2, within):
-        if time1 <= time2:
-            diff = time2 - time1
-        else:
-            diff = time1 - time2
-
-        secs = timeutil.total_seconds(within - diff)
-        if secs < 0:
-            self.fail("the timestamps are outside of the tolerance of by {0} seconds".format(secs))
 
     @staticmethod
     def assert_zip_contains(zip_filename, files):

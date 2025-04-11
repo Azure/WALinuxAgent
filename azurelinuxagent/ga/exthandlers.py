@@ -24,6 +24,7 @@ import os
 import re
 import shutil
 import stat
+import sys
 import tempfile
 import time
 import zipfile
@@ -48,7 +49,7 @@ from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEv
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
     ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionsGoalStateError, \
     GoalStateAggregateStatusCodes, MultiConfigExtensionEnableError
-from azurelinuxagent.common.future import ustr, is_file_not_found_error
+from azurelinuxagent.common.future import ustr, UTC, is_file_not_found_error
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, Extension, ExtHandlerStatus, \
     VMStatus, GoalStateAggregateStatus, ExtensionState, ExtensionRequestedState, ExtensionSettings
@@ -331,7 +332,7 @@ class ExtHandlersHandler(object):
             if self._extensions_on_hold():
                 return
 
-            utc_start = datetime.datetime.utcnow()
+            utc_start = datetime.datetime.now(UTC)
             error = None
             message = "ProcessExtensionsGoalState started [{0} channel: {1} source: {2} activity: {3} correlation {4} created: {5}]".format(
                 egs.id, egs.channel, egs.source, egs.activity_id, egs.correlation_id, egs.created_on_timestamp)
@@ -498,7 +499,7 @@ class ExtHandlersHandler(object):
             logger.info("No extension handlers found, not processing anything.")
             return
 
-        wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=_DEFAULT_EXT_TIMEOUT_MINUTES)
+        wait_until = datetime.datetime.now(UTC) + datetime.timedelta(minutes=_DEFAULT_EXT_TIMEOUT_MINUTES)
 
         all_extensions = self.__get_sorted_extensions_for_processing()
         # Since all_extensions are sorted based on sort_key, the last element would be the maximum based on the sort_key
@@ -630,7 +631,7 @@ class ExtHandlersHandler(object):
             ext_completed, status = False, None
 
             # Keep polling for the extension status until it succeeds or times out
-            while datetime.datetime.utcnow() <= wait_until:
+            while datetime.datetime.now(UTC) <= wait_until:
                 ext_completed, status = handler_i.is_ext_handling_complete(extension)
                 if ext_completed:
                     break
@@ -643,7 +644,7 @@ class ExtHandlersHandler(object):
 
         # In case of timeout or terminal error state, we log it and raise
         # Incase extension reported status at the last sec, we should prioritize reporting status over timeout
-        if not ext_completed and datetime.datetime.utcnow() > wait_until:
+        if not ext_completed and datetime.datetime.now(UTC) > wait_until:
             msg = "Dependent Extension {0} did not reach a terminal state within the allowed timeout. Last status was {1}".format(
                 extension_name, status)
             raise Exception(msg)
@@ -1369,7 +1370,7 @@ class ExtHandlerInstance(object):
         return True
 
     def download(self):
-        begin_utc = datetime.datetime.utcnow()
+        begin_utc = datetime.datetime.now(UTC)
         self.set_operation(WALAEventOperation.Download)
 
         if self.pkg is None or self.pkg.uris is None or len(self.pkg.uris) == 0:
@@ -1463,7 +1464,7 @@ class ExtHandlerInstance(object):
         # false, create a status file only if it does not already exist.
         _, status_path = self.get_status_file_path(extension)
         if status_path is not None and (overwrite or not os.path.exists(status_path)):
-            now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            now = datetime.datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
             status_contents = [
                 {
                     "version": 1.0,
@@ -1612,12 +1613,18 @@ class ExtHandlerInstance(object):
                 self.logger.info("Remove extension handler directory: {0}", base_dir)
 
                 # some extensions uninstall asynchronously so ignore error 2 while removing them
-                def on_rmtree_error(_, __, exc_info):
-                    _, exception, _ = exc_info
+                def on_rmtree_exception(_, __, exception):
                     if not isinstance(exception, OSError) or exception.errno != 2:  # [Errno 2] No such file or directory
                         raise exception
 
-                shutil.rmtree(base_dir, onerror=on_rmtree_error)
+                # On 3.12, 'onerror' has been deprecated in favor of 'onexc'
+                if sys.version_info[0] == 3 and sys.version_info[1] >= 12 or sys.version_info[0] > 3:
+                    kwargs = { 'onexc': on_rmtree_exception }
+                else:
+                    kwargs = { 'onerror': lambda function, path, exc_info: on_rmtree_exception(function, path, exc_info[1]) }
+
+                # E1123: Unexpected keyword argument 'onexc' in function call (unexpected-keyword-arg)
+                shutil.rmtree(base_dir, **kwargs)  # pylint: disable=unexpected-keyword-arg
 
             CGroupConfigurator.get_instance().stop_tracking_extension_cgroups(self.get_full_name())
             self.logger.info("Remove the extension slice: {0}".format(self.get_full_name()))
@@ -1969,7 +1976,7 @@ class ExtHandlerInstance(object):
 
     def launch_command(self, cmd, cmd_name=None, timeout=300, extension_error_code=ExtensionErrorCodes.PluginProcessingError,
                        env=None, extension=None):
-        begin_utc = datetime.datetime.utcnow()
+        begin_utc = datetime.datetime.now(UTC)
         self.logger.verbose("Launch command: [{0}]", cmd)
 
         base_dir = self.get_base_dir()

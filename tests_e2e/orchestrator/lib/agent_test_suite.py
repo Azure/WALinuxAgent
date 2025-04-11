@@ -46,6 +46,7 @@ from lisa.sut_orchestrator.azure.platform_ import AzurePlatform  # pylint: disab
 
 import makepkg
 from azurelinuxagent.common.version import AGENT_VERSION
+from azurelinuxagent.common.future import UTC, datetime_min_utc, datetime_max_utc
 from tests_e2e.tests.lib.retry import retry_if_false
 
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
@@ -556,7 +557,7 @@ class AgentTestSuite(LisaTestSuite):
         with set_thread_name(self._environment_name):
             log_path: Path = self._log_path / f"env-{self._environment_name}.log"
             with set_current_thread_log(log_path):
-                start_time: datetime.datetime = datetime.datetime.now()
+                start_time: datetime.datetime = datetime.datetime.now(UTC)
                 failed_cases = []
 
                 try:
@@ -579,7 +580,7 @@ class AgentTestSuite(LisaTestSuite):
                                 test_suite_success = False
                                 raise
 
-                        check_log_start_time = datetime.datetime.min
+                        check_log_start_time = datetime_min_utc
 
                         for suite in self._test_suites:
                             log.info("Executing test suite %s", suite.name)
@@ -626,8 +627,8 @@ class AgentTestSuite(LisaTestSuite):
         """
         suite_name = suite.name
         suite_full_name = f"{suite_name}-{self._environment_name}"
-        suite_start_time: datetime.datetime = datetime.datetime.now()
-        check_log_start_time_override = datetime.datetime.max  # tests can override the timestamp for the agent log check with the get_ignore_errors_before_timestamp() method
+        suite_start_time: datetime.datetime = datetime.datetime.now(UTC)
+        check_log_start_time_override = datetime_max_utc  # tests can override the timestamp for the agent log check with the get_ignore_errors_before_timestamp() method
 
         with set_thread_name(suite_full_name):  # The thread name is added to the LISA log
             log_path: Path = self._log_path / f"{suite_full_name}.log"
@@ -644,7 +645,7 @@ class AgentTestSuite(LisaTestSuite):
 
                     for test in suite.tests:
                         test_full_name = f"{suite_name}-{test.name}"
-                        test_start_time: datetime.datetime = datetime.datetime.now()
+                        test_start_time: datetime.datetime = datetime.datetime.now(UTC)
 
                         log.info("******** Executing %s", test.name)
                         self._lisa_log.info("Executing test %s", test_full_name)
@@ -717,7 +718,7 @@ class AgentTestSuite(LisaTestSuite):
                         # Check if the test is requesting to override the timestamp for the agent log check.
                         # Note that if multiple tests in the suite provide an override, we'll use the earliest timestamp.
                         test_check_log_start_time = test_instance.get_ignore_errors_before_timestamp()
-                        if test_check_log_start_time != datetime.datetime.min:
+                        if test_check_log_start_time != datetime_min_utc:
                             check_log_start_time_override = min(check_log_start_time_override, test_check_log_start_time)
 
                         if not test_success and test.blocks_suite:
@@ -744,8 +745,8 @@ class AgentTestSuite(LisaTestSuite):
                     if not suite_success:
                         self._mark_log_as_failed()
 
-                next_check_log_start_time = datetime.datetime.utcnow()
-                suite_success = suite_success and self._check_agent_log_on_test_nodes(ignore_error_rules, check_log_start_time_override if check_log_start_time_override != datetime.datetime.max else check_log_start_time)
+                next_check_log_start_time = datetime.datetime.now(UTC)
+                suite_success = suite_success and self._check_agent_log_on_test_nodes(ignore_error_rules, check_log_start_time_override if check_log_start_time_override != datetime_max_utc else check_log_start_time)
 
                 return suite_success, next_check_log_start_time
 
@@ -764,7 +765,7 @@ class AgentTestSuite(LisaTestSuite):
                 # If there are multiple test nodes, as in a scale set, append the name of the node to the name of the result
                 test_result_name += '_' + node_name.split('_')[-1]
 
-            start_time: datetime.datetime = datetime.datetime.now()
+            start_time: datetime.datetime = datetime.datetime.now(UTC)
 
             try:
                 message = f"Checking agent log on test node {node_name}, starting at {check_log_start_time.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}"
@@ -905,7 +906,7 @@ class AgentTestSuite(LisaTestSuite):
         msg.message = message
         if add_exception_stack_trace:
             msg.stacktrace = traceback.format_exc()
-        msg.elapsed = (datetime.datetime.now() - start_time).total_seconds()
+        msg.elapsed = (datetime.datetime.now(UTC) - start_time).total_seconds()
 
         notifier.notify(msg)
 

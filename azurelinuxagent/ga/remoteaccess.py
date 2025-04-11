@@ -24,7 +24,7 @@ from datetime import datetime, timedelta
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, UTC
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
@@ -80,8 +80,8 @@ class RemoteAccessHandler(object):
             for acc in self._remote_access.user_list.users:
                 try:
                     raw_expiration = acc.expiration
-                    account_expiration = datetime.strptime(raw_expiration, REMOTE_USR_EXPIRATION_FORMAT)
-                    now = datetime.utcnow()
+                    account_expiration = datetime.strptime(raw_expiration, REMOTE_USR_EXPIRATION_FORMAT).replace(tzinfo=UTC)
+                    now = datetime.now(UTC)
                     if acc.name not in existing_jit_users and now < account_expiration:
                         self._add_user(acc.name, acc.encrypted_password, account_expiration)
                     elif acc.name in existing_jit_users and now > account_expiration:

@@ -144,7 +144,7 @@ class ExtPolicy(AgentVmTest):
             #   2. force a new goal state by enabling a different extension
             #   3. allow extension with policy and send another delete request (should succeed)
             log.info(f"Attempting to delete {extension_case.extension}, should fail due to policy.")
-            delete_start_time = self._ssh_client.run_command("date '+%Y-%m-%d %T'").rstrip()
+            delete_start_time = self._ssh_client.run_command("date --utc '+%Y-%m-%d %T'").rstrip()
             try:
                 # Wait long enough for CRP timeout (15 min) and confirm that a timeout error was thrown.
                 timeout = (20 * 60)
