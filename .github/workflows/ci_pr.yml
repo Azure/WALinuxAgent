@@ -19,10 +19,10 @@ jobs:
           # Some of the Python versions we test are not supported by the setup-python Github Action. For those versions, we use a
           # pre-built virtual environment.
           #
-#          - python-version: "2.6"
-#            use_virtual_environment: true
-#          - python-version: "2.7"
-#            use_virtual_environment: true
+          - python-version: "2.6"
+            use_virtual_environment: true
+          - python-version: "2.7"
+            use_virtual_environment: true
           - python-version: "3.4"
             use_virtual_environment: true
           - python-version: "3.5"
@@ -31,11 +31,11 @@ jobs:
             use_virtual_environment: true
           - python-version: "3.7"
             use_virtual_environment: true
-#          - python-version: "3.8"
+          - python-version: "3.8"
           - python-version: "3.9"
             additional-nose-opts: "--with-coverage --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
-#          - python-version: "3.10"
-#          - python-version: "3.11"
+          - python-version: "3.10"
+          - python-version: "3.11"
 
     steps:
     - name: Checkout WALinuxAgent
