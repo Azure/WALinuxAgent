@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from azurelinuxagent.common.future import UTC
 
 ERROR_STATE_DELTA_DEFAULT = timedelta(minutes=15)
 ERROR_STATE_DELTA_INSTALL = timedelta(minutes=5)
@@ -14,7 +15,7 @@ class ErrorState(object):
 
     def incr(self):
         if self.count == 0:
-            self.timestamp = datetime.utcnow()
+            self.timestamp = datetime.now(UTC)
 
         self.count += 1
 
@@ -26,7 +27,7 @@ class ErrorState(object):
         if self.timestamp is None:
             return False
 
-        delta = datetime.utcnow() - self.timestamp
+        delta = datetime.now(UTC) - self.timestamp
         if delta >= self.min_timedelta:
             return True
 
@@ -37,7 +38,7 @@ class ErrorState(object):
         if self.timestamp is None:
             return 'unknown'
 
-        delta = round((datetime.utcnow() - self.timestamp).seconds / 60.0, 2)
+        delta = round((datetime.now(UTC) - self.timestamp).seconds / 60.0, 2)
         if delta < 60:
             return '{0} min'.format(delta)
 

@@ -17,6 +17,7 @@
 from datetime import timedelta, datetime
 
 from mock import Mock, MagicMock
+from azurelinuxagent.common.future import UTC
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.protocol.goal_state import RemoteAccess
 from azurelinuxagent.common.protocol.util import ProtocolUtil
@@ -91,7 +92,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             rah = RemoteAccessHandler(Mock())
             tstpassword = "]aPPEv}uNg1FPnl?"
             tstuser = "foobar"
-            expiration_date = datetime.utcnow() + timedelta(days=1)
+            expiration_date = datetime.now(UTC) + timedelta(days=1)
             pwd = tstpassword
             rah._add_user(tstuser, pwd, expiration_date)
             users = get_user_dictionary(rah._os_util.get_users())
@@ -107,7 +108,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             rah = RemoteAccessHandler(Mock())
             tstpassword = "]aPPEv}uNg1FPnl?"
             tstuser = ""
-            expiration = datetime.utcnow() + timedelta(days=1)
+            expiration = datetime.now(UTC) + timedelta(days=1)
             pwd = tstpassword
             error = "test exception for bad username"
             self.assertRaisesRegex(Exception, error, rah._add_user, tstuser, pwd, expiration)
@@ -119,7 +120,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             rah = RemoteAccessHandler(Mock())
             tstpassword = ""
             tstuser = "foobar"
-            expiration = datetime.utcnow() + timedelta(days=1)
+            expiration = datetime.now(UTC) + timedelta(days=1)
             pwd = tstpassword
             error = "test exception for bad password"
             self.assertRaisesRegex(Exception, error, rah._add_user, tstuser, pwd, expiration)
@@ -131,7 +132,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             rah = RemoteAccessHandler(Mock())
             tstpassword = "]aPPEv}uNg1FPnl?"
             tstuser = "foobar"
-            expiration_date = datetime.utcnow() + timedelta(days=1)
+            expiration_date = datetime.now(UTC) + timedelta(days=1)
             pwd = tstpassword
             rah._add_user(tstuser, pwd, expiration_date)
             users = get_user_dictionary(rah._os_util.get_users())
@@ -142,7 +143,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             # add the new duplicate user, ensure it's not created and does not overwrite the existing user.
             # this does not test the user add function as that's mocked, it tests processing skips the remaining
             # calls after the initial failure
-            new_user_expiration = datetime.utcnow() + timedelta(days=5)
+            new_user_expiration = datetime.now(UTC) + timedelta(days=5)
             self.assertRaises(Exception, rah._add_user, tstuser, pwd, new_user_expiration)
             # refresh users
             users = get_user_dictionary(rah._os_util.get_users())
@@ -158,7 +159,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             rah = RemoteAccessHandler(Mock())
             tstpassword = "]aPPEv}uNg1FPnl?"
             tstuser = "foobar"
-            expiration_date = datetime.utcnow() + timedelta(days=1)
+            expiration_date = datetime.now(UTC) + timedelta(days=1)
             expected_expiration = (expiration_date + timedelta(days=1)).strftime("%Y-%m-%d")  # pylint: disable=unused-variable
             pwd = tstpassword
             rah._add_user(tstuser, pwd, expiration_date)
@@ -176,7 +177,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             data_str = load_data('wire/remote_access_single_account.xml')
             remote_access = RemoteAccess(data_str)
             tstuser = remote_access.user_list.users[0].name
-            expiration_date = datetime.utcnow() + timedelta(days=1)
+            expiration_date = datetime.now(UTC) + timedelta(days=1)
             expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
             remote_access.user_list.users[0].expiration = expiration
             rah._remote_access = remote_access
@@ -193,7 +194,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             rah = RemoteAccessHandler(Mock())
             data_str = load_data('wire/remote_access_single_account.xml')
             remote_access = RemoteAccess(data_str)
-            expiration = (datetime.utcnow() - timedelta(days=2)).strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
+            expiration = (datetime.now(UTC) - timedelta(days=2)).strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
             remote_access.user_list.users[0].expiration = expiration
             rah._remote_access = remote_access
             rah._handle_remote_access()
@@ -204,7 +205,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         with patch("azurelinuxagent.ga.remoteaccess.get_osutil", return_value=MockOSUtil()):
             rah = RemoteAccessHandler(Mock())
             tstuser = "foobar"
-            expiration = datetime.utcnow() + timedelta(days=1)
+            expiration = datetime.now(UTC) + timedelta(days=1)
             pwd = "bad password"
             error = r"\[CryptError\] Error decoding secret\nInner error: Incorrect padding"
             self.assertRaisesRegex(Exception, error, rah._add_user, tstuser, pwd, expiration)
@@ -247,7 +248,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             count = 0
             while count < 2:
                 user = remote_access.user_list.users[count].name
-                expiration_date = datetime.utcnow() + timedelta(days=count + 1)
+                expiration_date = datetime.now(UTC) + timedelta(days=count + 1)
                 expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
                 remote_access.user_list.users[count].expiration = expiration
                 testusers.append(user)
@@ -269,7 +270,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             for user in remote_access.user_list.users:
                 count += 1
                 user.name = "tstuser{0}".format(count)
-                expiration_date = datetime.utcnow() + timedelta(days=count)
+                expiration_date = datetime.now(UTC) + timedelta(days=count)
                 user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
             rah._remote_access = remote_access
             rah._handle_remote_access()
@@ -286,7 +287,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             for user in remote_access.user_list.users:
                 count += 1
                 user.name = "tstuser{0}".format(count)
-                expiration_date = datetime.utcnow() + timedelta(days=count)
+                expiration_date = datetime.now(UTC) + timedelta(days=count)
                 user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
             rah._remote_access = remote_access
             rah._handle_remote_access()
@@ -307,7 +308,7 @@ class TestRemoteAccessHandler(AgentTestCase):
                 user.name = "tstuser{0}".format(count)
                 if count == 2:
                     user.name = ""
-                expiration_date = datetime.utcnow() + timedelta(days=count)
+                expiration_date = datetime.now(UTC) + timedelta(days=count)
                 user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
             rah._remote_access = remote_access
             rah._handle_remote_access()
@@ -321,7 +322,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             data_str = load_data('wire/remote_access_single_account.xml')
             remote_access = RemoteAccess(data_str)
             tstuser = remote_access.user_list.users[0].name
-            expiration_date = datetime.utcnow() + timedelta(days=1)
+            expiration_date = datetime.now(UTC) + timedelta(days=1)
             expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
             remote_access.user_list.users[0].expiration = expiration
             rah._remote_access = remote_access
@@ -348,7 +349,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             rah = RemoteAccessHandler(Mock())
             tstpassword = "]aPPEv}uNg1FPnl?"
             tstuser = "foobar"
-            expiration_date = datetime.utcnow() + timedelta(days=1)
+            expiration_date = datetime.now(UTC) + timedelta(days=1)
             pwd = tstpassword
             rah._add_user(tstuser, pwd, expiration_date)
             users = get_user_dictionary(rah._os_util.get_users())
@@ -366,7 +367,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             for user in remote_access.user_list.users:
                 count += 1
                 user.name = "tstuser{0}".format(count)
-                expiration_date = datetime.utcnow() + timedelta(days=count)
+                expiration_date = datetime.now(UTC) + timedelta(days=count)
                 user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
             rah._remote_access = remote_access
             rah._handle_remote_access()
@@ -390,7 +391,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             for user in remote_access.user_list.users:
                 count += 1
                 user.name = "tstuser{0}".format(count)
-                expiration_date = datetime.utcnow() + timedelta(days=count)
+                expiration_date = datetime.now(UTC) + timedelta(days=count)
                 user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
             rah._remote_access = remote_access
             rah._handle_remote_access()
@@ -412,7 +413,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             for user in remote_access.user_list.users:
                 count += 1
                 user.name = "tstuser{0}".format(count)
-                expiration_date = datetime.utcnow() + timedelta(days=count)
+                expiration_date = datetime.now(UTC) + timedelta(days=count)
                 user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
             rah._remote_access = remote_access
             rah._handle_remote_access()
@@ -447,7 +448,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             for user in remote_access.user_list.users:
                 count += 1
                 user.name = "tstuser{0}".format(count)
-                expiration_date = datetime.utcnow() + timedelta(days=count)
+                expiration_date = datetime.now(UTC) + timedelta(days=count)
                 user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
             rah._remote_access = remote_access
             rah._handle_remote_access()

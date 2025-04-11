@@ -36,6 +36,7 @@ jobs:
             additional-nose-opts: "--with-coverage --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
           - python-version: "3.10"
           - python-version: "3.11"
+          - python-version: "3.12"
 
     steps:
     - name: Checkout WALinuxAgent
@@ -140,13 +141,13 @@ jobs:
         # * 'contextmanager-generator-missing-cleanup' are false positives if yield is used inside an if-else block for contextmanager generator functions.
         #   (https://pylint.readthedocs.io/en/latest/user_guide/messages/warning/contextmanager-generator-missing-cleanup.html).
         #   This is not implemented on versions (3.0-3.7) Bad option value 'contextmanager-generator-missing-cleanup' (bad-option-value)
-        # * 3.9-3.11 will produce "too-many-positional-arguments" for several methods that are having more than 5 args, so we suppress that warning.
+        # * >= 3.9 will produce "too-many-positional-arguments" for several methods that are having more than 5 args, so we suppress that warning.
         #  (R0917: Too many positional arguments (8/5) (too-many-positional-arguments))
         PYLINT_OPTIONS="--rcfile=ci/pylintrc --jobs=0"
         if [[ "${{ matrix.python-version }}" == "3.9" ]]; then
           PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-member,too-many-positional-arguments --ignore=main.py"
         fi
-        if [[ "${{ matrix.python-version }}" =~ ^3\.(10|11)$ ]]; then
+        if [[ "${{ matrix.python-version }}" =~ ^3\.(10|11|12)$ ]]; then
           PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=too-many-positional-arguments"
         fi
         if [[ "${{ matrix.python-version }}" =~ ^3\.[0-7]$ ]]; then

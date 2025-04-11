@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 
 from azurelinuxagent.common.event import __event_logger__, add_log_event, MAX_NUMBER_OF_EVENTS, EVENTS_DIRECTORY
 
+from azurelinuxagent.common.future import UTC
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils import fileutil
 from tests.lib.tools import AgentTestCase, MagicMock, patch, skip_if_predicate_true
@@ -119,7 +120,7 @@ class TestLogger(AgentTestCase):
         logger.periodic_info(logger.EVERY_DAY, _MSG_INFO, *_DATA)
         self.assertEqual(1, mock_info.call_count)
 
-        logger.DEFAULT_LOGGER.periodic_messages[hash(_MSG_INFO)] = datetime.now() - \
+        logger.DEFAULT_LOGGER.periodic_messages[hash(_MSG_INFO)] = datetime.now(UTC) - \
                                                                    logger.EVERY_DAY - logger.EVERY_HOUR
         logger.periodic_info(logger.EVERY_DAY, _MSG_INFO, *_DATA)
         self.assertEqual(2, mock_info.call_count)
@@ -129,7 +130,7 @@ class TestLogger(AgentTestCase):
         logger.periodic_warn(logger.EVERY_DAY, _MSG_WARN, *_DATA)
         self.assertEqual(1, mock_warn.call_count)
 
-        logger.DEFAULT_LOGGER.periodic_messages[hash(_MSG_WARN)] = datetime.now() - \
+        logger.DEFAULT_LOGGER.periodic_messages[hash(_MSG_WARN)] = datetime.now(UTC) - \
                                                                    logger.EVERY_DAY - logger.EVERY_HOUR
         logger.periodic_warn(logger.EVERY_DAY, _MSG_WARN, *_DATA)
         self.assertEqual(2, mock_info.call_count)
@@ -139,7 +140,7 @@ class TestLogger(AgentTestCase):
         logger.periodic_error(logger.EVERY_DAY, _MSG_ERROR, *_DATA)
         self.assertEqual(1, mock_error.call_count)
 
-        logger.DEFAULT_LOGGER.periodic_messages[hash(_MSG_ERROR)] = datetime.now() - \
+        logger.DEFAULT_LOGGER.periodic_messages[hash(_MSG_ERROR)] = datetime.now(UTC) - \
                                                                     logger.EVERY_DAY - logger.EVERY_HOUR
         logger.periodic_error(logger.EVERY_DAY, _MSG_ERROR, *_DATA)
         self.assertEqual(2, mock_info.call_count)
@@ -149,7 +150,7 @@ class TestLogger(AgentTestCase):
         logger.periodic_verbose(logger.EVERY_DAY, _MSG_VERBOSE, *_DATA)
         self.assertEqual(1, mock_verbose.call_count)
 
-        logger.DEFAULT_LOGGER.periodic_messages[hash(_MSG_VERBOSE)] = datetime.now() - \
+        logger.DEFAULT_LOGGER.periodic_messages[hash(_MSG_VERBOSE)] = datetime.now(UTC) - \
                                                                       logger.EVERY_DAY - logger.EVERY_HOUR
         logger.periodic_verbose(logger.EVERY_DAY, _MSG_VERBOSE, *_DATA)
         self.assertEqual(2, mock_info.call_count)
@@ -171,20 +172,21 @@ class TestLogger(AgentTestCase):
         logger.periodic_verbose(logger.EVERY_DAY, _MSG_VERBOSE, *_DATA)
         mock_verbose.assert_called_once_with(_MSG_VERBOSE, *_DATA)
 
+    _UTCTimestampFormat = u"%Y-%m-%dT%H:%M:%S.%fZ"
+
     def test_logger_should_log_in_utc(self):
         file_name = "test.log"
         file_path = os.path.join(self.tmp_dir, file_name)
         test_logger = logger.Logger()
         test_logger.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=file_path)
 
-        before_write_utc = datetime.utcnow()
+        before_write_utc = datetime.now(UTC)
         test_logger.info("The time should be in UTC")
 
         with open(file_path, "r") as log_file:
             log = log_file.read()
             try:
-                time_in_file = datetime.strptime(log.split(logger.LogLevel.STRINGS[logger.LogLevel.INFO])[0].strip()
-                                                 , logger.Logger.LogTimeFormatInUTC)
+                time_in_file = datetime.strptime(log.split(logger.LogLevel.STRINGS[logger.LogLevel.INFO])[0].strip(), self._UTCTimestampFormat).replace(tzinfo=UTC)
             except ValueError:
                 self.fail("Ensure timestamp follows ISO-8601 format + 'Z' for UTC")
 
@@ -200,16 +202,15 @@ class TestLogger(AgentTestCase):
         test_logger = logger.Logger()
         test_logger.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=file_path)
 
-        ts_with_no_ms = datetime.utcnow().replace(microsecond=0)
-        mock_dt.utcnow = MagicMock(return_value=ts_with_no_ms)
+        ts_with_no_ms = datetime.now(UTC).replace(microsecond=0)
+        mock_dt.now = MagicMock(return_value=ts_with_no_ms)
 
         test_logger.info("The time should contain milli-seconds")
 
         with open(file_path, "r") as log_file:
             log = log_file.read()
             try:
-                time_in_file = datetime.strptime(log.split(logger.LogLevel.STRINGS[logger.LogLevel.INFO])[0].strip()
-                                                 , logger.Logger.LogTimeFormatInUTC)
+                time_in_file = datetime.strptime(log.split(logger.LogLevel.STRINGS[logger.LogLevel.INFO])[0].strip(), self._UTCTimestampFormat).replace(tzinfo=UTC)
             except ValueError:
                 self.fail("Ensure timestamp follows ISO-8601 format and has micro seconds in it")
 

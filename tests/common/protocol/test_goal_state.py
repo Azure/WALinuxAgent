@@ -11,7 +11,7 @@ import shutil
 import time
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.future import httpclient, urlparse
+from azurelinuxagent.common.future import httpclient, urlparse, UTC
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource, GoalStateChannel
 from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config import ExtensionsGoalStateFromExtensionsConfig
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import ExtensionsGoalStateFromVmSettings
@@ -284,7 +284,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
         data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
 
         with mock_wire_protocol(data_file) as protocol:
-            timestamp = datetime.datetime.utcnow()
+            timestamp = datetime.datetime.now(UTC)
             incarnation = '111'
             etag = '111111'
             protocol.mock_wire_data.set_incarnation(incarnation, timestamp=timestamp)
@@ -324,7 +324,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             # Verify __init__()
             #
             expected_incarnation = '111'  # test setup initializes to this value
-            timestamp = datetime.datetime.utcnow() + datetime.timedelta(seconds=15)
+            timestamp = datetime.datetime.now(UTC) + datetime.timedelta(seconds=15)
             protocol.mock_wire_data.set_etag('22222', timestamp)
 
             goal_state = GoalState(protocol.client)
@@ -349,7 +349,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             # Verify __init__()
             #
             expected_etag = '22222'
-            timestamp = datetime.datetime.utcnow() + datetime.timedelta(seconds=15)
+            timestamp = datetime.datetime.now(UTC) + datetime.timedelta(seconds=15)
             protocol.mock_wire_data.set_etag(expected_etag, timestamp)
 
             goal_state = GoalState(protocol.client)
@@ -372,7 +372,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             goal_state = GoalState(protocol.client)
 
             # The most recent goal state is FastTrack
-            timestamp = datetime.datetime.utcnow() + datetime.timedelta(seconds=15)
+            timestamp = datetime.datetime.now(UTC) + datetime.timedelta(seconds=15)
             protocol.mock_wire_data.set_vm_settings_source(GoalStateSource.FastTrack)
             protocol.mock_wire_data.set_etag('222222', timestamp)
 
@@ -404,7 +404,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             initial_timestamp = goal_state.extensions_goal_state.created_on_timestamp
 
             # Make the most recent goal state FastTrack
-            timestamp = datetime.datetime.utcnow() + datetime.timedelta(seconds=15)
+            timestamp = datetime.datetime.now(UTC) + datetime.timedelta(seconds=15)
             protocol.mock_wire_data.set_vm_settings_source(GoalStateSource.FastTrack)
             protocol.mock_wire_data.set_etag('444444', timestamp)
 

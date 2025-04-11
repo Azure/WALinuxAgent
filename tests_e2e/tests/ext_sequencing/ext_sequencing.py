@@ -32,6 +32,8 @@ from typing import List, Dict, Any
 from assertpy import fail
 from azure.mgmt.compute.models import VirtualMachineScaleSetVMExtensionsSummary
 
+from azurelinuxagent.common.future import UTC, datetime_min_utc
+
 from tests_e2e.tests.ext_sequencing.ext_seq_test_cases import add_one_dependent_ext_without_settings, add_two_extensions_with_dependencies, \
     remove_one_dependent_extension, remove_all_dependencies, add_one_dependent_extension, \
     add_single_dependencies, remove_all_dependent_extensions, add_failing_dependent_extension_with_one_dependency, add_failing_dependent_extension_with_two_dependencies
@@ -48,7 +50,7 @@ class ExtSequencing(AgentVmssTest):
 
     def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
-        self._scenario_start = datetime.min
+        self._scenario_start = datetime_min_utc
 
     # Cases to test different dependency scenarios
     _test_cases = [
@@ -185,7 +187,7 @@ class ExtSequencing(AgentVmssTest):
 
         for case in self._test_cases:
             test_case_start = random.choice(list(ssh_clients.values())).run_command("date '+%Y-%m-%d %T'").rstrip()
-            if self._scenario_start == datetime.min:
+            if self._scenario_start == datetime_min_utc:
                 self._scenario_start = test_case_start
 
             # Assign unique guid to forceUpdateTag for each extension to make sure they're always unique to force CRP
@@ -285,9 +287,9 @@ class ExtSequencing(AgentVmssTest):
 
     def get_ignore_errors_before_timestamp(self) -> datetime:
         # Ignore errors in the agent log before the first test case starts
-        if self._scenario_start == datetime.min:
+        if self._scenario_start == datetime_min_utc:
             return self._scenario_start
-        return datetime.strptime(self._scenario_start, u'%Y-%m-%d %H:%M:%S')
+        return datetime.strptime(self._scenario_start, u'%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [

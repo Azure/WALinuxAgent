@@ -25,6 +25,8 @@ from datetime import datetime
 import time
 import re
 
+from azurelinuxagent.common.future import UTC, datetime_min_utc
+
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.agent_log import AgentLog
 
@@ -91,9 +93,9 @@ def main():
     args = parser.parse_args()
 
     if args.after_timestamp is not None:
-        after_datetime = datetime.strptime(args.after_timestamp, '%Y-%m-%d %H:%M:%S')
+        after_datetime = datetime.strptime(args.after_timestamp, '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
     else:
-        after_datetime = datetime.min
+        after_datetime = datetime_min_utc
 
     status = __get_last_reported_status(after_datetime)
     if status is None:

@@ -26,11 +26,10 @@ from datetime import datetime
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.utils.shellutil as shellutil  # pylint: disable=W0611
 
-from azurelinuxagent.common.event import elapsed_milliseconds, WALAEventOperation  # pylint: disable=W0611
+from azurelinuxagent.common.event import elapsed_milliseconds
 from azurelinuxagent.common.exception import ProvisionError, ProtocolError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, UTC
 from azurelinuxagent.common.protocol.util import OVF_FILE_NAME
 from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.pa.provision.default import ProvisionHandler
@@ -47,7 +46,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
                 logger.info("Provisioning already completed, skipping.")
                 return
 
-            utc_start = datetime.utcnow()
+            utc_start = datetime.now(UTC)
             logger.info("Running CloudInit provisioning handler")
             self.wait_for_ovfenv()
             self.protocol_util.get_protocol()  # Trigger protocol detection

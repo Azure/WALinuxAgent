@@ -23,6 +23,7 @@ import time
 import glob
 import datetime
 
+from azurelinuxagent.common.future import UTC
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.logger as logger
@@ -190,9 +191,8 @@ class OpenBSDOSUtil(DefaultOSUtil):
                             try:
                                 expire_string = line.split(
                                     " ", 4)[-1].strip(";")
-                                expire_date = datetime.datetime.strptime(
-                                    expire_string, FORMAT_DATETIME)
-                                if expire_date > datetime.datetime.utcnow():
+                                expire_date = datetime.datetime.strptime(expire_string, FORMAT_DATETIME).replace(tzinfo=UTC)
+                                if expire_date > datetime.datetime.now(UTC):
                                     expired = False
                             except ValueError:
                                 logger.error("could not parse expiry token "
