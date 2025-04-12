@@ -27,7 +27,6 @@ PYTHON_VERSION=$1
 
 if [[ "${PYTHON_VERSION}" =~ ^2\.[0-9]$ ]]; then
   # Patch httplib.py on Python 2
-  httplib="$(find /opt -wholename '*/lib/python${PYTHON_VERSION}/http/client.py')"
   cat >> /opt/python/${PYTHON_VERSION}/lib/python${PYTHON_VERSION}/httplib.py << ...
 
 # Added by WALinuxAgent dev team to work around the lack of OpenSSL 1.0 shared libraries
