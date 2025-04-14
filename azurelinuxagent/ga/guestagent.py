@@ -7,7 +7,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import textutil
 
-from azurelinuxagent.common import logger, conf
+from azurelinuxagent.common import logger, conf, event
 from azurelinuxagent.common.exception import UpdateError
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_DIR_PATTERN, AGENT_NAME
@@ -127,7 +127,7 @@ class GuestAgent(object):
         return self.is_blacklisted or \
                os.path.isfile(self.get_agent_manifest_path())
 
-    def mark_failure(self, is_fatal=False, reason=''):
+    def mark_failure(self, is_fatal=False, reason='', report_func=event.warn):
         try:
             if not os.path.isdir(self.get_agent_dir()):
                 os.makedirs(self.get_agent_dir())
@@ -135,9 +135,7 @@ class GuestAgent(object):
             self.error.save()
             if self.error.is_blacklisted:
                 msg = u"Agent {0} is permanently blacklisted".format(self.name)
-                logger.warn(msg)
-                add_event(op=WALAEventOperation.AgentBlacklisted, is_success=False, message=msg, log_event=False,
-                          version=self.version)
+                report_func(WALAEventOperation.AgentBlacklisted, msg)
         except Exception as e:
             logger.warn(u"Agent {0} failed recording error state: {1}", self.name, ustr(e))
 

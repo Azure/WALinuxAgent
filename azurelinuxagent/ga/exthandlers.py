@@ -1446,6 +1446,7 @@ class ExtHandlerInstance(object):
         # Save HandlerEnvironment.json
         self.create_handler_env()
 
+        self.log_telemetry_if_ext_uses_resource_limits()
         self.set_extension_resource_limits()
 
     def set_extension_resource_limits(self):
@@ -1457,6 +1458,22 @@ class ExtHandlerInstance(object):
         CGroupConfigurator.get_instance().setup_extension_slice(
             extension_name=extension_name, cpu_quota=resource_limits.get_extension_slice_cpu_quota())
         CGroupConfigurator.get_instance().set_extension_services_cpu_memory_quota(resource_limits.get_service_list())
+
+    def log_telemetry_if_ext_uses_resource_limits(self):
+        extension_name = self.get_full_name()
+        man = self.load_manifest()
+        resource_limits = man.get_resource_limits()
+
+        def _log():
+            event.info(WALAEventOperation.ExtensionResourceGovernance,'{0} is using resource governance', extension_name)
+
+        if resource_limits is None:
+            return
+
+        if resource_limits.get_extension_slice_cpu_quota() is not None or resource_limits.get_extension_slice_memory_quota() is not None:
+            _log()
+        elif resource_limits.get_service_list() is not None and len(resource_limits.get_service_list()) > 0:
+            _log()
 
     def create_status_file(self, extension, status, code, operation, message, overwrite):
         # Create status file for specified extension. If overwrite is true, overwrite any existing status file. If
