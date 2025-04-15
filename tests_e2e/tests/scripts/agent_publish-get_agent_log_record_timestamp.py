@@ -18,8 +18,7 @@
 #
 
 import re
-from datetime import datetime
-
+from azurelinuxagent.common.future import datetime_min_utc
 from tests_e2e.tests.lib.agent_log import AgentLog
 
 # pylint: disable=W0105
@@ -70,7 +69,7 @@ def main():
                 if update_match:
                     return record.timestamp
 
-        return datetime.min
+        return datetime_min_utc
     except Exception as e:
         raise Exception("Error thrown when searching for update pattern in agent log to get record timestamp: {0}".format(str(e)))
 

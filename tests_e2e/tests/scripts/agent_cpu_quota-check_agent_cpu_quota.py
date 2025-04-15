@@ -24,6 +24,7 @@ import time
 
 from assertpy import fail
 
+from azurelinuxagent.common.future import UTC
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import shellutil
 from tests_e2e.tests.lib.agent_log import AgentLog
@@ -133,8 +134,8 @@ def verify_agent_reported_metrics():
 
 def wait_for_log_message(message, timeout=datetime.timedelta(minutes=5)):
     log.info("Checking agent's log for message matching [%s]", message)
-    start_time = datetime.datetime.now()
-    while datetime.datetime.now() - start_time <= timeout:
+    start_time = datetime.datetime.now(UTC)
+    while datetime.datetime.now(UTC) - start_time <= timeout:
         for record in AgentLog().read():
             match = re.search(message, record.message, flags=re.DOTALL)
             if match is not None:
@@ -177,7 +178,7 @@ def cleanup_test_setup():
         os.remove(drop_in_file)
         shellutil.run_command(["systemctl", "daemon-reload"])
 
-    check_time = datetime.datetime.utcnow()
+    check_time = datetime.datetime.now(UTC)
     shellutil.run_command(["agent-service", "restart"])
 
     found: bool = retry_if_false(lambda: check_log_message(" Agent cgroups enabled: True", after_timestamp=check_time))

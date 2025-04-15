@@ -20,7 +20,8 @@ import datetime
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import AgentError
-from azurelinuxagent.common.utils import textutil
+from azurelinuxagent.common.future import datetime_min_utc
+from azurelinuxagent.common.utils import textutil, timeutil
 
 
 class GoalStateChannel(object):
@@ -153,16 +154,16 @@ class ExtensionsGoalState(object):
         Takes 'ticks', a string indicating the number of ticks since midnight 0001-01-01 00:00:00, and
         returns a UTC timestamp  (every tick is 1/10000000 of a second).
         """
-        minimum = datetime.datetime(1900, 1, 1, 0, 0)  # min value accepted by datetime.strftime()
-        as_date_time = minimum
+        as_date_time = None
         if ticks_string not in (None, ""):
             try:
-                as_date_time = datetime.datetime.min + datetime.timedelta(seconds=float(ticks_string) / 10 ** 7)
+                as_date_time = datetime_min_utc + datetime.timedelta(seconds=float(ticks_string) / 10 ** 7)
             except Exception as exception:
-                logger.verbose("Can't parse ticks: {0}", textutil.format_exception(exception))
-        as_date_time = max(as_date_time, minimum)
+                logger.info("Can't parse ticks: {0}", textutil.format_exception(exception))
+        if as_date_time is None:
+            as_date_time = datetime_min_utc
 
-        return as_date_time.strftime(logger.Logger.LogTimeFormatInUTC)
+        return timeutil.create_utc_timestamp(as_date_time)
 
     @staticmethod
     def _string_to_id(id_string):
@@ -203,7 +204,7 @@ class EmptyExtensionsGoalState(ExtensionsGoalState):
 
     @property
     def created_on_timestamp(self):
-        return datetime.datetime.min
+        return datetime_min_utc
 
     @property
     def channel(self):

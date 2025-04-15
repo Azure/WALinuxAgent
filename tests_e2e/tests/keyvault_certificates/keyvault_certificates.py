@@ -25,6 +25,8 @@ import time
 
 from assertpy import fail
 
+from azurelinuxagent.common.future import UTC
+
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.shell import CommandError
@@ -87,7 +89,7 @@ class KeyvaultCertificates(AgentVmTest):
 
         # If the goal state includes only the certificates, but no extensions, the update/reapply operations may complete before the Agent has downloaded the certificates
         # so we retry for a few minutes to ensure the certificates are downloaded.
-        timed_out = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+        timed_out = datetime.datetime.now(UTC) + datetime.timedelta(minutes=5)
         while True:
             try:
                 output = ssh_client.run_command(f"ls {expected_certificates}", use_sudo=True)
@@ -95,7 +97,7 @@ class KeyvaultCertificates(AgentVmTest):
                 break
             except CommandError as error:
                 if error.stdout == "":
-                    if datetime.datetime.utcnow() < timed_out:
+                    if datetime.datetime.now(UTC) < timed_out:
                         log.info("The certificates have not been downloaded yet, will retry after a short delay.")
                         time.sleep(30)
                         continue

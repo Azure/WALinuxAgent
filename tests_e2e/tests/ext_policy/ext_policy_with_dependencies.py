@@ -31,6 +31,10 @@ import time
 from datetime import datetime
 from typing import List, Dict, Any
 
+from azurelinuxagent.common.future import datetime_min_utc
+
+from azurelinuxagent.common.future import UTC
+
 from assertpy import fail
 from tests_e2e.tests.lib.agent_test import AgentVmssTest, TestSkipped
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
@@ -52,7 +56,7 @@ from tests_e2e.tests.ext_policy.policy_dependencies_cases import _should_fail_si
 class ExtPolicyWithDependencies(AgentVmssTest):
     def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
-        self._scenario_start = datetime.min
+        self._scenario_start = datetime_min_utc
 
     # Cases to test different dependency scenarios
     _test_cases = [
@@ -130,8 +134,8 @@ class ExtPolicyWithDependencies(AgentVmssTest):
             for case in self._test_cases:
                 log.info("")
                 log.info("*** Test case: {0}".format(case.__name__.replace('_', ' ')))
-                test_case_start = random.choice(list(ssh_clients.values())).run_command("date '+%Y-%m-%d %T'").rstrip()
-                if self._scenario_start == datetime.min:
+                test_case_start = random.choice(list(ssh_clients.values())).run_command("date --utc '+%Y-%m-%d %T'").rstrip()
+                if self._scenario_start == datetime_min_utc:
                     self._scenario_start = test_case_start
                 log.info("Test case start time: {0}".format(test_case_start))
 
@@ -227,7 +231,7 @@ class ExtPolicyWithDependencies(AgentVmssTest):
                     })
                 ext_template['resources'][0]['properties']['virtualMachineProfile']['extensionProfile'][
                     'extensions'] = extensions
-                enable_start_time = random.choice(list(ssh_clients.values())).run_command("date '+%Y-%m-%d %T'").rstrip()
+                enable_start_time = random.choice(list(ssh_clients.values())).run_command("date --utc '+%Y-%m-%d %T'").rstrip()
                 try:
                     rg_client.deploy_template(template=ext_template)
                 except Exception as err:
@@ -272,9 +276,9 @@ class ExtPolicyWithDependencies(AgentVmssTest):
 
     def get_ignore_errors_before_timestamp(self) -> datetime:
         # Ignore errors in the agent log before the first test case starts
-        if self._scenario_start == datetime.min:
+        if self._scenario_start == datetime_min_utc:
             return self._scenario_start
-        return datetime.strptime(self._scenario_start, u'%Y-%m-%d %H:%M:%S')
+        return datetime.strptime(self._scenario_start, u'%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [
