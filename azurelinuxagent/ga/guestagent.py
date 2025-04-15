@@ -134,8 +134,8 @@ class GuestAgent(object):
             self.error.mark_failure(is_fatal=is_fatal, reason=reason)
             self.error.save()
             if self.error.is_blacklisted:
-                msg = u"Agent {0} is permanently blacklisted".format(self.name)
-                report_func(WALAEventOperation.AgentBlacklisted, msg)
+                msg = u"Agent {0} is permanently disabled".format(self.name)
+                report_func(WALAEventOperation.AgentDisabled, msg)
         except Exception as e:
             logger.warn(u"Agent {0} failed recording error state: {1}", self.name, ustr(e))
 
