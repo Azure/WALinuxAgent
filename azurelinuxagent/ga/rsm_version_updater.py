@@ -88,9 +88,11 @@ class RSMVersionUpdater(GAVersionUpdater):
         """
         Once version retrieved from goal state, we check if we allowed to update for that version
         allow update If new version not same as current version, not below than daemon version and if version is from rsm request
+
+        Todo: Downgrade flow has issues, not allowing it until we have a fix
         """
 
-        if not agent_family.is_version_from_rsm or self._version < self._daemon_version or self._version == CURRENT_VERSION:
+        if not agent_family.is_version_from_rsm or self._version < self._daemon_version or self._version == CURRENT_VERSION or (self._version < CURRENT_VERSION and conf.get_disable_rsm_downgrade()):
             return False
 
         return True
