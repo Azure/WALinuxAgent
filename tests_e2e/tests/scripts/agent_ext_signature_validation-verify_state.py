@@ -22,7 +22,7 @@ import glob
 
 # This script verifies that a "signature_validated" state file exists for the specified extension
 # and that it contains the expected validation state.
-# Usage: agent_ext_signature_validation-verify_state.py --extension-name "CustomScript" --expected-state "SignatureAndManifestValidated"
+# Usage: agent_ext_signature_validation-verify_state.py --extension-name "CustomScript"
 
 DEFAULT_EXPECTED_STATE = "SignatureAndManifestValidated"
 
@@ -55,8 +55,6 @@ def main():
                 raise Exception(f"Signature validation state mismatch. Expected '{args.expected_state}', found '{content}'.")
     except Exception as e:
         raise Exception(f"Error reading or validating file '{path}': {e}")
-
-
 
 
 if __name__ == "__main__":

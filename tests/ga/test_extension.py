@@ -4086,9 +4086,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
                                         expected_msg="Plugin enabled", expected_code=0)
 
             # Assert signature validation state
-            base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0')
-            state_file = os.path.join(base_dir, _SIGNATURE_VALIDATION_STATE_FILE)
-            self._assert_signature_validation_state(state_file, SignatureValidationState.NotValidated)
+            self._assert_signature_validation_state(self.signature_validated_state_file, SignatureValidationState.NotValidated)
 
             # Generate a new mock goal state to uninstall the extension - increment the incarnation
             protocol.mock_wire_data.set_incarnation(2)
@@ -4112,7 +4110,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
             protocol.report_vm_status = MagicMock()
             exthandlers_handler = get_exthandlers_handler(protocol)
 
-            # Enable extension - state file should not exist because extension is unsigned
+            # Enable extension - validation state should be NotValidated because extension is unsigned
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
             report_vm_status = protocol.report_vm_status
@@ -4123,9 +4121,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
                                         expected_msg="Plugin enabled", expected_code=0)
 
             # Assert signature validation state
-            base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0')
-            state_file = os.path.join(base_dir, _SIGNATURE_VALIDATION_STATE_FILE)
-            self._assert_signature_validation_state(state_file, SignatureValidationState.NotValidated)
+            self._assert_signature_validation_state(self.signature_validated_state_file, SignatureValidationState.NotValidated)
 
             # Generate a new mock goal state to uninstall the extension - increment the incarnation
             protocol.mock_wire_data.set_incarnation(2)
@@ -4153,7 +4149,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
             protocol.report_vm_status = MagicMock()
             exthandlers_handler = get_exthandlers_handler(protocol)
 
-            # Enable extension - extension signature validation should succeed and create state file
+            # Enable extension - extension signature validation should succeed and state should be SignatureAndManifestValidated
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
             report_vm_status = protocol.report_vm_status
@@ -4237,11 +4233,11 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
                                             expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
                                             expected_version="1.7.0")
 
-                # Should  have reported any signature validation error
+                # Should have reported signature validation error
                 errors = [kw for _, kw in report_err.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation]
                 self.assertEqual(1, len(errors), "Signature validation error not reported")
 
-                # Should have skipped manifest validation
+                # Should report successful handler manifest validation
                 expected_msg = "Successfully validated handler manifest 'signingInfo' for extension"
                 telemetry = [kw for _, kw in report_info.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['fmt']]
                 self.assertEqual(1, len(telemetry), "Handler manifest validation should have been sent as telemetry")

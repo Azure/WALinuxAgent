@@ -2537,6 +2537,3 @@ class ExtensionStatusError(ExtensionError):
 
     def __init__(self, msg=None, inner=None, code=-1):  # pylint: disable=W0235
         super(ExtensionStatusError, self).__init__(msg, inner, code)
-
-
-

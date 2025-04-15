@@ -123,10 +123,10 @@ class ExtSignatureValidation(AgentVmTest):
                 None
             )
 
-            # AzureMonitorLinuxAgent is an unsigned, no-config extension.
-            ama_id_1_34 = VmExtensionIdentifier(publisher='Microsoft.Azure.Monitor', ext_type='AzureMonitorLinuxAgent', version="1.33")
+            # AzureMonitorLinuxAgent 1.33 is an unsigned, no-config extension.
+            ama_id_1_33 = VmExtensionIdentifier(publisher='Microsoft.Azure.Monitor', ext_type='AzureMonitorLinuxAgent', version="1.33")
             azure_monitor_unsigned = ExtSignatureValidation.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, ama_id_1_34, resource_name="AzureMonitorLinuxAgent"),
+                VirtualMachineExtensionClient(self._context.vm, ama_id_1_33, resource_name="AzureMonitorLinuxAgent"),
                 None
             )
 
@@ -145,13 +145,13 @@ class ExtSignatureValidation(AgentVmTest):
             log.info("*** Begin test cases for signature validation without enforcement. All operations should succeed.")
             # Test unsigned, single-config extension (CustomScript). Extension should be enabled and uninstalled with no errors.
             log.info("")
-            log.info("*** Test case 1: should enable and uninstall unsigned single-config extension (CustomScript) successfully")
+            log.info("*** Test case 1: should enable and uninstall unsigned single-config extension (CustomScript 2.0) successfully")
             self._should_enable_extension(custom_script_unsigned, should_validate_signature=False)
             self._should_uninstall_extension(custom_script_unsigned)
 
             # Test signed, single-config extension (CustomScript). Extension signature should be validated, and extension should be enabled and uninstalled with no errors.
             log.info("")
-            log.info("*** Test case 2: should validate signature, enable, and uninstall signed single-config extension (CustomScript) successfully")
+            log.info("*** Test case 2: should validate signature, enable, and uninstall signed single-config extension (CustomScript 2.1) successfully")
             self._should_enable_extension(custom_script_signed, should_validate_signature=True)
             self._should_uninstall_extension(custom_script_signed)
 
@@ -168,7 +168,7 @@ class ExtSignatureValidation(AgentVmTest):
             # Test unsigned, no-config extension (AzureMonitorLinuxAgent). Extension should be enabled and uninstalled with no errors.
             if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(distro):
                 log.info("")
-                log.info("*** Test case 4: should enable and uninstall unsigned no-config extension (AzureMonitorLinuxAgent) successfully")
+                log.info("*** Test case 4: should enable and uninstall unsigned no-config extension (AzureMonitorLinuxAgent 1.33) successfully")
                 self._should_enable_extension(azure_monitor_unsigned, should_validate_signature=False)
                 self._should_uninstall_extension(azure_monitor_unsigned)
 

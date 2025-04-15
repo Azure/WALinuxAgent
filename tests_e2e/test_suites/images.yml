@@ -72,7 +72,7 @@ image-sets:
       - "ubuntu_2404_minimal"
       - "ubuntu_2404_arm64"
 
-   # These are distros with default OpenSSL version 1.1.1 or later, as required for signature validation.
+   # These are distros with default OpenSSL version 1.1.0 or later, as required for signature validation.
    signature-validation-endorsed:
       - "alma_8"
       - "alma_9"
