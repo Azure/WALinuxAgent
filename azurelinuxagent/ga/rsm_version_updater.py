@@ -92,7 +92,7 @@ class RSMVersionUpdater(GAVersionUpdater):
         Todo: Downgrade flow has issues, not allowing it until we have a fix
         """
 
-        if not agent_family.is_version_from_rsm or self._version < self._daemon_version or self._version == CURRENT_VERSION or (self._version < CURRENT_VERSION and conf.get_disable_rsm_downgrade()):
+        if not agent_family.is_version_from_rsm or self._version < self._daemon_version or self._version == CURRENT_VERSION or (self._version < CURRENT_VERSION and not conf.get_enable_rsm_downgrade()):
             return False
 
         return True

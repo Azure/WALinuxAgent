@@ -1752,31 +1752,31 @@ class TestAgentUpgrade(UpdateTestCase):
             self.__assert_exit_code_successful(update_handler)
             self.__assert_upgrade_telemetry_emitted(mock_telemetry, version="9.9.9.10")
 
-    # Todo: Uncomment this test case once the issue with rsm downgrade scenario fixed
-    # def test_it_should_mark_current_agent_as_bad_version_on_downgrade(self):
-    #     # Create Agent directory for current agent
-    #     self.prepare_agents(count=1)
-    #     self.assertTrue(os.path.exists(self.agent_dir(CURRENT_VERSION)))
-    #     self.assertFalse(next(agent for agent in self.agents() if agent.version == CURRENT_VERSION).is_blacklisted,
-    #                      "The current agent should not be blacklisted")
-    #     downgraded_version = "2.5.0"
-    #
-    #     data_file = wire_protocol_data.DATA_FILE.copy()
-    #     data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
-    #     with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
-    #         update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgraded_version)
-    #         update_handler._protocol.mock_wire_data.set_incarnation(2)
-    #         update_handler.run(debug=True)
-    #
-    #         self.__assert_exit_code_successful(update_handler)
-    #         self.__assert_upgrade_telemetry_emitted(mock_telemetry, upgrade=False,
-    #                                                                       version=downgraded_version)
-    #         current_agent = next(agent for agent in self.agents() if agent.version == CURRENT_VERSION)
-    #         self.assertTrue(current_agent.is_blacklisted, "The current agent should be blacklisted")
-    #         self.assertEqual(current_agent.error.reason, "Marking the agent {0} as bad version since a downgrade was requested in the GoalState, "
-    #                                                      "suggesting that we really don't want to execute any extensions using this version".format(CURRENT_VERSION),
-    #                          "Invalid reason specified for blacklisting agent")
-    #         self.__assert_agent_directories_exist_and_others_dont_exist(versions=[downgraded_version, str(CURRENT_VERSION)])
+    @skip_if_predicate_true(lambda: True, "Enable this test when rsm downgrade scenario fixed")
+    def test_it_should_mark_current_agent_as_bad_version_on_downgrade(self):
+        # Create Agent directory for current agent
+        self.prepare_agents(count=1)
+        self.assertTrue(os.path.exists(self.agent_dir(CURRENT_VERSION)))
+        self.assertFalse(next(agent for agent in self.agents() if agent.version == CURRENT_VERSION).is_blacklisted,
+                         "The current agent should not be blacklisted")
+        downgraded_version = "2.5.0"
+
+        data_file = wire_protocol_data.DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
+        with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
+            update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgraded_version)
+            update_handler._protocol.mock_wire_data.set_incarnation(2)
+            update_handler.run(debug=True)
+
+            self.__assert_exit_code_successful(update_handler)
+            self.__assert_upgrade_telemetry_emitted(mock_telemetry, upgrade=False,
+                                                                          version=downgraded_version)
+            current_agent = next(agent for agent in self.agents() if agent.version == CURRENT_VERSION)
+            self.assertTrue(current_agent.is_blacklisted, "The current agent should be blacklisted")
+            self.assertEqual(current_agent.error.reason, "Marking the agent {0} as bad version since a downgrade was requested in the GoalState, "
+                                                         "suggesting that we really don't want to execute any extensions using this version".format(CURRENT_VERSION),
+                             "Invalid reason specified for blacklisting agent")
+            self.__assert_agent_directories_exist_and_others_dont_exist(versions=[downgraded_version, str(CURRENT_VERSION)])
 
     def test_it_should_do_self_update_if_vm_opt_out_rsm_upgrades_later(self):
         no_of_iterations = 100

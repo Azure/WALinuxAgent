@@ -708,10 +708,10 @@ def get_log_collector_initial_delay(conf=__conf__):
     """
     return conf.get_int("Debug.LogCollectorInitialDelay", 5 * 60)
 
-def get_disable_rsm_downgrade(conf=__conf__):
+def get_enable_rsm_downgrade(conf=__conf__):
     """
-    If True, the agent will not downgrade to a lower version when a lower version is requested in the goal state.
+    If False, the agent will not downgrade to a lower version when a lower version is requested in the goal state.
 
     Todo: Flag will be removed once we have a fix for rsm downgrade scenario.
     """
-    return conf.get_switch("Debug.DisableRsmDowngrade", True)
+    return conf.get_switch("Debug.EnableRsmDowngrade", False)
