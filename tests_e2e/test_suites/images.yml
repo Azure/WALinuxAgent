@@ -190,8 +190,8 @@ images:
          - "Standard_B2s"
    rhel_810: "RedHat RHEL 8_10 latest"
    rhel_95: "RedHat RHEL 9_5 latest"
-   rhel_90_arm64:
-      urn: "RedHat rhel-arm64 9_0-arm64 latest"
+   rhel_95_arm64:
+      urn: "RedHat rhel-arm64 9_5-arm64 latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
