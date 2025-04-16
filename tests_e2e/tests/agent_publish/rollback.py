@@ -46,7 +46,7 @@ class Rollback(AgentVmTest):
         self._check_rsm_gs(rollback_version)
 
         output: str = self._ssh_client.run_command(
-            "update-waagent-conf Debug.EnableGAVersioning=y", use_sudo=True)
+            "update-waagent-conf Debug.EnableGAVersioning=y Debug.EnableRsmDowngrade=y", use_sudo=True)
         log.info('Successfully enabled rsm updates \n %s', output)
 
         verify_current_agent_version(self._ssh_client, rollback_version)
