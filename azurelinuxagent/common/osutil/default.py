@@ -46,7 +46,10 @@ if sys.version_info[0] == 3 and sys.version_info[1] >= 13 or sys.version_info[0]
         def crypt(password, salt):
             raise OSUtilError("Please install the legacycrypt Python module to use this feature.")
 else:
-    from crypt import crypt  # pylint: disable=deprecated-module
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+        from crypt import crypt  # pylint: disable=deprecated-module
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
@@ -54,7 +57,7 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils import textutil
 
-from azurelinuxagent.common.future import ustr, array_to_bytes
+from azurelinuxagent.common.future import ustr, array_to_bytes, UTC
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard
 from azurelinuxagent.common.utils.shellutil import CommandError
@@ -847,8 +850,8 @@ class DefaultOSUtil(object):
                         else:
                             try:
                                 expire_string = line.split(" ", 4)[-1].strip(";")
-                                expire_date = datetime.datetime.strptime(expire_string, FORMAT_DATETIME)
-                                if expire_date > datetime.datetime.utcnow():
+                                expire_date = datetime.datetime.strptime(expire_string, FORMAT_DATETIME).replace(tzinfo=UTC)
+                                if expire_date > datetime.datetime.now(UTC):
                                     expired = False
                             except:  # pylint: disable=W0702
                                 logger.error("could not parse expiry token '{0}'".format(line))

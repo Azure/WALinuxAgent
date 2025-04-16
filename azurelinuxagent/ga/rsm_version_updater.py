@@ -19,7 +19,7 @@
 import glob
 import os
 
-from azurelinuxagent.common import conf, logger
+from azurelinuxagent.common import conf, logger, event
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import AgentUpgradeExitException, AgentUpdateError
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -123,7 +123,7 @@ class RSMVersionUpdater(GAVersionUpdater):
                     CURRENT_VERSION)
                 logger.info(msg)
                 add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
-                current_agent.mark_failure(is_fatal=True, reason=msg)
+                current_agent.mark_failure(is_fatal=True, reason=msg, report_func=event.info)
             except StopIteration:
                 logger.warn(
                     "Could not find a matching agent with current version {0} to blacklist, skipping it".format(

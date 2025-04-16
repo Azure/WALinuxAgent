@@ -9,7 +9,7 @@ import zipfile
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.utils import fileutil, timeutil
+from azurelinuxagent.common.utils import fileutil
 
 # pylint: disable=W0105
 
@@ -211,10 +211,17 @@ class StateArchiver(object):
 class GoalStateHistory(object):
     def __init__(self, time, tag):
         self._errors = False
-        timestamp = timeutil.create_history_timestamp(time)
+        timestamp = GoalStateHistory._create_timestamp(time)
         self._root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "{0}__{1}".format(timestamp, tag) if tag is not None else timestamp)
 
         GoalStateHistory._purge()
+
+    @staticmethod
+    def _create_timestamp(dt):
+        """
+        Returns a string with the given datetime formatted as a timestamp for the agent's history folder
+        """
+        return dt.strftime('%Y-%m-%dT%H-%M-%S')
 
     @staticmethod
     def tag_exists(tag):

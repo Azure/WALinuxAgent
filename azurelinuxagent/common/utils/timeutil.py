@@ -1,39 +1,20 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
+
 import datetime
 
-
-def create_timestamp(dt=None):
+def create_utc_timestamp(dt):
     """
-    Returns a string with the given datetime in iso format. If no datetime is given as parameter, it
-    uses datetime.utcnow().
+    Formats the given datetime, which must be timezone-aware and in UTC, as "YYYY-MM-DDTHH:MM:SS.ffffffZ".
+    This is basically ISO-8601, but using "Z" (Zero offset) to represent the timezone offset (instead of "+00:00").
+    The corresponding format for strftime/strptime is "%Y-%m-%dT%H:%M:%S.%fZ".
     """
-    if dt is None:
-        dt = datetime.datetime.utcnow()
-    return dt.isoformat()
+    if dt.tzinfo is None:
+        raise ValueError("The datetime must be timezone-aware")
+    if dt.utcoffset() != datetime.timedelta(0):
+        raise ValueError("The datetime must be in UTC")
 
-
-def create_history_timestamp(dt=None):
-    """
-    Returns a string with the given datetime formatted as a timestamp for the agent's history folder
-    """
-    if dt is None:
-        dt = datetime.datetime.utcnow()
-    return dt.strftime('%Y-%m-%dT%H-%M-%S')
-
-
-def datetime_to_ticks(dt):
-    """
-    Converts 'dt', a datetime, to the number of ticks (1 tick == 1/10000000 sec) since datetime.min (0001-01-01 00:00:00).
-
-    Note that the resolution of a datetime goes only to microseconds.
-    """
-    return int(10 ** 7 * total_seconds(dt - datetime.datetime.min))
-
-
-def total_seconds(dt):
-    """
-    Compute the total_seconds for timedelta 'td'. Used instead timedelta.total_seconds() because 2.6 does not implement total_seconds.
-    """
-    return ((24.0 * 60 * 60 * dt.days + dt.seconds) * 10 ** 6 + dt.microseconds) / 10 ** 6
+    # We use isoformat() instead of strftime() since the later is limited to years >= 1900 in Python < 3.2.  We remove the
+    # timezone information since we are using "Z" to represent UTC, and we force the microseconds to be 000000 when it is 0.
+    return dt.replace(tzinfo=None).isoformat() + (".000000Z" if dt.microsecond == 0 else "Z")
 

@@ -30,6 +30,8 @@ from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.network.models import NetworkInterface, PublicIPAddress
 from azure.mgmt.resource import ResourceManagementClient
 
+from azurelinuxagent.common.future import UTC
+
 from tests_e2e.tests.lib.azure_sdk_client import AzureSdkClient
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import execute_with_retry
@@ -168,7 +170,7 @@ class VirtualMachineClient(AzureSdkClient):
         if wait_for_boot and ssh_client is None:
             raise ValueError("An SshClient must be provided if wait_for_boot is True")
 
-        before_restart = datetime.datetime.utcnow()
+        before_restart = datetime.datetime.now(UTC)
 
         self._execute_async_operation(
             lambda: self._compute_client.virtual_machines.begin_restart(
@@ -180,8 +182,8 @@ class VirtualMachineClient(AzureSdkClient):
         if not wait_for_boot:
             return
 
-        start = datetime.datetime.utcnow()
-        while datetime.datetime.utcnow() < start + boot_timeout:
+        start = datetime.datetime.now(UTC)
+        while datetime.datetime.now(UTC) < start + boot_timeout:
             log.info("Waiting for VM %s to boot", self)
             time.sleep(15)  # Note that we always sleep at least 1 time, to give the reboot time to start
             instance_view = self.get_instance_view()
@@ -196,7 +198,7 @@ class VirtualMachineClient(AzureSdkClient):
                 try:
                     uptime = ssh_client.run_command("cat /proc/uptime | sed 's/ .*//'", attempts=1).rstrip()  # The uptime is the first field in the file
                     log.info("Uptime: %s", uptime)
-                    boot_time = datetime.datetime.utcnow() - datetime.timedelta(seconds=float(uptime))
+                    boot_time = datetime.datetime.now(UTC) - datetime.timedelta(seconds=float(uptime))
                     if boot_time > before_restart:
                         log.info("VM %s completed boot and is running. Boot time: %s", self, boot_time)
                         return

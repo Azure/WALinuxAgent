@@ -174,7 +174,7 @@ class ExtensionWorkflow(AgentVmTest):
             log.info("*******Verifying the extension install scenario*******")
 
             # Record the time we start the test
-            start_time = self._ssh_client.run_command("date '+%Y-%m-%dT%TZ'").rstrip()
+            start_time = self._ssh_client.run_command("date --utc '+%Y-%m-%dT%TZ'").rstrip()
 
             # Create DcrTestExtension with version 1.1.5
             dcr_test_ext_id_1_1 = VmExtensionIdentifier(
@@ -223,7 +223,7 @@ class ExtensionWorkflow(AgentVmTest):
             log.info("*******Verifying the extension enable scenario*******")
 
             # Record the time we start the test
-            start_time = self._ssh_client.run_command("date '+%Y-%m-%dT%TZ'").rstrip()
+            start_time = self._ssh_client.run_command("date --utc '+%Y-%m-%dT%TZ'").rstrip()
 
             # Enable test extension on the VM
             dcr_ext.modify_ext_settings_and_enable()
@@ -280,7 +280,7 @@ class ExtensionWorkflow(AgentVmTest):
             log.info("*******Verifying the extension uninstall scenario*******")
 
             # Record the time we start the test
-            start_time = self._ssh_client.run_command("date '+%Y-%m-%dT%TZ'").rstrip()
+            start_time = self._ssh_client.run_command("date --utc '+%Y-%m-%dT%TZ'").rstrip()
 
             # Remove the test extension on the VM
             log.info("Delete %s from VM", dcr_test_ext_client)
@@ -320,7 +320,7 @@ class ExtensionWorkflow(AgentVmTest):
             dcr_ext.assert_instance_view()
 
             # Record the time we start the update with install scenario test
-            start_time = self._ssh_client.run_command("date '+%Y-%m-%dT%TZ'").rstrip()
+            start_time = self._ssh_client.run_command("date --utc '+%Y-%m-%dT%TZ'").rstrip()
 
             # Create DcrTestExtension with version 1.2
             dcr_test_ext_id_1_2 = VmExtensionIdentifier(
@@ -387,7 +387,7 @@ class ExtensionWorkflow(AgentVmTest):
             dcr_ext.assert_instance_view()
 
             # Record the time we start the update without scenario test
-            start_time = self._ssh_client.run_command("date '+%Y-%m-%dT%TZ'").rstrip()
+            start_time = self._ssh_client.run_command("date --utc '+%Y-%m-%dT%TZ'").rstrip()
 
             # Create DcrTestExtension with version 1.3
             dcr_test_ext_id_1_3 = VmExtensionIdentifier(
