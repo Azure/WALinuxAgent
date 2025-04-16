@@ -68,7 +68,7 @@ def send_logs_to_telemetry():
 
 class WALAEventOperation:
     ActivateResourceDisk = "ActivateResourceDisk"
-    AgentBlacklisted = "AgentBlacklisted"
+    AgentDisabled = "AgentDisabled"
     AgentEnabled = "AgentEnabled"
     AgentMemory = "AgentMemory"
     AgentUpgrade = "AgentUpgrade"
@@ -90,6 +90,7 @@ class WALAEventOperation:
     ExtensionHandlerManifest = "ExtensionHandlerManifest"
     ExtensionPolicy = "ExtensionPolicy"
     ExtensionProcessing = "ExtensionProcessing"
+    ExtensionResourceGovernance = "ExtensionResourceGovernance"
     ExtensionTelemetryEventProcessing = "ExtensionTelemetryEventProcessing"
     FetchGoalState = "FetchGoalState"
     Firewall = "Firewall"
