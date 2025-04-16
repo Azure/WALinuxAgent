@@ -87,7 +87,7 @@ class CGroupConfiguratorSystemdTestCaseSudo(AgentTestCase):
                     self.assertIn("Non-zero exit code", ustr(context_manager.exception))
                     # The scope name should appear in the process output since systemd-run was invoked and stderr
                     # wasn't truncated.
-                    self.assertIn("Running scope as unit", ustr(context_manager.exception))
+                    self.assertRegex(ustr(context_manager.exception), r"Running (scope )?as unit")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     @patch("azurelinuxagent.ga.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN", 5)

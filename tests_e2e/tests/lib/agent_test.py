@@ -25,6 +25,8 @@ from datetime import datetime
 from assertpy import fail
 from typing import Any, Dict, List
 
+from azurelinuxagent.common.future import datetime_min_utc
+
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext, AgentVmTestContext, AgentVmssTestContext
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import FAIL_EXIT_CODE
@@ -66,7 +68,7 @@ class AgentTest(ABC):
 
     def get_ignore_errors_before_timestamp(self) -> datetime:
         # Ignore errors in the agent log before this timestamp
-        return datetime.min
+        return datetime_min_utc
 
     @classmethod
     def run_from_command_line(cls):

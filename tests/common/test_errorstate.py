@@ -2,6 +2,7 @@ import unittest
 from datetime import timedelta, datetime
 
 from azurelinuxagent.common.errorstate import ErrorState
+from azurelinuxagent.common.future import UTC
 from tests.lib.tools import Mock, patch
 
 
@@ -47,12 +48,12 @@ class TestErrorState(unittest.TestCase):
         test_subject = ErrorState(timedelta(minutes=15))
 
         for x in range(1, 10):
-            mock_time.utcnow = Mock(return_value=datetime.utcnow() + timedelta(minutes=x))
+            mock_time.now = Mock(return_value=datetime.now(UTC) + timedelta(minutes=x))
 
             test_subject.incr()
             self.assertFalse(test_subject.is_triggered())
 
-        mock_time.utcnow = Mock(return_value=datetime.utcnow() + timedelta(minutes=30))
+        mock_time.now = Mock(return_value=datetime.now(UTC) + timedelta(minutes=30))
         test_subject.incr()
         self.assertTrue(test_subject.is_triggered())
         self.assertEqual('29.0 min', test_subject.fail_time)
@@ -83,23 +84,23 @@ class TestErrorState(unittest.TestCase):
         test_subject.incr()
         self.assertEqual('0.0 min', test_subject.fail_time)
 
-        test_subject.timestamp = datetime.utcnow() - timedelta(seconds=60)
+        test_subject.timestamp = datetime.now(UTC) - timedelta(seconds=60)
         self.assertEqual('1.0 min', test_subject.fail_time)
 
-        test_subject.timestamp = datetime.utcnow() - timedelta(seconds=73)
+        test_subject.timestamp = datetime.now(UTC) - timedelta(seconds=73)
         self.assertEqual('1.22 min', test_subject.fail_time)
 
-        test_subject.timestamp = datetime.utcnow() - timedelta(seconds=120)
+        test_subject.timestamp = datetime.now(UTC) - timedelta(seconds=120)
         self.assertEqual('2.0 min', test_subject.fail_time)
 
-        test_subject.timestamp = datetime.utcnow() - timedelta(seconds=60 * 59)
+        test_subject.timestamp = datetime.now(UTC) - timedelta(seconds=60 * 59)
         self.assertEqual('59.0 min', test_subject.fail_time)
 
-        test_subject.timestamp = datetime.utcnow() - timedelta(seconds=60 * 60)
+        test_subject.timestamp = datetime.now(UTC) - timedelta(seconds=60 * 60)
         self.assertEqual('1.0 hr', test_subject.fail_time)
 
-        test_subject.timestamp = datetime.utcnow() - timedelta(seconds=60 * 95)
+        test_subject.timestamp = datetime.now(UTC) - timedelta(seconds=60 * 95)
         self.assertEqual('1.58 hr', test_subject.fail_time)
 
-        test_subject.timestamp = datetime.utcnow() - timedelta(seconds=60 * 60 * 3)
+        test_subject.timestamp = datetime.now(UTC) - timedelta(seconds=60 * 60 * 3)
         self.assertEqual('3.0 hr', test_subject.fail_time)

@@ -4,11 +4,18 @@ from __future__ import print_function
 
 from Utils.WAAgentUtil import waagent
 import Utils.HandlerUtil as Util
+import datetime
 import sys
 import re
 import traceback
 import os
-import datetime
+
+if sys.version_info[0] == 3 and sys.version_info[1] >= 11:
+    def utc_now():
+        return datetime.datetime.now(datetime.UTC)
+else:
+    def utc_now():
+        return datetime.datetime.utcnow()
 
 ExtensionShortName = "GADcrTestExt"
 OperationFileName = "operations-{0}.log"
@@ -93,7 +100,7 @@ def parse_context(operation):
     op_log = os.path.join(hutil.get_log_dir(), OperationFileName.format(hutil.get_extension_version()))
     with open(op_log, 'a+') as oplog_handler:
         oplog_handler.write("Date:{0}; Operation:{1}; SeqNo:{2}\n"
-                            .format(datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            .format(utc_now().strftime("%Y-%m-%dT%H:%M:%SZ"),
                                     operation, hutil.get_seq_no()))
     return hutil
 

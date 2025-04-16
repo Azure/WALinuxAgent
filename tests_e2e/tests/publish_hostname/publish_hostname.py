@@ -36,6 +36,7 @@ from tests_e2e.tests.lib.agent_test import AgentVmTest, TestSkipped
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.logging import log
 
+from azurelinuxagent.common.future import UTC
 
 class PublishHostname(AgentVmTest):
     def __init__(self, context: AgentVmTestContext):
@@ -151,9 +152,9 @@ class PublishHostname(AgentVmTest):
                 # Wait for the agent to detect the hostname change for up to 2 minutes if hostname monitoring is enabled
                 if monitors_hostname == "y" or monitors_hostname == "yes":
                     log.info("Agent hostname monitoring is enabled")
-                    timeout = datetime.datetime.now() + datetime.timedelta(minutes=2)
+                    timeout = datetime.datetime.now(UTC) + datetime.timedelta(minutes=2)
                     hostname_detected = ""
-                    while datetime.datetime.now() <= timeout:
+                    while datetime.datetime.now(UTC) <= timeout:
                         try:
                             hostname_detected = self.retry_ssh_if_connection_reset("grep -n 'Detected hostname change:.*-> {0}' /var/log/waagent.log".format(hostname), use_sudo=True)
                             if hostname_detected:
@@ -171,9 +172,9 @@ class PublishHostname(AgentVmTest):
                     log.info("Agent hostname monitoring is disabled")
 
                 # Check that the expected hostname is published with 4 minute timeout
-                timeout = datetime.datetime.now() + datetime.timedelta(minutes=4)
+                timeout = datetime.datetime.now(UTC) + datetime.timedelta(minutes=4)
                 published_hostname = ""
-                while datetime.datetime.now() <= timeout:
+                while datetime.datetime.now(UTC) <= timeout:
                     try:
                         dns_info = self.retry_ssh_if_connection_reset(lookup_cmd)
                         actual_hostname = re.match(dns_regex, dns_info)

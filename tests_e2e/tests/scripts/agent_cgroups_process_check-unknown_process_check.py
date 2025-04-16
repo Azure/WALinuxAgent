@@ -23,6 +23,7 @@ import datetime
 
 from assertpy import fail
 
+from azurelinuxagent.common.future import UTC
 from azurelinuxagent.common.utils import shellutil
 from tests_e2e.tests.lib.cgroup_helpers import check_agent_quota_disabled, check_log_message, get_unit_cgroup_proc_path, AGENT_SERVICE_NAME
 from tests_e2e.tests.lib.logging import log
@@ -30,7 +31,7 @@ from tests_e2e.tests.lib.retry import retry_if_false
 
 
 def prepare_agent():
-    check_time = datetime.datetime.utcnow()
+    check_time = datetime.datetime.now(UTC)
     log.info("Executing script update-waagent-conf to enable agent cgroups config flag")
     result = shellutil.run_command(["update-waagent-conf", "Debug.CgroupCheckPeriod=20", "Debug.CgroupLogMetrics=y",
                                     "Debug.CgroupDisableOnProcessCheckFailure=y",

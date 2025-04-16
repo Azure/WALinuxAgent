@@ -21,6 +21,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, AnyStr, Dict, Iterable, List, Match
 
+from azurelinuxagent.common.future import UTC, datetime_min_utc
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
 
 
@@ -71,11 +72,11 @@ class AgentLogRecord:
         ext_timestamp_regex_2 = r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}"
 
         if re.match(ext_timestamp_regex_1, self.when):
-            return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S.%f')
+            return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S.%f').replace(tzinfo=UTC)
         elif re.match(ext_timestamp_regex_2, self.when):
-            return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S')
+            return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S').replace(tzinfo=UTC)
         # Logs from agent follow this format: 2023-07-10T20:50:13.038599Z
-        return datetime.strptime(self.when, u'%Y-%m-%dT%H:%M:%S.%fZ')
+        return datetime.strptime(self.when, u'%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=UTC)
 
     def __str__(self):
         return self.text
@@ -459,7 +460,7 @@ class AgentLog(object):
 
         return errors
 
-    def agent_log_contains(self, data: str, after_timestamp: str = datetime.min):
+    def agent_log_contains(self, data: str, after_timestamp: datetime = datetime_min_utc):
         """
         This function looks for the specified test data string in the WALinuxAgent logs and returns if found or not.
         :param data: The string to look for in the agent logs

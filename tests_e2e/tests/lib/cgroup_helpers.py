@@ -1,9 +1,9 @@
-import datetime
 import os
 import re
 
 from assertpy import assert_that, fail
 
+from azurelinuxagent.common.future import datetime_min_utc
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import shellutil, fileutil
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
@@ -154,7 +154,7 @@ def check_cgroup_disabled_due_to_systemd_error():
     """
     return check_log_message("Failed to start.+using systemd-run, will try invoking the extension directly.+[SystemdRunError].+Connection reset by peer")
 
-def check_log_message(message, after_timestamp=datetime.datetime.min):
+def check_log_message(message, after_timestamp=datetime_min_utc):
     """
     Check if the log message is present after the given timestamp(if provided) in the agent log
     """

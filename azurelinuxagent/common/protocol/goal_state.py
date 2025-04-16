@@ -26,7 +26,7 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.event import add_event, WALAEventOperation, LogEvent
 from azurelinuxagent.common.exception import ProtocolError, ResourceGoneError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, UTC
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.protocol.extensions_goal_state import VmSettingsParseError, GoalStateSource
 from azurelinuxagent.common.protocol.hostplugin import VmSettingsNotSupported, VmSettingsSupportStopped
@@ -206,7 +206,7 @@ class GoalState(object):
         #
         # Fetch the goal state from both the HGAP and the WireServer
         #
-        timestamp = datetime.datetime.utcnow()
+        timestamp = datetime.datetime.now(UTC)
 
         if force_update:
             message = "Refreshing goal state and vmSettings"
@@ -323,7 +323,7 @@ class GoalState(object):
         self.logger.info(msg)
         add_event(op=WALAEventOperation.VmSettings, message=msg)
         if self._save_to_history:
-            self._history = GoalStateHistory(datetime.datetime.utcnow(), incarnation)
+            self._history = GoalStateHistory(datetime.datetime.now(UTC), incarnation)
             self._history.save_goal_state(xml_text)
         self._extensions_goal_state = self._fetch_full_wire_server_goal_state(incarnation, xml_doc)
         if self._extensions_goal_state.created_on_timestamp < vm_settings_support_stopped_error.timestamp:
@@ -395,7 +395,7 @@ class GoalState(object):
             except VmSettingsParseError as exception:
                 # ensure we save the vmSettings if there were parsing errors, but save them only once per ETag
                 if not GoalStateHistory.tag_exists(exception.etag):
-                    GoalStateHistory(datetime.datetime.utcnow(), exception.etag).save_vm_settings(exception.vm_settings_text)
+                    GoalStateHistory(datetime.datetime.now(UTC), exception.etag).save_vm_settings(exception.vm_settings_text)
                 raise
 
         return vm_settings, vm_settings_updated

@@ -36,7 +36,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, report_e
     CollectOrReportEventDebugInfo, add_periodic
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError, ExtensionErrorCodes
-from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
+from azurelinuxagent.common.future import httpclient, bytebuffer, ustr, UTC
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME, GoalStateProperties
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import DataContract, ProvisionStatus, VMInfo, VMStatus
@@ -660,14 +660,14 @@ class WireClient(object):
         This method enforces a timeout (_DOWNLOAD_TIMEOUT) on the download and raises an exception if the limit is exceeded.
         """
         logger.info("Downloading {0}", download_type)
-        start_time = datetime.now()
+        start_time = datetime.now(UTC)
 
         uris_shuffled = uris
         random.shuffle(uris_shuffled)
         most_recent_error = "None"
 
         for index, uri in enumerate(uris_shuffled):
-            elapsed = datetime.now() - start_time
+            elapsed = datetime.now(UTC) - start_time
             if elapsed > _DOWNLOAD_TIMEOUT:
                 message = "Timeout downloading {0}. Elapsed: {1} URIs tried: {2}/{3}. Last error: {4}".format(download_type, elapsed, index, len(uris), ustr(most_recent_error))
                 raise ExtensionDownloadError(message, code=ExtensionErrorCodes.PluginManifestDownloadError)
