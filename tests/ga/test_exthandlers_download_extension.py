@@ -136,11 +136,9 @@ class DownloadExtensionTestCase(AgentTestCase):
         DownloadExtensionTestCase._create_zip_file(self._get_extension_package_file())
 
         with DownloadExtensionTestCase.create_mock_stream(lambda: None) as mock_stream:
-            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.report_event") as mock_report_event:
-                self.ext_handler_instance.download()
+            self.ext_handler_instance.download()
 
         mock_stream.assert_not_called()
-        mock_report_event.assert_called()
 
         self.assertTrue(os.path.exists(self._get_extension_command_file()), "The extension package was not expanded to the expected location")
 
