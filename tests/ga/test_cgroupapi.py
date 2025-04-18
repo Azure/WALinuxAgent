@@ -54,7 +54,7 @@ class _MockedFileSystemTestCase(AgentTestCase):
 
 
 class CGroupUtilTestCase(AgentTestCase):
-    def test_cgroups_should_be_supported_only_on_ubuntu16_centos7dot4_redhat7dot4_and_later_versions(self):
+    def test_cgroups_should_be_supported_only_on_ubuntu16plus_centos8_redhat8_rhel9_azurelinux3(self):
         test_cases = [
             (['ubuntu', '16.04', 'xenial'], True),
             (['ubuntu', '16.10', 'yakkety'], True),
@@ -78,6 +78,13 @@ class CGroupUtilTestCase(AgentTestCase):
             (['bigip', '15.0.1', 'Final'], False),
             (['gaia', '273.562', 'R80.30'], False),
             (['debian', '9.1', ''], False),
+            (['rhel', '9.5', "source"], True),
+            (['rhel', '9.0', "core"], True),
+            (['rhel', '10.9', "core"], False),
+            (['mariner', '1.0', ''], False),
+            (['mariner', '2.2', ''], False),
+            (['azurelinux', '3.0', ''], True),
+            (['azurelinux', '3.10', ''], True)
         ]
 
         for (distro, supported) in test_cases:
