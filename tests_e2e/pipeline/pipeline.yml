@@ -70,13 +70,6 @@ jobs:
     timeoutInMinutes: 90
 
     steps:
-      - task: UsePythonVersion@0
-        displayName: "Set Python Version"
-        inputs:
-          versionSpec: '3.10'
-          addToPath: true
-          architecture: 'x64'
-
       # Extract the Azure cloud from the "connection_info" variable. Its value includes one of
       # 'public', 'china', or 'gov' as a suffix (the suffix comes after the '.').
       - bash: |
