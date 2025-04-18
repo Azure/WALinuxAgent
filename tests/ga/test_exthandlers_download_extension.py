@@ -140,7 +140,7 @@ class DownloadExtensionTestCase(AgentTestCase):
                 self.ext_handler_instance.download()
 
         mock_stream.assert_not_called()
-        mock_report_event.assert_not_called()
+        mock_report_event.assert_called()
 
         self.assertTrue(os.path.exists(self._get_extension_command_file()), "The extension package was not expanded to the expected location")
 

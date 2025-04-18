@@ -44,7 +44,7 @@ class PackageValidationError(AgentError):
     Error raised when validation fails for a package.
     """
     def __init__(self, msg=None, inner=None, code=-1):
-        super(AgentError, self).__init__(msg, inner)
+        super(PackageValidationError, self).__init__(msg, inner)
         self.code = code
 
 

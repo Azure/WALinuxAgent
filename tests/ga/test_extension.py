@@ -49,7 +49,7 @@ from azurelinuxagent.ga.signing_certificate_util import write_signing_certificat
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, migrate_handler_state, \
     get_exthandlers_handler, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
     ExtensionStatusValue, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, GoalStateStatus, ExtHandlerState
-from azurelinuxagent.ga.signature_validation import save_signature_validation_state, signature_has_been_validated
+from azurelinuxagent.ga.signature_validation import signature_has_been_validated
 
 from tests.lib import wire_protocol_data
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse

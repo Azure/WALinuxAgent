@@ -88,8 +88,6 @@ class ExtSignatureValidation(AgentVmTest):
             # Setup test
             log.info("*** Begin test setup")
             log.info("")
-            log.info(" - Update config file")
-            self._ssh_client.run_command("update-waagent-conf Debug.EnableSignatureValidation=y", use_sudo=True)
             log.info(" - Get VM distro")
             distro = self._ssh_client.run_command("get_distro.py").rstrip()
 

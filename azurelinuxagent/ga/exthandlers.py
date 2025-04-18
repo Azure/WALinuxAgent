@@ -57,8 +57,7 @@ from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
-from azurelinuxagent.ga.signature_validation import validate_handler_manifest_signing_info, PackageValidationError, \
-    SignatureValidationError
+from azurelinuxagent.ga.signature_validation import validate_handler_manifest_signing_info
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
 _HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
@@ -1384,6 +1383,7 @@ class ExtHandlerInstance(object):
         if os.path.exists(package_file):
             msg = "Using existing extension package: {0}".format(package_file)
             self.logger.info(msg)
+            self.report_event(message=msg)
             if self._unzip_extension_package(package_file, self.get_base_dir()):
                 package_exists = True
             else:
