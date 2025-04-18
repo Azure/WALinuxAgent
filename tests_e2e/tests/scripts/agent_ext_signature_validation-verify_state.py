@@ -20,23 +20,18 @@
 import argparse
 import glob
 
-# This script verifies that a "signature_validated" state file exists for the specified extension
-# and that it contains the expected validation state.
+# This script verifies that a "signature_validated" state file exists for the specified extension.
 # Usage: agent_ext_signature_validation-verify_state.py --extension-name "CustomScript"
-
-DEFAULT_EXPECTED_STATE = "SignatureAndManifestValidated"
 
 
 def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--extension-name', dest='extension_name', required=True, help='Extension name to process.')
-    parser.add_argument('--expected-state', dest='expected_state', required=False, default=DEFAULT_EXPECTED_STATE,
-                        help='Expected signature validation state.')
 
     args = parser.parse_args()
 
-    state_file_pattern = f"/var/lib/waagent/*{args.extension_name}*/signature_validation_state"
+    state_file_pattern = f"/var/lib/waagent/*{args.extension_name}*/signature_validated"
     matched_files = glob.glob(state_file_pattern)
     if matched_files is None or len(matched_files) == 0:
         raise FileNotFoundError(f"No signature validation state file found for extension '{args.extension_name}'.")
@@ -44,17 +39,7 @@ def main():
     if len(matched_files) > 1:
         raise Exception(f"Expected exactly one signature validation state file for extension '{args.extension_name}', found {len(matched_files)}.")
 
-    path = matched_files[0]
-    try:
-        with open(path, 'r') as f:
-            content = f.read().strip()
-            if content == args.expected_state:
-                print(f"Signature validation state matches expected value '{args.expected_state}'")
-                return
-            else:
-                raise Exception(f"Signature validation state mismatch. Expected '{args.expected_state}', found '{content}'.")
-    except Exception as e:
-        raise Exception(f"Error reading or validating file '{path}': {e}")
+    print(f"Signature validation state file found for extension '{args.extension_name}'")
 
 
 if __name__ == "__main__":

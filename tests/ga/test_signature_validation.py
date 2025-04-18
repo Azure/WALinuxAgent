@@ -22,8 +22,8 @@ import sys
 from tests.lib.tools import AgentTestCase, data_dir, patch, skip_if_predicate_true
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 from azurelinuxagent.ga.signature_validation import validate_signature, SignatureValidationError, validate_handler_manifest_signing_info, \
-    HandlerManifestError, OpenSSLVersionError
-from azurelinuxagent.ga.signature_validation import _get_openssl_version
+    ManifestValidationError, PackageValidationError
+from azurelinuxagent.ga.signature_validation import _get_openssl_version, openssl_version_supported_for_signature_validation
 from azurelinuxagent.ga.exthandlers import HandlerManifest
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.protocol.restapi import Extension
@@ -95,11 +95,6 @@ class TestSignatureValidation(AgentTestCase):
                 signing_errors = [kw for _, kw in report_err.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation]
                 self.assertEqual(1, len(signing_errors), "Error writing signing certificates not logged or sent as telemetry")
 
-    def test_should_raise_error_if_openssl_version_is_unsupported(self):
-        with patch("azurelinuxagent.ga.signature_validation._get_openssl_version", return_value="1.0.2"):
-            with self.assertRaises(OpenSSLVersionError, msg="OpenSSL version is unsupported, should have raised error"):
-                validate_signature(self.vm_access_zip_path, self.vm_access_signature)
-
     def test_should_get_openssl_version(self):
         # Tests cases in format (<'openssl version' output>, <expected version string>)
         test_cases = [
@@ -115,17 +110,16 @@ class TestSignatureValidation(AgentTestCase):
 
     def test_should_raise_error_if_fail_to_get_openssl_version(self):
         with patch("azurelinuxagent.ga.signature_validation.run_command", side_effect=CommandError("cmd", 1, "", "error")):
-            with self.assertRaises(SignatureValidationError, msg="Failed to get openssl version, should have raised error"):
-                validate_signature(self.vm_access_zip_path, self.vm_access_signature)
+            with self.assertRaises(PackageValidationError, msg="Failed to get openssl version, should have raised error"):
+                openssl_version_supported_for_signature_validation()
 
         with patch("azurelinuxagent.ga.signature_validation.run_command", return_value=None):
-            with self.assertRaises(SignatureValidationError, msg="Failed to get openssl version, should have raised error"):
-                validate_signature(self.vm_access_zip_path, self.vm_access_signature)
+            with self.assertRaises(PackageValidationError, msg="Failed to get openssl version, should have raised error"):
+                openssl_version_supported_for_signature_validation()
 
         with patch("azurelinuxagent.ga.signature_validation.run_command", return_value="some junk output"):
-            with self.assertRaises(SignatureValidationError, msg="Failed to get openssl version, should have raised error"):
-                validate_signature(self.vm_access_zip_path, self.vm_access_signature)
-
+            with self.assertRaises(PackageValidationError, msg="Failed to get openssl version, should have raised error"):
+                openssl_version_supported_for_signature_validation()
 
     @skip_if_predicate_true(lambda: True, "Enable this test when timestamp validation has been implemented.")
     def test_should_raise_error_if_root_cert_was_expired_at_signing_time(self):
@@ -208,11 +202,11 @@ class TestHandlerManifestValidation(AgentTestCase):
         ext_handler.version = ext_version
         ext_handler.signature = ext_signature
 
-        with self.assertRaises(HandlerManifestError, msg="HandlerManifest type does not match extension type, should have raised error") as ex:
+        with self.assertRaises(ManifestValidationError, msg="HandlerManifest type does not match extension type, should have raised error") as ex:
             validate_handler_manifest_signing_info(manifest, ext_handler)
         expected_error_msg = "expected extension type 'RunCommand' does not match downloaded package type 'CustomScript'"
         self.assertIn(expected_error_msg, str(ex.exception.args[0]),
-                          msg="Raised HandlerManifestError but error did not indicate type mismatch")
+                          msg="Raised ManifestValidationError but error did not indicate type mismatch")
 
     def test_should_raise_error_if_manifest_publisher_does_not_match(self):
         data = {
@@ -232,11 +226,11 @@ class TestHandlerManifestValidation(AgentTestCase):
         ext_handler.version = ext_version
         ext_handler.signature = ext_signature
 
-        with self.assertRaises(HandlerManifestError, msg="HandlerManifest publisher does not match extension publisher, should have raised error") as ex:
+        with self.assertRaises(ManifestValidationError, msg="HandlerManifest publisher does not match extension publisher, should have raised error") as ex:
             validate_handler_manifest_signing_info(manifest, ext_handler)
         expected_error_msg = "expected extension publisher 'Microsoft.CPlat.Core' does not match downloaded package publisher 'Microsoft.Azure.Extensions'"
         self.assertIn(expected_error_msg, str(ex.exception.args[0]),
-                          msg="Raised HandlerManifestError but error did not indicate publisher mismatch")
+                          msg="Raised ManifestValidationError but error did not indicate publisher mismatch")
 
     def test_should_raise_error_if_manifest_version_does_not_match(self):
         data = {
@@ -256,11 +250,11 @@ class TestHandlerManifestValidation(AgentTestCase):
         ext_handler.version = ext_version
         ext_handler.signature = ext_signature
 
-        with self.assertRaises(HandlerManifestError, msg="HandlerManifest version does not match extension version, should have raised error") as ex:
+        with self.assertRaises(ManifestValidationError, msg="HandlerManifest version does not match extension version, should have raised error") as ex:
             validate_handler_manifest_signing_info(manifest, ext_handler)
         expected_error_msg = "expected extension version '2.2.0' does not match downloaded package version '2.1.13'"
         self.assertIn(expected_error_msg, str(ex.exception.args[0]),
-                          msg="Raised HandlerManifestError but error did not indicate version mismatch")
+                          msg="Raised ManifestValidationError but error did not indicate version mismatch")
 
     def test_should_raise_error_if_manifest_does_not_contain_signing_info(self):
         data = {
@@ -275,11 +269,11 @@ class TestHandlerManifestValidation(AgentTestCase):
         ext_handler.version = ext_version
         ext_handler.signature = ext_signature
 
-        with self.assertRaises(HandlerManifestError, msg="HandlerManifest does not contain signingInfo, should have raised error") as ex:
+        with self.assertRaises(ManifestValidationError, msg="HandlerManifest does not contain signingInfo, should have raised error") as ex:
             validate_handler_manifest_signing_info(manifest, ext_handler)
         expected_error_msg = "HandlerManifest.json does not contain 'signingInfo'"
         self.assertIn(expected_error_msg, str(ex.exception.args[0]),
-                          msg="Raised HandlerManifestError but error did not indicate missing signingInfo")
+                          msg="Raised ManifestValidationError but error did not indicate missing signingInfo")
 
     def test_should_raise_error_if_manifest_does_not_contain_signing_info_type(self):
         data = {
@@ -298,11 +292,11 @@ class TestHandlerManifestValidation(AgentTestCase):
         ext_handler.version = ext_version
         ext_handler.signature = ext_signature
 
-        with self.assertRaises(HandlerManifestError, msg="HandlerManifest does not contain signingInfo.type, should have raised error") as ex:
+        with self.assertRaises(ManifestValidationError, msg="HandlerManifest does not contain signingInfo.type, should have raised error") as ex:
             validate_handler_manifest_signing_info(manifest, ext_handler)
         expected_error_msg = "HandlerManifest.json does not contain attribute 'signingInfo.type'"
         self.assertIn(expected_error_msg, str(ex.exception.args[0]),
-                          msg="Raised HandlerManifestError but error did not indicate missing signingInfo.type")
+                          msg="Raised ManifestValidationError but error did not indicate missing signingInfo.type")
 
     def test_should_raise_error_if_manifest_does_not_contain_signing_info_publisher(self):
         data = {
@@ -321,11 +315,11 @@ class TestHandlerManifestValidation(AgentTestCase):
         ext_handler.version = ext_version
         ext_handler.signature = ext_signature
 
-        with self.assertRaises(HandlerManifestError, msg="HandlerManifest does not contain signingInfo.publisher, should have raised error") as ex:
+        with self.assertRaises(ManifestValidationError, msg="HandlerManifest does not contain signingInfo.publisher, should have raised error") as ex:
             validate_handler_manifest_signing_info(manifest, ext_handler)
         expected_error_msg = "HandlerManifest.json does not contain attribute 'signingInfo.publisher'"
         self.assertIn(expected_error_msg, str(ex.exception.args[0]),
-                          msg="Raised HandlerManifestError but error did not indicate missing signingInfo.publisher")
+                          msg="Raised ManifestValidationError but error did not indicate missing signingInfo.publisher")
 
     def test_should_raise_error_if_manifest_does_not_contain_signing_info_version(self):
         data = {
@@ -344,9 +338,9 @@ class TestHandlerManifestValidation(AgentTestCase):
         ext_handler.version = ext_version
         ext_handler.signature = ext_signature
 
-        with self.assertRaises(HandlerManifestError, msg="HandlerManifest does not contain signingInfo.version, should have raised error") as ex:
+        with self.assertRaises(ManifestValidationError, msg="HandlerManifest does not contain signingInfo.version, should have raised error") as ex:
             validate_handler_manifest_signing_info(manifest, ext_handler)
         expected_error_msg = "HandlerManifest.json does not contain attribute 'signingInfo.version'"
         self.assertIn(expected_error_msg, str(ex.exception.args[0]),
-                          msg="Raised HandlerManifestError but error did not indicate missing signingInfo.version")
+                          msg="Raised ManifestValidationError but error did not indicate missing signingInfo.version")
 

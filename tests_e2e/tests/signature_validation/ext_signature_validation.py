@@ -46,7 +46,7 @@ class ExtSignatureValidation(AgentVmTest):
         """
         log.info("")
         log.info(f"Enabling extension {extension_case.extension}, should succeed")
-        enable_start_time = self._ssh_client.run_command("date '+%Y-%m-%d %T'").rstrip()
+        enable_start_time = self._ssh_client.run_command("date -u +'%Y-%m-%dT%H:%M:%SZ'").rstrip()
         if not isinstance(extension_case.extension, VirtualMachineRunCommandClient):
             extension_case.extension.enable(settings=extension_case.settings, auto_upgrade_minor_version=False)
         else:
@@ -57,7 +57,7 @@ class ExtSignatureValidation(AgentVmTest):
         if should_validate_signature:
             # Confirm that agent logs successful signature validation and handler manifest validation
             log.info("Checking agent log to confirm that package signature was validated successfully.")
-            signature_log_msg = "Successfully validated package signature for extension"
+            signature_log_msg = "Successfully validated signature for package"
             self._ssh_client.run_command(f"agent_ext_workflow-check_data_in_agent_log.py --data '{signature_log_msg}' "
                                          f"--after-timestamp '{enable_start_time}'", use_sudo=True)
 
@@ -67,7 +67,7 @@ class ExtSignatureValidation(AgentVmTest):
                                          f"--after-timestamp '{enable_start_time}'", use_sudo=True)
 
             # Check signature validation state
-            log.info("Checking that signature validation state was set to 'SignatureAndManifestValidated'.")
+            log.info("Checking that signature validation state file exists.")
             self._ssh_client.run_command(
                 f"agent_ext_signature_validation-verify_state.py --extension-name '{extension_case.extension._identifier.type}'",
                 use_sudo=True
@@ -85,7 +85,7 @@ class ExtSignatureValidation(AgentVmTest):
 
     def run(self):
         try:
-
+            # Setup test
             log.info("*** Begin test setup")
             log.info("")
             log.info(" - Update config file")
@@ -177,6 +177,9 @@ class ExtSignatureValidation(AgentVmTest):
             log.info("*** Test case 5: should validate signature, enable, and uninstall signed no-config extension (VMApplicationManagerLinux) successfully")
             self._should_enable_extension(vm_app_signed, should_validate_signature=True)
             self._should_uninstall_extension(vm_app_signed)
+
+            # TODO: Add test cases for package published with invalid signature and invalid manifest signingInfo, when
+            # PIR allows for publication of invalid packages.
 
         finally:
             log.info("")

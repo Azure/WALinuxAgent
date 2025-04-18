@@ -726,28 +726,28 @@ def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, d
                            log_event=log_event, flush=flush)
 
 
-def info(op, fmt, *args):
+def info(op, fmt, *args, name=AGENT_NAME, version=str(CURRENT_VERSION)):
     """
      Creates a telemetry event and logs the message as INFO.
     """
     logger.info(fmt, *args)
-    add_event(op=op, message=fmt.format(*args), is_success=True)
+    add_event(op=op, message=fmt.format(*args), is_success=True, name=name, version=version)
 
 
-def warn(op, fmt, *args):
+def warn(op, fmt, *args, name=AGENT_NAME, version=str(CURRENT_VERSION)):
     """
     Creates a telemetry event and logs the message as WARNING.
     """
     logger.warn(fmt, *args)
-    add_event(op=op, message="[WARNING] " + fmt.format(*args), is_success=False, log_event=False)
+    add_event(op=op, message="[WARNING] " + fmt.format(*args), is_success=False, log_event=False, name=name, version=version)
 
 
-def error(op, fmt, *args):
+def error(op, fmt, *args, name=AGENT_NAME, version=str(CURRENT_VERSION)):
     """
     Creates a telemetry event and logs the message as ERROR.
     """
     logger.error(fmt, *args)
-    add_event(op=op, message=fmt.format(*args), is_success=False, log_event=False)
+    add_event(op=op, message=fmt.format(*args), is_success=False, log_event=False, name=name, version=version)
 
 
 class LogEvent(object):
