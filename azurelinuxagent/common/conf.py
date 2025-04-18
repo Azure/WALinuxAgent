@@ -709,7 +709,7 @@ def get_log_collector_initial_delay(conf=__conf__):
     """
     return conf.get_int("Debug.LogCollectorInitialDelay", 5 * 60)
 
-
+  
 def get_signature_validation_enabled(conf=__conf__):
     """
     Determine whether signature validation is enabled. If true, package signature will be validated before
@@ -717,3 +717,12 @@ def get_signature_validation_enabled(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_switch("Debug.EnableSignatureValidation", False)
+
+  
+def get_enable_rsm_downgrade(conf=__conf__):
+    """
+    If False, the agent will not downgrade to a lower version when a lower version is requested in the goal state.
+
+    Todo: Flag will be removed once we have a fix for rsm downgrade scenario.
+    """
+    return conf.get_switch("Debug.EnableRsmDowngrade", False)

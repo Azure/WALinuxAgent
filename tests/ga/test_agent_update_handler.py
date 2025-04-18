@@ -18,7 +18,7 @@ from tests.ga.test_update import UpdateTestCase
 from tests.lib.http_request_predicates import HttpRequestPredicates
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
 from tests.lib.wire_protocol_data import DATA_FILE
-from tests.lib.tools import clear_singleton_instances, load_bin_data, patch
+from tests.lib.tools import clear_singleton_instances, load_bin_data, patch, skip_if_predicate_true
 
 
 class TestAgentUpdate(UpdateTestCase):
@@ -277,6 +277,24 @@ class TestAgentUpdate(UpdateTestCase):
             self._assert_agent_directories_exist_and_others_dont_exist(versions=["9.9.9.10", str(CURRENT_VERSION)])
             self._assert_agent_exit_process_telemetry_emitted(ustr(context.exception.reason))
 
+    def test_it_should_not_allow_rsm_downgrade_if_rsm_version_is_available_less_than_current_version(self):
+        data_file = DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
+
+        # Set the test environment by adding 20 random agents to the agent directory
+        self.prepare_agents()
+        self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
+
+        downgraded_version = "2.5.0"
+
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, _):
+            agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgraded_version)
+            agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
+            agent_update_handler._protocol.client.update_goal_state()
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
+            self.assertFalse(os.path.exists(self.agent_dir(downgraded_version)),"New agent directory should not be found")
+
+    @skip_if_predicate_true(lambda: True, "Enable this test when rsm downgrade scenario fixed")
     def test_it_should_downgrade_agent_if_rsm_version_is_available_less_than_current_version(self):
         data_file = DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
@@ -302,7 +320,7 @@ class TestAgentUpdate(UpdateTestCase):
         self.prepare_agents(count=1)
         data_file = DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
-        version = "5.2.0.1"
+        version = "9.9.9.999"
         with self._get_agent_update_handler(test_data=data_file, autoupdate_frequency=10) as (agent_update_handler, mock_telemetry):
             agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(version)
             agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
@@ -370,7 +388,7 @@ class TestAgentUpdate(UpdateTestCase):
         self.prepare_agents()
         self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
 
-        version = "5.2.0.4"
+        version = "9.9.9.999"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(version)
