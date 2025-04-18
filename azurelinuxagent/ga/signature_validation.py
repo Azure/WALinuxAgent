@@ -94,7 +94,7 @@ def openssl_version_supported_for_signature_validation():
         msg = ("Signature validation requires OpenSSL version {0}, but the current version is {1}. "
                "To validate signature, please upgrade OpenSSL to version {0} or higher.").format(
             _MIN_OPENSSL_VERSION_FOR_SIG_VALIDATION, openssl_version)
-        logger.warn(msg)
+        logger.info(msg)
         return False
     return True
 
