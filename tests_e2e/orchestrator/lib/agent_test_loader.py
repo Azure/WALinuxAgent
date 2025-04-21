@@ -225,7 +225,7 @@ class AgentTestLoader(object):
               - "bvts/vm_access.py"
             images: "endorsed"
             locations: "AzureCloud:eastuseaup"
-            runs_on_all_locations: false
+            runs_on_all_suite_locations: false
             owns_vm: true
             install_test_agent: true
             template: "bvts/template.py"
@@ -245,7 +245,7 @@ class AgentTestLoader(object):
         * locations - [Optional; string or list of strings] If given, the test suite must be executed on that cloud location(e.g. "AzureCloud:eastus2euap").
                      If not specified, or set to an empty string, the test suite will be executed in the default location. This is useful
                      for test suites that exercise a feature that is enabled only in certain regions.
-        * runs_on_all_locations - [Optional; boolean] By default a test suite runs on one location per image. If this
+        * runs_on_all_suite_locations - [Optional; boolean] By default a test suite runs on one location per image. If this
                     value is True, then the test will run on all listed locations for each image.
         * owns_vm - [Optional; boolean] By default all suites in a test run are executed on the same test VMs; if this
                     value is set to True, new test VMs will be created and will be used exclusively for this test suite.
