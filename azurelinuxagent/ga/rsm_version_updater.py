@@ -19,7 +19,7 @@
 import glob
 import os
 
-from azurelinuxagent.common import conf, logger
+from azurelinuxagent.common import conf, logger, event
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import AgentUpgradeExitException, AgentUpdateError
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -88,9 +88,11 @@ class RSMVersionUpdater(GAVersionUpdater):
         """
         Once version retrieved from goal state, we check if we allowed to update for that version
         allow update If new version not same as current version, not below than daemon version and if version is from rsm request
+
+        Todo: Downgrade flow has issues, not allowing it until we have a fix
         """
 
-        if not agent_family.is_version_from_rsm or self._version < self._daemon_version or self._version == CURRENT_VERSION:
+        if not agent_family.is_version_from_rsm or self._version < self._daemon_version or self._version == CURRENT_VERSION or (self._version < CURRENT_VERSION and not conf.get_enable_rsm_downgrade()):
             return False
 
         return True
@@ -123,7 +125,7 @@ class RSMVersionUpdater(GAVersionUpdater):
                     CURRENT_VERSION)
                 logger.info(msg)
                 add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
-                current_agent.mark_failure(is_fatal=True, reason=msg)
+                current_agent.mark_failure(is_fatal=True, reason=msg, report_func=event.info)
             except StopIteration:
                 logger.warn(
                     "Could not find a matching agent with current version {0} to blacklist, skipping it".format(
