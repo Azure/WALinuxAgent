@@ -25,7 +25,6 @@ from azurelinuxagent.common.utils.shellutil import run_command, CommandError
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import WALAEventOperation, add_event
-from azurelinuxagent.common.exception import ExtensionErrorCodes
 from azurelinuxagent.ga.signing_certificate_util import get_microsoft_signing_certificate_path
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
