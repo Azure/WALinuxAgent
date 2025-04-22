@@ -465,32 +465,32 @@ class CGroupConfigurator(object):
             except Exception as exception:
                 log_cgroup_warning("Error disabling cgroups: {0}".format(ustr(exception)))
 
-        @staticmethod
-        def _set_cpu_quota(unit_name, quota):
+        def _set_cpu_quota(self, unit_name, quota):
             """
             Sets CPU quota to the given percentage (100% == 1 CPU)
 
             NOTE: This is done using a systemtcl set-property --runtime; any local overrides in /etc folder on the VM will take precedence
             over this setting.
             """
-            quota_percentage = "{0}%".format(quota)
-            log_cgroup_info("Setting {0}'s CPUQuota to {1}".format(unit_name, quota_percentage))
-            CGroupConfigurator._Impl._try_set_cpu_quota(unit_name, quota_percentage)
+            if self._cgroups_api.can_enforce_cpu():
+                quota_percentage = "{0}%".format(quota)
+                log_cgroup_info("Setting {0}'s CPUQuota to {1}".format(unit_name, quota_percentage))
+                CGroupConfigurator._Impl._try_set_cpu_quota(unit_name, quota_percentage)
 
-        @staticmethod
-        def _reset_cpu_quota(unit_name):
+        def _reset_cpu_quota(self, unit_name):
             """
             Removes any CPUQuota on the agent
 
             NOTE: This resets the quota on the agent's default dropin file; any local overrides on the VM will take precedence
             over this setting.
             """
-            log_cgroup_info("Resetting {0}'s CPUQuota".format(unit_name), send_event=False)
-            if CGroupConfigurator._Impl._try_set_cpu_quota(unit_name, "infinity"): # systemd expresses no-quota as infinity, following the same convention
-                try:
-                    log_cgroup_info('Current CPUQuota: {0}'.format(systemd.get_unit_property(unit_name, "CPUQuotaPerSecUSec")))
-                except Exception as e:
-                    log_cgroup_warning('Failed to get current CPUQuotaPerSecUSec after reset: {0}'.format(ustr(e)))
+            if self._cgroups_api.can_enforce_cpu():
+                log_cgroup_info("Resetting {0}'s CPUQuota".format(unit_name), send_event=False)
+                if CGroupConfigurator._Impl._try_set_cpu_quota(unit_name, "infinity"): # systemd expresses no-quota as infinity, following the same convention
+                    try:
+                        log_cgroup_info('Current CPUQuota: {0}'.format(systemd.get_unit_property(unit_name, "CPUQuotaPerSecUSec")))
+                    except Exception as e:
+                        log_cgroup_warning('Failed to get current CPUQuotaPerSecUSec after reset: {0}'.format(ustr(e)))
 
         # W0238: Unused private member `_Impl.__try_set_cpu_quota(quota)` (unused-private-member)
         @staticmethod
@@ -938,7 +938,7 @@ class CGroupConfigurator(object):
                         self._cleanup_all_files(files_to_remove)
 
                         cpu_quota = service.get('cpuQuotaPercentage')
-                        cpu_quota = "{0}%".format(cpu_quota) if cpu_quota is not None else "infinity"  # following systemd convention for no-quota (infinity)
+                        cpu_quota = "{0}%".format(cpu_quota) if cpu_quota is not None and self._cgroups_api.can_enforce_cpu() else "infinity"  # following systemd convention for no-quota (infinity)
                         try:
                             properties_to_update, properties_values = self._get_unit_properties_requiring_update(service_name, cpu_quota)
                         except Exception as exception:
