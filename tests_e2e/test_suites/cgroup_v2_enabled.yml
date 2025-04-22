@@ -10,7 +10,7 @@ tests:
 images:
   - "ubuntu_2204"
   - "ubuntu_2404"
-  - "rhel_90"
+  - "rhel_95"
   - "azure-linux_3"
 # The DCR test extension installs sample service, so this test suite uses it to test services cgroups but this is only published in southcentralus region in public cloud.
 locations: "AzureCloud:southcentralus"
