@@ -63,7 +63,7 @@ image-sets:
       - "azure-linux_3"
       - "centos_82"
       - "rhel_82"
-      - "rhel_90"
+      - "rhel_95"
       - "ubuntu_1604"
       - "ubuntu_1804"
       - "ubuntu_2004"
