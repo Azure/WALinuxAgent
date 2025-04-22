@@ -60,8 +60,10 @@ image-sets:
 
    # These are the distros which have periodic log collector support.
    log-collector-endorsed:
+      - "azure-linux_3"
       - "centos_82"
       - "rhel_82"
+      - "rhel_90"
       - "ubuntu_1604"
       - "ubuntu_1804"
       - "ubuntu_2004"
