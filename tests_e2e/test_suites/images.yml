@@ -17,15 +17,15 @@ image-sets:
       - "debian_10"
       - "debian_11"
       - "flatcar"
-      - "suse_12"
       - "mariner_2"
       - "azure-linux_3"
       - "azure-linux_3_fips"
-      - "suse_15"
       - "rhel_79"
-      - "rhel_82"
-      - "rhel_90"
+      - "rhel_810"
+      - "rhel_95"
       - "rocky_9"
+      - "suse_12"
+      - "suse_15"
       - "ubuntu_1604"
       - "ubuntu_1804"
       - "ubuntu_2004"
@@ -40,7 +40,7 @@ image-sets:
       - "flatcar_arm64"
       - "mariner_2_arm64"
       - "azure-linux_3_arm64"
-      - "rhel_90_arm64"
+      - "rhel_95_arm64"
       - "ubuntu_2204_arm64"
       - "ubuntu_2404_arm64"
 
@@ -63,15 +63,13 @@ image-sets:
       - "azure-linux_3"
       - "centos_82"
       - "rhel_82"
-      - "rhel_90"
+      - "rhel_95"
       - "ubuntu_1604"
       - "ubuntu_1804"
       - "ubuntu_2004"
       - "ubuntu_2204"
-      - "ubuntu_2204_minimal"
       - "ubuntu_2204_arm64"
       - "ubuntu_2404"
-      - "ubuntu_2404_minimal"
       - "ubuntu_2404_arm64"
 
 #
@@ -192,16 +190,13 @@ images:
       vm_sizes:
       # Previously one user reported agent hang on this VM size for redhat 7+ but not observed in rhel 8. So I'm using same vm size to test agent cgroups scenario for rhel 8 to make sure we don't see any issue in automation.
          - "Standard_B2s"
-   rhel_90:
-      urn: "RedHat RHEL 9_0 latest"
-      locations:
-         AzureChinaCloud: []
-   rhel_90_arm64:
-      urn: "RedHat rhel-arm64 9_0-arm64 latest"
+   rhel_810: "RedHat RHEL 8_10 latest"
+   rhel_95: "RedHat RHEL 9_5 latest"
+   rhel_95_arm64:
+      urn: "RedHat rhel-arm64 9_5-arm64 latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
-   rhel_94: "RedHat RHEL 9_4 latest"
    rocky_9:
       urn: "resf rockylinux-x86_64 9-base latest"
       locations:
@@ -226,9 +221,4 @@ images:
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
-   ubuntu_2404_minimal:
-      # TODO: Currently using the daily build, update to the release build once it is available
-      urn: "Canonical ubuntu-24_04-lts-daily minimal latest"
-      locations:
-         AzureChinaCloud: []
-         AzureUSGovernment: []
+   ubuntu_2404_minimal: "Canonical ubuntu-24_04-lts minimal latest"
