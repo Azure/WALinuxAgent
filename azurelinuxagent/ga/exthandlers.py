@@ -57,7 +57,8 @@ from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
-from azurelinuxagent.ga.signature_validation import validate_handler_manifest_signing_info
+from azurelinuxagent.ga.signature_validation import validate_handler_manifest_signing_info, SignatureValidationError, \
+    ManifestValidationError, save_signature_validation_state, openssl_version_supported_for_signature_validation
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
 _HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
@@ -1391,18 +1392,41 @@ class ExtHandlerInstance(object):
 
         if not package_exists:
             is_fast_track_goal_state = self.protocol.get_goal_state().extensions_goal_state.source == GoalStateSource.FastTrack
-            if self.ext_handler.encoded_signature is None:
-                event.info(op=WALAEventOperation.SignatureValidation, fmt="Extension '{0}' is not signed".format(self.ext_handler),
-                           name=self.ext_handler.name, version=self.ext_handler.version)
-                self.protocol.client.download_zip_package("extension package", self.pkg.uris, package_file, self.get_base_dir(), use_verify_header=is_fast_track_goal_state)
+
+            # Validate signature if extension is signed, signature validation is enabled via conf, and openssl version is supported.
+            # If validation fails, handle and report the error but do not block download; blocking will be enforced once
+            # we gain confidence in the validation process.
+            #
+            # TODO: allow users to opt-in to validation enforcement using policy, as a temporary work-around until validation is always enforced.
+            if conf.get_signature_validation_enabled() and openssl_version_supported_for_signature_validation() and self.ext_handler.encoded_signature is not None:
+                signature_validated = False
+                try:
+                    self.protocol.client.download_zip_package("extension package", self.pkg.uris, package_file,
+                                                              self.get_base_dir(),
+                                                              use_verify_header=is_fast_track_goal_state,
+                                                              signature=self.ext_handler.encoded_signature,
+                                                              package_name=self.ext_handler.name,
+                                                              package_version=self.ext_handler.version)
+                    signature_validated = True
+                except SignatureValidationError as ex:
+                    logger.error(ustr(ex))
+                    add_event(op=WALAEventOperation.SignatureValidation, message=ustr(ex), name=self.ext_handler.name,
+                              version=self.ext_handler.version, is_success=False)
+
+                try:
+                    validate_handler_manifest_signing_info(self.load_manifest(), self.ext_handler)
+                    if signature_validated:
+                        save_signature_validation_state(self.get_base_dir())
+                except ManifestValidationError as ex:
+                    logger.error(ustr(ex))
+                    add_event(op=WALAEventOperation.SignatureValidation, message=ustr(ex), name=self.ext_handler.name,
+                              version=self.ext_handler.version, is_success=False)
             else:
-                # If the extension is signed, signature validation is performed immediately after download.
-                # Handler manifest "signingInfo" validation is deferred until after the package is extracted,
-                # so we pass the manifest validation logic as a callable parameter.
-                validate_manifest = lambda: validate_handler_manifest_signing_info(self.load_manifest(), self.ext_handler)
-                self.protocol.client.download_zip_package("extension package", self.pkg.uris, package_file, self.get_base_dir(), use_verify_header=is_fast_track_goal_state,
-                                                          signature=self.ext_handler.encoded_signature, validate_manifest=validate_manifest,
-                                                          package_name=self.ext_handler.name, package_version=self.ext_handler.version)
+                if self.ext_handler.encoded_signature is None:
+                    msg = "Extension '{0}' is not signed".format(self.ext_handler)
+                    logger.info(msg)
+                    add_event(op=WALAEventOperation.SignatureValidation, message=msg, name=self.ext_handler.name, version=self.ext_handler.version, is_success=True)
+                self.protocol.client.download_zip_package("extension package", self.pkg.uris, package_file, self.get_base_dir(), use_verify_header=is_fast_track_goal_state)
 
             self.report_event(message="Download succeeded", duration=elapsed_milliseconds(begin_utc))
 

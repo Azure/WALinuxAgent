@@ -48,8 +48,7 @@ from azurelinuxagent.common.utils.restutil import TELEMETRY_THROTTLE_DELAY_IN_SE
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, gettext, remove_bom, get_bytes_from_pem, parse_json, redact_sas_token
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
-from azurelinuxagent.ga.signature_validation import validate_signature, PackageValidationError, SignatureValidationError, \
-    ManifestValidationError, save_signature_validation_state, openssl_version_supported_for_signature_validation
+from azurelinuxagent.ga.signature_validation import validate_signature, PackageValidationError, SignatureValidationError
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
 HEALTH_REPORT_URI = "http://{0}/machine?comp=health"
@@ -614,7 +613,7 @@ class WireClient(object):
 
         return self._download_with_fallback_channel(download_type, uris, direct_download=direct_download, hgap_download=hgap_download)
 
-    def download_zip_package(self, package_type, uris, target_file, target_directory, use_verify_header, signature=None, validate_manifest=None, package_name=None, package_version=None):
+    def download_zip_package(self, package_type, uris, target_file, target_directory, use_verify_header, signature=None, package_name=None, package_version=None):
         """
         Downloads the ZIP package specified in 'uris' (which is a list of alternate locations for the ZIP), saving it to 'target_file' and then expanding
         its contents to 'target_directory'. Deletes the target file after it has been expanded.
@@ -627,10 +626,7 @@ class WireClient(object):
         The 'signature' parameter should be a base64-encoded signature string. If specified, package signature will be validated
         immediately after downloading the package but before expanding it.
 
-        The 'validate_manifest' parameter should be a callable function that validates the relevant signing information in the package's manifest file.
-        If specified, it will be called immediately after downloading the package but before expanding it.
-
-        'package_name' and 'package_version' are optional and only used to report telemetry.
+        'package_name' and 'package_version' are optional and only used to report telemetry during signature validation.
         """
         host_ga_plugin = self.get_host_plugin()
 
@@ -642,32 +638,17 @@ class WireClient(object):
 
         def on_downloaded():
             # If 'signature' parameter is specified, validate package signature immediately after download.
-            # If 'validate_manifest' parameter is specified, validate package manifest after extracting downloaded zip.
-            # If validation fails, handle the error, but do not block package extraction. Blocking will be enforced
-            # once we gain confidence in the validation process.
-            #
-            # TODO: allow users to opt-in to validation enforcement using policy, as a temporary work-around until validation is always enforced.
-            signature_validated = False
-            if conf.get_signature_validation_enabled() and openssl_version_supported_for_signature_validation():
-                if signature is not None:
-                    try:
-                        validate_signature(target_file, signature, package_name, package_version)
-                        signature_validated = True
-                    except SignatureValidationError:
-                        # TODO: raise exception if policy specifies that signature validation should be enforced
-                        pass
+            validation_error = None
+            if signature is not None:
+                try:
+                    validate_signature(target_file, signature, package_name, package_version)
+                except SignatureValidationError as ex:
+                    # TODO: raise error here if signature validation result should be enforced
+                    validation_error = ex
 
             WireClient._try_expand_zip_package(package_type, target_file, target_directory)
-
-            if conf.get_signature_validation_enabled():
-                if validate_manifest is not None:
-                    try:
-                        validate_manifest()
-                        if signature_validated:
-                            save_signature_validation_state(target_directory)
-                    except ManifestValidationError:
-                        # TODO: raise exception if policy specifies that signature validation should be enforced
-                        pass
+            if validation_error is not None:
+                raise validation_error
 
         self._download_with_fallback_channel(package_type, uris, direct_download=direct_download, hgap_download=hgap_download, on_downloaded=on_downloaded)
 
@@ -711,10 +692,10 @@ class WireClient(object):
                     on_downloaded()
 
                 return uri, response
-            except Exception as exception:
+            except PackageValidationError:
                 # If download fails due to package signature validation, do not retry.
-                if isinstance(exception, PackageValidationError):
-                    raise exception
+                raise
+            except Exception as exception:
                 most_recent_error = exception
 
         raise ExtensionDownloadError("Failed to download {0} from all URIs. Last error: {1}".format(download_type, ustr(most_recent_error)), code=ExtensionErrorCodes.PluginManifestDownloadError)

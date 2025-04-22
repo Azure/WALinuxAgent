@@ -726,34 +726,28 @@ def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, d
                            log_event=log_event, flush=flush)
 
 
-def info(op, fmt, *args, **kwargs):
+def info(op, fmt, *args):
     """
      Creates a telemetry event and logs the message as INFO.
     """
     logger.info(fmt, *args)
-    name = kwargs.get('name', AGENT_NAME)
-    version = kwargs.get('version', str(CURRENT_VERSION))
-    add_event(op=op, message=fmt.format(*args), is_success=True, name=name, version=version)
+    add_event(op=op, message=fmt.format(*args), is_success=True)
 
 
-def warn(op, fmt, *args, **kwargs):
+def warn(op, fmt, *args):
     """
     Creates a telemetry event and logs the message as WARNING.
     """
     logger.warn(fmt, *args)
-    name = kwargs.get('name', AGENT_NAME)
-    version = kwargs.get('version', str(CURRENT_VERSION))
-    add_event(op=op, message="[WARNING] " + fmt.format(*args), is_success=False, log_event=False, name=name, version=version)
+    add_event(op=op, message="[WARNING] " + fmt.format(*args), is_success=False, log_event=False)
 
 
-def error(op, fmt, *args, **kwargs):
+def error(op, fmt, *args):
     """
     Creates a telemetry event and logs the message as ERROR.
     """
     logger.error(fmt, *args)
-    name = kwargs.get('name', AGENT_NAME)
-    version = kwargs.get('version', str(CURRENT_VERSION))
-    add_event(op=op, message=fmt.format(*args), is_success=False, log_event=False, name=name, version=version)
+    add_event(op=op, message=fmt.format(*args), is_success=False, log_event=False)
 
 
 class LogEvent(object):

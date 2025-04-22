@@ -108,18 +108,15 @@ class TestSignatureValidation(AgentTestCase):
                 version = _get_openssl_version()
                 self.assertEqual(version, case[1], "Returned incorrect openssl version")
 
-    def test_should_raise_error_if_fail_to_get_openssl_version(self):
+    def test_should_not_support_signature_validation_if_fail_to_get_openssl_version(self):
         with patch("azurelinuxagent.ga.signature_validation.run_command", side_effect=CommandError("cmd", 1, "", "error")):
-            with self.assertRaises(PackageValidationError, msg="Failed to get openssl version, should have raised error"):
-                openssl_version_supported_for_signature_validation()
+            self.assertFalse(openssl_version_supported_for_signature_validation())
 
         with patch("azurelinuxagent.ga.signature_validation.run_command", return_value=None):
-            with self.assertRaises(PackageValidationError, msg="Failed to get openssl version, should have raised error"):
-                openssl_version_supported_for_signature_validation()
+            self.assertFalse(openssl_version_supported_for_signature_validation())
 
         with patch("azurelinuxagent.ga.signature_validation.run_command", return_value="some junk output"):
-            with self.assertRaises(PackageValidationError, msg="Failed to get openssl version, should have raised error"):
-                openssl_version_supported_for_signature_validation()
+            self.assertFalse(openssl_version_supported_for_signature_validation())
 
     @skip_if_predicate_true(lambda: True, "Enable this test when timestamp validation has been implemented.")
     def test_should_raise_error_if_root_cert_was_expired_at_signing_time(self):
