@@ -24,6 +24,7 @@ from .arch import ArchUtil
 from .bigip import BigIpOSUtil
 from .clearlinux import ClearLinuxUtil
 from .coreos import CoreOSUtil
+from .chainguard import ChainguardOSUtil
 from .debian import DebianOSBaseUtil, DebianOSModernUtil
 from .default import DefaultOSUtil
 from .devuan import DevuanOSUtil
@@ -81,6 +82,9 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
 
     if distro_name == "alpine":
         return AlpineOSUtil()
+
+    if distro_name == "chainguard":
+        return ChainguardOSUtil()
 
     if distro_name == "kali":
         return DebianOSBaseUtil()
