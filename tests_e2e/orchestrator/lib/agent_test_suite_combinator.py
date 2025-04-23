@@ -38,7 +38,7 @@ class AgentTestSuitesCombinatorSchema(schema.Combinator):
     identity_file: str = field(default_factory=str, metadata=field_metadata(required=True))
     image: str = field(default_factory=str, metadata=field_metadata(required=True))
     keep_environment: str = field(default_factory=str, metadata=field_metadata(required=True))
-    location: str = field(default_factory=str, metadata=field_metadata(required=True))
+    locations: str = field(default_factory=str, metadata=field_metadata(required=True))
     resource_group_name: str = field(default_factory=str, metadata=field_metadata(required=True))
     subscription_id: str = field(default_factory=str, metadata=field_metadata(required=True))
     test_suites: str = field(default_factory=str, metadata=field_metadata(required=True))
@@ -132,7 +132,7 @@ class AgentTestSuitesCombinator(Combinator):
         Examines the test_suites specified in the runbook and returns a list of the environments (i.e. test VMs or scale sets) that need to be
         created in order to execute these suites.
 
-        Note that if the runbook provides an 'image', 'location', or 'vm_size', those values override any values provided in the
+        Note that if the runbook provides an 'image', 'locations', or 'vm_size', those values override any values provided in the
         configuration of the test suites.
         """
         environments: List[Dict[str, Any]] = []
@@ -266,9 +266,10 @@ class AgentTestSuitesCombinator(Combinator):
     def create_existing_vm_environment(self, test_suites: List[str]) -> Dict[str, Any]:
         loader = AgentTestLoader(test_suites, self.runbook.cloud)
 
+        location = self.runbook.locations.split(',')[0]
         vm: VirtualMachineClient = VirtualMachineClient(
             cloud=self.runbook.cloud,
-            location=self.runbook.location,
+            location=location,
             subscription=self.runbook.subscription_id,
             resource_group=self.runbook.resource_group_name,
             name=self.runbook.vm_name)
@@ -299,16 +300,17 @@ class AgentTestSuitesCombinator(Combinator):
                     }
                 ]
             },
-            "c_location": self.runbook.location,
+            "c_location": location,
             "c_test_suites": loader.test_suites,
         }
 
     def create_existing_vmss_environment(self, test_suites: List[str]) -> Dict[str, Any]:
         loader = AgentTestLoader(test_suites, self.runbook.cloud)
 
+        location = self.runbook.locations.split(',')[0]
         vmss = VirtualMachineScaleSetClient(
             cloud=self.runbook.cloud,
-            location=self.runbook.location,
+            location=location,
             subscription=self.runbook.subscription_id,
             resource_group=self.runbook.resource_group_name,
             name=self.runbook.vmss_name)
@@ -339,7 +341,7 @@ class AgentTestSuitesCombinator(Combinator):
                     "capture_vm_information": False
                 }
             ],
-            "c_location": self.runbook.location,
+            "c_location": location,
             "c_test_suites": loader.test_suites,
         }
 
@@ -510,18 +512,11 @@ class AgentTestSuitesCombinator(Combinator):
         If the image is not available on any location, returns empty list, to indicate that the test suite should be skipped.
         """
         # If the runbook specified a location, use it.
-        if self.runbook.location != "":
-            return [self.runbook.location]
+        if self.runbook.locations != "":
+            return self.runbook.locations.split(',')
 
         # Then try the suite locations, if any.
-        locations = []
-        for location in suite_info.locations:
-            if location.startswith(self.runbook.cloud + ":"):
-                region = location.split(":")[1]
-                if suite_info.runs_on_all_suite_locations:
-                    locations.append(region)
-                else:
-                    return [region]
+        locations = [location.split(":")[1] for location in suite_info.locations if location.startswith(self.runbook.cloud + ":")]
         if len(locations) > 0:
             return locations
 

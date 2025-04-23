@@ -53,4 +53,3 @@ locations:
   - "AzureChinaCloud:chinanorth2"
   - "AzureChinaCloud:chinaeast"
   - "AzureChinaCloud:chinaeast2"
-runs_on_all_suite_locations: true

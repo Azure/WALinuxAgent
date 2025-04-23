@@ -55,8 +55,6 @@ class TestSuiteInfo(object):
     images: List[str]
     # The locations (regions) on which the suite must run; if empty, the suite can run on any location
     locations: List[str]
-    # If locations is provided, this determines whether the suite should run on all the suite locations or just one
-    runs_on_all_suite_locations: bool
     # Whether this suite must run on its own test VM
     owns_vm: bool
     # If True, the suite must run on a scale set (instead of a single VM)
@@ -225,7 +223,6 @@ class AgentTestLoader(object):
               - "bvts/vm_access.py"
             images: "endorsed"
             locations: "AzureCloud:eastuseaup"
-            runs_on_all_suite_locations: false
             owns_vm: true
             install_test_agent: true
             template: "bvts/template.py"
@@ -245,8 +242,6 @@ class AgentTestLoader(object):
         * locations - [Optional; string or list of strings] If given, the test suite must be executed on that cloud location(e.g. "AzureCloud:eastus2euap").
                      If not specified, or set to an empty string, the test suite will be executed in the default location. This is useful
                      for test suites that exercise a feature that is enabled only in certain regions.
-        * runs_on_all_suite_locations - [Optional; boolean] By default a test suite runs on one location per image. If this
-                    value is True, then the test will run on all listed locations for each image.
         * owns_vm - [Optional; boolean] By default all suites in a test run are executed on the same test VMs; if this
                     value is set to True, new test VMs will be created and will be used exclusively for this test suite.
                     This is useful for suites that modify the test VMs in such a way that the setup may cause problems
@@ -298,7 +293,6 @@ class AgentTestLoader(object):
             else:
                 test_suite_info.locations = locations
 
-        test_suite_info.runs_on_all_suite_locations = "runs_on_all_suite_locations" in test_suite and test_suite["runs_on_all_suite_locations"]
         test_suite_info.owns_vm = "owns_vm" in test_suite and test_suite["owns_vm"]
         test_suite_info.install_test_agent = "install_test_agent" not in test_suite or test_suite["install_test_agent"]
         test_suite_info.executes_on_scale_set = "executes_on_scale_set" in test_suite and test_suite["executes_on_scale_set"]
