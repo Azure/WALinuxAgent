@@ -22,11 +22,14 @@ import argparse
 import contextlib
 import os
 import pwd
+import re
 import socket
 
 from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import format_exception
-from tests_e2e.tests.lib.firewall_manager import FirewallManager, get_wireserver_ip
+from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
+from tests_e2e.tests.lib.firewall_manager import FirewallManager, IpTables, get_wireserver_ip
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import run_remote_test
 import http.client as httpclient
@@ -66,11 +69,29 @@ class AgentFirewall:
         self._prepare_agent()
 
         self._firewall_manager.log_firewall_state("** Initial state of the firewall")
+        # Some versions of RHEL have a baked-in agent (2.7.0.6) that can produce duplicate DNS rules.
+        if DISTRO_NAME in ["rhel", "redhat"] and FlexibleVersion(DISTRO_VERSION).major >= 8:
+            self._remove_duplicate_dns_rules()
         self._firewall_manager.assert_all_rules_are_set()
 
         self._test_accept_dns_rule()
         self._test_accept_rule()
         self._test_drop_rule()
+
+    def _remove_duplicate_dns_rules(self) -> None:
+        log.info("Checking for duplicate DNS rules...")
+        if not isinstance(self._firewall_manager, IpTables):
+            raise Exception(f"Expected a FirewallManager of type IpTables on {DISTRO_NAME} {DISTRO_VERSION}. It is {type(self._firewall_manager)}")
+        state = self._firewall_manager.get_state()
+        matches = [line for line in state.splitlines() if re.search(r"ACCEPT.+168\.63\.129\.16.*tcp dpt:53",  line) is not None]
+        if len(matches) < 2:
+            log.info("No duplicates found")
+            return
+        duplicates = '\n'.join(matches)
+        log.info(f"Found duplicates:\n{duplicates}")
+        log.info("Removing 1 duplicate...")
+        self._firewall_manager.delete_rule(FirewallManager.ACCEPT_DNS)
+        self._firewall_manager.log_firewall_state("** State of the firewall")
 
     @staticmethod
     def _verify_dns_request_to_wireserver(should_succeed: bool) -> None:

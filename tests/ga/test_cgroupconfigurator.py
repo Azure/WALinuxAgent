@@ -204,10 +204,33 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     any(cg for cg in tracked if tracked[cg].name == AGENT_NAME_TELEMETRY and 'cpu' in cg),
                     "The Agent's cpu is being tracked. Tracked: {0}".format(tracked))
 
-    def test_enforcement_not_enabled_in_v2(self):
+    def test_agent_enforcement_not_enabled_in_v2(self):
         with self._get_cgroup_configurator_v2() as configurator:
             cmd = 'systemctl set-property walinuxagent.service CPUQuota'
             self.assertNotIn(cmd, configurator.mocks.commands_call_list, "The command to set CPU quota was called")
+
+    def test_extension_enforcement_not_enabled_in_v2(self):
+        service_list = [
+            {
+                "name": "extension.service",
+                "cpuQuotaPercentage": 5
+            }
+        ]
+        with self._get_cgroup_configurator_v2() as configurator:
+            configurator.setup_extension_slice(extension_name="Microsoft.CPlat.Extension", cpu_quota=5)
+            cmd = 'systemctl set-property azure-vmextensions-Microsoft.CPlat.Extension.slice CPUAccounting=yes MemoryAccounting=yes CPUQuota'
+            self.assertNotIn(cmd, configurator.mocks.commands_call_list,
+                            "The command to set the CPU quota was not called")
+            cmd = 'systemctl set-property azure-vmextensions-Microsoft.CPlat.Extension.slice CPUQuota'
+            self.assertNotIn(cmd, configurator.mocks.commands_call_list,
+                            "The command to set the CPU quota was not called")
+            configurator.set_extension_services_cpu_memory_quota(service_list)
+            cmd = 'systemctl set-property extension.service CPUAccounting=yes MemoryAccounting=yes CPUQuota'
+            self.assertNotIn(cmd, configurator.mocks.commands_call_list,
+                          "The command to set the reset CPU quota was not called")
+            cmd = 'systemctl set-property extension.service CPUQuota'
+            self.assertNotIn(cmd, configurator.mocks.commands_call_list,
+                            "The command to set the CPU quota was not called")
 
     def test_initialize_should_not_create_unit_files(self):
         with self._get_cgroup_configurator() as configurator:
