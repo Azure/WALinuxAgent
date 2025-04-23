@@ -24,8 +24,9 @@ import uuid
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import WALAEventOperation, add_event
-from azurelinuxagent.ga.controllermetrics import CpuMetrics, MemoryMetrics
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.ga.cpucontroller import _CpuController, CpuControllerV1, CpuControllerV2
+from azurelinuxagent.ga.memorycontroller import MemoryControllerV1, MemoryControllerV2
 from azurelinuxagent.common.conf import get_agent_pid_file_path
 from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes, ExtensionError, \
     ExtensionOperationError
@@ -58,7 +59,7 @@ class CGroupUtil(object):
     Cgroup utility methods which are independent of systemd cgroup api.
     """
     @staticmethod
-    def cgroups_supported():
+    def distro_supported():
         distro_info = get_distro()
         distro_name = distro_info[0]
         try:
@@ -66,7 +67,9 @@ class CGroupUtil(object):
         except ValueError:
             return False
         return (distro_name.lower() == 'ubuntu' and distro_version.major >= 16) or \
-               (distro_name.lower() in ('centos', 'redhat') and 8 <= distro_version.major < 9)
+            (distro_name.lower() in ('centos', 'redhat') and distro_version.major == 8) or \
+            (distro_name.lower() == 'rhel' and distro_version.major == 9) or \
+            (distro_name.lower() == 'azurelinux' and distro_version.major == 3)
 
     @staticmethod
     def get_extension_slice_name(extension_name, old_slice=False):
@@ -120,6 +123,50 @@ class CGroupUtil(object):
         return len(legacy_cgroups)
 
     @staticmethod
+    def get_current_cpu_quota(unit_name):
+        """
+        Calculate the CPU percentage from CPUQuotaPerSecUSec for given unit.
+        Params:
+            cpu_quota_per_sec_usec (str): The value of CPUQuotaPerSecUSec (e.g., "1s", "500ms", "500us", or "infinity").
+
+        Returns:
+            str: CPU percentage, or 'infinity' or 'unknown' if we can't determine the value.
+        """
+        try:
+            cpu_quota_per_sec_usec = systemd.get_unit_property(unit_name, "CPUQuotaPerSecUSec").strip().lower()
+            if cpu_quota_per_sec_usec == "infinity":
+                return cpu_quota_per_sec_usec  # No limit on CPU usage
+
+            # Parse the value based on the suffix
+            elif cpu_quota_per_sec_usec.endswith("us"):
+                # Directly use the microseconds value
+                cpu_quota_us = float(cpu_quota_per_sec_usec[:-2])
+            elif cpu_quota_per_sec_usec.endswith("ms"):
+                # Convert milliseconds to microseconds
+                cpu_quota_us = float(cpu_quota_per_sec_usec[:-2]) * 1000
+            elif cpu_quota_per_sec_usec.endswith("s"):
+                # Convert seconds to microseconds
+                cpu_quota_us = float(cpu_quota_per_sec_usec[:-1]) * 1000000
+            else:
+                raise ValueError("Invalid format. Expected 's', 'ms', 'us', or 'infinity'.")
+
+            # Calculate CPU percentage
+            cpu_percentage = (cpu_quota_us / 1000000) * 100
+            return "{0:g}%".format(cpu_percentage)  # :g Removes trailing zeros after decimal point
+        except Exception as e:
+            log_cgroup_warning("Error parsing current CPUQuotaPerSecUSec: {0}".format(ustr(e)))
+            return "unknown"
+
+    @staticmethod
+    def has_cpu_quota(unit_name):
+        """
+        Returns True if quota set for the unit.
+        """
+        cpu_quota_percentage = CGroupUtil.get_current_cpu_quota(unit_name)
+        has_quota = cpu_quota_percentage not in ("infinity", "unknown")
+        return has_quota
+
+    @staticmethod
     def cleanup_legacy_cgroups():
         """
         Previous versions of the daemon (2.2.31-2.2.40) wrote their PID to /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent;
@@ -148,7 +195,7 @@ class InvalidCgroupMountpointException(CGroupsException):
         super(InvalidCgroupMountpointException, self).__init__(msg)
 
 
-def get_cgroup_api():
+def create_cgroup_api():
     """
     Determines which version of Cgroup should be used for resource enforcement and monitoring by the Agent and returns
     the corresponding Api.
@@ -171,7 +218,6 @@ def get_cgroup_api():
     root_hierarchy_mode = shellutil.run_command(["stat", "-f", "--format=%T", CGROUP_FILE_SYSTEM_ROOT]).rstrip()
 
     if root_hierarchy_mode == "cgroup2fs":
-        log_cgroup_info("Using cgroup v2 for resource enforcement and monitoring")
         return SystemdCgroupApiv2()
 
     elif root_hierarchy_mode == "tmpfs":
@@ -191,7 +237,6 @@ def get_cgroup_api():
         # mounted in a location other than the systemd default, raise Exception.
         if not cgroup_api_v1.are_mountpoints_systemd_created():
             raise InvalidCgroupMountpointException("Expected cgroup controllers to be mounted at '{0}', but at least one is not. v1 mount points: \n{1}".format(CGROUP_FILE_SYSTEM_ROOT, json.dumps(cgroup_api_v1.get_controller_mountpoints())))
-        log_cgroup_info("Using cgroup v1 for resource enforcement and monitoring")
         return cgroup_api_v1
 
     raise CGroupsException("{0} has an unexpected file type: {1}".format(CGROUP_FILE_SYSTEM_ROOT, root_hierarchy_mode))
@@ -204,6 +249,12 @@ class _SystemdCgroupApi(object):
     def __init__(self):
         self._systemd_run_commands = []
         self._systemd_run_commands_lock = threading.RLock()
+
+    def get_cgroup_version(self):
+        """
+        Returns the version of the cgroup hierarchy in use.
+        """
+        return NotImplementedError()
 
     def get_systemd_run_commands(self):
         """
@@ -245,12 +296,82 @@ class _SystemdCgroupApi(object):
         """
         raise NotImplementedError()
 
-    def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr,
-                                error_code=ExtensionErrorCodes.PluginUnknownFailure):
+    def can_enforce_cpu(self):
         """
-        Cgroup version specific. Starts extension command.
+        Cgroup version specific. Returns if controller can be used for enforcement
         """
         raise NotImplementedError()
+
+    def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr,
+                                error_code=ExtensionErrorCodes.PluginUnknownFailure):
+        scope = "{0}_{1}".format(cmd_name, uuid.uuid4())
+        extension_slice_name = CGroupUtil.get_extension_slice_name(extension_name)
+        with self._systemd_run_commands_lock:
+            process = subprocess.Popen(  # pylint: disable=W1509
+                # Some distros like ubuntu20 by default cpu and memory accounting enabled. Thus create nested cgroups under the extension slice
+                # So disabling CPU and Memory accounting prevents from creating nested cgroups, so that all the counters will be present in extension Cgroup
+                # since slice unit file configured with accounting enabled.
+                "systemd-run --property=CPUAccounting=no --property=MemoryAccounting=no --unit={0} --scope --slice={1} {2}".format(scope, extension_slice_name, command),
+                shell=shell,
+                cwd=cwd,
+                stdout=stdout,
+                stderr=stderr,
+                env=env,
+                preexec_fn=os.setsid)
+
+            # We start systemd-run with shell == True so process.pid is the shell's pid, not the pid for systemd-run
+            self._systemd_run_commands.append(process.pid)
+
+        scope_name = scope + '.scope'
+
+        log_cgroup_info("Started extension in unit '{0}'".format(scope_name), send_event=False)
+
+        cpu_controller = None
+        try:
+            cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice', extension_slice_name)
+            cgroup = self.get_cgroup_from_relative_path(cgroup_relative_path, extension_name)
+            has_cpu_quota = CGroupUtil.has_cpu_quota(extension_slice_name)
+            for controller in cgroup.get_controllers():
+                if isinstance(controller, _CpuController):
+                    cpu_controller = controller
+                    if has_cpu_quota:
+                        cpu_controller.track_throttle_time(True)  # CPU controller track the throttle time only when CPU quota is set
+                CGroupsTelemetry.track_cgroup_controller(controller)
+
+        except IOError as e:
+            if e.errno == 2:  # 'No such file or directory'
+                log_cgroup_info("The extension command already completed; will not track resource usage", send_event=False)
+            log_cgroup_info("Failed to start tracking resource usage for the extension: {0}".format(ustr(e)), send_event=False)
+        except Exception as e:
+            log_cgroup_info("Failed to start tracking resource usage for the extension: {0}".format(ustr(e)), send_event=False)
+
+        # Wait for process completion or timeout
+        try:
+            return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout,
+                                             stderr=stderr, error_code=error_code, cpu_controller=cpu_controller)
+        except ExtensionError as e:
+            # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
+            # extension errors.
+            if not self._is_systemd_failure(scope, stderr):
+                # There was an extension error; it either timed out or returned a non-zero exit code. Re-raise the error
+                raise
+
+            # There was an issue with systemd-run. We need to log it and retry the extension without systemd.
+            process_output = read_output(stdout, stderr)
+            # Reset the stdout and stderr
+            stdout.truncate(0)
+            stderr.truncate(0)
+
+            if isinstance(e, ExtensionOperationError):
+                # no-member: Instance of 'ExtensionError' has no 'exit_code' member (no-member) - Disabled: e is actually an ExtensionOperationError
+                err_msg = 'Systemd process exited with code %s and output %s' % (
+                    e.exit_code, process_output)  # pylint: disable=no-member
+            else:
+                err_msg = "Systemd timed-out, output: %s" % process_output
+            raise SystemdRunError(err_msg)
+        finally:
+            with self._systemd_run_commands_lock:
+                self._systemd_run_commands.remove(process.pid)
 
     @staticmethod
     def _is_systemd_failure(scope_name, stderr):
@@ -292,9 +413,15 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
             if match is not None:
                 path = match.group('path')
                 controller = match.group('controller')
-                if controller is not None and path is not None and controller in CgroupV1.get_supported_controllers():
+                if controller is not None and path is not None and controller in CgroupV1.get_supported_controller_names():
                     mount_points[controller] = path
         return mount_points
+
+    def get_cgroup_version(self):
+        """
+        Returns the version of the cgroup hierarchy in use.
+        """
+        return "v1"
 
     def get_controller_mountpoints(self):
         """
@@ -335,7 +462,7 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
             if match is not None:
                 controller = match.group('controller')
                 path = match.group('path').lstrip('/') if match.group('path') != '/' else None
-                if path is not None and controller in CgroupV1.get_supported_controllers():
+                if path is not None and controller in CgroupV1.get_supported_controller_names():
                     conroller_relative_paths[controller] = path
 
         return conroller_relative_paths
@@ -371,80 +498,15 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
                         controller_paths=process_controller_paths)
 
     def log_root_paths(self):
-        for controller in CgroupV1.get_supported_controllers():
+        for controller in CgroupV1.get_supported_controller_names():
             mount_point = self._cgroup_mountpoints.get(controller)
             if mount_point is None:
-                log_cgroup_info("The {0} controller is not mounted".format(controller), send_event=False)
+                log_cgroup_info("The {0} controller is not mounted".format(controller))
             else:
-                log_cgroup_info("The {0} controller is mounted at {1}".format(controller, mount_point), send_event=False)
+                log_cgroup_info("The {0} controller is mounted at {1}".format(controller, mount_point))
 
-    def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr,
-                                error_code=ExtensionErrorCodes.PluginUnknownFailure):
-        scope = "{0}_{1}".format(cmd_name, uuid.uuid4())
-        extension_slice_name = CGroupUtil.get_extension_slice_name(extension_name)
-        with self._systemd_run_commands_lock:
-            process = subprocess.Popen(  # pylint: disable=W1509
-                # Some distros like ubuntu20 by default cpu and memory accounting enabled. Thus create nested cgroups under the extension slice
-                # So disabling CPU and Memory accounting prevents from creating nested cgroups, so that all the counters will be present in extension Cgroup
-                # since slice unit file configured with accounting enabled.
-                "systemd-run --property=CPUAccounting=no --property=MemoryAccounting=no --unit={0} --scope --slice={1} {2}".format(scope, extension_slice_name, command),
-                shell=shell,
-                cwd=cwd,
-                stdout=stdout,
-                stderr=stderr,
-                env=env,
-                preexec_fn=os.setsid)
-
-            # We start systemd-run with shell == True so process.pid is the shell's pid, not the pid for systemd-run
-            self._systemd_run_commands.append(process.pid)
-
-        scope_name = scope + '.scope'
-
-        log_cgroup_info("Started extension in unit '{0}'".format(scope_name), send_event=False)
-
-        cpu_metrics = None
-        try:
-            cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice', extension_slice_name)
-            cgroup = self.get_cgroup_from_relative_path(cgroup_relative_path, extension_name)
-            for metrics in cgroup.get_controller_metrics():
-                if isinstance(metrics, CpuMetrics):
-                    cpu_metrics = metrics
-                CGroupsTelemetry.track_cgroup(metrics)
-
-        except IOError as e:
-            if e.errno == 2:  # 'No such file or directory'
-                log_cgroup_info("The extension command already completed; will not track resource usage", send_event=False)
-            log_cgroup_info("Failed to start tracking resource usage for the extension: {0}".format(ustr(e)), send_event=False)
-        except Exception as e:
-            log_cgroup_info("Failed to start tracking resource usage for the extension: {0}".format(ustr(e)), send_event=False)
-
-        # Wait for process completion or timeout
-        try:
-            return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout,
-                                             stderr=stderr, error_code=error_code, cpu_metrics=cpu_metrics)
-        except ExtensionError as e:
-            # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
-            # extension errors.
-            if not self._is_systemd_failure(scope, stderr):
-                # There was an extension error; it either timed out or returned a non-zero exit code. Re-raise the error
-                raise
-
-            # There was an issue with systemd-run. We need to log it and retry the extension without systemd.
-            process_output = read_output(stdout, stderr)
-            # Reset the stdout and stderr
-            stdout.truncate(0)
-            stderr.truncate(0)
-
-            if isinstance(e, ExtensionOperationError):
-                # no-member: Instance of 'ExtensionError' has no 'exit_code' member (no-member) - Disabled: e is actually an ExtensionOperationError
-                err_msg = 'Systemd process exited with code %s and output %s' % (
-                    e.exit_code, process_output)  # pylint: disable=no-member
-            else:
-                err_msg = "Systemd timed-out, output: %s" % process_output
-            raise SystemdRunError(err_msg)
-        finally:
-            with self._systemd_run_commands_lock:
-                self._systemd_run_commands.remove(process.pid)
+    def can_enforce_cpu(self):
+        return CgroupV1.CPU_CONTROLLER in self._cgroup_mountpoints
 
 
 class SystemdCgroupApiv2(_SystemdCgroupApi):
@@ -478,6 +540,12 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
                     return root_cgroup_path
         return ""
 
+    def get_cgroup_version(self):
+        """
+        Returns the version of the cgroup hierarchy in use.
+        """
+        return "v2"
+
     def get_root_cgroup_path(self):
         """
         Returns the unified cgroup mountpoint.
@@ -498,7 +566,7 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
         enabled_controllers_file = os.path.join(root_cgroup_path, 'cgroup.subtree_control')
         if os.path.exists(enabled_controllers_file):
             controllers_enabled_at_root = fileutil.read_file(enabled_controllers_file).rstrip().split()
-            return list(set(controllers_enabled_at_root) & set(CgroupV2.get_supported_controllers()))
+            return list(set(controllers_enabled_at_root) & set(CgroupV2.get_supported_controller_names()))
         return []
 
     @staticmethod
@@ -545,16 +613,15 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
         return CgroupV2(cgroup_name=cgroup_name, root_cgroup_path=self._root_cgroup_path, cgroup_path=cgroup_path, enabled_controllers=self._controllers_enabled_at_root)
 
     def log_root_paths(self):
-        log_cgroup_info("The root cgroup path is {0}".format(self._root_cgroup_path), send_event=False)
-        for controller in CgroupV2.get_supported_controllers():
+        log_cgroup_info("The root cgroup path is {0}".format(self._root_cgroup_path))
+        for controller in CgroupV2.get_supported_controller_names():
             if controller in self._controllers_enabled_at_root:
-                log_cgroup_info("The {0} controller is enabled at the root cgroup".format(controller), send_event=False)
+                log_cgroup_info("The {0} controller is enabled at the root cgroup".format(controller))
             else:
-                log_cgroup_info("The {0} controller is not enabled at the root cgroup".format(controller), send_event=False)
+                log_cgroup_info("The {0} controller is not enabled at the root cgroup".format(controller))
 
-    def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr,
-                                error_code=ExtensionErrorCodes.PluginUnknownFailure):
-        raise NotImplementedError()
+    def can_enforce_cpu(self):
+        return False
 
 
 class Cgroup(object):
@@ -564,9 +631,9 @@ class Cgroup(object):
         self._cgroup_name = cgroup_name
 
     @staticmethod
-    def get_supported_controllers():
+    def get_supported_controller_names():
         """
-        Cgroup version specific. Returns a list of the controllers which the agent supports.
+        Cgroup version specific. Returns a list of the controllers which the agent supports as strings.
         """
         raise NotImplementedError()
 
@@ -578,12 +645,12 @@ class Cgroup(object):
         """
         raise NotImplementedError()
 
-    def get_controller_metrics(self, expected_relative_path=None):
+    def get_controllers(self, expected_relative_path=None):
         """
-        Cgroup version specific. Returns a list of the metrics for the agent supported controllers which are
-        mounted/enabled for the cgroup.
+        Cgroup version specific. Returns a list of the agent supported controllers which are mounted/enabled for the cgroup.
 
-        :param expected_relative_path: The expected relative path of the cgroup. If provided, only metrics for controllers at this expected path will be returned.
+        :param expected_relative_path: The expected relative path of the cgroup. If provided, only controllers mounted
+        at this expected path will be returned.
         """
         raise NotImplementedError()
 
@@ -608,7 +675,7 @@ class CgroupV1(Cgroup):
         self._controller_paths = controller_paths
 
     @staticmethod
-    def get_supported_controllers():
+    def get_supported_controller_names():
         return [CgroupV1.CPU_CONTROLLER, CgroupV1.MEMORY_CONTROLLER]
 
     def check_in_expected_slice(self, expected_slice):
@@ -620,39 +687,38 @@ class CgroupV1(Cgroup):
 
         return in_expected_slice
 
-    def get_controller_metrics(self, expected_relative_path=None):
-        metrics = []
+    def get_controllers(self, expected_relative_path=None):
+        controllers = []
 
-        for controller in self.get_supported_controllers():
-            controller_metrics = None
-            controller_path = self._controller_paths.get(controller)
-            controller_mountpoint = self._controller_mountpoints.get(controller)
+        for supported_controller_name in self.get_supported_controller_names():
+            controller = None
+            controller_path = self._controller_paths.get(supported_controller_name)
+            controller_mountpoint = self._controller_mountpoints.get(supported_controller_name)
 
             if controller_mountpoint is None:
-                log_cgroup_warning("{0} controller is not mounted; will not track metrics".format(controller), send_event=False)
+                # Do not send telemetry here. We already have telemetry for unmounted controllers in cgroup init
+                log_cgroup_warning("{0} controller is not mounted; will not track".format(supported_controller_name), send_event=False)
                 continue
 
             if controller_path is None:
-                log_cgroup_warning("{0} is not mounted for the {1} cgroup; will not track metrics".format(controller, self._cgroup_name), send_event=False)
+                log_cgroup_warning("{0} is not mounted for the {1} cgroup; will not track".format(supported_controller_name, self._cgroup_name))
                 continue
 
             if expected_relative_path is not None:
                 expected_path = os.path.join(controller_mountpoint, expected_relative_path)
                 if controller_path != expected_path:
-                    log_cgroup_warning("The {0} controller is not mounted at the expected path for the {1} cgroup; will not track metrics. Actual cgroup path:[{2}] Expected:[{3}]".format(controller, self._cgroup_name, controller_path, expected_path), send_event=False)
+                    log_cgroup_warning("The {0} controller is not mounted at the expected path for the {1} cgroup; will not track. Actual cgroup path:[{2}] Expected:[{3}]".format(supported_controller_name, self._cgroup_name, controller_path, expected_path))
                     continue
 
-            if controller == self.CPU_CONTROLLER:
-                controller_metrics = CpuMetrics(self._cgroup_name, controller_path)
-            elif controller == self.MEMORY_CONTROLLER:
-                controller_metrics = MemoryMetrics(self._cgroup_name, controller_path)
+            if supported_controller_name == self.CPU_CONTROLLER:
+                controller = CpuControllerV1(self._cgroup_name, controller_path)
+            elif supported_controller_name == self.MEMORY_CONTROLLER:
+                controller = MemoryControllerV1(self._cgroup_name, controller_path)
 
-            if controller_metrics is not None:
-                msg = "{0} metrics for cgroup: {1}".format(controller, controller_metrics)
-                log_cgroup_info(msg, send_event=False)
-                metrics.append(controller_metrics)
+            if controller is not None:
+                controllers.append(controller)
 
-        return metrics
+        return controllers
 
     def get_controller_procs_path(self, controller):
         controller_path = self._controller_paths.get(controller)
@@ -687,7 +753,7 @@ class CgroupV2(Cgroup):
         self._enabled_controllers = enabled_controllers
 
     @staticmethod
-    def get_supported_controllers():
+    def get_supported_controller_names():
         return [CgroupV2.CPU_CONTROLLER, CgroupV2.MEMORY_CONTROLLER]
 
     def check_in_expected_slice(self, expected_slice):
@@ -697,9 +763,39 @@ class CgroupV2(Cgroup):
 
         return True
 
-    def get_controller_metrics(self, expected_relative_path=None):
-        # TODO - Implement controller metrics for cgroup v2
-        raise NotImplementedError()
+    def get_controllers(self, expected_relative_path=None):
+        controllers = []
+
+        for supported_controller_name in self.get_supported_controller_names():
+            controller = None
+
+            if supported_controller_name not in self._enabled_controllers:
+                # Do not send telemetry here. We already have telemetry for disabled controllers in cgroup init
+                log_cgroup_warning("{0} controller is not enabled; will not track".format(supported_controller_name),
+                                   send_event=False)
+                continue
+
+            if self._cgroup_path == "":
+                log_cgroup_warning("Cgroup path for {0} cannot be determined; will not track".format(self._cgroup_name))
+                continue
+
+            if expected_relative_path is not None:
+                expected_path = os.path.join(self._root_cgroup_path, expected_relative_path)
+                if self._cgroup_path != expected_path:
+                    log_cgroup_warning(
+                        "The {0} cgroup is not mounted at the expected path; will not track. Actual cgroup path:[{1}] Expected:[{2}]".format(
+                            self._cgroup_name, self._cgroup_path, expected_path))
+                    continue
+
+            if supported_controller_name == self.CPU_CONTROLLER:
+                controller = CpuControllerV2(self._cgroup_name, self._cgroup_path)
+            elif supported_controller_name == self.MEMORY_CONTROLLER:
+                controller = MemoryControllerV2(self._cgroup_name, self._cgroup_path)
+
+            if controller is not None:
+                controllers.append(controller)
+
+        return controllers
 
     def get_procs_path(self):
         if self._cgroup_path != "":

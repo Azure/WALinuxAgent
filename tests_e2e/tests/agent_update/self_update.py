@@ -102,7 +102,7 @@ class SelfUpdateBvt(AgentVmTest):
         Verifies the agent updated to latest version from custom test version.
         We retrieve latest version from goal state and compare with current agent version running as that latest version
         """
-        latest_version: str = self._ssh_client.run_command("agent_update-self_update_latest_version.py",
+        latest_version: str = self._ssh_client.run_command("agent_update-get_latest_version_from_manifest.py",
                                                            use_sudo=True).rstrip()
         self._verify_guest_agent_update(latest_version)
         # Verify agent updated to latest version by custom test agent

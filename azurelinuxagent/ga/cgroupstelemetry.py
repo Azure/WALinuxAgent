@@ -17,7 +17,7 @@ import errno
 import threading
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.ga.controllermetrics import CpuMetrics
+from azurelinuxagent.ga.cpucontroller import _CpuController
 from azurelinuxagent.common.future import ustr
 
 
@@ -25,30 +25,29 @@ class CGroupsTelemetry(object):
     """
     """
     _tracked = {}
-    _track_throttled_time = False
     _rlock = threading.RLock()
 
     @staticmethod
-    def set_track_throttled_time(value):
-        CGroupsTelemetry._track_throttled_time = value
+    def _get_tracking_id(cgroup_controller):
+        controller_type = cgroup_controller.get_controller_type()
+        # Since the path is same for all controllers in v2, we need to differentiate to track them separately
+        tracking_id = "{0}:{1}".format(controller_type, cgroup_controller.path)
+        return tracking_id
 
     @staticmethod
-    def get_track_throttled_time():
-        return CGroupsTelemetry._track_throttled_time
-
-    @staticmethod
-    def track_cgroup(cgroup):
+    def track_cgroup_controller(cgroup_controller):
         """
-        Adds the given item to the dictionary of tracked cgroups
+        Adds the given item to the dictionary of tracked cgroup controllers
         """
-        if isinstance(cgroup, CpuMetrics):
+        if isinstance(cgroup_controller, _CpuController):
             # set the current cpu usage
-            cgroup.initialize_cpu_usage()
+            cgroup_controller.initialize_cpu_usage()
 
         with CGroupsTelemetry._rlock:
-            if not CGroupsTelemetry.is_tracked(cgroup.path):
-                CGroupsTelemetry._tracked[cgroup.path] = cgroup
-                logger.info("Started tracking cgroup {0}", cgroup)
+            tracking_id = CGroupsTelemetry._get_tracking_id(cgroup_controller)
+            if not CGroupsTelemetry.is_tracked(tracking_id):
+                CGroupsTelemetry._tracked[tracking_id] = cgroup_controller
+                logger.info("Started tracking {0} cgroup {1}", cgroup_controller.get_controller_type(), cgroup_controller)
 
     @staticmethod
     def is_tracked(path):
@@ -68,18 +67,19 @@ class CGroupsTelemetry(object):
         Stop tracking the cgroups for the given path
         """
         with CGroupsTelemetry._rlock:
-            if cgroup.path in CGroupsTelemetry._tracked:
-                CGroupsTelemetry._tracked.pop(cgroup.path)
-                logger.info("Stopped tracking cgroup {0}", cgroup)
+            tracking_id = CGroupsTelemetry._get_tracking_id(cgroup)
+            if tracking_id in CGroupsTelemetry._tracked:
+                CGroupsTelemetry._tracked.pop(tracking_id)
+                logger.info("Stopped tracking {0} cgroup {1}", cgroup.get_controller_type(), cgroup)
 
     @staticmethod
     def poll_all_tracked():
         metrics = []
-        inactive_cgroups = []
+        inactive_controllers = []
         with CGroupsTelemetry._rlock:
-            for cgroup in CGroupsTelemetry._tracked.values():
+            for controller in CGroupsTelemetry._tracked.values():
                 try:
-                    metrics.extend(cgroup.get_tracked_metrics(track_throttled_time=CGroupsTelemetry._track_throttled_time))
+                    metrics.extend(controller.get_tracked_metrics())
                 except Exception as e:
                     # There can be scenarios when the CGroup has been deleted by the time we are fetching the values
                     # from it. This would raise IOError with file entry not found (ERRNO: 2). We do not want to log
@@ -87,11 +87,11 @@ class CGroupsTelemetry(object):
                     # exceptions which could occur, which is why we do a periodic log for all the other errors.
                     if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:  # pylint: disable=E1101
                         logger.periodic_warn(logger.EVERY_HOUR, '[PERIODIC] Could not collect metrics for cgroup '
-                                                                '{0}. Error : {1}'.format(cgroup.name, ustr(e)))
-                if not cgroup.is_active():
-                    inactive_cgroups.append(cgroup)
-            for inactive_cgroup in inactive_cgroups:
-                CGroupsTelemetry.stop_tracking(inactive_cgroup)
+                                                                '{0}. Error : {1}'.format(controller.name, ustr(e)))
+                if not controller.is_active():
+                    inactive_controllers.append(controller)
+            for inactive_controller in inactive_controllers:
+                CGroupsTelemetry.stop_tracking(inactive_controller)
 
         return metrics
 
@@ -99,4 +99,3 @@ class CGroupsTelemetry(object):
     def reset():
         with CGroupsTelemetry._rlock:
             CGroupsTelemetry._tracked.clear()  # emptying the dictionary
-            CGroupsTelemetry._track_throttled_time = False

@@ -27,8 +27,8 @@ from datetime import datetime
 from heapq import heappush, heappop
 
 from azurelinuxagent.common.conf import get_lib_dir, get_ext_log_dir, get_agent_log_file
-from azurelinuxagent.common.event import initialize_event_logger_vminfo_common_parameters
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.event import initialize_event_logger_vminfo_common_parameters_and_protocol, add_event, WALAEventOperation
+from azurelinuxagent.common.future import ustr, UTC
 from azurelinuxagent.ga.logcollector_manifests import MANIFEST_NORMAL, MANIFEST_FULL
 
 # Please note: be careful when adding agent dependencies in this module.
@@ -76,7 +76,6 @@ class LogCollector(object):
         self._must_collect_files = self._expand_must_collect_files()
         self._create_base_dirs()
         self._set_logger()
-        self._initialize_telemetry()
 
     @staticmethod
     def _mkdir(dirname):
@@ -104,11 +103,11 @@ class LogCollector(object):
         _LOGGER.setLevel(logging.INFO)
 
     @staticmethod
-    def _initialize_telemetry():
+    def initialize_telemetry():
         protocol = get_protocol_util().get_protocol(init_goal_state=False)
         protocol.client.reset_goal_state(goal_state_properties=GoalStateProperties.RoleConfig | GoalStateProperties.HostingEnv)
         # Initialize the common parameters for telemetry events
-        initialize_event_logger_vminfo_common_parameters(protocol)
+        initialize_event_logger_vminfo_common_parameters_and_protocol(protocol)
 
     @staticmethod
     def _run_shell_command(command, stdout=subprocess.PIPE, log_output=False):
@@ -314,21 +313,23 @@ class LogCollector(object):
 
                 if os.path.getsize(file_path) <= _FILE_SIZE_LIMIT:
                     final_files_to_collect.append(file_path)
+                    total_uncompressed_size += file_size
                     _LOGGER.info("Adding file %s, size %s b", file_path, file_size)
                 else:
                     truncated_file_path = self._truncate_large_file(file_path)
                     if truncated_file_path:
                         _LOGGER.info("Adding truncated file %s, size %s b", truncated_file_path, file_size)
                         final_files_to_collect.append(truncated_file_path)
-
-                total_uncompressed_size += file_size
+                        total_uncompressed_size += file_size
             except IOError as e:
                 if e.errno == 2:    # [Errno 2] No such file or directory
                     _LOGGER.warning("File %s does not exist, skipping collection for this file", file_path)
 
-        _LOGGER.info("Uncompressed archive size is %s b", total_uncompressed_size)
+        msg = "Uncompressed archive size is {0} b".format(total_uncompressed_size)
+        _LOGGER.info(msg)
+        add_event(op=WALAEventOperation.LogCollection, message=msg)
 
-        return final_files_to_collect
+        return final_files_to_collect, total_uncompressed_size
 
     def _create_list_of_files_to_collect(self):
         # The final list of files to be collected by zip is created in three steps:
@@ -338,8 +339,8 @@ class LogCollector(object):
         #    the size limit.
         parsed_file_paths = self._process_manifest_file()
         prioritized_file_paths = self._get_priority_files_list(parsed_file_paths)
-        files_to_collect = self._get_final_list_for_archive(prioritized_file_paths)
-        return files_to_collect
+        files_to_collect, total_uncompressed_size = self._get_final_list_for_archive(prioritized_file_paths)
+        return files_to_collect, total_uncompressed_size
 
     def collect_logs_and_get_archive(self):
         """
@@ -347,16 +348,17 @@ class LogCollector(object):
         :return: Returns the path of the collected compressed archive
         """
         files_to_collect = []
+        total_uncompressed_size = 0
 
         try:
             # Clear previous run's output and create base directories if they don't exist already.
             self._create_base_dirs()
             LogCollector._reset_file(OUTPUT_RESULTS_FILE_PATH)
-            start_time = datetime.utcnow()
+            start_time = datetime.now(UTC)
             _LOGGER.info("Starting log collection at %s", start_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
             _LOGGER.info("Using log collection mode %s", "full" if self._is_full_mode else "normal")
 
-            files_to_collect = self._create_list_of_files_to_collect()
+            files_to_collect, total_uncompressed_size = self._create_list_of_files_to_collect()
             _LOGGER.info("### Creating compressed archive ###")
 
             compressed_archive = None
@@ -391,10 +393,10 @@ class LogCollector(object):
                 compressed_archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
                 _LOGGER.info("Successfully compressed files. Compressed archive size is %s b", compressed_archive_size)
 
-                end_time = datetime.utcnow()
+                end_time = datetime.now(UTC)
                 duration = end_time - start_time
                 elapsed_ms = int(((duration.days * 24 * 60 * 60 + duration.seconds) * 1000) + (duration.microseconds / 1000.0))
-                _LOGGER.info("Finishing log collection at %s", end_time.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"))
+                _LOGGER.info("Finishing log collection at %s", end_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
                 _LOGGER.info("Elapsed time: %s ms", elapsed_ms)
 
                 compressed_archive.write(OUTPUT_RESULTS_FILE_PATH.encode("utf-8"), arcname="results.txt")
@@ -402,7 +404,7 @@ class LogCollector(object):
                 if compressed_archive is not None:
                     compressed_archive.close()
 
-            return COMPRESSED_ARCHIVE_PATH
+            return COMPRESSED_ARCHIVE_PATH, total_uncompressed_size
         except Exception as e:
             msg = "Failed to collect logs: {0}".format(ustr(e))
             _LOGGER.error(msg)

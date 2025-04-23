@@ -86,19 +86,22 @@ class CryptUtil(object):
             thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
             return thumbprint
 
-    def decrypt_p7m(self, p7m_file, trans_prv_file, trans_cert_file, pem_file):
-        if not os.path.exists(p7m_file):
-            raise IOError(errno.ENOENT, "File not found", p7m_file)
-        elif not os.path.exists(trans_prv_file):
-            raise IOError(errno.ENOENT, "File not found", trans_prv_file)
-        else:
-            try:
-                shellutil.run_pipe([
-                    [self.openssl_cmd, "cms", "-decrypt", "-in", p7m_file, "-inkey", trans_prv_file, "-recip", trans_cert_file],
-                    [self.openssl_cmd, "pkcs12", "-nodes", "-password", "pass:", "-out", pem_file]])
-            except shellutil.CommandError as command_error:
-                logger.error("Failed to decrypt {0} (return code: {1})\n[stdout]\n{2}\n[stderr]\n{3}",
-                    p7m_file, command_error.returncode, command_error.stdout, command_error.stderr)
+    def decrypt_certificates_p7m(self, p7m_file, trans_prv_file, trans_cert_file, pfx_file):
+        umask = None
+        try:
+            umask = os.umask(0o077)
+            with open(pfx_file, "wb") as pfx_file_:
+                shellutil.run_command([self.openssl_cmd, "cms", "-decrypt", "-in", p7m_file, "-inkey", trans_prv_file, "-recip", trans_cert_file], stdout=pfx_file_)
+        finally:
+            if umask is not None:
+                os.umask(umask)
+
+    def convert_pfx_to_pem(self, pfx_file, nomacver, pem_file):
+        command = [self.openssl_cmd, "pkcs12", "-nodes", "-password", "pass:", "-in", pfx_file, "-out", pem_file]
+        if nomacver:
+            command.append("-nomacver")
+
+        shellutil.run_command(command)
 
     def crt_to_ssh(self, input_file, output_file):
         with open(output_file, "ab") as file_out:

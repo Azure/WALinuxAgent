@@ -33,6 +33,7 @@ import sys
 import time
 from datetime import datetime
 from typing import Any, Dict, List
+from azurelinuxagent.common.future import UTC
 
 DELIMITER = ";"
 OPS_FILE_DIR = "/var/log/azure/Microsoft.Azure.TestExtensions.Edp.GuestAgentDcrTest/"
@@ -58,12 +59,11 @@ def parse_ops_log(ops_version: str, input_ops: List[str], start_time: str):
 
     ops = []
     with open(ops_file_name, 'r') as ops_log:
-        # we get the last len(input_ops) from the log file and ensure they match with the input_ops
         # Example of a line in the log file - `Date:2019-07-30T21:54:03Z; Operation:install; SeqNo:0`
-        content = ops_log.readlines()[-len(input_ops):]
+        content = ops_log.readlines()
         for op_log in content:
             data = op_log.split(DELIMITER)
-            date = datetime.strptime(data[0].split("Date:")[1], "%Y-%m-%dT%H:%M:%SZ")
+            date = datetime.strptime(data[0].split("Date:")[1], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
             op = data[1].split("Operation:")[1]
             seq_no = data[2].split("SeqNo:")[1].strip('\n')
 
@@ -72,6 +72,13 @@ def parse_ops_log(ops_version: str, input_ops: List[str], start_time: str):
                 continue
 
             ops.append({'date': date, 'op': op, 'seq_no': seq_no})
+
+            # Only parse the expected number of operations after the test case starts. There may be additional
+            # operations on the extension if the agent processes a goal state with additional extensions added by policy
+            # or otherwise (ConfigurationforLinux, for example)
+            if len(ops) == len(input_ops):
+                break
+
     return ops
 
 
@@ -81,7 +88,7 @@ def assert_ops_in_sequence(actual_ops: List[Dict[str, Any]], expected_ops: List[
         print("Operation sequence length doesn't match, exit code 2")
         exit_code = 2
 
-    last_date = datetime(70, 1, 1)
+    last_date = datetime(70, 1, 1, tzinfo=UTC)
     for idx, val in enumerate(actual_ops):
         if exit_code != 0:
             break
@@ -146,7 +153,7 @@ def main():
         # Print any unknown arguments passed to this script and fix them with low priority
         print("[Low Proiority][To-Fix] Found unknown args: %s" % ', '.join(unknown))
 
-    args.start_time = datetime.strptime(args.start_time, "%Y-%m-%dT%H:%M:%SZ")
+    args.start_time = datetime.strptime(args.start_time, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
 
     exit_code = 999
     actual_ops = []

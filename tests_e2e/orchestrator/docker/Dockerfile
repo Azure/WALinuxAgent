@@ -28,7 +28,11 @@ RUN \
     #                                                                                                            \
     # Install LISA dependencies                                                                                  \
     #                                                                                                            \
-    tdnf install -y git gcc gobject-introspection-devel cairo-devel pkg-config python3-devel libvirt-devel       \
+    # NOTE - Dependencies for Ubuntu:                                                                            \
+    #                                                                                                            \
+    # apt install -y gcc libgirepository1.0-dev libcairo2-dev qemu-utils libvirt-dev python3-pip python3-venv    \                                                                                                      \
+    #                                                                                                            \
+    tdnf install -y gcc gobject-introspection-devel cairo-devel pkg-config python3-devel libvirt-devel           \
             cairo-gobject binutils kernel-headers glibc-devel python3-pip python3-virtualenv                  && \
                                                                                                                  \
     #                                                                                                            \
@@ -67,7 +71,7 @@ RUN \
     cd $HOME                                                                                                  && \
     git clone https://github.com/microsoft/lisa.git                                                           && \
     cd lisa                                                                                                   && \
-    git checkout 0e37ed07304b74362cfb3d3c55ac932d3bdc660c                                                     && \
+    git checkout 99cfc195f9285fb0188ef6f24a9f613dc203e897                                                     && \
                                                                                                                  \
     python3 -m pip install --upgrade pip                                                                      && \
     python3 -m pip install --editable .[azure,libvirt] --config-settings editable_mode=compat                 && \

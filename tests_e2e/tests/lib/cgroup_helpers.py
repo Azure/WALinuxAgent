@@ -1,13 +1,14 @@
-import datetime
 import os
 import re
 
 from assertpy import assert_that, fail
 
+from azurelinuxagent.common.future import datetime_min_utc
 from azurelinuxagent.common.osutil import systemd
-from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils import shellutil, fileutil
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
-from azurelinuxagent.ga.cgroupapi import get_cgroup_api, SystemdCgroupApiv1
+from azurelinuxagent.ga.cgroupapi import create_cgroup_api, SystemdCgroupApiv1, SystemdCgroupApiv2
+from azurelinuxagent.ga.cpucontroller import CpuControllerV1, CpuControllerV2
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
@@ -15,17 +16,12 @@ from tests_e2e.tests.lib.retry import retry_if_false
 BASE_CGROUP = '/sys/fs/cgroup'
 AGENT_CGROUP_NAME = 'WALinuxAgent'
 AGENT_SERVICE_NAME = systemd.get_agent_unit_name()
-AGENT_CONTROLLERS = ['cpu', 'memory']
-EXT_CONTROLLERS = ['cpu', 'memory']
-
-CGROUP_TRACKED_PATTERN = re.compile(r'Started tracking cgroup ([^\s]+)\s+\[(?P<path>[^\s]+)\]')
+CGROUP_TRACKED_PATTERN = r'Started tracking (cpu|memory) cgroup ([^\s]+)\s+\[(?P<path>[^\s]+)\]'
 
 GATESTEXT_FULL_NAME = "Microsoft.Azure.Extensions.Edp.GATestExtGo"
-GATESTEXT_SERVICE = "gatestext.service"
+GATESTEXT_SERVICE = "gatestext"
 AZUREMONITOREXT_FULL_NAME = "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent"
-AZUREMONITORAGENT_SERVICE = "azuremonitoragent.service"
-MDSD_SERVICE = "mdsd.service"
-
+AZUREMONITORAGENT_SERVICE = "azuremonitoragent"
 
 def verify_if_distro_supports_cgroup():
     """
@@ -68,7 +64,7 @@ def print_service_status():
 
 
 def get_agent_cgroup_mount_path():
-    return os.path.join('/', 'azure.slice', AGENT_SERVICE_NAME)
+    return [os.path.join('/', 'azure.slice', AGENT_SERVICE_NAME), os.path.join("/", "system.slice", AGENT_SERVICE_NAME)]
 
 
 def get_extension_cgroup_mount_path(extension_name):
@@ -109,7 +105,7 @@ def verify_agent_cgroup_assigned_correctly():
         for line in service_status.splitlines():
             if re.match(is_active_pattern, line):
                 is_active = True
-            elif cgroup_mount_path in line:
+            if any(cgroup in line for cgroup in cgroup_mount_path):
                 is_cgroup_assigned = True
 
         return is_active and is_cgroup_assigned
@@ -140,18 +136,25 @@ def check_agent_quota_disabled():
     Returns True if the cpu quota is infinity
     """
     cpu_quota = get_agent_cpu_quota()
+    log.info(cpu_quota)
     # the quota can be expressed as seconds (s) or milliseconds (ms); no quota is expressed as "infinity"
-    return cpu_quota == 'infinity'
+    # Ubuntu 16 has an issue in expressing no quota as "infinity" https://github.com/systemd/systemd/issues/5965, so we are directly checking the quota value in cpu controller
+    return cpu_quota == 'infinity' or get_unit_cgroup_cpu_quota_disabled(AGENT_SERVICE_NAME)
 
-
-def check_cgroup_disabled_with_unknown_process():
+def check_cgroup_disabled_due_to_systemd_error():
     """
-    Returns True if the cgroup is disabled with unknown process
+    Returns True if the cgroup is disabled due to systemd error (Connection reset by peer)
+
+    Ex:
+    2024-12-18T06:43:23.867711Z INFO ExtHandler ExtHandler [CGW] Disabling resource usage monitoring. Reason: Failed to start Microsoft.Azure.Extensions.Edp.GATestExtGo-1.2.0.0 using systemd-run, will try invoking the extension directly. Error: [SystemdRunError] Systemd process exited with code 1 and output [stdout]
+
+    [stderr]
+    Warning! D-Bus connection terminated.
+    Failed to start transient scope unit: Connection reset by peer
     """
-    return check_log_message("Disabling resource usage monitoring. Reason: Check on cgroups failed:.+UNKNOWN")
+    return check_log_message("Failed to start.+using systemd-run, will try invoking the extension directly.+[SystemdRunError].+Connection reset by peer")
 
-
-def check_log_message(message, after_timestamp=datetime.datetime.min):
+def check_log_message(message, after_timestamp=datetime_min_utc):
     """
     Check if the log message is present after the given timestamp(if provided) in the agent log
     """
@@ -168,10 +171,46 @@ def get_unit_cgroup_proc_path(unit_name, controller):
     """
     Returns the cgroup.procs path for the given unit and controller.
     """
-    cgroups_api = get_cgroup_api()
+    cgroups_api = create_cgroup_api()
     unit_cgroup = cgroups_api.get_unit_cgroup(unit_name=unit_name, cgroup_name="test cgroup")
     if isinstance(cgroups_api, SystemdCgroupApiv1):
         return unit_cgroup.get_controller_procs_path(controller=controller)
     else:
         return unit_cgroup.get_procs_path()
 
+def get_unit_cgroup_cpu_quota_disabled(unit_name):
+    """
+    Returns True if cpu quota not set for the given unit cgroup
+    """
+    cgroups_api = create_cgroup_api()
+    unit_cgroup = cgroups_api.get_unit_cgroup(unit_name=unit_name, cgroup_name="test cgroup")
+    controllers = unit_cgroup.get_controllers()
+    for controller in controllers:
+        if isinstance(controller, CpuControllerV1):
+            path = os.path.join(controller.path, "cpu.cfs_quota_us")
+            log.info("Checking cpu.cfs_quota_us file: {0}".format(path))
+            val = fileutil.read_file(path).strip()
+            return val == "-1" # -1 means no quota
+        elif isinstance(controller, CpuControllerV2):
+            # /sys/fs/cgroup/system.slice/cron.service$ cat cpu.max
+            # max 100000
+            path = os.path.join(controller.path, "cpu.max")
+            log.info("Checking cpu.cfs_quota_us file: {0}".format(path))
+            val = fileutil.read_file(path).split()[0]
+            return val == "max" # max means no quota
+    return False
+
+def get_mounted_controller_list():
+    """
+    Returns list of controller names which are mounted in different cgroup paths
+    """
+    if using_cgroupv2():
+        return [] # empty since v2 controllers are mounted at same root
+    return ['cpu', 'memory']
+
+def using_cgroupv2():
+    """
+    Returns True if systemd v2 is used
+    """
+    cgroups_api = create_cgroup_api()
+    return isinstance(cgroups_api, SystemdCgroupApiv2)

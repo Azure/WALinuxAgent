@@ -17,7 +17,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import base64
-import hashlib
 import re
 import struct
 import sys
@@ -75,6 +74,19 @@ def gettext(node):
     return None
 
 
+def gettextxml(node):
+    """
+    Get the raw XML of a text node
+    """
+    if node is None:
+        return None
+
+    for child in node.childNodes:
+        if child.nodeType == child.TEXT_NODE:
+            return child.toxml()
+    return None
+
+
 def findtext(root, tag, namespace=None):
     """
     Get text of node by tag and namespace under Node root.
@@ -85,12 +97,22 @@ def findtext(root, tag, namespace=None):
 
 def getattrib(node, attr_name):
     """
-    Get attribute of xml node
+    Get attribute of xml node. Returns None if node is None. Returns "" if node does not have attribute attr_name
     """
     if node is not None:
         return node.getAttribute(attr_name)
     else:
         return None
+
+
+def hasattrib(node, attr_name):
+    """
+    Return True if xml node has attribute, False if node is None or node does not have attribute attr_name
+    """
+    if node is not None:
+        return node.hasAttribute(attr_name)
+    else:
+        return False
 
 
 def unpack(buf, offset, value_range):
@@ -301,30 +323,26 @@ def compress(s):
     the contents of a file. The output of this method is suitable for
     embedding in log statements.
     """
-    from azurelinuxagent.common.version import PY_VERSION_MAJOR
-    if PY_VERSION_MAJOR > 2:
+    if sys.version_info[0] > 2:
         return base64.b64encode(zlib.compress(bytes(s, 'utf-8'))).decode('utf-8')
     return base64.b64encode(zlib.compress(s))
 
 
 def b64encode(s):
-    from azurelinuxagent.common.version import PY_VERSION_MAJOR
-    if PY_VERSION_MAJOR > 2:
+    if sys.version_info[0] > 2:
         return base64.b64encode(bytes(s, 'utf-8')).decode('utf-8')
     return base64.b64encode(s)
 
 
 def b64decode(s):
-    from azurelinuxagent.common.version import PY_VERSION_MAJOR
-    if PY_VERSION_MAJOR > 2:
+    if sys.version_info[0] > 2:
         return base64.b64decode(s).decode('utf-8')
     return base64.b64decode(s)
 
 
 def safe_shlex_split(s):
     import shlex
-    from azurelinuxagent.common.version import PY_VERSION
-    if PY_VERSION[:2] == (2, 6):
+    if sys.version_info[:2] == (2, 6):
         return shlex.split(s.encode('utf-8'))
     return shlex.split(s)
 
@@ -362,19 +380,6 @@ def is_str_empty(s):
     return is_str_none_or_whitespace(s) or is_str_none_or_whitespace(s.rstrip(' \t\r\n\0'))
 
 
-def hash_strings(string_list):
-    """
-    Compute a cryptographic hash of a list of strings
-
-    :param string_list: The strings to be hashed
-    :return: The cryptographic hash (digest) of the strings in the order provided
-    """
-    sha1_hash = hashlib.sha1()
-    for item in string_list:
-        sha1_hash.update(item.encode())
-    return sha1_hash.digest()
-
-
 def format_memory_value(unit, value):
     units = {'bytes': 1, 'kilobytes': 1024, 'megabytes': 1024*1024, 'gigabytes': 1024*1024*1024}
 
@@ -398,13 +403,10 @@ def str_to_encoded_ustr(s, encoding='utf-8'):
     :return: Returns the corresponding ustr string. Returns None if input is None.
     """
 
-    # TODO: Import at the top of the file instead of a local import (using local import here to avoid cyclic dependency)
-    from azurelinuxagent.common.version import PY_VERSION_MAJOR
-
     if s is None or type(s) is ustr:
         # If its already a ustr/None then return as is
         return s
-    if PY_VERSION_MAJOR > 2:
+    if sys.version_info[0] > 2:
         try:
             # For py3+, str() is unicode by default
             if isinstance(s, bytes):
@@ -435,4 +437,17 @@ def format_exception(exception):
         msg += ''.join(traceback.format_exception(type(exception), value=exception, tb=tb))
 
     return msg
+
+
+SAS_TOKEN_RE = re.compile(r'(https://\S+\?)((sv|st|se|sr|sp|sip|spr|sig)=\S+)+', flags=re.IGNORECASE)
+
+
+def redact_sas_token(msg):
+    """
+    Redact SAS tokens from the message
+    """
+    if msg is None:
+        return msg
+    return SAS_TOKEN_RE.sub(r'\1<redacted>', msg)
+
 

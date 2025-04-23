@@ -26,7 +26,7 @@ from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
 from tests.lib.mock_cgroup_environment import mock_cgroup_v1_environment
-from tests.lib.tools import AgentTestCase, patch, mock_sleep, i_am_root, is_python_version_26_or_34, skip_if_predicate_true
+from tests.lib.tools import AgentTestCase, patch, mock_sleep, i_am_root
 
 
 class CGroupConfiguratorSystemdTestCaseSudo(AgentTestCase):
@@ -53,7 +53,6 @@ class CGroupConfiguratorSystemdTestCaseSudo(AgentTestCase):
                     configurator.initialize()
             yield configurator
 
-    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4 for now. Need to revisit to fix it")
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_not_use_fallback_option_if_extension_fails(self, *args):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
@@ -88,9 +87,8 @@ class CGroupConfiguratorSystemdTestCaseSudo(AgentTestCase):
                     self.assertIn("Non-zero exit code", ustr(context_manager.exception))
                     # The scope name should appear in the process output since systemd-run was invoked and stderr
                     # wasn't truncated.
-                    self.assertIn("Running scope as unit", ustr(context_manager.exception))
+                    self.assertRegex(ustr(context_manager.exception), r"Running (scope )?as unit")
 
-    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4 for now. Need to revisit to fix it")
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     @patch("azurelinuxagent.ga.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN", 5)
     def test_start_extension_command_should_not_use_fallback_option_if_extension_fails_with_long_output(self, *args):

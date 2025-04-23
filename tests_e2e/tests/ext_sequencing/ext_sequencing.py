@@ -22,6 +22,7 @@
 # validates they are enabled in order of dependencies.
 #
 import copy
+import json
 import random
 import re
 import uuid
@@ -30,6 +31,8 @@ from typing import List, Dict, Any
 
 from assertpy import fail
 from azure.mgmt.compute.models import VirtualMachineScaleSetVMExtensionsSummary
+
+from azurelinuxagent.common.future import UTC, datetime_min_utc
 
 from tests_e2e.tests.ext_sequencing.ext_seq_test_cases import add_one_dependent_ext_without_settings, add_two_extensions_with_dependencies, \
     remove_one_dependent_extension, remove_all_dependencies, add_one_dependent_extension, \
@@ -47,7 +50,7 @@ class ExtSequencing(AgentVmssTest):
 
     def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
-        self._scenario_start = datetime.min
+        self._scenario_start = datetime_min_utc
 
     # Cases to test different dependency scenarios
     _test_cases = [
@@ -184,7 +187,7 @@ class ExtSequencing(AgentVmssTest):
 
         for case in self._test_cases:
             test_case_start = random.choice(list(ssh_clients.values())).run_command("date '+%Y-%m-%d %T'").rstrip()
-            if self._scenario_start == datetime.min:
+            if self._scenario_start == datetime_min_utc:
                 self._scenario_start = test_case_start
 
             # Assign unique guid to forceUpdateTag for each extension to make sure they're always unique to force CRP
@@ -225,13 +228,42 @@ class ExtSequencing(AgentVmssTest):
                 # We only expect to catch an exception during deployment if we are forcing one of the extensions to
                 # fail. We know an extension should fail if "failing" is in the case name. Otherwise, report the
                 # failure.
-                deployment_failure_pattern = r"[\s\S]*\"details\": [\s\S]* \"code\": \"(?P<code>.*)\"[\s\S]* \"message\": \"(?P<msg>.*)\"[\s\S]*"
-                msg_pattern = r"Multiple VM extensions failed to be provisioned on the VM. Please see the VM extension instance view for other failures. The first extension failed due to the error: VM Extension '.*' is marked as failed since it depends upon the VM Extension 'CustomScript' which has failed."
-                deployment_failure_match = re.match(deployment_failure_pattern, str(e))
+                #
+                # Example deployment failure:
+                #   (DeploymentFailed) At least one resource deployment operation failed. Please list deployment operations for details. Please see https://aka.ms/arm-deployment-operations for usage details.
+                #   Code: DeploymentFailed
+                #   Message: At least one resource deployment operation failed. Please list deployment operations for details. Please see https://aka.ms/arm-deployment-operations for usage details.
+                #   Exception Details:	(Conflict) {
+                # 	  "status": "Failed",
+                # 	  "error": {
+                # 	    "code": "ResourceDeploymentFailure",
+                # 	    "message": "The resource write operation failed to complete successfully, because it reached terminal provisioning state 'Failed'.",
+                # 	    "details": [
+                # 	      {
+                # 	        "code": "VMExtensionProvisioningError",
+                # 	        "target": "0",
+                # 	        "message": "Multiple VM extensions failed to be provisioned on the VM. The Extensions failed due to the errors: \n[Extension Name: 'AzureMonitorLinuxAgent'\nError Message: VM Extension 'AzureMonitorLinuxAgent' is marked as failed since it depends upon the VM Extension 'CustomScript' which has failed.]\n\n[Extension Name: 'CustomScript'\nError Message: VM has reported a failure when processing extension 'CustomScript' (publisher 'Microsoft.Azure.Extensions' and type 'CustomScript'). Error message: 'Enable failed: failed to execute command: command terminated with exit status=1\n[stdout]\n\n[stderr]\n'. More information on troubleshooting is available at https://aka.ms/VMExtensionCSELinuxTroubleshoot. ]\n"
+                # 	      }
+                # 	    ]
+                # 	  }
+                # 	}
                 if "failing" not in case.__name__:
                     fail("Extension template deployment unexpectedly failed: {0}".format(e))
-                elif not deployment_failure_match or deployment_failure_match.group("code") != "VMExtensionProvisioningError" or not re.match(msg_pattern, deployment_failure_match.group("msg")):
-                    fail("Extension template deployment failed as expected, but with an unexpected error: {0}".format(e))
+                else:
+                    deployment_failure_pattern = r"[\s\S]*\"code\":\s*\"ResourceDeploymentFailure\"[\s\S]*\"details\":\s*\[\s*(?P<error>[\s\S]*)\]"
+                    deployment_failure_match = re.match(deployment_failure_pattern, str(e))
+                    try:
+                        if deployment_failure_match is None:
+                            raise Exception("Unable to match a ResourceDeploymentFailure")
+                        error_json = json.loads(deployment_failure_match.group("error"))
+                        error_code = error_json['code']
+                        error_message = error_json['message']
+                    except Exception as parse_exc:
+                        fail("Extension template deployment failed as expected, but there was an error in parsing the failure. Parsing failure: {0}\nDeployment Failure: {1}".format(parse_exc, e))
+
+                    msg_pattern = r"Multiple VM extensions failed to be provisioned on the VM[\s\S]*VM Extension '.*' is marked as failed since it depends upon the VM Extension 'CustomScript' which has failed."
+                    if error_code != "VMExtensionProvisioningError" or re.match(msg_pattern, error_message) is None:
+                        fail("Extension template deployment failed as expected, but with an unexpected error: {0}".format(e))
 
             # Get the extensions on the VMSS from the instance view
             log.info("")
@@ -255,9 +287,9 @@ class ExtSequencing(AgentVmssTest):
 
     def get_ignore_errors_before_timestamp(self) -> datetime:
         # Ignore errors in the agent log before the first test case starts
-        if self._scenario_start == datetime.min:
+        if self._scenario_start == datetime_min_utc:
             return self._scenario_start
-        return datetime.strptime(self._scenario_start, u'%Y-%m-%d %H:%M:%S')
+        return datetime.strptime(self._scenario_start, u'%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [

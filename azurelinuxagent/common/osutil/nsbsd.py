@@ -136,27 +136,3 @@ class NSBSDOSUtil(FreeBSDOSUtil):
     def set_dhcp_hostname(self, hostname):
         # already done by the dhcp client
         pass
-
-    def get_firewall_dropped_packets(self, dst_ip=None):
-        # disable iptables methods
-        return 0
-
-    def get_firewall_will_wait(self):
-        # disable iptables methods
-        return ""
-
-    def _delete_rule(self, rule):
-        # disable iptables methods
-        return
-
-    def remove_firewall(self, dst_ip=None, uid=None, wait=""):
-        # disable iptables methods
-        return True
-
-    def enable_firewall(self, dst_ip=None, uid=None):
-        # disable iptables methods
-        return True, True
-
-    def get_firewall_list(self, wait=""):
-        # disable iptables methods
-        return ""

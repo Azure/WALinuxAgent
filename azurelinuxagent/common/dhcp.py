@@ -20,6 +20,7 @@ import socket
 import time
 
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import DhcpError
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
@@ -151,9 +152,15 @@ class DhcpHandler(object):
         """
         Check if DHCP is available
         """
-        dhcp_available =  self.osutil.is_dhcp_available()
-        if not dhcp_available:
-            logger.info("send_dhcp_req: DHCP not available")
+        dhcp_available = self.osutil.is_dhcp_available()
+        # If user has DHCP disabled for their VM then the dhcp request will fail. The user can configure the agent to
+        # use the known wire server ip instead.
+        use_dhcp = conf.get_dhcp_discovery_enabled()
+        if not dhcp_available or not use_dhcp:
+            if not use_dhcp:
+                logger.info("send_dhcp_req: DHCP usage for endpoint discovery is disabled (Protocol.EndpointDiscovery={0}). Will use known wireserver endpoint.".format(conf.get_protocol_endpoint_discovery()))
+            elif not dhcp_available:
+                logger.info("send_dhcp_req: DHCP not available")
             self.endpoint = KNOWN_WIRESERVER_IP
             return
 

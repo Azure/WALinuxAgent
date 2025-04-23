@@ -21,7 +21,9 @@ import sys
 from datetime import datetime, timedelta
 from threading import current_thread
 
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, UTC
+from azurelinuxagent.common.utils import timeutil
+from azurelinuxagent.common.utils.textutil import redact_sas_token
 
 EVERY_DAY = timedelta(days=1)
 EVERY_HALF_DAY = timedelta(hours=12)
@@ -36,10 +38,6 @@ class Logger(object):
     """
     Logger class
     """
-
-    # This format is based on ISO-8601, Z represents UTC (Zero offset)
-    LogTimeFormatInUTC = u'%Y-%m-%dT%H:%M:%S.%fZ'
-
     def __init__(self, logger=None, prefix=None):
         self.appenders = []
         self.logger = self if logger is None else logger
@@ -55,13 +53,13 @@ class Logger(object):
 
     def _is_period_elapsed(self, delta, h):
         return h not in self.logger.periodic_messages or \
-            (self.logger.periodic_messages[h] + delta) <= datetime.now()
+            (self.logger.periodic_messages[h] + delta) <= datetime.now(UTC)
 
     def _periodic(self, delta, log_level_op, msg_format, *args):
         h = hash(msg_format)
         if self._is_period_elapsed(delta, h):
             log_level_op(msg_format, *args)
-            self.logger.periodic_messages[h] = datetime.now()
+            self.logger.periodic_messages[h] = datetime.now(UTC)
 
     def periodic_info(self, delta, msg_format, *args):
         self._periodic(delta, self.info, msg_format, *args)
@@ -135,13 +133,17 @@ class Logger(object):
             msg = msg_format.format(*args)
         else:
             msg = msg_format
-        time = datetime.utcnow().strftime(Logger.LogTimeFormatInUTC)
+
+        # redact the sas token from the message before logging
+        redacted_msg = redact_sas_token(msg)
+
+        time = timeutil.create_utc_timestamp(datetime.now(UTC))
         level_str = LogLevel.STRINGS[level]
         thread_name = current_thread().name
         if self.prefix is not None:
-            log_item = u"{0} {1} {2} {3} {4}\n".format(time, level_str, thread_name, self.prefix, msg)
+            log_item = u"{0} {1} {2} {3} {4}\n".format(time, level_str, thread_name, self.prefix, redacted_msg)
         else:
-            log_item = u"{0} {1} {2} {3}\n".format(time, level_str, thread_name, msg)
+            log_item = u"{0} {1} {2} {3}\n".format(time, level_str, thread_name, redacted_msg)
 
         log_item = ustr(log_item.encode('ascii', "backslashreplace"), 
                         encoding="ascii")

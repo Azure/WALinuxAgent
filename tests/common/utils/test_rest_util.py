@@ -134,68 +134,6 @@ class TestHttpOperations(AgentTestCase):
         rel_uri = restutil._trim_url_parameters("None")
         self.assertEqual(rel_uri, "None")
 
-    def test_cleanup_sas_tokens_from_urls_for_normal_cases(self):
-        test_url = "http://abc.def/ghi#hash?jkl=mn"
-        filtered_url = restutil.redact_sas_tokens_in_urls(test_url)
-        self.assertEqual(test_url, filtered_url) 
-
-        test_url = "http://abc.def:80/"
-        filtered_url = restutil.redact_sas_tokens_in_urls(test_url)
-        self.assertEqual(test_url, filtered_url) 
-
-        test_url = "http://abc.def/"
-        filtered_url = restutil.redact_sas_tokens_in_urls(test_url)
-        self.assertEqual(test_url, filtered_url) 
-
-        test_url = "https://abc.def/ghi?jkl=mn"
-        filtered_url = restutil.redact_sas_tokens_in_urls(test_url)
-        self.assertEqual(test_url, filtered_url) 
-
-    def test_cleanup_sas_tokens_from_urls_containing_sas_tokens(self):
-        # Contains pair of URLs (RawURL, RedactedURL)
-        urls_tuples = [("https://abc.def.xyz.123.net/functiontest/yokawasa.png?sig"
-                        "=sXBjML1Fpk9UnTBtajo05ZTFSk0LWFGvARZ6WlVcAog%3D&srt=o&ss=b&"
-                        "spr=https&sp=rl&sv=2016-05-31&se=2017-07-01T00%3A21%3A38Z&"
-                        "st=2017-07-01T23%3A16%3A38Z",
-                        "https://abc.def.xyz.123.net/functiontest/yokawasa.png?sig"
-                        "=" + restutil.REDACTED_TEXT +
-                        "&srt=o&ss=b&spr=https&sp=rl&sv=2016-05-31&se=2017-07-01T00"
-                        "%3A21%3A38Z&st=2017-07-01T23%3A16%3A38Z"),
-                       ("https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se=2018-07"
-                        "-26T02:20:44Z&st=2018-07-25T18:20:44Z&spr=https,"
-                        "http&sig=DavQgRtl99DsEPv9Xeb63GnLXCuaLYw5ay%2BE1cFckQY%3D",
-                        "https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se"
-                        "=2018-07-26T02:20:44Z&st=2018-07-25T18:20:44Z&spr=https,"
-                        "http&sig=" + restutil.REDACTED_TEXT),
-                       ("https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se=2018-07"
-                        "-26T02:20:44Z&st=2018-07-25T18:20:44Z&spr=https,"
-                        "http&sig=ttSCKmyjiDEeIzT9q7HtYYgbCRIXuesFSOhNEab52NM%3D",
-                        "https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se"
-                        "=2018-07-26T02:20:44Z&st=2018-07-25T18:20:44Z&spr=https,"
-                        "http&sig=" + restutil.REDACTED_TEXT),
-                       ("https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se=2018-07"
-                        "-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https,"
-                        "http&sig=X0imGmcj5KcBPFcqlfYjIZakzGrzONGbRv5JMOnGrwc%3D",
-                        "https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se"
-                        "=2018-07-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https,"
-                        "http&sig=" + restutil.REDACTED_TEXT),
-                       ("https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se=2018-07"
-                        "-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https,"
-                        "http&sig=9hfxYvaZzrMahtGO1OgMUiFGnDOtZXulZ3skkv1eVBg%3D",
-                        "https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se"
-                        "=2018-07-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https,"
-                        "http&sig=" + restutil.REDACTED_TEXT),
-                       ("https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se=2018-07"
-                        "-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https"
-                        "&sig=cmluQEHnOGsVK9NDm83ruuPdPWNQcerfjOAbkspNZXU%3D",
-                        "https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se"
-                        "=2018-07-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https&sig"
-                        "=" + restutil.REDACTED_TEXT)
-                       ]
-
-        for x in urls_tuples:
-            self.assertEqual(restutil.redact_sas_tokens_in_urls(x[0]), x[1]) 
-
     @patch('azurelinuxagent.common.conf.get_httpproxy_port')
     @patch('azurelinuxagent.common.conf.get_httpproxy_host')
     def test_get_http_proxy_none_is_default(self, mock_host, mock_port):
@@ -658,6 +596,23 @@ class TestHttpOperations(AgentTestCase):
         self.assertEqual(
             [call(1) for i in range(restutil.THROTTLE_RETRIES-1)],
             _sleep.call_args_list)
+
+    @patch("time.sleep")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_try_max_retries_when_telemetry_throttled(self, _http_request, _sleep):
+        # Ensure the code is a throttle code
+        self.assertTrue(httpclient.SERVICE_UNAVAILABLE in restutil.THROTTLE_CODES)
+        max_retries = 5
+        _http_request.side_effect = [
+                Mock(status=httpclient.SERVICE_UNAVAILABLE)
+                    for i in range(max_retries-1)  # pylint: disable=unused-variable
+            ] + [Mock(status=httpclient.OK)]
+
+        restutil.http_post("https://telemetrydata", data=None,
+                            max_retry=max_retries)
+        self.assertEqual(max_retries, _http_request.call_count)
+        self.assertEqual(max_retries-1, _sleep.call_count)
+
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")

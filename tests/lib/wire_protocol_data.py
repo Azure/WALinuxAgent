@@ -19,13 +19,12 @@ import datetime
 import json
 import re
 
-from azurelinuxagent.common.utils import timeutil
 from azurelinuxagent.common.utils.textutil import parse_doc, find, findall
 from tests.lib.http_request_predicates import HttpRequestPredicates
 from tests.lib.tools import load_bin_data, load_data, MagicMock, Mock
 from azurelinuxagent.common.protocol.imds import IMDS_ENDPOINT
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
-from azurelinuxagent.common.future import httpclient
+from azurelinuxagent.common.future import httpclient, UTC, datetime_min_utc
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 
 DATA_FILE = {
@@ -311,7 +310,6 @@ class WireProtocolData(object):
         return resp
 
     def mock_http_put(self, url, data, **_):
-        content = ''
 
         resp = MagicMock()
         resp.status = httpclient.OK
@@ -321,10 +319,11 @@ class WireProtocolData(object):
         elif HttpRequestPredicates.is_storage_status_request(url):
             self.status_blobs.append(data)
         elif HttpRequestPredicates.is_host_plugin_status_request(url):
-            self.status_blobs.append(WireProtocolData.get_status_blob_from_hostgaplugin_put_status_request(content))
+            self.status_blobs.append(WireProtocolData.get_status_blob_from_hostgaplugin_put_status_request(data))
         else:
             raise NotImplementedError(url)
 
+        content = ''
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
 
@@ -345,7 +344,7 @@ class WireProtocolData(object):
     def get_status_blob_from_hostgaplugin_put_status_request(data):
         status_object = json.loads(data)
         content = status_object["content"]
-        return base64.b64decode(content)
+        return base64.b64decode(content).decode("utf-8")
 
     def get_no_of_plugins_in_extension_config(self):
         if self.ext_conf is None:
@@ -393,11 +392,11 @@ class WireProtocolData(object):
         This function is used to mock a new goal state, and it also updates the timestamp (extensionsLastModifiedTickCount) in vmSettings.
         """
         if timestamp is None:
-            timestamp = datetime.datetime.utcnow()
+            timestamp = datetime.datetime.now(UTC)
         self.etag = etag
         try:
             vm_settings = json.loads(self.vm_settings)
-            vm_settings["extensionsLastModifiedTickCount"] = timeutil.datetime_to_ticks(timestamp)
+            vm_settings["extensionsLastModifiedTickCount"] = self._datetime_to_ticks(timestamp)
             self.vm_settings = json.dumps(vm_settings)
         except ValueError:  # some test data include syntax errors; ignore those
             pass
@@ -418,8 +417,24 @@ class WireProtocolData(object):
         self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "Incarnation", str(incarnation))
         if self.ext_conf is not None:
             if timestamp is None:
-                timestamp = datetime.datetime.utcnow()
-            self.ext_conf = WireProtocolData.replace_xml_attribute_value(self.ext_conf, "InVMGoalStateMetaData", "createdOnTicks", timeutil.datetime_to_ticks(timestamp))
+                timestamp = datetime.datetime.now(UTC)
+            self.ext_conf = WireProtocolData.replace_xml_attribute_value(self.ext_conf, "InVMGoalStateMetaData", "createdOnTicks", self._datetime_to_ticks(timestamp))
+
+    @staticmethod
+    def _datetime_to_ticks(dt):
+        """
+        Converts 'dt', a datetime, to the number of ticks (1 tick == 1/10000000 sec) since datetime.min (0001-01-01 00:00:00).
+
+        Note that the resolution of a datetime goes only to microseconds.
+        """
+        return int(10 ** 7 * WireProtocolData._total_seconds(dt - datetime_min_utc))
+
+    @staticmethod
+    def _total_seconds(time_delta):
+        """
+        Compute the total_seconds for the given timedelta. Used instead timedelta.total_seconds() because 2.6 does not implement total_seconds.
+        """
+        return ((24.0 * 60 * 60 * time_delta.days + time_delta.seconds) * 10 ** 6 + time_delta.microseconds) / 10 ** 6
 
     def set_container_id(self, container_id):
         self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "ContainerId", container_id)

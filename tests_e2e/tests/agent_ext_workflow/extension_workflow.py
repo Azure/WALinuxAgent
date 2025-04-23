@@ -174,7 +174,7 @@ class ExtensionWorkflow(AgentVmTest):
             log.info("*******Verifying the extension install scenario*******")
 
             # Record the time we start the test
-            start_time = self._ssh_client.run_command("date '+%Y-%m-%dT%TZ'").rstrip()
+            start_time = self._ssh_client.run_command("date --utc '+%Y-%m-%dT%TZ'").rstrip()
 
             # Create DcrTestExtension with version 1.1.5
             dcr_test_ext_id_1_1 = VmExtensionIdentifier(
@@ -223,7 +223,7 @@ class ExtensionWorkflow(AgentVmTest):
             log.info("*******Verifying the extension enable scenario*******")
 
             # Record the time we start the test
-            start_time = self._ssh_client.run_command("date '+%Y-%m-%dT%TZ'").rstrip()
+            start_time = self._ssh_client.run_command("date --utc '+%Y-%m-%dT%TZ'").rstrip()
 
             # Enable test extension on the VM
             dcr_ext.modify_ext_settings_and_enable()
@@ -280,7 +280,7 @@ class ExtensionWorkflow(AgentVmTest):
             log.info("*******Verifying the extension uninstall scenario*******")
 
             # Record the time we start the test
-            start_time = self._ssh_client.run_command("date '+%Y-%m-%dT%TZ'").rstrip()
+            start_time = self._ssh_client.run_command("date --utc '+%Y-%m-%dT%TZ'").rstrip()
 
             # Remove the test extension on the VM
             log.info("Delete %s from VM", dcr_test_ext_client)
@@ -304,15 +304,25 @@ class ExtensionWorkflow(AgentVmTest):
             log.info("")
             log.info("*******Verifying the extension update with install scenario*******")
 
-            # Record the time we start the test
-            start_time = self._ssh_client.run_command("date '+%Y-%m-%dT%TZ'").rstrip()
-
             # Version 1.2.0 of the test extension has the same functionalities as 1.1.5 with
             # "updateMode": "UpdateWithInstall" in HandlerManifest.json to test update case
             new_version_update_mode_with_install = "1.2.0"
             old_version = "1.1.5"
 
-            # Create DcrTestExtension with version 1.1 and 1.2
+            # Install test extension v1.1.5 on the VM and assert instance view before updating the start_time, since
+            # the previous test case removed v1.1.5 from the VM.
+            dcr_ext = ExtensionWorkflow.GuestAgentDcrTestExtension(
+                extension=dcr_test_ext_client,
+                ssh_client=self._ssh_client,
+                version=old_version
+            )
+            dcr_ext.modify_ext_settings_and_enable()
+            dcr_ext.assert_instance_view()
+
+            # Record the time we start the update with install scenario test
+            start_time = self._ssh_client.run_command("date --utc '+%Y-%m-%dT%TZ'").rstrip()
+
+            # Create DcrTestExtension with version 1.2
             dcr_test_ext_id_1_2 = VmExtensionIdentifier(
                 VmExtensionIds.GuestAgentDcrTestExtension.publisher,
                 VmExtensionIds.GuestAgentDcrTestExtension.type,
@@ -323,15 +333,6 @@ class ExtensionWorkflow(AgentVmTest):
                 dcr_test_ext_id_1_2,
                 resource_name="GuestAgentDcrTestExt"
             )
-            dcr_ext = ExtensionWorkflow.GuestAgentDcrTestExtension(
-                extension=dcr_test_ext_client,
-                ssh_client=self._ssh_client,
-                version=old_version
-            )
-
-            # Install test extension v1.1.5 on the VM and assert instance view
-            dcr_ext.modify_ext_settings_and_enable()
-            dcr_ext.assert_instance_view()
 
             # Update extension object & version to new version
             dcr_ext.update_ext_version(dcr_test_ext_client_1_2, new_version_update_mode_with_install)
@@ -371,14 +372,24 @@ class ExtensionWorkflow(AgentVmTest):
             log.info("")
             log.info("*******Verifying the extension update without install scenario*******")
 
-            # Record the time we start the test
-            start_time = self._ssh_client.run_command("date '+%Y-%m-%dT%TZ'").rstrip()
-
             # Version 1.3.0 of the test extension has the same functionalities as 1.1.5 with
             # "updateMode": "UpdateWithoutInstall" in HandlerManifest.json to test update case
             new_version_update_mode_without_install = "1.3.0"
 
-            # Create DcrTestExtension with version 1.1 and 1.3
+            # Install test extension v1.1.5 on the VM and assert instance view before updating the start_time, since
+            # the previous test case removed v1.1.5 from the VM.
+            dcr_ext = ExtensionWorkflow.GuestAgentDcrTestExtension(
+                extension=dcr_test_ext_client,
+                ssh_client=self._ssh_client,
+                version=old_version
+            )
+            dcr_ext.modify_ext_settings_and_enable()
+            dcr_ext.assert_instance_view()
+
+            # Record the time we start the update without scenario test
+            start_time = self._ssh_client.run_command("date --utc '+%Y-%m-%dT%TZ'").rstrip()
+
+            # Create DcrTestExtension with version 1.3
             dcr_test_ext_id_1_3 = VmExtensionIdentifier(
                 VmExtensionIds.GuestAgentDcrTestExtension.publisher,
                 VmExtensionIds.GuestAgentDcrTestExtension.type,
@@ -388,15 +399,6 @@ class ExtensionWorkflow(AgentVmTest):
                 dcr_test_ext_id_1_3,
                 resource_name="GuestAgentDcrTestExt"
             )
-            dcr_ext = ExtensionWorkflow.GuestAgentDcrTestExtension(
-                extension=dcr_test_ext_client,
-                ssh_client=self._ssh_client,
-                version=old_version
-            )
-
-            # Install test extension v1.1.5 on the VM and assert instance view
-            dcr_ext.modify_ext_settings_and_enable()
-            dcr_ext.assert_instance_view()
 
             # Update extension object & version to new version
             dcr_ext.update_ext_version(dcr_test_ext_client_1_3, new_version_update_mode_without_install)

@@ -4,7 +4,7 @@
 #
 python=$(command -v python 2> /dev/null)
 
-if [ -z "$PYTHON" ]; then
+if [ -z "$python" ]; then
   python=$(command -v python3)
 fi
 

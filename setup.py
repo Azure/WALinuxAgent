@@ -147,7 +147,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
                        src=["config/clearlinux/waagent.conf"])
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/clearlinux/waagent.service"])
-    elif name == 'mariner':
+    elif name in ["mariner", "azurelinux"]:
         set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, dest="/etc",
                        src=["config/mariner/waagent.conf"])
@@ -320,10 +320,11 @@ class install(_install):  # pylint: disable=C0103
 #   will be removed from Python 3.
 # * In version 3.13 of Python, the crypt module was removed and legacycrypt is
 #   required instead.
-requires = [
-    "distro;python_version>='3.8'",
-    "legacycrypt;python_version>='3.13'",
-]
+requires = []
+if sys.version_info[0] >= 3 and sys.version_info[1] >= 8:
+    requires.append('distro')
+if sys.version_info[0] >= 3 and sys.version_info[1] >= 13:
+    requires.append('legacycrypt')
 
 modules = []  # pylint: disable=invalid-name
 

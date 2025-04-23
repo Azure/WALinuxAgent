@@ -27,16 +27,17 @@ import time
 import threading
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.ga.controllermetrics import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory, CpuMetrics
+from azurelinuxagent.ga.cgroupcontroller import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, DisableCgroups
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import shellutil, fileutil
+from azurelinuxagent.ga.cpucontroller import CpuControllerV1
 from tests.lib.mock_environment import MockCommand
 from tests.lib.mock_cgroup_environment import mock_cgroup_v1_environment, UnitFilePaths, mock_cgroup_v2_environment
-from tests.lib.tools import AgentTestCase, patch, mock_sleep, data_dir, is_python_version_26_or_34, skip_if_predicate_true
+from tests.lib.tools import AgentTestCase, patch, mock_sleep, data_dir
 from tests.lib.miscellaneous_tools import format_processes, wait_for
 
 
@@ -90,16 +91,12 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         with self._get_cgroup_configurator() as configurator:
             self.assertTrue(configurator.enabled(), "cgroups were not enabled")
 
-    def test_initialize_should_not_enable_cgroups_v2(self):
-        with self._get_cgroup_configurator_v2() as configurator:
-            self.assertFalse(configurator.enabled(), "cgroups were enabled")
-
     def test_initialize_should_not_enable_when_cgroup_api_cannot_be_determined(self):
         # Mock cgroup api to raise CGroupsException
-        def mock_get_cgroup_api():
+        def mock_create_cgroup_api():
             raise CGroupsException("")
 
-        with patch('azurelinuxagent.ga.cgroupconfigurator.get_cgroup_api', side_effect=mock_get_cgroup_api):
+        with patch('azurelinuxagent.ga.cgroupconfigurator.create_cgroup_api', side_effect=mock_create_cgroup_api):
             with self._get_cgroup_configurator() as configurator:
                 self.assertFalse(configurator.enabled(), "cgroups were enabled")
 
@@ -175,6 +172,66 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
             self.assertFalse(os.path.exists(agent_drop_in_file_cpu_quota), "{0} should not have been created".format(agent_drop_in_file_cpu_quota))
 
+    def test_initialize_should_enable_cgroups_v2(self):
+        with self._get_cgroup_configurator_v2() as configurator:
+            self.assertTrue(configurator.enabled(), "cgroups were not enabled")
+
+    def test_initialize_should_start_tracking_the_agent_cgroups_in_v2(self):
+        with self._get_cgroup_configurator_v2() as configurator:
+            tracked = CGroupsTelemetry._tracked
+
+            self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
+            self.assertTrue(any(cg for cg in tracked if tracked[cg].name == AGENT_NAME_TELEMETRY and 'cpu' in cg),
+                "The Agent's CPU is not being tracked. Tracked: {0}".format(tracked))
+            self.assertTrue(any(cg for cg in tracked if tracked[cg].name == AGENT_NAME_TELEMETRY and 'memory' in cg),
+                "The Agent's Memory is not being tracked. Tracked: {0}".format(tracked))
+
+    def test_initialize_should_not_enable_cgroups_when_the_cpu_and_memory_controllers_are_not_present_in_v2(self):
+        with patch('azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv2._get_controllers_enabled_at_root', return_value=[]):
+            with self._get_cgroup_configurator_v2() as configurator:
+                tracked = CGroupsTelemetry._tracked
+
+                self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
+                self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
+
+    def test_initialize_should_start_tracking_other_controllers_when_one_is_not_present_in_v2(self):
+        with patch('azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv2._get_controllers_enabled_at_root', return_value=['memory']):
+            with self._get_cgroup_configurator_v2() as configurator:
+                tracked = CGroupsTelemetry._tracked
+
+                self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
+                self.assertFalse(
+                    any(cg for cg in tracked if tracked[cg].name == AGENT_NAME_TELEMETRY and 'cpu' in cg),
+                    "The Agent's cpu is being tracked. Tracked: {0}".format(tracked))
+
+    def test_agent_enforcement_not_enabled_in_v2(self):
+        with self._get_cgroup_configurator_v2() as configurator:
+            cmd = 'systemctl set-property walinuxagent.service CPUQuota'
+            self.assertNotIn(cmd, configurator.mocks.commands_call_list, "The command to set CPU quota was called")
+
+    def test_extension_enforcement_not_enabled_in_v2(self):
+        service_list = [
+            {
+                "name": "extension.service",
+                "cpuQuotaPercentage": 5
+            }
+        ]
+        with self._get_cgroup_configurator_v2() as configurator:
+            configurator.setup_extension_slice(extension_name="Microsoft.CPlat.Extension", cpu_quota=5)
+            cmd = 'systemctl set-property azure-vmextensions-Microsoft.CPlat.Extension.slice CPUAccounting=yes MemoryAccounting=yes CPUQuota'
+            self.assertNotIn(cmd, configurator.mocks.commands_call_list,
+                            "The command to set the CPU quota was not called")
+            cmd = 'systemctl set-property azure-vmextensions-Microsoft.CPlat.Extension.slice CPUQuota'
+            self.assertNotIn(cmd, configurator.mocks.commands_call_list,
+                            "The command to set the CPU quota was not called")
+            configurator.set_extension_services_cpu_memory_quota(service_list)
+            cmd = 'systemctl set-property extension.service CPUAccounting=yes MemoryAccounting=yes CPUQuota'
+            self.assertNotIn(cmd, configurator.mocks.commands_call_list,
+                          "The command to set the reset CPU quota was not called")
+            cmd = 'systemctl set-property extension.service CPUQuota'
+            self.assertNotIn(cmd, configurator.mocks.commands_call_list,
+                            "The command to set the CPU quota was not called")
+
     def test_initialize_should_not_create_unit_files(self):
         with self._get_cgroup_configurator() as configurator:
             # get the paths to the mocked files
@@ -196,7 +253,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             self.assertFalse(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} should not have been created".format(agent_drop_in_file_cpu_accounting))
             self.assertFalse(os.path.exists(agent_drop_in_file_memory_accounting), "{0} should not have been created".format(agent_drop_in_file_memory_accounting))
 
-    def test_initialize_should_create_unit_files_when_the_agent_service_file_is_not_updated(self):
+    def test_initialize_should_create_azure_and_vmextensions_slice_file_when_the_agent_service_file_is_not_updated(self):
         with self._get_cgroup_configurator(initialize=False) as configurator:
             # get the paths to the mocked files
             azure_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.azure)
@@ -217,76 +274,60 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             self.assertTrue(os.path.exists(azure_slice_unit_file), "{0} was not created".format(azure_slice_unit_file))
             self.assertTrue(os.path.exists(extensions_slice_unit_file), "{0} was not created".format(extensions_slice_unit_file))
             self.assertTrue(os.path.exists(agent_drop_in_file_slice), "{0} was not created".format(agent_drop_in_file_slice))
-            self.assertTrue(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} was not created".format(agent_drop_in_file_cpu_accounting))
-            self.assertTrue(os.path.exists(agent_drop_in_file_memory_accounting), "{0} was not created".format(agent_drop_in_file_memory_accounting))
+            self.assertFalse(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} was created".format(agent_drop_in_file_cpu_accounting))
+            self.assertFalse(os.path.exists(agent_drop_in_file_memory_accounting), "{0} was created".format(agent_drop_in_file_memory_accounting))
 
-    def test_initialize_should_update_logcollector_memorylimit(self):
+    def test_initialize_should_clear_logcollector_slice(self):
         with self._get_cgroup_configurator(initialize=False) as configurator:
             log_collector_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.logcollector)
-            original_memory_limit = "MemoryLimit=30M"
 
-            # The mock creates the slice unit file with memory limit
+            # The mock creates the slice unit file
             configurator.mocks.add_data_file(os.path.join(data_dir, 'init', "azure-walinuxagent-logcollector.slice"),
                                              UnitFilePaths.logcollector)
-            if not os.path.exists(log_collector_unit_file):
-                raise Exception("{0} should have been created during test setup".format(log_collector_unit_file))
-            if not fileutil.findre_in_file(log_collector_unit_file, original_memory_limit):
-                raise Exception("MemoryLimit was not set correctly. Expected: {0}. Got:\n{1}".format(
-                    original_memory_limit, fileutil.read_file(log_collector_unit_file)))
+
+            self.assertTrue(os.path.exists(log_collector_unit_file), "{0} was not created".format(log_collector_unit_file))
 
             configurator.initialize()
 
-            # initialize() should update the unit file to remove the memory limit
-            self.assertFalse(fileutil.findre_in_file(log_collector_unit_file, original_memory_limit),
-                             "Log collector slice unit file was not updated correctly. Expected no memory limit. Got:\n{0}".format(
-                                 fileutil.read_file(log_collector_unit_file)))
+            # initialize() should remove the unit file
+            self.assertFalse(os.path.exists(log_collector_unit_file), "{0} should not have been created".format(log_collector_unit_file))
 
-    def test_setup_extension_slice_should_create_unit_files(self):
+    def test_setup_extension_slice(self):
         with self._get_cgroup_configurator() as configurator:
             # get the paths to the mocked files
             extension_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.extensionslice)
 
-            configurator.setup_extension_slice(extension_name="Microsoft.CPlat.Extension", cpu_quota=5)
+            extension_name = "Microsoft.CPlat.Extension"
+            cpu_quota = 5
+            configurator.setup_extension_slice(extension_name=extension_name, cpu_quota=cpu_quota)
 
-            expected_cpu_accounting = "CPUAccounting=yes"
-            expected_cpu_quota_percentage = "5%"
-            expected_memory_accounting = "MemoryAccounting=yes"
+            command = 'systemctl set-property azure-vmextensions-{0}.slice CPUAccounting=yes MemoryAccounting=yes CPUQuota={1}% --runtime'.format(extension_name, cpu_quota)
+            self.assertIn(command, configurator.mocks.commands_call_list, "The command to set the CPU quota was not called")
+            self.assertFalse(os.path.exists(extension_slice_unit_file), "{0} should not have been created".format(extension_slice_unit_file))
 
-            self.assertTrue(os.path.exists(extension_slice_unit_file), "{0} was not created".format(extension_slice_unit_file))
-            self.assertTrue(fileutil.findre_in_file(extension_slice_unit_file, expected_cpu_accounting),
-                "CPUAccounting was not set correctly. Expected: {0}. Got:\n{1}".format(expected_cpu_accounting, fileutil.read_file(
-                    extension_slice_unit_file)))
-            self.assertTrue(fileutil.findre_in_file(extension_slice_unit_file, expected_cpu_quota_percentage),
-                "CPUQuota was not set correctly. Expected: {0}. Got:\n{1}".format(expected_cpu_quota_percentage, fileutil.read_file(
-                    extension_slice_unit_file)))
-            self.assertTrue(fileutil.findre_in_file(extension_slice_unit_file, expected_memory_accounting),
-                "MemoryAccounting was not set correctly. Expected: {0}. Got:\n{1}".format(expected_memory_accounting, fileutil.read_file(
-                    extension_slice_unit_file)))
+    def test_reset_extension_quota(self):
+        command_mocks = [MockCommand(r"^systemctl show (.+) --property CPUQuotaPerSecUSec",
+                                     '''CPUQuotaPerSecUSec=5ms
+                                     ''')]
+        with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
+            extension_name = "Microsoft.CPlat.Extension"
+            configurator.reset_extension_quota(extension_name=extension_name)
 
-    def test_remove_extension_slice_should_remove_unit_files(self):
-        with self._get_cgroup_configurator() as configurator:
-            with patch("os.path.exists") as mock_path:
-                mock_path.return_value = True
-                # get the paths to the mocked files
-                extension_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.extensionslice)
+        command = 'systemctl set-property azure-vmextensions-{0}.slice CPUQuota= --runtime'.format(
+            extension_name)
+        self.assertIn(command, configurator.mocks.commands_call_list, "The command to reset the CPU quota was not called")
 
-                CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/' \
-                                          'azure-vmextensions-Microsoft.CPlat.Extension.slice'] = \
-                    CpuMetrics('Microsoft.CPlat.Extension',
-                              '/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/azure-vmextensions-Microsoft.CPlat.Extension.slice')
+    def test_it_should_handle_exceptions_when_reset_extension_quota_fails(self):
+        command_mocks = [MockCommand(r"systemctl show (.+) --property CPUQuotaPerSecUSec", return_value=1, stdout='', stderr='Failed to get properties: Access denied')]
+        with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
+            extension_name = "Microsoft.CPlat.Extension"
+            configurator.reset_extension_quota(extension_name=extension_name)
 
-                configurator.remove_extension_slice(extension_name="Microsoft.CPlat.Extension")
-
-                tracked = CGroupsTelemetry._tracked
-
-                self.assertFalse(
-                    any(cg for cg in tracked.values() if cg.name == 'Microsoft.CPlat.Extension' and 'cpu' in cg.path),
-                    "The extension's CPU is being tracked")
-                self.assertFalse(
-                    any(cg for cg in tracked.values() if cg.name == 'Microsoft.CPlat.Extension' and 'memory' in cg.path),
-                    "The extension's Memory is being tracked")
-
-            self.assertFalse(os.path.exists(extension_slice_unit_file), "{0} should not be present".format(extension_slice_unit_file))
+        command_set = 'systemctl set-property azure-vmextensions-{0}.slice CPUQuota= --runtime'.format(
+            extension_name)
+        self.assertIn(command_set, configurator.mocks.commands_call_list, "The command to reset the CPU quota was not called")
+        command_get = 'systemctl show azure-vmextensions-{0}.slice --property CPUQuotaPerSecUSec'.format(extension_name)
+        self.assertIn(command_get, configurator.mocks.commands_call_list, "The command to get the CPU quota was not called")
 
     def test_enable_should_raise_cgroups_exception_when_cgroups_are_not_supported(self):
         with self._get_cgroup_configurator(enable=False) as configurator:
@@ -304,48 +345,31 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             configurator.initialize()
 
             expected_quota = "CPUQuota={0}%".format(conf.get_agent_cpu_quota())
-            self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
-            self.assertTrue(
-                fileutil.findre_in_file(agent_drop_in_file_cpu_quota, expected_quota),
-                "CPUQuota was not set correctly. Expected: {0}. Got:\n{1}".format(expected_quota, fileutil.read_file(agent_drop_in_file_cpu_quota)))
-            self.assertTrue(CGroupsTelemetry.get_track_throttled_time(), "Throttle time should be tracked")
+            self.assertFalse(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
+            cmd = 'systemctl set-property walinuxagent.service {0} --runtime'.format(expected_quota)
+            self.assertIn(cmd, configurator.mocks.commands_call_list, "The command to set the CPU quota was not called")
 
-    def test_enable_should_not_track_throttled_time_when_setting_the_cpu_quota_fails(self):
-        with self._get_cgroup_configurator(initialize=False) as configurator:
-            if CGroupsTelemetry.get_track_throttled_time():
-                raise Exception("Test setup should not start tracking Throttle Time")
 
-            configurator.mocks.add_file(UnitFilePaths.cpu_quota, Exception("A TEST EXCEPTION"))
-
-            configurator.initialize()
-
-            self.assertFalse(CGroupsTelemetry.get_track_throttled_time(), "Throttle time should not be tracked")
-
-    def test_enable_should_not_track_throttled_time_when_cgroups_v2_enabled(self):
+    def test_enable_should_not_track_controllers_when_cgroups_v2_enabled(self):
         with self._get_cgroup_configurator_v2(initialize=False) as configurator:
-            if CGroupsTelemetry.get_track_throttled_time():
+            if len(CGroupsTelemetry._tracked) > 0:
                 raise Exception("Test setup should not start tracking Throttle Time")
 
             configurator.mocks.add_file(UnitFilePaths.cpu_quota, Exception("A TEST EXCEPTION"))
 
             configurator.initialize()
 
-            self.assertFalse(CGroupsTelemetry.get_track_throttled_time(), "Throttle time should not be tracked when using cgroups v2")
+            self.assertEqual(len(CGroupsTelemetry._tracked), 0, "Throttle time should not be tracked when using cgroups v2")
 
     def test_disable_should_reset_cpu_quota(self):
         with self._get_cgroup_configurator() as configurator:
             if len(CGroupsTelemetry._tracked) == 0:
                 raise Exception("Test setup should have started tracking at least 1 cgroup (the agent's)")
-            if not CGroupsTelemetry._track_throttled_time:
-                raise Exception("Test setup should have started tracking Throttle Time")
 
             configurator.disable("UNIT TEST", DisableCgroups.AGENT)
 
             agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
-            self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
-            self.assertTrue(
-                fileutil.findre_in_file(agent_drop_in_file_cpu_quota, "^CPUQuota=$"),
-                "CPUQuota was not set correctly. Expected an empty value. Got:\n{0}".format(fileutil.read_file(agent_drop_in_file_cpu_quota)))
+            self.assertFalse(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was created".format(agent_drop_in_file_cpu_quota))
             self.assertEqual(len(CGroupsTelemetry._tracked), 1, "Memory cgroups should be tracked after disable. Tracking: {0}".format(CGroupsTelemetry._tracked))
             self.assertFalse(any(cg for cg in CGroupsTelemetry._tracked.values() if cg.name == 'walinuxagent.service' and 'cpu' in cg.path),
                 "The Agent's cpu should not be tracked. Tracked: {0}".format(CGroupsTelemetry._tracked))
@@ -369,35 +393,21 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                 configurator.setup_extension_slice(extension_name=extension_name, cpu_quota=5)
                 configurator.set_extension_services_cpu_memory_quota(service_list)
                 CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
-                    CpuMetrics('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
+                    CpuControllerV1('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
                 CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/' \
                                           'azure-vmextensions-Microsoft.CPlat.Extension.slice'] = \
-                    CpuMetrics('Microsoft.CPlat.Extension',
+                    CpuControllerV1('Microsoft.CPlat.Extension',
                               '/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/azure-vmextensions-Microsoft.CPlat.Extension.slice')
 
                 configurator.disable("UNIT TEST", DisableCgroups.ALL)
 
-                self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota),
-                                "{0} was not created".format(agent_drop_in_file_cpu_quota))
-                self.assertTrue(
-                    fileutil.findre_in_file(agent_drop_in_file_cpu_quota, "^CPUQuota=$"),
-                    "CPUQuota was not set correctly. Expected an empty value. Got:\n{0}".format(
-                        fileutil.read_file(agent_drop_in_file_cpu_quota)))
-                self.assertTrue(os.path.exists(extension_slice_unit_file),
-                                "{0} was not created".format(extension_slice_unit_file))
-                self.assertTrue(
-                    fileutil.findre_in_file(extension_slice_unit_file, "^CPUQuota=$"),
-                    "CPUQuota was not set correctly. Expected an empty value. Got:\n{0}".format(
-                        fileutil.read_file(extension_slice_unit_file)))
-                self.assertTrue(os.path.exists(extension_service_cpu_quota),
-                                "{0} was not created".format(extension_service_cpu_quota))
-                self.assertTrue(
-                    fileutil.findre_in_file(extension_service_cpu_quota, "^CPUQuota=$"),
-                    "CPUQuota was not set correctly. Expected an empty value. Got:\n{0}".format(
-                        fileutil.read_file(extension_service_cpu_quota)))
-                self.assertEqual(len(CGroupsTelemetry._tracked), 0,
-                                 "No cgroups should be tracked after disable. Tracking: {0}".format(
-                                     CGroupsTelemetry._tracked))
+                self.assertFalse(os.path.exists(agent_drop_in_file_cpu_quota),
+                                "{0} was created".format(agent_drop_in_file_cpu_quota))
+                self.assertFalse(os.path.exists(extension_slice_unit_file),
+                                 "{0} was created".format(extension_slice_unit_file))
+                self.assertFalse(os.path.exists(extension_service_cpu_quota),
+                                "{0} was created".format(extension_service_cpu_quota))
+
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_not_use_systemd_when_cgroups_are_not_enabled(self, _):
@@ -412,7 +422,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     timeout=300,
                     shell=False,
                     cwd=self.tmp_dir,
-                    env={},
+                    env={}.update(os.environ),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE)
 
@@ -432,7 +442,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     timeout=300,
                     shell=False,
                     cwd=self.tmp_dir,
-                    env={},
+                    env={}.update(os.environ),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE)
 
@@ -453,7 +463,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                 timeout=300,
                 shell=False,
                 cwd=self.tmp_dir,
-                env={},
+                env={}.update(os.environ),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
 
@@ -484,39 +494,31 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                         timeout=300,
                         shell=False,
                         cwd=self.tmp_dir,
-                        env={},
+                        env={}.update(os.environ),
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE)
 
                     self.assertIn("A TEST EXCEPTION", str(context_manager.exception))
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
-    def test_start_extension_command_should_not_use_systemd_when_cgroup_v2_enabled(self, _):
+    def test_start_extension_command_should_use_systemd_when_cgroup_v2_enabled(self, _):
         with self._get_cgroup_configurator_v2() as configurator:
-            self.assertFalse(configurator.enabled())
+            with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+                configurator.start_extension_command(
+                    extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                    command="the-test-extension-command",
+                    cmd_name="test",
+                    timeout=300,
+                    shell=False,
+                    cwd=self.tmp_dir,
+                    env={}.update(os.environ),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE)
 
-            with patch("azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv2.start_extension_command") as v2_extension_start_command:
-                with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as patcher:
-                    configurator.start_extension_command(
-                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                        command="date",
-                        cmd_name="test",
-                        timeout=300,
-                        shell=False,
-                        cwd=self.tmp_dir,
-                        env={},
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE)
+                command_calls = [args[0] for (args, _) in popen_patch.call_args_list if "the-test-extension-command" in args[0]]
 
-                    command_calls = [args[0] for args, _ in patcher.call_args_list if
-                                     len(args) > 0 and "date" in args[0]]
-                    self.assertFalse(v2_extension_start_command.called)
-                    self.assertEqual(len(command_calls), 1,
-                                     "The test command should have been called exactly once [{0}]".format(
-                                         command_calls))
-                    self.assertNotIn("systemd-run", command_calls[0],
-                                     "The command should not have been invoked using systemd")
-                    self.assertEqual(command_calls[0], "date", "The command line should not have been modified")
+                self.assertEqual(len(command_calls), 1, "The test command should have been called exactly once [{0}]".format(command_calls))
+                self.assertIn("systemd-run", command_calls[0], "The extension should have been invoked using systemd")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_disable_cgroups_and_invoke_the_command_directly_if_systemd_fails(self, _):
@@ -538,7 +540,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                             timeout=300,
                             shell=True,
                             cwd=self.tmp_dir,
-                            env={},
+                            env={}.update(os.environ),
                             stdout=output_file,
                             stderr=output_file)
 
@@ -565,6 +567,68 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                         self.assertIn("TEST_OUTPUT\n", command_output, "The test output was not captured")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_disable_cgroups_and_invoke_the_command_directly_if_systemd_fails_and_reset_fails(self, _):
+        service_list = [
+            {
+                "name": "extension.service",
+                "cpuQuotaPercentage": 5
+            }
+        ]
+        extension_name = "Microsoft.Compute.TestExtension"
+        extension_services = {extension_name: service_list}
+
+        with self._get_cgroup_configurator() as configurator:
+            with patch.object(configurator, "get_extension_services_list", return_value=extension_services):
+                configurator.mocks.add_command(MockCommand("systemd-run", return_value=1, stdout='', stderr='Failed to start transient scope unit: syntax error'))
+                configurator.mocks.add_command(MockCommand(r"^systemctl show (.+) --property CPUQuotaPerSecUSec", return_value=1, stdout='', stderr='Failed to get properties: Access denied'))
+
+                with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as output_file:
+                    with patch("azurelinuxagent.ga.cgroupapi.add_event") as mock_add_event:
+                        with patch("subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+                            CGroupsTelemetry.reset()
+
+                            command = "echo TEST_OUTPUT"
+
+                            command_output = configurator.start_extension_command(
+                                extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                                command=command,
+                                cmd_name="test",
+                                timeout=300,
+                                shell=True,
+                                cwd=self.tmp_dir,
+                                env={}.update(os.environ),
+                                stdout=output_file,
+                                stderr=output_file)
+
+                            self.assertFalse(configurator.enabled(), "Cgroups should have been disabled")
+
+                            disabled_events = [kwargs for _, kwargs in mock_add_event.call_args_list if kwargs['op'] == WALAEventOperation.CGroupsDisabled]
+
+                            self.assertTrue(len(disabled_events) == 1, "Exactly one CGroupsDisabled telemetry event should have been issued. Found: {0}".format(disabled_events))
+                            self.assertIn("Failed to start Microsoft.Compute.TestExtension-1.2.3 using systemd-run",
+                                          disabled_events[0]['message'],
+                                          "The systemd-run failure was not included in the telemetry message")
+                            self.assertEqual(False, disabled_events[0]['is_success'], "The telemetry event should indicate a failure")
+
+                            extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
+
+                            self.assertEqual(2, len(extension_calls), "The extension should have been invoked exactly twice")
+                            self.assertIn("systemd-run", extension_calls[0],
+                                          "The first call to the extension should have used systemd")
+                            self.assertEqual(command, extension_calls[1],
+                                              "The second call to the extension should not have used systemd")
+
+                            self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")
+
+                            self.assertIn("TEST_OUTPUT\n", command_output, "The test output was not captured")
+
+                            failed_systemctl_events = [kwargs for _, kwargs in mock_add_event.call_args_list if kwargs['op'] == WALAEventOperation.CGroupsInfo and "Failed to get current CPUQuotaPerSecUSec" in kwargs['message']]
+                            # we should have at least 3 telemetry events agent + extension + extension service
+                            self.assertEqual(len(failed_systemctl_events),3, "systemctl error should have been happened: {0}".format(failed_systemctl_events))
+                            self.assertIn("Failed to get properties: Access denied", failed_systemctl_events[0]['message'], "The systemctl error was not included in the telemetry message")
+
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_disable_cgroups_and_invoke_the_command_directly_if_systemd_times_out(self, _):
         with self._get_cgroup_configurator() as configurator:
             # Systemd has its own internal timeout which is shorter than what we define for extension operation timeout.
@@ -584,7 +648,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                             timeout=300,
                             shell=True,
                             cwd=self.tmp_dir,
-                            env={},
+                            env={}.update(os.environ),
                             stdout=stdout,
                             stderr=stderr)
 
@@ -597,45 +661,40 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
 
                         self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")
 
-    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4, they run on containers where the OS commands needed by the test are not present.")
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_capture_only_the_last_subprocess_output(self, _):
         with self._get_cgroup_configurator() as configurator:
-            pass  # release the mocks used to create the test CGroupConfigurator so that they do not conflict the mock Popen below
+            original_popen = subprocess.Popen
 
-        original_popen = subprocess.Popen
+            def mock_popen(command, *args, **kwargs):
+                # Inject a syntax error to the call
 
-        def mock_popen(command, *args, **kwargs):
-            # Inject a syntax error to the call
-            
-            # Popen can accept both strings and lists, handle both here.
-            if isinstance(command, str):
-                command = command.replace('systemd-run', 'systemd-run syntax_error')
-            elif isinstance(command, list) and command[0] == 'systemd-run':
-                command = ['systemd-run', 'syntax_error'] + command[1:]
-            elif command == ['systemctl', 'daemon-reload']:
-                command = ['echo', 'systemctl', 'daemon-reload']
+                # Popen can accept both strings and lists, handle both here.
+                if isinstance(command, str) and command.startswith('systemd-run'):
+                    command = 'systemd-run syntax_error'
+                elif isinstance(command, list) and command[0] == 'systemd-run':
+                    command = ['systemd-run', 'syntax_error']
 
-            return original_popen(command, *args, **kwargs)
+                return original_popen(command, *args, **kwargs)
 
-        expected_output = "[stdout]\n{0}\n\n\n[stderr]\n"
+            expected_output = "[stdout]\n{0}\n\n\n[stderr]\n"
 
-        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
-            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", side_effect=mock_popen):
-                    # We expect this call to fail because of the syntax error
-                    process_output = configurator.start_extension_command(
-                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                        command="echo 'very specific test message'",
-                        cmd_name="test",
-                        timeout=300,
-                        shell=True,
-                        cwd=self.tmp_dir,
-                        env={},
-                        stdout=stdout,
-                        stderr=stderr)
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+                with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                    with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", side_effect=mock_popen):
+                        # We expect this call to fail because of the syntax error
+                        process_output = configurator.start_extension_command(
+                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                            command="echo 'very specific test message'",
+                            cmd_name="test",
+                            timeout=300,
+                            shell=True,
+                            cwd=self.tmp_dir,
+                            env={}.update(os.environ),
+                            stdout=stdout,
+                            stderr=stderr)
 
-                    self.assertEqual(expected_output.format("very specific test message"), process_output)
+                        self.assertEqual(expected_output.format("very specific test message"), process_output)
 
     def test_it_should_set_extension_services_cpu_memory_quota(self):
         service_list = [
@@ -652,17 +711,37 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             configurator.set_extension_services_cpu_memory_quota(service_list)
             expected_cpu_accounting = "CPUAccounting=yes"
             expected_cpu_quota_percentage = "CPUQuota=5%"
+            expected_memory_accounting = "MemoryAccounting=yes"
 
-            # create drop in files to set those properties
-            self.assertTrue(os.path.exists(extension_service_cpu_accounting), "{0} was not created".format(extension_service_cpu_accounting))
-            self.assertTrue(
-                fileutil.findre_in_file(extension_service_cpu_accounting, expected_cpu_accounting),
-                "CPUAccounting was not enabled. Expected: {0}. Got:\n{1}".format(expected_cpu_accounting, fileutil.read_file(extension_service_cpu_accounting)))
+            # now drop in files should not create
+            self.assertFalse(os.path.exists(extension_service_cpu_accounting), "{0} was created".format(extension_service_cpu_accounting))
+            self.assertFalse(os.path.exists(extension_service_cpu_quota), "{0} was created".format(extension_service_cpu_quota))
+            cmd = 'systemctl set-property extension.service {0} {1} {2} --runtime'.format(expected_cpu_accounting, expected_memory_accounting, expected_cpu_quota_percentage)
+            self.assertIn(cmd, configurator.mocks.commands_call_list, "The command to set the CPU quota was not called")
 
-            self.assertTrue(os.path.exists(extension_service_cpu_quota), "{0} was not created".format(extension_service_cpu_quota))
-            self.assertTrue(
-                fileutil.findre_in_file(extension_service_cpu_quota, expected_cpu_quota_percentage),
-                "CPUQuota was not set. Expected: {0}. Got:\n{1}".format(expected_cpu_quota_percentage, fileutil.read_file(extension_service_cpu_quota)))
+    def test_it_should_not_update_quota_when_quota_is_not_changed(self):
+        command_mocks = [MockCommand(r"^systemctl show extension\.service --property CPUQuotaPerSecUSec",
+                                     '''CPUQuotaPerSecUSec=50ms
+                                     '''),
+                         MockCommand(r"^systemctl show extension\.service --property CPUAccounting",
+                                     '''CPUAccounting=yes
+                                     '''),
+                         MockCommand(r"^systemctl show extension\.service --property MemoryAccounting",
+                                     '''MemoryAccounting=yes
+                                     ''')]
+        service_list = [
+            {
+                "name": "extension.service",
+                "cpuQuotaPercentage": 5
+            }
+        ]
+
+        with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
+            configurator.set_extension_services_cpu_memory_quota(service_list)
+            cmd = 'systemctl set-property extension.service'
+            commands_list = configurator.mocks.commands_call_list
+            for command in commands_list:
+                self.assertNotIn(cmd, command, "The command to set CPU quota was called")
 
     def test_it_should_set_extension_services_when_quotas_not_defined(self):
         service_list = [
@@ -679,15 +758,50 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
 
             configurator.set_extension_services_cpu_memory_quota(service_list)
 
-            self.assertTrue(os.path.exists(extension_service_cpu_accounting),
-                            "{0} was not created".format(extension_service_cpu_accounting))
+            command = 'systemctl set-property extension.service CPUAccounting=yes MemoryAccounting=yes --runtime'
+            self.assertIn(command, configurator.mocks.commands_call_list, "The command to set cgroups was not called")
+
+            self.assertFalse(os.path.exists(extension_service_cpu_accounting),
+                            "{0} was created".format(extension_service_cpu_accounting))
             self.assertFalse(os.path.exists(extension_service_cpu_quota),
                             "{0} should not have been created during setup".format(extension_service_cpu_quota))
 
-            self.assertTrue(os.path.exists(extension_service_memory_accounting),
-                            "{0} was not created".format(extension_service_memory_accounting))
+            self.assertFalse(os.path.exists(extension_service_memory_accounting),
+                            "{0} was created".format(extension_service_memory_accounting))
             self.assertFalse(os.path.exists(extension_service_memory_quota),
                             "{0} should not have been created during setup".format(extension_service_memory_quota))
+
+    def test_it_should_handle_systemd_errors_when_set_extension_services_cpu_memory_quota(self):
+        service_list = [
+            {
+                "name": "extension.service",
+                "cpuQuotaPercentage": 5
+            },
+            {
+                "name": "extension2.service",
+                "cpuQuotaPercentage": 10
+            }
+        ]
+        with self._get_cgroup_configurator() as configurator:
+            with patch("azurelinuxagent.ga.cgroupapi.add_event") as mock_add_event:
+                configurator.mocks.add_command(MockCommand("systemctl show extension.service --property CPUAccounting", return_value=1, stdout='', stderr='Failed to set properties: connection timed out'))
+                configurator.mocks.add_command(MockCommand("systemctl set-property extension2.service CPUAccounting=yes MemoryAccounting=yes CPUQuota=10% --runtime", return_value=1, stdout='', stderr='Failed to set properties: Access denied'))
+
+                configurator.set_extension_services_cpu_memory_quota(service_list)
+                commands_list = configurator.mocks.commands_call_list
+
+                extension_command_set = 'systemctl set-property extension.service CPUAccounting=yes MemoryAccounting=yes CPUQuota=5% --runtime'
+                extension2_command_set = 'systemctl set-property extension2.service CPUAccounting=yes MemoryAccounting=yes CPUQuota=10% --runtime'
+                systemd_error_timed_out_event = [kwargs for _, kwargs in mock_add_event.call_args_list if kwargs['op'] == WALAEventOperation.CGroupsInfo and "connection timed out" in kwargs['message']]
+                systemd_error_access_denied_event = [kwargs for _, kwargs in mock_add_event.call_args_list if kwargs['op'] == WALAEventOperation.CGroupsInfo and "Access denied" in kwargs['message']]
+
+                # first service(extension) should not call set-property, as get properties failed
+                self.assertNotIn(extension_command_set, commands_list, "The command to set the CPU quota was called")
+                self.assertEqual(len(systemd_error_timed_out_event), 1, "systemd error timed out should have been happened: {0}".format(systemd_error_timed_out_event))
+
+                # second service(extension2)
+                self.assertIn(extension2_command_set, commands_list, "The command to set the CPU quota was not called")
+                self.assertEqual(len(systemd_error_access_denied_event), 1, "systemd error access denied should have been happened: {0}".format(systemd_error_access_denied_event))
 
     def test_it_should_start_tracking_extension_services_cgroups(self):
         service_list = [
@@ -717,7 +831,8 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         with self._get_cgroup_configurator() as configurator:
             with patch("os.path.exists") as mock_path:
                 mock_path.return_value = True
-                CGroupsTelemetry.track_cgroup(CpuMetrics('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'))
+                CGroupsTelemetry.track_cgroup_controller(
+                    CpuControllerV1('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'))
                 configurator.stop_tracking_extension_services_cgroups(service_list)
 
                 tracked = CGroupsTelemetry._tracked
@@ -729,26 +844,20 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'memory' in cg.path),
                     "The extension service's Memory is being tracked")
 
-    def test_it_should_remove_extension_services_drop_in_files(self):
+    def test_it_should_reset_extension_services_quota(self):
+        command_mocks = [MockCommand(r"^systemctl show extension\.service --property CPUQuotaPerSecUSec",
+                                     '''CPUQuotaPerSecUSec=5ms
+                                     ''')]
         service_list = [
             {
                 "name": "extension.service",
                 "cpuQuotaPercentage": 5
             }
         ]
-        with self._get_cgroup_configurator() as configurator:
-            extension_service_cpu_accounting = configurator.mocks.get_mapped_path(
-            UnitFilePaths.extension_service_cpu_accounting)
-            extension_service_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.extension_service_cpu_quota)
-            extension_service_memory_accounting = configurator.mocks.get_mapped_path(
-            UnitFilePaths.extension_service_memory_accounting)
-            configurator.remove_extension_services_drop_in_files(service_list)
-            self.assertFalse(os.path.exists(extension_service_cpu_accounting),
-                            "{0} should not have been created".format(extension_service_cpu_accounting))
-            self.assertFalse(os.path.exists(extension_service_cpu_quota),
-                            "{0} should not have been created".format(extension_service_cpu_quota))
-            self.assertFalse(os.path.exists(extension_service_memory_accounting),
-                            "{0} should not have been created".format(extension_service_memory_accounting))
+        with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
+            configurator.reset_extension_services_quota(service_list)
+            cmd = 'systemctl set-property extension.service CPUQuota= --runtime'
+            self.assertIn(cmd, configurator.mocks.commands_call_list, "The command to set the reset CPU quota was not called")
 
     def test_it_should_start_tracking_unit_cgroups(self):
 
@@ -775,8 +884,8 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         with self._get_cgroup_configurator() as configurator:
             with patch("os.path.exists") as mock_path:
                 mock_path.side_effect = side_effect
-                CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
-                    CpuMetrics('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
+                CGroupsTelemetry._tracked['cpu:/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
+                    CpuControllerV1('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
                 configurator.stop_tracking_unit_cgroups("extension.service")
 
                 tracked = CGroupsTelemetry._tracked
@@ -789,8 +898,9 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     "The extension service's Memory is being tracked")
 
     def test_check_processes_in_agent_cgroup_should_raise_a_cgroups_exception_when_there_are_unexpected_processes_in_the_agent_cgroup(self):
-        with self._get_cgroup_configurator() as configurator:
-            pass  # release the mocks used to create the test CGroupConfigurator so that they do not conflict the mock Popen below
+        with patch('azurelinuxagent.common.conf.get_cgroup_disable_on_process_check_failure', return_value=True):
+            with self._get_cgroup_configurator() as configurator:
+                pass  # release the mocks used to create the test CGroupConfigurator so that they do not conflict the mock Popen below
 
         # The test script recursively creates a given number of descendant processes, then it blocks until the
         # 'stop_file' exists. It produces an output file containing the PID of each descendant process.
@@ -897,7 +1007,7 @@ exit 0
             # For the agent's processes, we use the current process and its parent (in the actual agent these would be the daemon and the extension
             # handler), and the commands started by the agent.
             #
-            # For other processes, we use process 1, a process that already completed, and an extension. Note that extensions are started using
+            # For other processes, we use a process that already completed, and an extension process. Note that extensions are started using
             # systemd-run and the process for that commands belongs to the agent's cgroup but the processes for the extension should be in a
             # different cgroup
             #
@@ -909,11 +1019,13 @@ exit 0
                 return completed
 
             agent_processes = [os.getppid(), os.getpid()] + agent_command_processes + [start_extension.systemd_run_pid]
-            other_processes = [1, get_completed_process()] + extension_processes
+            other_processes = [get_completed_process()] + extension_processes
 
             with patch("azurelinuxagent.ga.cgroupapi.CgroupV1.get_processes", return_value=agent_processes + other_processes):
                 with self.assertRaises(CGroupsException) as context_manager:
-                    configurator._check_processes_in_agent_cgroup()
+                    configurator._check_processes_in_agent_cgroup(False)
+                    # will raise an exception if the processes are not as expected in the second call
+                    configurator._check_processes_in_agent_cgroup(False)
 
                 # The list of processes in the message is an array of strings: "['foo', ..., 'bar']"
                 message = ustr(context_manager.exception)
@@ -956,25 +1068,27 @@ exit 0
                         p.start()
 
                     with patch("azurelinuxagent.ga.cgroupapi.add_event") as add_event:
-                        configurator.enable()
+                        with patch('azurelinuxagent.common.conf.get_cgroup_disable_on_process_check_failure',
+                                   return_value=True):
+                            configurator.enable()
 
-                        tracked_metrics = [
-                            MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, "test",
-                                        10)]
-                        configurator.check_cgroups(tracked_metrics)
-                        if method_to_fail == "_check_processes_in_agent_cgroup":
-                            self.assertFalse(configurator.enabled(), "An error in {0} should have disabled cgroups".format(method_to_fail))
-                        else:
-                            self.assertFalse(configurator.agent_enabled(), "An error in {0} should have disabled cgroups".format(method_to_fail))
+                            tracked_metrics = [
+                                MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, "test",
+                                            10)]
+                            configurator.check_cgroups(tracked_metrics)
+                            if method_to_fail == "_check_processes_in_agent_cgroup":
+                                self.assertFalse(configurator.enabled(), "An error in {0} should have disabled cgroups".format(method_to_fail))
+                            else:
+                                self.assertFalse(configurator.agent_enabled(), "An error in {0} should have disabled cgroups".format(method_to_fail))
 
-                        disable_events = [kwargs for _, kwargs in add_event.call_args_list if kwargs["op"] == WALAEventOperation.CGroupsDisabled]
-                        self.assertTrue(
-                            len(disable_events) == 1,
-                            "Exactly 1 event should have been emitted when {0} fails. Got: {1}".format(method_to_fail, disable_events))
-                        self.assertIn(
-                            "[CGroupsException] {0}".format(method_to_fail),
-                            disable_events[0]["message"],
-                            "The error message is not correct when {0} failed".format(method_to_fail))
+                            disable_events = [kwargs for _, kwargs in add_event.call_args_list if kwargs["op"] == WALAEventOperation.CGroupsDisabled]
+                            self.assertTrue(
+                                len(disable_events) == 1,
+                                "Exactly 1 event should have been emitted when {0} fails. Got: {1}".format(method_to_fail, disable_events))
+                            self.assertIn(
+                                "[CGroupsException] {0}".format(method_to_fail),
+                                disable_events[0]["message"],
+                                "The error message is not correct when {0} failed".format(method_to_fail))
                 finally:
                     for p in patchers:
                         p.stop()
@@ -994,17 +1108,20 @@ exit 0
 
         with self._get_cgroup_configurator(initialize=False, mock_commands=command_mocks) as configurator:
             with patch("azurelinuxagent.common.utils.fileutil.read_file", side_effect=mock_read_file):
-                configurator.initialize()
+                with patch('azurelinuxagent.common.conf.get_cgroup_disable_on_process_check_failure',
+                           return_value=True):
 
-                self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
-                disable_events = [kwargs for _, kwargs in add_event.call_args_list if kwargs["op"] == WALAEventOperation.CGroupsDisabled]
-                self.assertTrue(
-                    len(disable_events) == 1,
-                    "Exactly 1 event should have been emitted. Got: {0}".format(disable_events))
-                self.assertIn(
-                    "Found unexpected processes in the agent cgroup before agent enable cgroups",
-                    disable_events[0]["message"],
-                    "The error message is not correct when process check failed")
+                    configurator.initialize()
+
+                    self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
+                    disable_events = [kwargs for _, kwargs in add_event.call_args_list if kwargs["op"] == WALAEventOperation.CGroupsDisabled]
+                    self.assertTrue(
+                        len(disable_events) == 1,
+                        "Exactly 1 event should have been emitted. Got: {0}".format(disable_events))
+                    self.assertIn(
+                        "Found unexpected processes in the agent cgroup before agent enable cgroups",
+                        disable_events[0]["message"],
+                        "The error message is not correct when process check failed")
 
     def test_check_agent_memory_usage_should_raise_a_cgroups_exception_when_the_limit_is_exceeded(self):
         metrics = [MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, AGENT_NAME_TELEMETRY, conf.get_agent_memory_quota() + 1),
@@ -1012,8 +1129,15 @@ exit 0
 
         with self.assertRaises(AgentMemoryExceededException) as context_manager:
             with self._get_cgroup_configurator() as configurator:
-                with patch("azurelinuxagent.ga.controllermetrics.MemoryMetrics.get_tracked_metrics") as tracked_metrics:
+                with patch("azurelinuxagent.ga.memorycontroller.MemoryControllerV1.get_tracked_metrics") as tracked_metrics:
                     tracked_metrics.return_value = metrics
                     configurator.check_agent_memory_usage()
 
         self.assertIn("The agent memory limit {0} bytes exceeded".format(conf.get_agent_memory_quota()), ustr(context_manager.exception), "An incorrect exception was raised")
+
+    def test_get_log_collector_properties_should_return_correct_props(self):
+        with self._get_cgroup_configurator() as configurator:
+            self.assertEqual(configurator.get_logcollector_unit_properties(), ["--property=CPUAccounting=yes", "--property=MemoryAccounting=yes", "--property=CPUQuota=5%"])
+
+        with self._get_cgroup_configurator_v2() as configurator:
+            self.assertEqual(configurator.get_logcollector_unit_properties(), ["--property=CPUAccounting=yes", "--property=MemoryAccounting=yes", "--property=CPUQuota=5%", "--property=MemoryHigh=170M"])

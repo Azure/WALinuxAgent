@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Extensions version="1.0.0.0" goalStateIncarnation="1"><GuestAgentExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+  <GAFamilies>
+    <GAFamily>
+      <IsVMEnabledForRSMUpgrades>false</IsVMEnabledForRSMUpgrades>
+      <IsVersionFromRSM>false</IsVersionFromRSM>
+      <Name>Prod</Name>
+      <Uris>
+        <Uri>https://umsaq0ksgznjhnhvqvmj.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+      </Uris>
+      <Version>2.12.0.2</Version>
+    </GAFamily>
+  </GAFamilies>
+  <Location>westus2</Location>
+  <ServiceName>CRP</ServiceName>
+</GuestAgentExtension>
+<StatusUploadBlob statusBlobType="PageBlob">https://md-z9z999zzzz99.z38.blob.storage.azure.net/$system/vm01.667ae9f0-zz99-99z9-9zz9-9z9z99999zz9.status?sv=2018-03-28&amp;sr=b&amp;sk=system-1&amp;sig=9ZzZZzZZZZ999zzz%2bzz99zzZzZZZ99999zz%2b9ZZZ%3d&amp;se=9999-01-01T00%3a00%3a00Z&amp;sp=w</StatusUploadBlob>
+<Plugins>
+  <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="2.1.10" location="https://umsaff4lwzr0mqltcdsj.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://umsat3kgcjtz4rzmtdhx.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
+    <additionalLocations>
+      <additionalLocation>https://umsalhsl5scrdmt03dql.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml</additionalLocation>
+    </additionalLocations>
+  </Plugin>
+  <Plugin name="Microsoft.Azure.AzureDefenderForServers.MDE.Linux" version="1.0.4.7" location="https://umsargnfzcnssnpfskrr.blob.core.windows.net/60eb5f5d-256d-1d4b-3db7-8808756d9b09/60eb5f5d-256d-1d4b-3db7-8808756d9b09_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://umsajn4ck0sd50j02kxr.blob.core.windows.net/60eb5f5d-256d-1d4b-3db7-8808756d9b09/60eb5f5d-256d-1d4b-3db7-8808756d9b09_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
+    <additionalLocations>
+      <additionalLocation>https://umsajcsg1mkf30sqkz4v.blob.core.windows.net/60eb5f5d-256d-1d4b-3db7-8808756d9b09/60eb5f5d-256d-1d4b-3db7-8808756d9b09_manifest.xml</additionalLocation>
+    </additionalLocations>
+  </Plugin>
+  <Plugin name="Microsoft.CPlat.Core.RunCommandLinux" version="1.0.5" location="https://umsapqg4jwbpzxdrjjwr.blob.core.windows.net/4beefb67-5a1e-aa37-7ede-3180ba34ba0d/4beefb67-5a1e-aa37-7ede-3180ba34ba0d_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://umsac5lzx3m5mmb1qsnk.blob.core.windows.net/4beefb67-5a1e-aa37-7ede-3180ba34ba0d/4beefb67-5a1e-aa37-7ede-3180ba34ba0d_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
+    <additionalLocations>
+      <additionalLocation>https://umsarmtx2bjcqg0cj14s.blob.core.windows.net/4beefb67-5a1e-aa37-7ede-3180ba34ba0d/4beefb67-5a1e-aa37-7ede-3180ba34ba0d_manifest.xml</additionalLocation>
+    </additionalLocations>
+  </Plugin>
+</Plugins>
+<PluginSettings>
+  <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="2.1.10">
+    <RuntimeSettings seqNo="1">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "protectedSettingsCertThumbprint": "3CA9F246CB9F2D4D17A1BBF732CA5D70AE5CB810",
+        "protectedSettings": "MIIC4AYJKoZIhvcNAQcWMicrosoft.Azure.Extensions.CustomScript/IsZAEZFidXVFB/8Ucc8OxGFWpqtXZdrFcuuSxOa6ib/+la5ukd7pXjzYCd/Sp9yGj7Rw3Kqf9Lpix/sPuqWjV6e2XgDhW4j2nRNTJU4yXxocQm/PhAr39Um7n0pgI2Cn28AabYtsHWjKqr8Al9LX6bKm8cnmnLjqTntphCw=="
+      }
+    }
+  ]
+}</RuntimeSettings>
+  </Plugin>
+  <Plugin name="Microsoft.Azure.AzureDefenderForServers.MDE.Linux" version="1.0.4.7">
+    <RuntimeSettings seqNo="12">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "protectedSettingsCertThumbprint": "3CA9F246CB9F2D4D17A1BBF732CA5D70AE5CB810",
+        "protectedSettings": "MIIC4AYJKoZIhvcNAQcWMicrosoft.Azure.AzureDefenderForServers.MDE.Linux/IsZAEZFidXVFB/8Ucc8OxGFWpqtXZdrFcuuSxOa6ib/+la5ukd7pXjzYCd/Sp9yGj7Rw3Kqf9Lpix/sPuqWjV6e2XgDhW4j2nRNTJU4yXxocQm/PhAr39Um7n0pgI2Cn28AabYtsHWjKqr8Al9LX6bKm8cnmnLjqTntphCw==",
+        "publicSettings": {"azureResourceId":"/subscriptions/z99z9999/resourceGroups/RG/providers/Microsoft.Compute/virtualMachines/vm01","forceReOnboarding":false,"vNextEnabled":false,"autoUpdate":true}
+      }
+    }
+  ]
+}</RuntimeSettings>
+  </Plugin>
+  <Plugin name="Microsoft.CPlat.Core.RunCommandLinux" version="1.0.5">
+    <RuntimeSettings seqNo="13">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "protectedSettingsCertThumbprint": "3CA9F246CB9F2D4D17A1BBF732CA5D70AE5CB810",
+        "protectedSettings": "MIIC4AYJKoZIhvcNAQcWMicrosoft.CPlat.Core.RunCommandLinux/IsZAEZFidXVFB/8Ucc8OxGFWpqtXZdrFcuuSxOa6ib/+la5ukd7pXjzYCd/Sp9yGj7Rw3Kqf9Lpix/sPuqWjV6e2XgDhW4j2nRNTJU4yXxocQm/PhAr39Um7n0pgI2Cn28AabYtsHWjKqr8Al9LX6bKm8cnmnLjqTntphCw==",
+        "publicSettings": {}
+      }
+    }
+  ]
+}</RuntimeSettings>
+  </Plugin>
+</PluginSettings>
+<InVMArtifactsProfileBlob>https://md-z9z999zzzz99.z38.blob.storage.azure.net/$system/vm01.667ae9f0-zz99-99z9-9zz9-9z9z99999zz9.vmSettings?sv=2018-03-28&amp;sr=b&amp;sk=system-1&amp;sig=9ZzZZZ%2fZzz9zZzZZZZz9z9zZ99Zzz%3d&amp;se=9999-01-01T00%3a00%3a00Z&amp;sp=r</InVMArtifactsProfileBlob>
+<InVMGoalStateMetaData inSvdSeqNo="71" createdOnTicks="638697286354582862" activityId="b72a79fc-6f88-41f5-9f9c-0f3b808de282" correlationId="ac50d27a-b3db-411f-a74e-aa8c0e358258" /></Extensions>

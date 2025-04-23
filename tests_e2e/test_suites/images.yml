@@ -9,6 +9,7 @@ image-sets:
 #
 #      - "debian_8"
 #
+      - "alma_8"
       - "alma_9"
       - "centos_79"
       - "centos_82"
@@ -16,14 +17,15 @@ image-sets:
       - "debian_10"
       - "debian_11"
       - "flatcar"
-      - "suse_12"
-      - "mariner_1"
       - "mariner_2"
-      - "suse_15"
+      - "azure-linux_3"
+      - "azure-linux_3_fips"
       - "rhel_79"
-      - "rhel_82"
-      - "rhel_90"
+      - "rhel_810"
+      - "rhel_95"
       - "rocky_9"
+      - "suse_12"
+      - "suse_15"
       - "ubuntu_1604"
       - "ubuntu_1804"
       - "ubuntu_2004"
@@ -37,8 +39,10 @@ image-sets:
       - "debian_11_arm64"
       - "flatcar_arm64"
       - "mariner_2_arm64"
-      - "rhel_90_arm64"
+      - "azure-linux_3_arm64"
+      - "rhel_95_arm64"
       - "ubuntu_2204_arm64"
+      - "ubuntu_2404_arm64"
 
    # As of today agent only support and enabled resource governance feature on following distros
    cgroups-endorsed:
@@ -53,6 +57,20 @@ image-sets:
       - "centos_610"
       - "oracle_610"
       - "rhel_610"
+
+   # These are the distros which have periodic log collector support.
+   log-collector-endorsed:
+      - "azure-linux_3"
+      - "centos_82"
+      - "rhel_82"
+      - "rhel_95"
+      - "ubuntu_1604"
+      - "ubuntu_1804"
+      - "ubuntu_2004"
+      - "ubuntu_2204"
+      - "ubuntu_2204_arm64"
+      - "ubuntu_2404"
+      - "ubuntu_2404_arm64"
 
 #
 # An image can be specified by a string giving its urn, as in
@@ -83,9 +101,26 @@ image-sets:
 # '<Publisher>:<Offer>:<Sku>:<Version>'
 #
 images:
+   alma_8:
+      urn: "almalinux almalinux-x86_64 8-gen2 latest"
    alma_9:
-      urn: "almalinux almalinux 9-gen2 latest"
+      urn: "almalinux almalinux-x86_64 9-gen2 latest"
       locations:
+         AzureChinaCloud: []
+   azure-linux_3:
+      urn: "microsoftcblmariner azure-linux-3 azure-linux-3 latest"
+      locations:
+         AzureUSGovernment: []
+         AzureChinaCloud: []
+   azure-linux_3_fips:
+      urn: "microsoftcblmariner azure-linux-3 azure-linux-3-gen2-fips latest"
+      locations:
+         AzureUSGovernment: []
+         AzureChinaCloud: []
+   azure-linux_3_arm64:
+      urn: "microsoftcblmariner azure-linux-3 azure-linux-3-arm64 latest"
+      locations:
+         AzureUSGovernment: []
          AzureChinaCloud: []
    centos_610: "OpenLogic CentOS 6.10 latest"
    centos_75: "OpenLogic CentOS 7.5 latest"
@@ -155,17 +190,21 @@ images:
       vm_sizes:
       # Previously one user reported agent hang on this VM size for redhat 7+ but not observed in rhel 8. So I'm using same vm size to test agent cgroups scenario for rhel 8 to make sure we don't see any issue in automation.
          - "Standard_B2s"
-   rhel_90:
-      urn: "RedHat RHEL 9_0 latest"
+   rhel_810:
+      urn: "RedHat RHEL 8_10 latest"
       locations:
          AzureChinaCloud: []
-   rhel_90_arm64:
-      urn: "RedHat rhel-arm64 9_0-arm64 latest"
+   rhel_95:
+      urn: "RedHat RHEL 9_5 latest"
+      locations:
+         AzureChinaCloud: []
+   rhel_95_arm64:
+      urn: "RedHat rhel-arm64 9_5-arm64 latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
    rocky_9:
-      urn: "erockyenterprisesoftwarefoundationinc1653071250513 rockylinux-9 rockylinux-9 latest"
+      urn: "resf rockylinux-x86_64 9-base latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
@@ -175,21 +214,17 @@ images:
    ubuntu_1804: "Canonical UbuntuServer 18.04-LTS latest"
    ubuntu_2004: "Canonical 0001-com-ubuntu-server-focal 20_04-lts latest"
    ubuntu_2204: "Canonical 0001-com-ubuntu-server-jammy 22_04-lts latest"
+   ubuntu_2204_pro: "Canonical 0001-com-ubuntu-pro-microsoft pro-22_04 latest"
    ubuntu_2204_arm64:
       urn: "Canonical 0001-com-ubuntu-server-jammy 22_04-lts-arm64 latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
    ubuntu_2204_minimal: "Canonical 0001-com-ubuntu-minimal-jammy minimal-22_04-lts-gen2 latest"
-   ubuntu_2404:
-      # TODO: Currently using the daily build, update to the release build once it is available
-      urn: "Canonical 0001-com-ubuntu-server-noble-daily 24_04-daily-lts-gen2 latest"
+   ubuntu_2404: "Canonical ubuntu-24_04-lts server latest"
+   ubuntu_2404_arm64:
+      urn: "Canonical ubuntu-24_04-lts server-arm64 latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
-   ubuntu_2404_minimal:
-      # TODO: Currently using the daily build, update to the release build once it is available
-      urn: "Canonical ubuntu-24_04-lts-daily minimal latest"
-      locations:
-         AzureChinaCloud: []
-         AzureUSGovernment: []
+   ubuntu_2404_minimal: "Canonical ubuntu-24_04-lts minimal latest"

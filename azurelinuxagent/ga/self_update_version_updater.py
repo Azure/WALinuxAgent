@@ -17,13 +17,17 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import datetime
+import random
 
 from azurelinuxagent.common import conf, logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import AgentUpgradeExitException, AgentUpdateError
+from azurelinuxagent.common.future import UTC, datetime_min_utc
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.utils import timeutil
 from azurelinuxagent.common.version import CURRENT_VERSION
 from azurelinuxagent.ga.ga_version_updater import GAVersionUpdater
+from azurelinuxagent.ga.guestagent import GuestAgentUpdateUtil
 
 
 class SelfUpdateType(object):
@@ -37,8 +41,8 @@ class SelfUpdateType(object):
 class SelfUpdateVersionUpdater(GAVersionUpdater):
     def __init__(self, gs_id):
         super(SelfUpdateVersionUpdater, self).__init__(gs_id)
-        self._last_attempted_manifest_download_time = datetime.datetime.min
-        self._last_attempted_self_update_time = datetime.datetime.min
+        self._last_attempted_manifest_download_time = datetime_min_utc
+        self._next_update_time = datetime_min_utc
 
     @staticmethod
     def _get_largest_version(agent_manifest):
@@ -61,34 +65,35 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         return SelfUpdateType.Regular
 
     @staticmethod
-    def _get_next_process_time(last_val, frequency, now):
+    def _get_next_process_time(upgrade_type, now):
         """
-        Get the next upgrade time
+        Returns random time in between 0 to 24hrs(regular) or 4hrs(hotfix) from now
         """
-        return now if last_val == datetime.datetime.min else last_val + datetime.timedelta(seconds=frequency)
-
-    def _is_new_agent_allowed_update(self):
-        """
-        This method ensure that update is allowed only once per (hotfix/Regular) upgrade frequency
-        """
-        now = datetime.datetime.utcnow()
-        upgrade_type = self._get_agent_upgrade_type(self._version)
         if upgrade_type == SelfUpdateType.Hotfix:
-            next_update_time = self._get_next_process_time(self._last_attempted_self_update_time,
-                                                           conf.get_self_update_hotfix_frequency(), now)
+            frequency = conf.get_self_update_hotfix_frequency()
         else:
-            next_update_time = self._get_next_process_time(self._last_attempted_self_update_time,
-                                                           conf.get_self_update_regular_frequency(), now)
+            frequency = conf.get_self_update_regular_frequency()
+        return now + datetime.timedelta(seconds=random.randint(0, frequency))
 
-        if self._version > CURRENT_VERSION:
-            message = "Self-update discovered new {0} upgrade WALinuxAgent-{1}; Will upgrade on or after {2}".format(
-                upgrade_type, str(self._version), next_update_time.strftime(logger.Logger.LogTimeFormatInUTC))
-            logger.info(message)
-            add_event(op=WALAEventOperation.AgentUpgrade, message=message, log_event=False)
+    def _new_agent_allowed_now_to_update(self):
+        """
+        This method is called when a new update is detected and computes a random time for the next update on the first call.
+        Since the method is called periodically until we reach the next update time, we shouldn't refresh or recompute the next update time on every call.
+        We use default value(datetime.datetime.min) to ensure the computation happens only once. This next_update_time will reset to default value(datetime.min) when agent allowed to update.
+        So that, in case the update fails due to an issue, such as a package download error, the same default value used to recompute the next update time.
+        """
+        now = datetime.datetime.now(UTC)
+        upgrade_type = self._get_agent_upgrade_type(self._version)
 
-        if next_update_time <= now:
-            # Update the last upgrade check time even if no new agent is available for upgrade
-            self._last_attempted_self_update_time = now
+        if self._next_update_time == datetime_min_utc:
+            self._next_update_time = self._get_next_process_time(upgrade_type, now)
+        message = "Self-update discovered new {0} upgrade WALinuxAgent-{1}; Will upgrade on or after {2}".format(
+            upgrade_type, str(self._version), timeutil.create_utc_timestamp(self._next_update_time))
+        logger.info(message)
+        add_event(op=WALAEventOperation.AgentUpgrade, message=message, log_event=False)
+
+        if self._next_update_time <= now:
+            self._next_update_time = datetime_min_utc
             return True
         return False
 
@@ -98,9 +103,9 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         the agent has not attempted to download the manifest in the last 1 hour
         If we allow update, we update the last attempted manifest download time
         """
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(UTC)
 
-        if self._last_attempted_manifest_download_time != datetime.datetime.min:
+        if self._last_attempted_manifest_download_time != datetime_min_utc:
             next_attempt_time = self._last_attempted_manifest_download_time + datetime.timedelta(
                 seconds=conf.get_autoupdate_frequency())
         else:
@@ -150,14 +155,22 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
 
     def is_retrieved_version_allowed_to_update(self, agent_family):
         """
-        checks update is spread per (as specified in the conf.get_self_update_hotfix_frequency() or conf.get_self_update_regular_frequency())
-        or if version below than current version
-        return false when we don't allow updates.
+        we don't allow new version update, if
+            1) The version is not greater than current version
+            2) if current time is before next update time
+
+        Allow the update, if
+            1) Initial update
+            2) If current time is on or after next update time
         """
-        if not self._is_new_agent_allowed_update():
+        if self._version <= CURRENT_VERSION:
             return False
 
-        if self._version <= CURRENT_VERSION:
+        # very first update need to proceed without any delay
+        if GuestAgentUpdateUtil.is_initial_update():
+            return True
+
+        if not self._new_agent_allowed_now_to_update():
             return False
 
         return True

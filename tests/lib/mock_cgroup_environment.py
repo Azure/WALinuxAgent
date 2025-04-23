@@ -27,27 +27,35 @@ _MOCKED_COMMANDS_COMMON = [
 +PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP +LIBCRYPTSETUP +GCRYPT +GNUTLS +ACL +XZ +LZ4 +SECCOMP +BLKID +ELFUTILS +KMOD -IDN2 +IDN -PCRE2 default-hierarchy=hybrid
 '''),
 
+    MockCommand(r"^systemctl show walinuxagent\.service --property ControlGroup$",
+'''ControlGroup=/system.slice/walinuxagent.service
+'''),
+
     MockCommand(r"^systemctl show walinuxagent\.service --property Slice",
 '''Slice=system.slice
-'''),
-
-    MockCommand(r"^systemctl show walinuxagent\.service --property CPUAccounting$",
-'''CPUAccounting=no
-'''),
-
-    MockCommand(r"^systemctl show walinuxagent\.service --property CPUQuotaPerSecUSec$",
-'''CPUQuotaPerSecUSec=infinity
-'''),
-
-    MockCommand(r"^systemctl show walinuxagent\.service --property MemoryAccounting$",
-'''MemoryAccounting=no
 '''),
 
     MockCommand(r"^systemctl show extension\.service --property ControlGroup$",
 '''ControlGroup=/system.slice/extension.service
 '''),
 
-    MockCommand(r"^systemctl daemon-reload", ""),
+    MockCommand(r"^systemctl show (.+) --property CPUQuotaPerSecUSec$",
+'''CPUQuotaPerSecUSec=infinity
+'''),
+
+    MockCommand(r"^systemctl show (.+) --property CPUAccounting$",
+'''CPUAccounting=no
+'''),
+
+    MockCommand(r"^systemctl show (.+) --property MemoryAccounting$",
+'''MemoryAccounting=no
+'''),
+
+    MockCommand(r"^systemctl show (.+) --property LoadState$",
+'''LoadState=loaded
+'''),
+
+    MockCommand(r"^systemctl set-property (.+) --runtime", ""),
 
     MockCommand(r"^systemctl stop ([^\s]+)"),
 
@@ -177,10 +185,11 @@ def mock_cgroup_v1_environment(tmp_dir):
         (os.path.join(data_dir, 'init', 'azure-vmextensions.slice'), UnitFilePaths.vmextensions)
     ]
 
-    with patch('azurelinuxagent.ga.cgroupapi.CGroupUtil.cgroups_supported', return_value=True):
+    with patch('azurelinuxagent.ga.cgroupapi.CGroupUtil.distro_supported', return_value=True):
         with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=True):
-            with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS_COMMON + _MOCKED_COMMANDS_V1, paths=_MOCKED_PATHS, files=_MOCKED_FILES_V1, data_files=data_files) as mock:
-                yield mock
+            with patch('azurelinuxagent.common.conf.get_cgroup_disable_on_process_check_failure', return_value=False):
+                with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS_COMMON + _MOCKED_COMMANDS_V1, paths=_MOCKED_PATHS, files=_MOCKED_FILES_V1, data_files=data_files) as mock:
+                    yield mock
 
 
 @contextlib.contextmanager
@@ -196,10 +205,11 @@ def mock_cgroup_v2_environment(tmp_dir):
         (os.path.join(data_dir, 'init', 'azure-vmextensions.slice'), UnitFilePaths.vmextensions)
     ]
 
-    with patch('azurelinuxagent.ga.cgroupapi.CGroupUtil.cgroups_supported', return_value=True):
+    with patch('azurelinuxagent.ga.cgroupapi.CGroupUtil.distro_supported', return_value=True):
         with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=True):
-            with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS_COMMON + _MOCKED_COMMANDS_V2, paths=_MOCKED_PATHS, files=_MOCKED_FILES_V2, data_files=data_files) as mock:
-                yield mock
+            with patch('azurelinuxagent.common.conf.get_cgroup_disable_on_process_check_failure', return_value=False):
+                with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS_COMMON + _MOCKED_COMMANDS_V2, paths=_MOCKED_PATHS, files=_MOCKED_FILES_V2, data_files=data_files) as mock:
+                    yield mock
 
 
 @contextlib.contextmanager
@@ -214,7 +224,8 @@ def mock_cgroup_hybrid_environment(tmp_dir):
         (os.path.join(data_dir, 'init', 'azure-vmextensions.slice'), UnitFilePaths.vmextensions)
     ]
 
-    with patch('azurelinuxagent.ga.cgroupapi.CGroupUtil.cgroups_supported', return_value=True):
+    with patch('azurelinuxagent.ga.cgroupapi.CGroupUtil.distro_supported', return_value=True):
         with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=True):
-            with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS_COMMON + _MOCKED_COMMANDS_HYBRID, paths=_MOCKED_PATHS, files=_MOCKED_FILES_HYBRID, data_files=data_files) as mock:
-                yield mock
+            with patch('azurelinuxagent.common.conf.get_cgroup_disable_on_process_check_failure', return_value=False):
+                with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS_COMMON + _MOCKED_COMMANDS_HYBRID, paths=_MOCKED_PATHS, files=_MOCKED_FILES_HYBRID, data_files=data_files) as mock:
+                    yield mock

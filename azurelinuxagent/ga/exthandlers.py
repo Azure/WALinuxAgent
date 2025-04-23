@@ -24,6 +24,7 @@ import os
 import re
 import shutil
 import stat
+import sys
 import tempfile
 import time
 import zipfile
@@ -35,9 +36,12 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common import version
+from azurelinuxagent.common import event
 from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions, \
     SupportedFeatureNames, get_supported_feature_by_name, get_agent_supported_features_list_for_crp
+from azurelinuxagent.common.utils.textutil import redact_sas_token
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEventOperation, \
@@ -45,7 +49,7 @@ from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEv
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
     ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionsGoalStateError, \
     GoalStateAggregateStatusCodes, MultiConfigExtensionEnableError
-from azurelinuxagent.common.future import ustr, is_file_not_found_error
+from azurelinuxagent.common.future import ustr, UTC, is_file_not_found_error
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, Extension, ExtHandlerStatus, \
     VMStatus, GoalStateAggregateStatus, ExtensionState, ExtensionRequestedState, ExtensionSettings
@@ -84,6 +88,26 @@ _STATUS_FILE_RETRY_DELAY = 2  # seconds
 
 # This is the default sequence number we use when there are no settings available for Handlers
 _DEFAULT_SEQ_NO = "0"
+
+# For extension disallowed errors (e.g. blocked by policy, extensions disabled), this mapping is used to generate
+# user-friendly error messages and determine the appropriate terminal error code based on the blocked operation.
+# Format: {<ExtensionRequestedState>: (<str>, <ExtensionErrorCodes>)}
+# - The first element of the tuple is a user-friendly operation name included in error messages.
+# - The second element of the tuple is the CRP terminal error code for the operation.
+_EXT_DISALLOWED_ERROR_MAP = \
+    {
+        ExtensionRequestedState.Enabled: ('run', ExtensionErrorCodes.PluginEnableProcessingFailed),
+        # TODO: CRP does not currently have a terminal error code for uninstall. Once this code is added, use
+        #       it instead of PluginDisableProcessingFailed below.
+        #
+        # Note: currently, when uninstall is requested for an extension, CRP polls until the agent does not
+        #       report status for that extension, or until timeout is reached. In the case of an extension disallowed
+        #       error, agent reports failed status on behalf of the extension, which will cause CRP to poll for the full
+        #       timeout, instead of failing fast.
+        ExtensionRequestedState.Uninstall: ('uninstall', ExtensionErrorCodes.PluginDisableProcessingFailed),
+        # "Disable" is an internal operation, users are unaware of it. We surface the term "uninstall" instead.
+        ExtensionRequestedState.Disabled: ('uninstall', ExtensionErrorCodes.PluginDisableProcessingFailed),
+    }
 
 
 class ExtHandlerStatusValue(object):
@@ -275,10 +299,15 @@ class ExtHandlersHandler(object):
     def __init__(self, protocol):
         self.protocol = protocol
         self.ext_handlers = None
+        # Maintain a list of extension handler objects that are disallowed (e.g. blocked by policy, extensions disabled, etc.).
+        # Extension status, if it exists, is always reported for the extensions in this list. List is reset for each goal state.
+        self.__disallowed_ext_handlers = []
         # The GoalState Aggregate status needs to report the last status of the GoalState. Since we only process
         # extensions on goal state change, we need to maintain its state.
         # Setting the status to None here. This would be overridden as soon as the first GoalState is processed
         self.__gs_aggregate_status = None
+        # CRP Activity ID for the goal state that is being processed. Initialized once we start processing the goal state.
+        self._gs_activity_id = '00000000-0000-0000-0000-000000000000'
 
         self.report_status_error_state = ErrorState()
 
@@ -293,6 +322,8 @@ class ExtHandlersHandler(object):
         try:
             gs = self.protocol.get_goal_state()
             egs = gs.extensions_goal_state
+            self._gs_activity_id = egs.activity_id
+
 
             # self.ext_handlers needs to be initialized before returning, since status reporting depends on it; also
             # we make a deep copy of the extensions, since changes are made to self.ext_handlers while processing the extensions
@@ -301,7 +332,7 @@ class ExtHandlersHandler(object):
             if self._extensions_on_hold():
                 return
 
-            utc_start = datetime.datetime.utcnow()
+            utc_start = datetime.datetime.now(UTC)
             error = None
             message = "ProcessExtensionsGoalState started [{0} channel: {1} source: {2} activity: {3} correlation {4} created: {5}]".format(
                 egs.id, egs.channel, egs.source, egs.activity_id, egs.correlation_id, egs.created_on_timestamp)
@@ -468,7 +499,7 @@ class ExtHandlersHandler(object):
             logger.info("No extension handlers found, not processing anything.")
             return
 
-        wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=_DEFAULT_EXT_TIMEOUT_MINUTES)
+        wait_until = datetime.datetime.now(UTC) + datetime.timedelta(minutes=_DEFAULT_EXT_TIMEOUT_MINUTES)
 
         all_extensions = self.__get_sorted_extensions_for_processing()
         # Since all_extensions are sorted based on sort_key, the last element would be the maximum based on the sort_key
@@ -476,27 +507,48 @@ class ExtHandlersHandler(object):
 
         depends_on_err_msg = None
         extensions_enabled = conf.get_extensions_enabled()
+
+        # Instantiate policy engine, and use same engine to handle all extension handlers. If an error is thrown during
+        # policy engine initialization, we block all extensions and report the error via handler status for each extension.
+        # Save policy to history folder.
+        policy_error = None
+        try:
+            gs_history = self.protocol.get_goal_state().history
+            policy_engine = ExtensionPolicyEngine()
+            if policy_engine is not None and policy_engine.policy_file_contents is not None and gs_history is not None:
+                gs_history.save(policy_engine.policy_file_contents, "waagent_policy.json")
+
+        except Exception as ex:
+            policy_error = ex
+
+        self.__disallowed_ext_handlers = []
+
         for extension, ext_handler in all_extensions:
 
             handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)
+
+            # Get user-friendly operation name and terminal error code to use in status messages if extension is disallowed
+            operation, error_code = _EXT_DISALLOWED_ERROR_MAP.get(ext_handler.state)
 
             # In case of extensions disabled, we skip processing extensions. But CRP is still waiting for some status
             # back for the skipped extensions. In order to propagate the status back to CRP, we will report status back
             # here with an error message.
             if not extensions_enabled:
-                agent_conf_file_path = get_osutil().agent_conf_file_path
-                msg = "Extension will not be processed since extension processing is disabled. To enable extension " \
-                      "processing, set Extensions.Enabled=y in '{0}'".format(agent_conf_file_path)
                 ext_full_name = handler_i.get_extension_full_name(extension)
-                logger.info('')
-                logger.info("{0}: {1}".format(ext_full_name, msg))
-                add_event(op=WALAEventOperation.ExtensionProcessing, message="{0}: {1}".format(ext_full_name, msg))
-                handler_i.set_handler_status(status=ExtHandlerStatusValue.not_ready, message=msg, code=-1)
-                handler_i.create_status_file_if_not_exist(extension,
-                                                          status=ExtensionStatusValue.error,
-                                                          code=-1,
-                                                          operation=handler_i.operation,
-                                                          message=msg)
+                agent_conf_file_path = get_osutil().get_agent_conf_file_path()
+                msg = "Extension '{0}' will not be processed since extension processing is disabled. To enable extension " \
+                      "processing, set Extensions.Enabled=y in '{1}'".format(ext_full_name, agent_conf_file_path)
+                self.__handle_ext_disallowed_error(handler_i, error_code, report_op=WALAEventOperation.ExtensionProcessing,
+                                                   message=msg, extension=extension)
+                continue
+
+            # If an error was thrown during policy engine initialization, skip further processing of the extension.
+            # CRP is still waiting for status, so we report error status here.
+            if policy_error is not None:
+                msg = "Extension will not be processed: {0}".format(ustr(policy_error))
+                self.__handle_ext_disallowed_error(ext_handler_i=handler_i, error_code=error_code,
+                                                   report_op=WALAEventOperation.ExtensionPolicy, message=msg,
+                                                   extension=extension)
                 continue
 
             # In case of depends-on errors, we skip processing extensions if there was an error processing dependent extensions.
@@ -510,9 +562,9 @@ class ExtHandlersHandler(object):
                     if handler_i.get_handler_status() is None:
                         handler_i.set_handler_status(message=depends_on_err_msg, code=-1)
 
-                    handler_i.create_status_file_if_not_exist(extension, status=ExtensionStatusValue.error, code=-1,
-                                                              operation=WALAEventOperation.ExtensionProcessing,
-                                                              message=depends_on_err_msg)
+                    handler_i.create_status_file(extension, status=ExtensionStatusValue.error, code=-1,
+                                                 operation=WALAEventOperation.ExtensionProcessing,
+                                                 message=depends_on_err_msg, overwrite=False)
 
                 # For SC extensions, overwrite the HandlerStatus with the relevant message
                 else:
@@ -520,8 +572,21 @@ class ExtHandlersHandler(object):
 
                 continue
 
-            # Process extensions and get if it was successfully executed or not
-            extension_success = self.handle_ext_handler(handler_i, extension, goal_state_id)
+            # Invoke policy engine to determine if extension is allowed.
+            # - if allowed: process the extension and get if it was successfully executed or not
+            # - if disallowed: do not process the handler and report an error on behalf of the extension, dependent
+            #                  extensions will also be blocked.
+            extension_allowed = policy_engine.should_allow_extension(ext_handler.name)
+            if not extension_allowed:
+                msg = (
+                    "Extension will not be processed: failed to {0} extension '{1}' because it is not specified "
+                    "as an allowed extension. To {0}, add the extension to the list of allowed extensions in the policy file ('{2}')."
+                ).format(operation, ext_handler.name, conf.get_policy_file_path())
+                self.__handle_ext_disallowed_error(handler_i, error_code, report_op=WALAEventOperation.ExtensionPolicy,
+                                                   message=msg, extension=extension)
+                extension_success = False
+            else:
+                extension_success = self.handle_ext_handler(handler_i, extension, goal_state_id)
 
             dep_level = self.__get_dependency_level((extension, ext_handler))
             if 0 <= dep_level < max_dep_level:
@@ -566,7 +631,7 @@ class ExtHandlersHandler(object):
             ext_completed, status = False, None
 
             # Keep polling for the extension status until it succeeds or times out
-            while datetime.datetime.utcnow() <= wait_until:
+            while datetime.datetime.now(UTC) <= wait_until:
                 ext_completed, status = handler_i.is_ext_handling_complete(extension)
                 if ext_completed:
                     break
@@ -579,7 +644,7 @@ class ExtHandlersHandler(object):
 
         # In case of timeout or terminal error state, we log it and raise
         # Incase extension reported status at the last sec, we should prioritize reporting status over timeout
-        if not ext_completed and datetime.datetime.utcnow() > wait_until:
+        if not ext_completed and datetime.datetime.now(UTC) > wait_until:
             msg = "Dependent Extension {0} did not reach a terminal state within the allowed timeout. Last status was {1}".format(
                 extension_name, status)
             raise Exception(msg)
@@ -608,8 +673,7 @@ class ExtHandlersHandler(object):
             # If the extension version is unregistered and the customers wants to uninstall the extension,
             # we should let it go through even if the installed version doesnt exist in Handler manifest (PIR) anymore.
             # If target state is enabled and version not found in manifest, do not process the extension.
-            if ext_handler_i.decide_version(target_state=handler_state,
-                                            extension=extension) is None and handler_state == ExtensionRequestedState.Enabled:
+            if ext_handler_i.decide_version(target_state=handler_state, extension=extension, gs_activity_id=self._gs_activity_id) is None and handler_state == ExtensionRequestedState.Enabled:
                 handler_version = ext_handler_i.ext_handler.version
                 name = ext_handler_i.ext_handler.name
                 err_msg = "Unable to find version {0} in manifest for extension {1}".format(handler_version, name)
@@ -621,6 +685,8 @@ class ExtHandlersHandler(object):
             if handler_state == ExtensionRequestedState.Enabled:
                 self.handle_enable(ext_handler_i, extension)
             elif handler_state == ExtensionRequestedState.Disabled:
+                # The "disabled" state is now deprecated. Send telemetry if it is still being used on any VMs
+                event.info(WALAEventOperation.RequestedStateDisabled, 'Goal State is requesting "disabled" state on {0} [Activity ID: {1}]',  ext_handler_i.ext_handler.name, self._gs_activity_id)
                 self.handle_disable(ext_handler_i, extension)
             elif handler_state == ExtensionRequestedState.Uninstall:
                 self.handle_uninstall(ext_handler_i, extension=extension)
@@ -635,8 +701,8 @@ class ExtHandlersHandler(object):
             # This error is only thrown for enable operation on MultiConfig extension.
             # Since these are maintained by the extensions, the expectation here is that they would update their status files appropriately with their errors.
             # The extensions should already have a placeholder status file, but incase they dont, setting one here to fail fast.
-            ext_handler_i.create_status_file_if_not_exist(extension, status=ExtensionStatusValue.error, code=error.code,
-                                                          operation=ext_handler_i.operation, message=err_msg)
+            ext_handler_i.create_status_file(extension, status=ExtensionStatusValue.error, code=error.code,
+                                             operation=ext_handler_i.operation, message=err_msg, overwrite=False)
             add_event(name=ext_name, version=ext_handler_i.ext_handler.version, op=ext_handler_i.operation,
                       is_success=False, log_event=True, message=err_msg)
         except ExtensionsGoalStateError as error:
@@ -676,14 +742,55 @@ class ExtHandlersHandler(object):
         # file with failure since the extensions wont be called where they can create their status files.
         # This way we guarantee reporting back to CRP
         if ext_handler_i.should_perform_multi_config_op(extension):
-            ext_handler_i.create_status_file_if_not_exist(extension, status=ExtensionStatusValue.error, code=error.code,
-                                                          operation=report_op, message=message)
+            ext_handler_i.create_status_file(extension, status=ExtensionStatusValue.error, code=error.code,
+                                             operation=report_op, message=message, overwrite=False)
 
         if report:
             name = ext_handler_i.get_extension_full_name(extension)
             handler_version = ext_handler_i.ext_handler.version
             add_event(name=name, version=handler_version, op=report_op, is_success=False, log_event=True,
                       message=message)
+
+    def __handle_ext_disallowed_error(self, ext_handler_i, error_code, report_op, message, extension):
+        #
+        # Handle and report errors for disallowed extensions (e.g. extensions blocked by policy or disabled via config).
+        #
+        # TODO: __handle_and_report_ext_handler_errors() is also used to report extension errors, but it does not create
+        #       a status file for single-config extensions (see below as to why this is important). This function,
+        #       __handle_ext_disallowed_error, implements what we believe is the correct behavior, but at this point we
+        #       use it only for disallowed extensions scenarios. In a future release, consider merging the two functions
+        #       after assessing any impact.
+        #
+        # Note: When CRP polls for extension status, it first looks at handler status and then looks for any extension
+        #       status. If extension status is present, CRP uses it instead of the handler status, ensuring that the
+        #       sequence number for the extension settings match the sequence number in the reported status. CRP polls
+        #       asynchronously to the Agent and, on a new goal state, it can check the status blob before the Agent has
+        #       reported status for that goal state, effectively checking the status of the previous goal state. This is
+        #       not an issue when the extension reports status at the extension level, since CRP wil wait for the status
+        #       for the correct sequence number. However, when the extension reports status *only* at the handler level
+        #       (e.g if the extension has no settings, during install errors, if extension is disallowed, etc.) CRP can
+        #       end up picking up a stale status. There is not a good solution for extensions with no settings, and CRP
+        #       can report an error from a previous goal state. For install errors of extensions with settings, though,
+        #       we work around this issue by reporting the error *both* at the handler level and at the extension level
+        #       (although reporting at the handler level *should* be sufficient). By reporting at the extension level,
+        #       CRP will enforce a match on the sequence number for the settings, and skip stale status blobs.
+
+        # Keep a list of disallowed extensions so that report_ext_handler_status() can report status for them.
+        self.__disallowed_ext_handlers.append(ext_handler_i.ext_handler)
+
+        ext_handler_i.set_handler_status(status=ExtHandlerStatusValue.not_ready, message=message, code=error_code)
+
+        # Only report extension status for install errors of extensions with settings. Disable/uninstall errors are
+        # reported at the handler status level only.
+        if extension is not None and ext_handler_i.ext_handler.state == ExtensionRequestedState.Enabled:
+            # Overwrite any existing status file to reflect the failure accurately.
+            ext_handler_i.create_status_file(extension, status=ExtensionStatusValue.error, code=error_code,
+                                             operation=ext_handler_i.operation, message=message, overwrite=True)
+
+        name = ext_handler_i.get_extension_full_name(extension)
+        handler_version = ext_handler_i.ext_handler.version
+        add_event(name=name, version=handler_version, op=report_op, is_success=False, log_event=True,
+                  message=message)
 
     def handle_enable(self, ext_handler_i, extension):
         """
@@ -978,23 +1085,40 @@ class ExtHandlersHandler(object):
 
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_statuses = []
+        ext_disallowed = ext_handler in self.__disallowed_ext_handlers
         # For MultiConfig, we need to report status per extension even for Handler level failures.
         # If we have HandlerStatus for a MultiConfig handler and GS is requesting for it, we would report status per
         # extension even if HandlerState == NotInstalled (Sample scenario: ExtensionsGoalStateError, DecideVersionError, etc)
-        # We also need to report extension status for an uninstalled handler if extensions are disabled because CRP
-        # waits for extension runtime status before failing the extension operation.
-        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config or not conf.get_extensions_enabled():
+        # We also need to report extension status for an uninstalled handler if the extension is disallowed (due to
+        # policy failure, extensions disabled, etc.) because CRP waits for extension runtime status before failing the operation.
+        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config or ext_disallowed:
 
             # Since we require reading the Manifest for reading the heartbeat, this would fail if HandlerManifest not found.
             # Only try to read heartbeat if HandlerState != NotInstalled.
+            # If extension is disallowed, concatenate the heartbeat message to the existing handler status message, and
+            # do not override handler error code or status with heartbeat.
             if handler_state != ExtHandlerState.NotInstalled:
-                # Heartbeat is a handler level thing only, so we dont need to modify this
+                # Heartbeat is a handler level thing only, so we don't need to modify this
                 try:
                     heartbeat = ext_handler_i.collect_heartbeat()
                     if heartbeat is not None:
-                        handler_status.status = heartbeat.get('status')
+                        if ext_disallowed:
+                            pass  # The status already specifies that the extension is disallowed ('NotReady')
+                        else:
+                            handler_status.status = heartbeat.get('status')
+
                         if 'formattedMessage' in heartbeat:
-                            handler_status.message = parse_formatted_message(heartbeat.get('formattedMessage'))
+                            heartbeat_message = parse_formatted_message(heartbeat.get('formattedMessage'))
+                            if ext_disallowed:
+                                # If extension is disallowed, the agent should set the handler status message on behalf of the
+                                # extension, handler_status.message should not be None.
+                                if handler_status.message is None:
+                                    handler_status.message = "Extension was not executed, but it was previously enabled and reported the following heartbeat:\n{0}".format(heartbeat_message)
+                                else:
+                                    handler_status.message += " Extension was previously enabled and reported the following heartbeat:\n{0}".format(heartbeat_message)
+                            else:
+                                handler_status.message = heartbeat_message
+
                 except ExtensionError as e:
                     ext_handler_i.set_handler_status(message=ustr(e), code=e.code)
 
@@ -1097,7 +1221,7 @@ class ExtHandlerInstance(object):
                         logger.warn("Exception occurred while attempting to remove file '{0}': {1}", f,
                                     cleanup_exception)
 
-    def decide_version(self, target_state=None, extension=None):
+    def decide_version(self, target_state, extension, gs_activity_id):
         self.logger.verbose("Decide which version to use")
         try:
             manifest = self.protocol.get_goal_state().fetch_extension_manifest(self.ext_handler.name, self.ext_handler.manifest_uris)
@@ -1142,6 +1266,11 @@ class ExtHandlerInstance(object):
         else:
             self.pkg = selected_pkg
             if self.pkg is not None:
+                if self.ext_handler.version != str(selected_pkg.version):
+                    # The Agent should not change the version requested by the Goal State. Send telemetry if this happens.
+                    event.info(
+                        WALAEventOperation.RequestedVersionMismatch,
+                        'Goal State requesting {0} version {1}, but Agent overriding with version {2} [Activity ID: {3}]',  self.ext_handler.name, self.ext_handler.version, selected_pkg.version, gs_activity_id)
                 self.ext_handler.version = str(selected_pkg.version)
 
         if self.pkg is not None:
@@ -1241,7 +1370,7 @@ class ExtHandlerInstance(object):
         return True
 
     def download(self):
-        begin_utc = datetime.datetime.utcnow()
+        begin_utc = datetime.datetime.now(UTC)
         self.set_operation(WALAEventOperation.Download)
 
         if self.pkg is None or self.pkg.uris is None or len(self.pkg.uris) == 0:
@@ -1295,6 +1424,9 @@ class ExtHandlerInstance(object):
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionDownloadError(u"Failed to save HandlerManifest.json", e)
 
+        man = self.load_manifest()
+        man.report_invalid_boolean_properties(ext_name=self.get_full_name())
+
         self.ensure_consistent_data_for_mc()
 
         # Create status and config dir
@@ -1315,23 +1447,43 @@ class ExtHandlerInstance(object):
         # Save HandlerEnvironment.json
         self.create_handler_env()
 
+        self.log_telemetry_if_ext_uses_resource_limits()
         self.set_extension_resource_limits()
 
     def set_extension_resource_limits(self):
         extension_name = self.get_full_name()
         # setup the resource limits for extension operations and it's services.
         man = self.load_manifest()
-        resource_limits = man.get_resource_limits(extension_name, self.ext_handler.version)
-        if not CGroupConfigurator.get_instance().is_extension_resource_limits_setup_completed(extension_name,
-                                                                                              cpu_quota=resource_limits.get_extension_slice_cpu_quota()):
-            CGroupConfigurator.get_instance().setup_extension_slice(
-                extension_name=extension_name, cpu_quota=resource_limits.get_extension_slice_cpu_quota())
-            CGroupConfigurator.get_instance().set_extension_services_cpu_memory_quota(resource_limits.get_service_list())
+        resource_limits = man.get_resource_limits()
 
-    def create_status_file_if_not_exist(self, extension, status, code, operation, message):
+        CGroupConfigurator.get_instance().setup_extension_slice(
+            extension_name=extension_name, cpu_quota=resource_limits.get_extension_slice_cpu_quota())
+        CGroupConfigurator.get_instance().set_extension_services_cpu_memory_quota(resource_limits.get_service_list())
+
+    def log_telemetry_if_ext_uses_resource_limits(self):
+        extension_name = self.get_full_name()
+        man = self.load_manifest()
+        resource_limits = man.get_resource_limits()
+
+        def _log(msg):
+            event.info(WALAEventOperation.ExtensionResourceGovernance, msg)
+
+        if resource_limits is None:
+            return
+
+        if resource_limits.get_extension_slice_cpu_quota() is not None or resource_limits.get_extension_slice_memory_quota() is not None:
+            msg = "{0} is using resource governance to set limits".format(extension_name)
+            _log(msg)
+        if resource_limits.get_service_list() is not None and len(resource_limits.get_service_list()) > 0:
+            msg = "{0} is using resource governance for its service list".format(extension_name)
+            _log(msg)
+
+    def create_status_file(self, extension, status, code, operation, message, overwrite):
+        # Create status file for specified extension. If overwrite is true, overwrite any existing status file. If
+        # false, create a status file only if it does not already exist.
         _, status_path = self.get_status_file_path(extension)
-        if status_path is not None and not os.path.exists(status_path):
-            now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        if status_path is not None and (overwrite or not os.path.exists(status_path)):
+            now = datetime.datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
             status_contents = [
                 {
                     "version": 1.0,
@@ -1343,7 +1495,7 @@ class ExtHandlerInstance(object):
                         "code": code,
                         "formattedMessage": {
                             "lang": "en-US",
-                            "message": message
+                            "message": redact_sas_token(message)
                         }
                     }
                 }
@@ -1391,7 +1543,7 @@ class ExtHandlerInstance(object):
             self.__set_extension_state(extension, ExtensionState.Enabled)
 
         # start tracking the extension services cgroup.
-        resource_limits = man.get_resource_limits(self.get_full_name(), self.ext_handler.version)
+        resource_limits = man.get_resource_limits()
         CGroupConfigurator.get_instance().start_tracking_extension_services_cgroups(
             resource_limits.get_service_list())
 
@@ -1416,9 +1568,17 @@ class ExtHandlerInstance(object):
             self.report_event(name=self.get_extension_full_name(extension), message=msg, is_success=False,
                               log_event=False)
 
-        # Clean extension state For Multi Config extensions on Disable
+        #
+        # In the case of multi-config handlers, we keep the state of each extension individually.
+        # Disable can be called when the extension is deleted (the extension state in the goal state is set to "disabled"),
+        # or as part of the Uninstall and Update sequences. When the extension is deleted, we need to remove its state, along
+        # with its status and settings files. Otherwise, we need to set the state to "disabled".
+        #
         if self.should_perform_multi_config_op(extension):
-            self.__remove_extension_state_files(extension)
+            if extension.state == ExtensionRequestedState.Disabled:
+                self.__remove_extension_state_files(extension)
+            else:
+                self.__set_extension_state(extension, ExtensionState.Disabled)
 
         # For Single config, dont check enabled_extensions because no extension state is maintained.
         # For MultiConfig, Set the handler state to Installed only when all extensions have been disabled
@@ -1450,10 +1610,10 @@ class ExtHandlerInstance(object):
         man = self.load_manifest()
 
         # stop tracking extension services cgroup.
-        resource_limits = man.get_resource_limits(self.get_full_name(), self.ext_handler.version)
+        resource_limits = man.get_resource_limits()
         CGroupConfigurator.get_instance().stop_tracking_extension_services_cgroups(
             resource_limits.get_service_list())
-        CGroupConfigurator.get_instance().remove_extension_services_drop_in_files(
+        CGroupConfigurator.get_instance().reset_extension_services_quota(
             resource_limits.get_service_list())
 
         uninstall_cmd = man.get_uninstall_command()
@@ -1472,15 +1632,22 @@ class ExtHandlerInstance(object):
                 self.logger.info("Remove extension handler directory: {0}", base_dir)
 
                 # some extensions uninstall asynchronously so ignore error 2 while removing them
-                def on_rmtree_error(_, __, exc_info):
-                    _, exception, _ = exc_info
+                def on_rmtree_exception(_, __, exception):
                     if not isinstance(exception, OSError) or exception.errno != 2:  # [Errno 2] No such file or directory
                         raise exception
 
-                shutil.rmtree(base_dir, onerror=on_rmtree_error)
+                # On 3.12, 'onerror' has been deprecated in favor of 'onexc'
+                if sys.version_info[0] == 3 and sys.version_info[1] >= 12 or sys.version_info[0] > 3:
+                    kwargs = { 'onexc': on_rmtree_exception }
+                else:
+                    kwargs = { 'onerror': lambda function, path, exc_info: on_rmtree_exception(function, path, exc_info[1]) }
 
+                # E1123: Unexpected keyword argument 'onexc' in function call (unexpected-keyword-arg)
+                shutil.rmtree(base_dir, **kwargs)  # pylint: disable=unexpected-keyword-arg
+
+            CGroupConfigurator.get_instance().stop_tracking_extension_cgroups(self.get_full_name())
             self.logger.info("Remove the extension slice: {0}".format(self.get_full_name()))
-            CGroupConfigurator.get_instance().remove_extension_slice(
+            CGroupConfigurator.get_instance().reset_extension_quota(
                 extension_name=self.get_full_name())
 
         except IOError as e:
@@ -1828,7 +1995,7 @@ class ExtHandlerInstance(object):
 
     def launch_command(self, cmd, cmd_name=None, timeout=300, extension_error_code=ExtensionErrorCodes.PluginProcessingError,
                        env=None, extension=None):
-        begin_utc = datetime.datetime.utcnow()
+        begin_utc = datetime.datetime.now(UTC)
         self.logger.verbose("Launch command: [{0}]", cmd)
 
         base_dir = self.get_base_dir()
@@ -2036,7 +2203,7 @@ class ExtHandlerInstance(object):
         handler_status = ExtHandlerStatus()
         handler_status.name = self.ext_handler.name
         handler_status.version = str(self.ext_handler.version)
-        handler_status.message = message
+        handler_status.message = redact_sas_token(message)
         handler_status.code = code
         handler_status.status = status
         handler_status.supports_multi_config = self.ext_handler.supports_multi_config
@@ -2119,14 +2286,6 @@ class ExtHandlerInstance(object):
 
     def get_log_dir(self):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
-
-    @staticmethod
-    def is_azuremonitorlinuxagent(extension_name):
-        cgroup_monitor_extension_name = conf.get_cgroup_monitor_extension_name()
-        if re.match(r"\A" + cgroup_monitor_extension_name, extension_name) is not None\
-            and datetime.datetime.utcnow() < datetime.datetime.strptime(conf.get_cgroup_monitor_expiry_time(), "%Y-%m-%d"):
-            return True
-        return False
 
     @staticmethod
     def _read_status_file(ext_status_file):
@@ -2229,7 +2388,8 @@ class HandlerManifest(object):
         return self.data['handlerManifest']["disableCommand"]
 
     def is_report_heartbeat(self):
-        return self.data['handlerManifest'].get('reportHeartbeat', False)
+        value = self.data['handlerManifest'].get('reportHeartbeat', False)
+        return self._parse_boolean_value(value, default_val=False)
 
     def is_update_with_install(self):
         update_mode = self.data['handlerManifest'].get('updateMode')
@@ -2238,41 +2398,38 @@ class HandlerManifest(object):
         return update_mode.lower() == "updatewithinstall"
 
     def is_continue_on_update_failure(self):
-        return self.data['handlerManifest'].get('continueOnUpdateFailure', False)
+        value = self.data['handlerManifest'].get('continueOnUpdateFailure', False)
+        return self._parse_boolean_value(value, default_val=False)
 
     def supports_multiple_extensions(self):
-        return self.data['handlerManifest'].get('supportsMultipleExtensions', False)
+        value = self.data['handlerManifest'].get('supportsMultipleExtensions', False)
+        return self._parse_boolean_value(value, default_val=False)
 
-    def get_resource_limits(self, extension_name, str_version):
-        """
-        Placeholder values for testing and monitoring the monitor extension resource usage.
-        This is not effective after nov 30th.
-        """
-        if ExtHandlerInstance.is_azuremonitorlinuxagent(extension_name):
-            if FlexibleVersion(str_version) < FlexibleVersion("1.12"):
-                test_man = {
-                    "resourceLimits": {
-                        "services": [
-                            {
-                                "name": "mdsd.service"
-                            }
-                        ]
-                    }
-                }
-                return ResourceLimits(test_man.get('resourceLimits', None))
-            else:
-                test_man = {
-                    "resourceLimits": {
-                        "services": [
-                            {
-                                "name": "azuremonitoragent.service"
-                            }
-                        ]
-                    }
-                }
-                return ResourceLimits(test_man.get('resourceLimits', None))
-
+    def get_resource_limits(self):
         return ResourceLimits(self.data.get('resourceLimits', None))
+
+    def report_invalid_boolean_properties(self, ext_name):
+        """
+        Check that the specified keys in the handler manifest has boolean values.
+        """
+        for key in ['reportHeartbeat', 'continueOnUpdateFailure', 'supportsMultipleExtensions']:
+            value = self.data['handlerManifest'].get(key)
+            if value is not None and not isinstance(value, bool):
+                msg = "In the handler manifest: '{0}' has a non-boolean value [{1}] for boolean type. Please change it to a boolean value.".format(key, value)
+                logger.info(msg)
+                add_event(name=ext_name, message=msg, op=WALAEventOperation.ExtensionHandlerManifest, log_event=False)
+
+    @staticmethod
+    def _parse_boolean_value(value, default_val):
+        """
+        Expects boolean value but
+        for backward compatibility, 'true' (case-insensitive) is accepted, and other values default to False
+        Note: Json module returns unicode on py2. In py3, unicode removed
+        ustr is a unicode object for Py2 and a str object for Py3.
+        """
+        if not isinstance(value, bool):
+            return True if isinstance(value, ustr) and value.lower() == "true" else default_val
+        return value
 
 
 class ResourceLimits(object):

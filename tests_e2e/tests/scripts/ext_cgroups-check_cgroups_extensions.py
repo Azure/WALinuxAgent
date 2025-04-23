@@ -18,17 +18,17 @@
 #
 
 import os
+import re
 
 from assertpy import fail
 
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.cgroup_helpers import verify_if_distro_supports_cgroup, \
-    verify_agent_cgroup_assigned_correctly, BASE_CGROUP, EXT_CONTROLLERS, get_unit_cgroup_mount_path, \
-    GATESTEXT_SERVICE, AZUREMONITORAGENT_SERVICE, MDSD_SERVICE, check_agent_quota_disabled, \
-    check_cgroup_disabled_with_unknown_process, CGROUP_TRACKED_PATTERN, AZUREMONITOREXT_FULL_NAME, GATESTEXT_FULL_NAME, \
-    print_cgroups
+    verify_agent_cgroup_assigned_correctly, BASE_CGROUP, get_unit_cgroup_mount_path, \
+    GATESTEXT_SERVICE, AZUREMONITORAGENT_SERVICE, check_agent_quota_disabled, \
+    check_cgroup_disabled_due_to_systemd_error, CGROUP_TRACKED_PATTERN, AZUREMONITOREXT_FULL_NAME, GATESTEXT_FULL_NAME, \
+    print_cgroups, get_mounted_controller_list, using_cgroupv2
 from tests_e2e.tests.lib.logging import log
-from tests_e2e.tests.lib.remote_test import run_remote_test
 from tests_e2e.tests.lib.retry import retry_if_false
 
 
@@ -53,26 +53,36 @@ def verify_custom_script_cgroup_assigned_correctly():
 
         extension_path = "/azure.slice/azure-vmextensions.slice/azure-vmextensions-Microsoft.Azure.Extensions.CustomScript"
 
-        correct_cpu_mount_v1 = "cpu,cpuacct:{0}".format(extension_path)
-        correct_cpu_mount_v2 = "cpuacct,cpu:{0}".format(extension_path)
+        correct_cpu_mount_v1_1 = "cpu,cpuacct:{0}".format(extension_path)
+        correct_cpu_mount_v1_2 = "cpuacct,cpu:{0}".format(extension_path)
 
-        correct_memory_mount = "memory:{0}".format(extension_path)
+        correct_memory_mount_v1 = "memory:{0}".format(extension_path)
+
+        correct_cpu_memory_mount_v2 = "0::{0}".format(extension_path)
+
+        cgroup_v2 = using_cgroupv2()
 
         for mounted_controller in controllers.split("\n"):
-            if correct_cpu_mount_v1 in mounted_controller or correct_cpu_mount_v2 in mounted_controller:
-                log.info('Custom script extension mounted under correct cgroup '
-                      'for CPU: %s', mounted_controller)
-                cpu_mounted = True
-            elif correct_memory_mount in mounted_controller:
-                log.info('Custom script extension mounted under correct cgroup '
-                      'for Memory: %s', mounted_controller)
-                memory_mounted = True
+            if cgroup_v2:
+                if correct_cpu_memory_mount_v2 in mounted_controller:
+                    log.info('Custom script extension mounted under correct cgroup for CPU and Memory: %s', mounted_controller)
+                    cpu_mounted = True
+                    memory_mounted = True
+            else:
+                if correct_cpu_mount_v1_1 in mounted_controller or correct_cpu_mount_v1_2 in mounted_controller:
+                    log.info('Custom script extension mounted under correct cgroup '
+                          'for CPU: %s', mounted_controller)
+                    cpu_mounted = True
+                elif correct_memory_mount_v1 in mounted_controller:
+                    log.info('Custom script extension mounted under correct cgroup '
+                          'for Memory: %s', mounted_controller)
+                    memory_mounted = True
 
         if not cpu_mounted:
-            fail('Custom script not mounted correctly for CPU! Expected {0} or {1}'.format(correct_cpu_mount_v1, correct_cpu_mount_v2))
+            fail('Custom script not mounted correctly for CPU! Expected {0} or {1} in cgroupv1 or {2} in cgroupv2'.format(correct_cpu_mount_v1_1, correct_cpu_mount_v1_2, correct_cpu_memory_mount_v2))
 
         if not memory_mounted:
-            fail('Custom script not mounted correctly for Memory! Expected {0}'.format(correct_memory_mount))
+            fail('Custom script not mounted correctly for Memory! Expected {0} in cgroupv1 or {1} in cgroupv2'.format(correct_memory_mount_v1, correct_cpu_memory_mount_v2))
 
 
 def check_temporary_folder_exists():
@@ -91,7 +101,7 @@ def verify_ext_cgroup_controllers_created_on_file_system():
     missing_controllers_path = []
     verified_controllers_path = []
 
-    for controller in EXT_CONTROLLERS:
+    for controller in get_mounted_controller_list():
         controller_path = os.path.join(BASE_CGROUP, controller)
         if not os.path.exists(controller_path):
             all_controllers_present = False
@@ -101,7 +111,7 @@ def verify_ext_cgroup_controllers_created_on_file_system():
 
     if not all_controllers_present:
         fail('Expected all of the extension controller: {0} paths present in the file system after extension install. But missing cgroups paths are :{1}\n'
-             'and verified cgroup paths are: {2} \nSystem mounted cgroups are \n{3}'.format(EXT_CONTROLLERS, missing_controllers_path, verified_controllers_path, print_cgroups()))
+             'and verified cgroup paths are: {2} \nSystem mounted cgroups are \n{3}'.format(get_mounted_controller_list(), missing_controllers_path, verified_controllers_path, print_cgroups()))
 
     log.info('Verified all extension cgroup controller paths are present and they are: \n {0}'.format(verified_controllers_path))
 
@@ -119,10 +129,6 @@ def verify_extension_service_cgroup_created_on_file_system():
     # Azure Monitor Extension Service
     azuremonitoragent_cgroup_mount_path = get_unit_cgroup_mount_path(AZUREMONITORAGENT_SERVICE)
     azuremonitoragent_service_name = AZUREMONITORAGENT_SERVICE
-    # Old versions of AMA extension has different service name
-    if azuremonitoragent_cgroup_mount_path is None:
-        azuremonitoragent_cgroup_mount_path = get_unit_cgroup_mount_path(MDSD_SERVICE)
-        azuremonitoragent_service_name = MDSD_SERVICE
     verify_extension_service_cgroup_created(azuremonitoragent_service_name, azuremonitoragent_cgroup_mount_path)
 
     log.info('Verified all extension service cgroup paths created in file system .\n')
@@ -135,7 +141,7 @@ def verify_extension_service_cgroup_created(service_name, cgroup_mount_path):
     missing_cgroups_path = []
     verified_cgroups_path = []
 
-    for controller in EXT_CONTROLLERS:
+    for controller in get_mounted_controller_list():
         # cgroup_mount_path is similar to /azure.slice/walinuxagent.service
         # cgroup_mount_path[1:] = azure.slice/walinuxagent.service
         # expected extension_service_controller_path similar to /sys/fs/cgroup/cpu/azure.slice/walinuxagent.service
@@ -163,22 +169,23 @@ def verify_ext_cgroups_tracked():
     azuremonitoragent_cgroups_tracked = False
     gatestext_service_cgroups_tracked = False
     azuremonitoragent_service_cgroups_tracked = False
+    cgroup_tracked_pattern_re = re.compile(CGROUP_TRACKED_PATTERN)
 
     for record in AgentLog().read():
 
         # Cgroup tracking logged as
-        # 2021-11-14T13:09:59.351961Z INFO ExtHandler ExtHandler Started tracking cgroup Microsoft.Azure.Extensions.Edp.GATestExtGo-1.0.0.2
+        # 2021-11-14T13:09:59.351961Z INFO ExtHandler ExtHandler Started cpu tracking cgroup Microsoft.Azure.Extensions.Edp.GATestExtGo-1.0.0.2
         # [/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/azure-vmextensions-Microsoft.Azure.Extensions.Edp.GATestExtGo_1.0.0.2.slice]
-        cgroup_tracked_match = CGROUP_TRACKED_PATTERN.findall(record.message)
+        cgroup_tracked_match = cgroup_tracked_pattern_re.findall(record.message)
         if len(cgroup_tracked_match) != 0:
-            name, path = cgroup_tracked_match[0][0], cgroup_tracked_match[0][1]
+            name, path = cgroup_tracked_match[0][1], cgroup_tracked_match[0][2]
             if name.startswith(GATESTEXT_FULL_NAME):
                 gatestext_cgroups_tracked = True
             elif name.startswith(AZUREMONITOREXT_FULL_NAME):
                 azuremonitoragent_cgroups_tracked = True
             elif name.startswith(GATESTEXT_SERVICE):
                 gatestext_service_cgroups_tracked = True
-            elif name.startswith(AZUREMONITORAGENT_SERVICE) or name.startswith(MDSD_SERVICE):
+            elif name.startswith(AZUREMONITORAGENT_SERVICE):
                 azuremonitoragent_service_cgroups_tracked = True
             cgroups_added_for_telemetry.append((name, path))
 
@@ -216,10 +223,10 @@ def main():
 
 
 try:
-    run_remote_test(main)
+    main()
 except Exception as e:
-    # It is possible that  agent cgroup can be disabled due to UNKNOWN process or throttled before we run this check, in that case, we should ignore the validation
-    if check_cgroup_disabled_with_unknown_process() and retry_if_false(check_agent_quota_disabled()):
-        log.info("Cgroup is disabled due to UNKNOWN process, ignoring ext cgroups validations")
+    # It is possible that agent cgroup can be disabled and reset the quotas if the extension failed to start using systemd-run. In that case, we should ignore the validation
+    if check_cgroup_disabled_due_to_systemd_error() and retry_if_false(check_agent_quota_disabled):
+        log.info("Cgroup is disabled due to systemd error while invoking the extension, ignoring ext cgroups validations")
     else:
         raise

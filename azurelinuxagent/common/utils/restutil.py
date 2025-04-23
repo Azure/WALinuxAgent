@@ -18,7 +18,6 @@
 #
 
 import os
-import re
 import threading
 import time
 import socket
@@ -39,9 +38,10 @@ DELAY_IN_SECONDS = 1
 
 THROTTLE_RETRIES = 25
 THROTTLE_DELAY_IN_SECONDS = 1
-
-REDACTED_TEXT = "<SAS_SIGNATURE>"
-SAS_TOKEN_RETRIEVAL_REGEX = re.compile(r'^(https?://[a-zA-Z0-9.].*sig=)([a-zA-Z0-9%-]*)(.*)$')
+# Reducing next attempt calls when throttled since telemetrydata endpoint has a limit 15 calls per 15 secs,
+TELEMETRY_THROTTLE_DELAY_IN_SECONDS = 8
+# Considering short delay for telemetry flush imp events
+TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS = 2
 
 RETRY_CODES = [
     httpclient.RESET_CONTENT,
@@ -109,6 +109,7 @@ REQUEST_ROLE_CONFIG_FILE_NOT_FOUND = "RequestRoleConfigFileNotFound"
 KNOWN_WIRESERVER_IP = '168.63.129.16'
 HOST_PLUGIN_PORT = 32526
 
+TELEMETRY_DATA = "telemetrydata"
 
 class IOErrorCounter(object):
     _lock = threading.RLock()
@@ -163,6 +164,10 @@ def _is_retry_exception(e):
 def _is_throttle_status(status):
     return status in THROTTLE_CODES
 
+def _is_telemetry_req(url):
+    if TELEMETRY_DATA in url:
+        return True
+    return False
 
 def _parse_url(url):
     """
@@ -305,10 +310,6 @@ def _get_http_proxy(secure=False):
     return host, port
 
 
-def redact_sas_tokens_in_urls(url):
-    return SAS_TOKEN_RETRIEVAL_REGEX.sub(r"\1" + REDACTED_TEXT + r"\3", url)
-
-
 def _http_request(method, host, rel_uri, timeout, port=None, data=None, secure=False,
                   headers=None, proxy_host=None, proxy_port=None, redact_data=False):
 
@@ -349,7 +350,7 @@ def _http_request(method, host, rel_uri, timeout, port=None, data=None, secure=F
     # Logger requires the msg to be a ustr to log properly, ensuring that the data string that we log is always ustr
     logger.verbose("HTTP connection [{0}] [{1}] [{2}] [{3}]",
                    method,
-                   redact_sas_tokens_in_urls(url),
+                   url,
                    textutil.str_to_encoded_ustr(payload),
                    headers)
 
@@ -364,6 +365,7 @@ def http_request(method,
                  max_retry=None,
                  retry_codes=None,
                  retry_delay=DELAY_IN_SECONDS,
+                 throttle_delay=THROTTLE_DELAY_IN_SECONDS,
                  redact_data=False,
                  return_raw_response=False):
     """
@@ -427,10 +429,10 @@ def http_request(method,
             #    (with a safe, minimum number of retry attempts)
             # -- Otherwise, compute a delay that is the product of the next
             #    item in the Fibonacci series and the initial delay value
-            delay = THROTTLE_DELAY_IN_SECONDS \
-                        if was_throttled \
-                        else _compute_delay(retry_attempt=attempt,
-                                            delay=retry_delay)
+            if was_throttled:
+                delay = throttle_delay
+            else:
+                delay = _compute_delay(retry_attempt=attempt, delay=retry_delay)
 
             logger.verbose("[HTTP Retry] "
                         "Attempt {0} of {1} will delay {2} seconds: {3}", 
@@ -468,7 +470,10 @@ def http_request(method,
                     # retry attempts
                     if _is_throttle_status(resp.status):
                         was_throttled = True
-                        max_retry = max(max_retry, THROTTLE_RETRIES)
+                        # Today, THROTTLE_RETRIES is set to a large number (26) for retries, as opposed to backing off and attempting fewer retries.
+                        # However, for telemetry calls (due to throttle limit 15 calls per 15 seconds), we use max_retry set by the caller for overall retry attempts instead of THROTTLE_RETRIES.
+                        if not _is_telemetry_req(url):
+                            max_retry = max(max_retry, THROTTLE_RETRIES)
                     continue
 
             # If we got a 410 (resource gone) for any reason, raise an exception. The caller will handle it by
@@ -563,6 +568,7 @@ def http_post(url,
               max_retry=None,
               retry_codes=None,
               retry_delay=DELAY_IN_SECONDS,
+              throttle_delay=THROTTLE_DELAY_IN_SECONDS,
               timeout=10):
 
     if max_retry is None:
@@ -575,7 +581,8 @@ def http_post(url,
                         use_proxy=use_proxy,
                         max_retry=max_retry,
                         retry_codes=retry_codes,
-                        retry_delay=retry_delay)
+                        retry_delay=retry_delay,
+                        throttle_delay=throttle_delay)
 
 
 def http_put(url,

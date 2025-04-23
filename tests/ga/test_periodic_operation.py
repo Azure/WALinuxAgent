@@ -16,6 +16,7 @@
 #
 import datetime
 import time
+from azurelinuxagent.common.future import UTC
 from azurelinuxagent.ga.monitor import PeriodicOperation
 from tests.lib.tools import AgentTestCase, patch, PropertyMock
 
@@ -27,7 +28,7 @@ class TestPeriodicOperation(AgentTestCase):
             self.run_time = None
 
         def _operation(self):
-            self.run_time = datetime.datetime.utcnow()
+            self.run_time = datetime.datetime.now(UTC)
 
     def test_it_should_take_a_timedelta_as_period(self):
         op = TestPeriodicOperation.SaveRunTimestamp(datetime.timedelta(hours=1))

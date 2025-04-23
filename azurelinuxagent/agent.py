@@ -23,6 +23,7 @@ Module agent
 
 from __future__ import print_function
 
+import json
 import os
 import re
 import subprocess
@@ -31,18 +32,20 @@ import threading
 
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.ga import logcollector, cgroupconfigurator
-from azurelinuxagent.ga.controllermetrics import AGENT_LOG_COLLECTOR, CpuMetrics
-from azurelinuxagent.ga.cgroupapi import get_cgroup_api, log_cgroup_warning, InvalidCgroupMountpointException
+from azurelinuxagent.ga.cgroupcontroller import AGENT_LOG_COLLECTOR
+from azurelinuxagent.ga.cpucontroller import _CpuController
+from azurelinuxagent.ga.cgroupapi import create_cgroup_api, InvalidCgroupMountpointException
+from azurelinuxagent.ga.firewall_manager import FirewallManager
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.ga.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, \
     PY_VERSION_MAJOR, PY_VERSION_MINOR, \
@@ -206,28 +209,34 @@ class Agent(object):
         else:
             logger.info("Running log collector mode normal")
 
+        LogCollector.initialize_telemetry()
+
         # Check the cgroups unit
         log_collector_monitor = None
-        tracked_metrics = []
+        tracked_controllers = []
         if CollectLogsHandler.is_enabled_monitor_cgroups_check():
             try:
-                cgroup_api = get_cgroup_api()
+                cgroup_api = create_cgroup_api()
+                logger.info("Using cgroup {0} for resource enforcement and monitoring".format(cgroup_api.get_cgroup_version()))
             except InvalidCgroupMountpointException as e:
-                log_cgroup_warning("The agent does not support cgroups if the default systemd mountpoint is not being used: {0}".format(ustr(e)), send_event=True)
+                event.warn(WALAEventOperation.LogCollection, "The agent does not support cgroups if the default systemd mountpoint is not being used: {0}", ustr(e))
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
             except CGroupsException as e:
-                log_cgroup_warning("Unable to determine which cgroup version to use: {0}".format(ustr(e)), send_event=True)
+                event.warn(WALAEventOperation.LogCollection, "Unable to determine which cgroup version to use: {0}", ustr(e))
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
             log_collector_cgroup = cgroup_api.get_process_cgroup(process_id="self", cgroup_name=AGENT_LOG_COLLECTOR)
-            tracked_metrics = log_collector_cgroup.get_controller_metrics()
+            tracked_controllers = log_collector_cgroup.get_controllers()
+            for controller in tracked_controllers:
+                logger.info("{0} controller for cgroup: {1}".format(controller.get_controller_type(), controller))
 
-            if len(tracked_metrics) != len(log_collector_cgroup.get_supported_controllers()):
-                log_cgroup_warning("At least one required controller is missing. The following controllers are required for the log collector to run: {0}".format(log_collector_cgroup.get_supported_controllers()))
+            if len(tracked_controllers) != len(log_collector_cgroup.get_supported_controller_names()):
+                event.warn(WALAEventOperation.LogCollection, "At least one required controller is missing. The following controllers are required for the log collector to run: {0}", log_collector_cgroup.get_supported_controller_names())
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
-            if not log_collector_cgroup.check_in_expected_slice(cgroupconfigurator.LOGCOLLECTOR_SLICE):
-                log_cgroup_warning("The Log Collector process is not in the proper cgroups", send_event=False)
+            expected_slice = cgroupconfigurator.LOGCOLLECTOR_SLICE
+            if not log_collector_cgroup.check_in_expected_slice(expected_slice):
+                event.warn(WALAEventOperation.LogCollection, "The Log Collector process is not in the proper cgroups. Expected slice: {0}", expected_slice)
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
         try:
@@ -235,15 +244,31 @@ class Agent(object):
             # Running log collector resource monitoring only if agent starts the log collector.
             # If Log collector start by any other means, then it will not be monitored.
             if CollectLogsHandler.is_enabled_monitor_cgroups_check():
-                for metric in tracked_metrics:
-                    if isinstance(metric, CpuMetrics):
-                        metric.initialize_cpu_usage()
+                for controller in tracked_controllers:
+                    if isinstance(controller, _CpuController):
+                        controller.initialize_cpu_usage()
+                        controller.track_throttle_time(True)
                         break
-                log_collector_monitor = get_log_collector_monitor_handler(tracked_metrics)
+                log_collector_monitor = get_log_collector_monitor_handler(tracked_controllers)
                 log_collector_monitor.run()
-            archive = log_collector.collect_logs_and_get_archive()
+
+            archive, total_uncompressed_size = log_collector.collect_logs_and_get_archive()
             logger.info("Log collection successfully completed. Archive can be found at {0} "
                   "and detailed log output can be found at {1}".format(archive, OUTPUT_RESULTS_FILE_PATH))
+
+            if log_collector_monitor is not None:
+                log_collector_monitor.stop()
+                try:
+                    metrics_summary = log_collector_monitor.get_max_recorded_metrics()
+                    metrics_summary['Total Uncompressed File Size (B)'] = total_uncompressed_size
+                    msg = json.dumps(metrics_summary)
+                    logger.info(msg)
+                    event.add_event(op=event.WALAEventOperation.LogCollection, message=msg, log_event=False)
+                except Exception as e:
+                    msg = "An error occurred while reporting log collector resource usage summary: {0}".format(ustr(e))
+                    logger.warn(msg)
+                    event.add_event(op=event.WALAEventOperation.LogCollection, is_success=False, message=msg, log_event=False)
+
         except Exception as e:
             logger.error("Log collection completed unsuccessfully. Error: {0}".format(ustr(e)))
             logger.info("Detailed log output can be found at {0}".format(OUTPUT_RESULTS_FILE_PATH))
@@ -253,15 +278,16 @@ class Agent(object):
                 log_collector_monitor.stop()
 
     @staticmethod
-    def setup_firewall(firewall_metadata):
-
-        print("Setting up firewall for the WALinux Agent with args: {0}".format(firewall_metadata))
+    def setup_firewall(endpoint):
+        logger.set_prefix("Firewall")
+        threading.current_thread().name = "Firewall"
+        event.info(event.WALAEventOperation.Firewall, "Setting up firewall after boot. Endpoint: {0}", ustr(endpoint))
         try:
-            AddFirewallRules.add_iptables_rules(firewall_metadata['wait'], firewall_metadata['dst_ip'],
-                                                firewall_metadata['uid'])
-            print("Successfully set the firewall rules")
+            firewall_manager = FirewallManager.create(endpoint)
+            firewall_manager.setup()
+            event.info(event.WALAEventOperation.Firewall, "Successfully set the firewall rules")
         except Exception as error:
-            print("Unable to add firewall rules. Error: {0}".format(ustr(error)))
+            event.error(event.WALAEventOperation.Firewall, "Unable to add firewall rules. Error: {0}", ustr(error))
             sys.exit(1)
 
 
@@ -274,7 +300,7 @@ def main(args=None):
         args = []
     if len(args) <= 0:
         args = sys.argv[1:]
-    command, force, verbose, debug, conf_file_path, log_collector_full_mode, firewall_metadata = parse_args(args)
+    command, force, verbose, debug, conf_file_path, log_collector_full_mode, firewall_endpoint = parse_args(args)
     if command == AgentCommands.Version:
         version()
     elif command == AgentCommands.Help:
@@ -301,7 +327,7 @@ def main(args=None):
             elif command == AgentCommands.CollectLogs:
                 agent.collect_logs(log_collector_full_mode)
             elif command == AgentCommands.SetupFirewall:
-                agent.setup_firewall(firewall_metadata)
+                agent.setup_firewall(firewall_endpoint)
         except Exception as e:
             logger.error(u"Failed to run '{0}': {1}",
                          command,
@@ -318,11 +344,7 @@ def parse_args(sys_args):
     debug = False
     conf_file_path = None
     log_collector_full_mode = False
-    firewall_metadata = {
-        "dst_ip": None,
-        "uid": None,
-        "wait": ""
-    }
+    endpoint = None
 
     regex_cmd_format = "^([-/]*){0}"
 
@@ -366,20 +388,17 @@ def parse_args(sys_args):
             cmd = AgentCommands.CollectLogs
         elif re.match(regex_cmd_format.format("full"), arg):
             log_collector_full_mode = True
-        elif re.match(regex_cmd_format.format(AgentCommands.SetupFirewall), arg):
-            cmd = AgentCommands.SetupFirewall
-        elif re.match(regex_cmd_format.format("dst_ip=(?P<dst_ip>[\\d.]{7,})"), arg):
-            firewall_metadata['dst_ip'] = re.match(regex_cmd_format.format("dst_ip=(?P<dst_ip>[\\d.]{7,})"), arg).group(
-                'dst_ip')
-        elif re.match(regex_cmd_format.format("uid=(?P<uid>[\\d]+)"), arg):
-            firewall_metadata['uid'] = re.match(regex_cmd_format.format("uid=(?P<uid>[\\d]+)"), arg).group('uid')
-        elif re.match(regex_cmd_format.format("(w|wait)$"), arg):
-            firewall_metadata['wait'] = "-w"
         else:
-            cmd = AgentCommands.Help
-            break
+            regex_cmd = regex_cmd_format.format("{0}=(?P<endpoint>[\\d.]{{7,}})".format(AgentCommands.SetupFirewall))
+            match = re.match(regex_cmd, arg)
+            if match is not None:
+                cmd = AgentCommands.SetupFirewall
+                endpoint = match.group('endpoint')
+            else:
+                cmd = AgentCommands.Help
+                break
 
-    return cmd, force, verbose, debug, conf_file_path, log_collector_full_mode, firewall_metadata
+    return cmd, force, verbose, debug, conf_file_path, log_collector_full_mode, endpoint
 
 
 def version():
@@ -399,11 +418,11 @@ def usage():
     """
     Return agent usage message
     """
-    s  = "\n"
+    s = "\n"
     s += ("usage: {0} [-verbose] [-force] [-help] "
            "-configuration-path:<path to configuration file>" 
            "-deprovision[+user]|-register-service|-version|-daemon|-start|"
-           "-run-exthandlers|-show-configuration|-collect-logs [-full]|-setup-firewall [-dst_ip=<IP> -uid=<UID> [-w/--wait]]"
+           "-run-exthandlers|-show-configuration|-collect-logs [-full]|-setup-firewall=<IP>]"
            "").format(sys.argv[0])
     s += "\n"
     return s

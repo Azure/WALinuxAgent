@@ -7,7 +7,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import textutil
 
-from azurelinuxagent.common import logger, conf
+from azurelinuxagent.common import logger, conf, event
 from azurelinuxagent.common.exception import UpdateError
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_DIR_PATTERN, AGENT_NAME
@@ -17,6 +17,9 @@ AGENT_ERROR_FILE = "error.json"  # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
 MAX_FAILURE = 3  # Max failure allowed for agent before declare bad agent
 AGENT_UPDATE_COUNT_FILE = "update_attempt.json"  # File for tracking agent update attempt count
+
+RSM_UPDATE_STATE_FILE = "waagent_rsm_update"
+INITIAL_UPDATE_STATE_FILE = "waagent_initial_update"
 
 
 class GuestAgent(object):
@@ -124,17 +127,15 @@ class GuestAgent(object):
         return self.is_blacklisted or \
                os.path.isfile(self.get_agent_manifest_path())
 
-    def mark_failure(self, is_fatal=False, reason=''):
+    def mark_failure(self, is_fatal=False, reason='', report_func=event.warn):
         try:
             if not os.path.isdir(self.get_agent_dir()):
                 os.makedirs(self.get_agent_dir())
             self.error.mark_failure(is_fatal=is_fatal, reason=reason)
             self.error.save()
             if self.error.is_blacklisted:
-                msg = u"Agent {0} is permanently blacklisted".format(self.name)
-                logger.warn(msg)
-                add_event(op=WALAEventOperation.AgentBlacklisted, is_success=False, message=msg, log_event=False,
-                          version=self.version)
+                msg = u"Agent {0} is permanently disabled".format(self.name)
+                report_func(WALAEventOperation.AgentDisabled, msg)
         except Exception as e:
             logger.warn(u"Agent {0} failed recording error state: {1}", self.name, ustr(e))
 
@@ -329,3 +330,71 @@ class GuestAgentUpdateAttempt(object):
         return data
 
 
+class GuestAgentUpdateUtil(object):
+
+    @staticmethod
+    def get_initial_update_state_file():
+        """
+        This file tracks whether the initial update attempt has been made or not
+        """
+        return os.path.join(conf.get_lib_dir(), INITIAL_UPDATE_STATE_FILE)
+
+    @staticmethod
+    def save_initial_update_state_file():
+        """
+        Save the file if agent attempted initial update
+        """
+        try:
+            with open(GuestAgentUpdateUtil.get_initial_update_state_file(), "w"):
+                pass
+        except Exception as e:
+            msg = "Error creating the initial update state file ({0}): {1}".format(GuestAgentUpdateUtil.get_initial_update_state_file(), ustr(e))
+            logger.warn(msg)
+            add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
+
+    @staticmethod
+    def is_initial_update():
+        """
+        Returns True if the state file doesn't exist, as the presence of the file indicates that the initial update has already been attempted
+        """
+        return not os.path.exists(GuestAgentUpdateUtil.get_initial_update_state_file())
+
+    @staticmethod
+    def get_rsm_update_state_file():
+        """
+        This file tracks whether the last attempted update was an RSM update or not
+        """
+        return os.path.join(conf.get_lib_dir(), RSM_UPDATE_STATE_FILE)
+
+    @staticmethod
+    def save_rsm_update_state_file():
+        """
+        Save the rsm state empty file when we switch to RSM
+        """
+        try:
+            with open(GuestAgentUpdateUtil.get_rsm_update_state_file(), "w"):
+                pass
+        except Exception as e:
+            msg = "Error creating the RSM state file ({0}): {1}".format(GuestAgentUpdateUtil.get_rsm_update_state_file(), ustr(e))
+            logger.warn(msg)
+            add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
+
+    @staticmethod
+    def remove_rsm_update_state_file():
+        """
+        Remove the rsm state file when we switch to self-update
+        """
+        try:
+            if os.path.exists(GuestAgentUpdateUtil.get_rsm_update_state_file()):
+                os.remove(GuestAgentUpdateUtil.get_rsm_update_state_file())
+        except Exception as e:
+            msg = "Error removing the RSM state file ({0}): {1}".format(GuestAgentUpdateUtil.get_rsm_update_state_file(), ustr(e))
+            logger.warn(msg)
+            add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
+
+    @staticmethod
+    def is_last_update_with_rsm():
+        """
+        Returns True if the state file exists, as this indicates that the last update was with RSM
+        """
+        return os.path.exists(GuestAgentUpdateUtil.get_rsm_update_state_file())

@@ -27,7 +27,7 @@ from azurelinuxagent.common.protocol import hostplugin, restapi, wire
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError, ProtocolError
-from azurelinuxagent.common.future import ustr, httpclient
+from azurelinuxagent.common.future import ustr, UTC, httpclient
 from azurelinuxagent.common.osutil.default import UUID_PATTERN
 from azurelinuxagent.common.protocol.hostplugin import API_VERSION, _VmSettingsErrorReporter, VmSettingsNotSupported, VmSettingsSupportStopped
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource
@@ -365,8 +365,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
             # ensure host plugin is not set as default
             self.assertFalse(wire.HostPluginProtocol.is_default_channel)
 
-    @patch("azurelinuxagent.common.event.add_event")
-    def test_put_status_error_reporting(self, patch_add_event):
+    def test_put_status_error_reporting(self):
         """
         Validate the telemetry when uploading status fails
         """
@@ -377,22 +376,22 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
 
                 put_error = wire.HttpError("put status http error")
                 with patch.object(restutil, "http_put", side_effect=put_error):
-                    with patch.object(wire.HostPluginProtocol,
-                                      "ensure_initialized", return_value=True):
-                        self.assertRaises(wire.ProtocolError, wire_protocol_client.upload_status_blob)
+                    with patch.object(wire.HostPluginProtocol, "ensure_initialized", return_value=True):
+                        with patch("azurelinuxagent.common.event.add_event") as patch_add_event:
+                            self.assertRaises(wire.ProtocolError, wire_protocol_client.upload_status_blob)
 
-                        # The agent tries to upload via HostPlugin and that fails due to
-                        # http_put having a side effect of "put_error"
-                        #
-                        # The agent tries to upload using a direct connection, and that succeeds.
-                        self.assertEqual(1, wire_protocol_client.status_blob.upload.call_count)  # pylint: disable=no-member
-                        # The agent never touches the default protocol is this code path, so no change.
-                        self.assertFalse(wire.HostPluginProtocol.is_default_channel)
-                        # The agent never logs telemetry event for direct fallback
-                        self.assertEqual(1, patch_add_event.call_count)
-                        self.assertEqual('ReportStatus', patch_add_event.call_args[1]['op'])
-                        self.assertTrue('Falling back to direct' in patch_add_event.call_args[1]['message'])
-                        self.assertEqual(True, patch_add_event.call_args[1]['is_success'])
+                            # The agent tries to upload via HostPlugin and that fails due to
+                            # http_put having a side effect of "put_error"
+                            #
+                            # The agent tries to upload using a direct connection, and that succeeds.
+                            self.assertEqual(1, wire_protocol_client.status_blob.upload.call_count)  # pylint: disable=no-member
+                            # The agent never touches the default protocol is this code path, so no change.
+                            self.assertFalse(wire.HostPluginProtocol.is_default_channel)
+                            # The agent never logs telemetry event for direct fallback
+                            self.assertEqual(1, patch_add_event.call_count)
+                            self.assertEqual('ReportStatus', patch_add_event.call_args[1]['op'])
+                            self.assertTrue('Falling back to direct' in patch_add_event.call_args[1]['message'])
+                            self.assertEqual(True, patch_add_event.call_args[1]['is_success'])
 
     def test_validate_http_request_when_uploading_status(self):
         """Validate correct set of data is sent to HostGAPlugin when reporting VM status"""
@@ -808,7 +807,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         self.assertEqual(True, actual)
 
         # second measurement at 30s, should not report
-        last_timestamp = datetime.datetime.utcnow() - datetime.timedelta(seconds=30)
+        last_timestamp = datetime.datetime.now(UTC) - datetime.timedelta(seconds=30)
         actual = host_plugin.should_report(is_healthy,
                                            error_state,
                                            last_timestamp,
@@ -816,7 +815,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         self.assertEqual(False, actual)
 
         # third measurement at 60s, should report
-        last_timestamp = datetime.datetime.utcnow() - datetime.timedelta(seconds=60)
+        last_timestamp = datetime.datetime.now(UTC) - datetime.timedelta(seconds=60)
         actual = host_plugin.should_report(is_healthy,
                                            error_state,
                                            last_timestamp,
@@ -835,7 +834,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
 
         # fifth measurement, should not report and reset counter
         is_healthy = True
-        last_timestamp = datetime.datetime.utcnow() - datetime.timedelta(seconds=30)
+        last_timestamp = datetime.datetime.now(UTC) - datetime.timedelta(seconds=30)
         self.assertEqual(1, error_state.count)
         actual = host_plugin.should_report(is_healthy,
                                            error_state,
@@ -893,7 +892,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
             # force the summary by resetting its period and calling update_goal_state
             with patch("azurelinuxagent.common.protocol.hostplugin.add_event") as add_event:
                 mock_response = None  # stop producing errors
-                protocol.client._host_plugin._vm_settings_error_reporter._next_period = datetime.datetime.now()
+                protocol.client._host_plugin._vm_settings_error_reporter._next_period = datetime.datetime.now(UTC)
                 self._fetch_vm_settings_ignoring_errors(protocol)
             summary_text = [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettingsSummary"]
 
@@ -931,7 +930,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
                 self.assertEqual(_VmSettingsErrorReporter._MaxErrors, len(telemetry_messages), "The number of errors reported to telemetry is not the max allowed (got: {0})".format(telemetry_messages))
 
             # Reset the error reporter and verify that additional errors are reported
-            protocol.client.get_host_plugin()._vm_settings_error_reporter._next_period = datetime.datetime.now()
+            protocol.client.get_host_plugin()._vm_settings_error_reporter._next_period = datetime.datetime.now(UTC)
             self._fetch_vm_settings_ignoring_errors(protocol)  # this triggers the reset
 
             with patch("azurelinuxagent.common.protocol.hostplugin.add_event") as add_event:
@@ -959,7 +958,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
             self.assertEqual(1, get_vm_settings_call_count(), "Additional calls to update_goal_state should not have produced extra calls to vmSettings.")
 
             # reset the vmSettings check period; this should restart the calls to the API
-            protocol.client._host_plugin._supports_vm_settings_next_check = datetime.datetime.now()
+            protocol.client._host_plugin._supports_vm_settings_next_check = datetime.datetime.now(UTC)
             protocol.client.update_goal_state()
             self.assertEqual(2, get_vm_settings_call_count(), "A second call to vmSettings was expecting after the check period has elapsed.")
 

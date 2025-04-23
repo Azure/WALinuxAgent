@@ -46,7 +46,10 @@ if sys.version_info[0] == 3 and sys.version_info[1] >= 13 or sys.version_info[0]
         def crypt(password, salt):
             raise OSUtilError("Please install the legacycrypt Python module to use this feature.")
 else:
-    from crypt import crypt  # pylint: disable=deprecated-module
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+        from crypt import crypt  # pylint: disable=deprecated-module
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
@@ -54,10 +57,9 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils import textutil
 
-from azurelinuxagent.common.future import ustr, array_to_bytes
+from azurelinuxagent.common.future import ustr, array_to_bytes, UTC
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
-from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard, AddFirewallRules
+from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard
 from azurelinuxagent.common.utils.shellutil import CommandError
 
 __RULES_FILES__ = ["/lib/udev/rules.d/75-persistent-net-generator.rules",
@@ -69,59 +71,8 @@ for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
 
-_IPTABLES_VERSION_PATTERN = re.compile(r"^[^\d\.]*([\d\.]+).*$")
-_IPTABLES_LOCKING_VERSION = FlexibleVersion('1.4.21')
-
-
-def _add_wait(wait, command):
-    """
-    If 'wait' is True, adds the wait option (-w) to the given iptables command line
-    """
-    if wait:
-        command.insert(1, "-w")
-    return command
-
-
-def get_iptables_version_command():
-    return ["iptables", "--version"]
-
-
-def get_firewall_list_command(wait):
-    return _add_wait(wait, ["iptables", "-t", "security", "-L", "-nxv"])
-
-
-def get_firewall_packets_command(wait):
-    return _add_wait(wait, ["iptables", "-t", "security", "-L", "OUTPUT", "--zero", "OUTPUT", "-nxv"])
-
-
-# Precisely delete the rules created by the agent.
-# this rule was used <= 2.2.25.  This rule helped to validate our change, and determine impact.
-def get_firewall_delete_conntrack_accept_command(wait, destination):
-    return _add_wait(wait,
-                     ["iptables", "-t", "security", AddFirewallRules.DELETE_COMMAND, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "conntrack",
-                      "--ctstate", "INVALID,NEW", "-j", "ACCEPT"])
-
-
-def get_delete_accept_tcp_rule(wait, destination):
-    return AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.DELETE_COMMAND, destination, wait=wait)
-
-
-def get_firewall_delete_owner_accept_command(wait, destination, owner_uid):
-    return _add_wait(wait, ["iptables", "-t", "security", AddFirewallRules.DELETE_COMMAND, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner",
-                            "--uid-owner", str(owner_uid), "-j", "ACCEPT"])
-
-
-def get_firewall_delete_conntrack_drop_command(wait, destination):
-    return _add_wait(wait,
-                     ["iptables", "-t", "security", AddFirewallRules.DELETE_COMMAND, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "conntrack",
-                      "--ctstate", "INVALID,NEW", "-j", "DROP"])
-
-
-PACKET_PATTERN = r"^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"
 ALL_CPUS_REGEX = re.compile('^cpu .*')
 ALL_MEMS_REGEX = re.compile('^Mem.*')
-
-_enable_firewall = True
 
 DMIDECODE_CMD = 'dmidecode --string system-uuid'
 PRODUCT_ID_FILE = '/sys/class/dmi/id/product_uuid'
@@ -134,7 +85,7 @@ IOCTL_SIOCGIFFLAGS = 0x8913
 IOCTL_SIOCGIFHWADDR = 0x8927
 IFNAMSIZ = 16
 
-IP_COMMAND_OUTPUT = re.compile(r'^\d+:\s+(\w+):\s+(.*)$')
+IP_COMMAND_OUTPUT = re.compile(r'^\d+:\s+([\w@]+):\s+(.*)$')
 
 STORAGE_DEVICE_PATH = '/sys/bus/vmbus/devices/'
 GEN2_DEVICE_ID = 'f8b3781a-1e82-4818-a1c3-63d806ec15bb'
@@ -167,165 +118,6 @@ class DefaultOSUtil(object):
         except Exception as e:
             logger.warn("Unable to determine cpu architecture: {0}", ustr(e))
             return "unknown"
-
-    def get_firewall_dropped_packets(self, dst_ip=None):
-        # If a previous attempt failed, do not retry
-        global _enable_firewall  # pylint: disable=W0603
-        if not _enable_firewall:
-            return 0
-
-        try:
-            wait = self.get_firewall_will_wait()
-
-            try:
-                output = shellutil.run_command(get_firewall_packets_command(wait))
-
-                pattern = re.compile(PACKET_PATTERN.format(dst_ip))
-                for line in output.split('\n'):
-                    m = pattern.match(line)
-                    if m is not None:
-                        return int(m.group(1))
-
-            except Exception as e:
-                if isinstance(e, CommandError) and (e.returncode == 3 or e.returncode == 4):  # pylint: disable=E1101
-                    # Transient error that we ignore returncode 3. This code fires every loop
-                    # of the daemon (60m), so we will get the value eventually.
-                    # ignore returncode 4 as temporary fix (RULE_REPLACE failed (Invalid argument))
-                    return 0
-                logger.warn("Failed to get firewall packets: {0}", ustr(e))
-                return -1
-
-            return 0
-
-        except Exception as e:
-            _enable_firewall = False
-            logger.warn("Unable to retrieve firewall packets dropped"
-                        "{0}".format(ustr(e)))
-            return -1
-
-    def get_firewall_will_wait(self):
-        # Determine if iptables will serialize access
-        try:
-            output = shellutil.run_command(get_iptables_version_command())
-        except Exception as e:
-            msg = "Unable to determine version of iptables: {0}".format(ustr(e))
-            logger.warn(msg)
-            raise Exception(msg)
-
-        m = _IPTABLES_VERSION_PATTERN.match(output)
-        if m is None:
-            msg = "iptables did not return version information: {0}".format(output)
-            logger.warn(msg)
-            raise Exception(msg)
-
-        wait = "-w" \
-            if FlexibleVersion(m.group(1)) >= _IPTABLES_LOCKING_VERSION \
-            else ""
-        return wait
-
-    def _delete_rule(self, rule):
-        """
-        Continually execute the delete operation until the return
-        code is non-zero or the limit has been reached.
-        """
-        for i in range(1, 100):  # pylint: disable=W0612
-            try:
-                rc = shellutil.run_command(rule)  # pylint: disable=W0612
-            except CommandError as e:
-                if e.returncode == 1:
-                    return
-                if e.returncode == 2:
-                    raise Exception("invalid firewall deletion rule '{0}'".format(rule))
-
-    def remove_firewall(self, dst_ip, uid, wait):
-        # If a previous attempt failed, do not retry
-        global _enable_firewall  # pylint: disable=W0603
-        if not _enable_firewall:
-            return False
-
-        try:
-            # This rule was <= 2.2.25 only, and may still exist on some VMs.  Until 2.2.25
-            # has aged out, keep this cleanup in place.
-            self._delete_rule(get_firewall_delete_conntrack_accept_command(wait, dst_ip))
-
-            self._delete_rule(get_delete_accept_tcp_rule(wait, dst_ip))
-            self._delete_rule(get_firewall_delete_owner_accept_command(wait, dst_ip, uid))
-            self._delete_rule(get_firewall_delete_conntrack_drop_command(wait, dst_ip))
-
-            return True
-
-        except Exception as e:
-            _enable_firewall = False
-            logger.info("Unable to remove firewall -- "
-                        "no further attempts will be made: "
-                        "{0}".format(ustr(e)))
-            return False
-
-    def remove_legacy_firewall_rule(self, dst_ip):
-        # This function removes the legacy firewall rule that was added <= 2.2.25.
-        # Not adding the global _enable_firewall check here as this will only be called once per service start and
-        # we dont want the state of this call to affect other iptable calls.
-        try:
-            wait = self.get_firewall_will_wait()
-
-            # This rule was <= 2.2.25 only, and may still exist on some VMs.  Until 2.2.25
-            # has aged out, keep this cleanup in place.
-            self._delete_rule(get_firewall_delete_conntrack_accept_command(wait, dst_ip))
-        except Exception as error:
-            logger.info(
-                "Unable to remove legacy firewall rule, won't try removing it again. Error: {0}".format(ustr(error)))
-
-    def enable_firewall(self, dst_ip, uid):
-        """
-        It checks if every iptable rule exists and add them if not present. It returns a tuple(enable firewall success status, missing rules array)
-        enable firewall success status: Returns True if every firewall rule exists otherwise False
-        missing rules: array with names of the missing rules ("ACCEPT DNS", "ACCEPT", "DROP")
-        """
-        # If a previous attempt failed, do not retry
-        global _enable_firewall  # pylint: disable=W0603
-        if not _enable_firewall:
-            return False, []
-
-        missing_rules = []
-
-        try:
-            wait = self.get_firewall_will_wait()
-
-            # check every iptable rule and delete others if any rule is missing
-            #   and append every iptable rule to the end of the chain.
-            try:
-                missing_rules.extend(AddFirewallRules.get_missing_iptables_rules(wait, dst_ip, uid))
-                if len(missing_rules) > 0:
-                    self.remove_firewall(dst_ip, uid, wait)
-                    AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
-            except CommandError as e:
-                if e.returncode == 2:
-                    self.remove_firewall(dst_ip, uid, wait)
-                    msg = "please upgrade iptables to a version that supports the -C option"
-                    logger.warn(msg)
-                    raise
-            except Exception as error:
-                logger.warn(ustr(error))
-                raise
-
-            return True, missing_rules
-
-        except Exception as e:
-            _enable_firewall = False
-            logger.info("Unable to establish firewall -- "
-                        "no further attempts will be made: "
-                        "{0}".format(ustr(e)))
-            return False, missing_rules
-
-    def get_firewall_list(self, wait=None):
-        try:
-            if wait is None:
-                wait = self.get_firewall_will_wait()
-            output = shellutil.run_command(get_firewall_list_command(wait))
-            return output
-        except Exception as e:
-            logger.warn("Listing firewall rules failed: {0}".format(ustr(e)))
-            return ""
 
     @staticmethod
     def _correct_instance_id(instance_id):
@@ -557,7 +349,7 @@ class DefaultOSUtil(object):
                 raise OSUtilError("Bad public key: {0}".format(value))
             if not value.endswith("\n"):
                 value += "\n"
-            fileutil.write_file(path, value)
+            fileutil.write_file(path, value, append=True)
         elif thumbprint is not None:
             lib_dir = conf.get_lib_dir()
             crt_path = os.path.join(lib_dir, thumbprint + '.crt')
@@ -1058,8 +850,8 @@ class DefaultOSUtil(object):
                         else:
                             try:
                                 expire_string = line.split(" ", 4)[-1].strip(";")
-                                expire_date = datetime.datetime.strptime(expire_string, FORMAT_DATETIME)
-                                if expire_date > datetime.datetime.utcnow():
+                                expire_date = datetime.datetime.strptime(expire_string, FORMAT_DATETIME).replace(tzinfo=UTC)
+                                if expire_date > datetime.datetime.now(UTC):
                                     expired = False
                             except:  # pylint: disable=W0702
                                 logger.error("could not parse expiry token '{0}'".format(line))

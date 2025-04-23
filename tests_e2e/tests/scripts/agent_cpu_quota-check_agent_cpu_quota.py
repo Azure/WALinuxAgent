@@ -20,14 +20,13 @@
 import datetime
 import os
 import re
-import shutil
 import time
 
 from assertpy import fail
 
+from azurelinuxagent.common.future import UTC
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import shellutil
-from azurelinuxagent.ga.cgroupconfigurator import _DROP_IN_FILE_CPU_QUOTA
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.cgroup_helpers import check_agent_quota_disabled, \
     get_agent_cpu_quota, check_log_message
@@ -115,7 +114,7 @@ def verify_agent_reported_metrics():
             if match is not None:
                 processor_time.append(float(match.group(1)))
             else:
-                match = re.search(r"Throttled Time\s*\[walinuxagent.service\]\s*=\s*([0-9.]+)", record.message)
+                match = re.search(r"Throttled Time \(s\)\s*\[walinuxagent.service\]\s*=\s*([0-9.]+)", record.message)
                 if match is not None:
                     throttled_time.append(float(match.group(1)))
         if len(processor_time) < 1 or len(throttled_time) < 1:
@@ -135,8 +134,8 @@ def verify_agent_reported_metrics():
 
 def wait_for_log_message(message, timeout=datetime.timedelta(minutes=5)):
     log.info("Checking agent's log for message matching [%s]", message)
-    start_time = datetime.datetime.now()
-    while datetime.datetime.now() - start_time <= timeout:
+    start_time = datetime.datetime.now(UTC)
+    while datetime.datetime.now(UTC) - start_time <= timeout:
         for record in AgentLog().read():
             match = re.search(message, record.message, flags=re.DOTALL)
             if match is not None:
@@ -144,7 +143,6 @@ def wait_for_log_message(message, timeout=datetime.timedelta(minutes=5)):
                 return
         time.sleep(30)
     fail("The agent did not find [{0}] in its log within the allowed timeout".format(message))
-
 
 def verify_throttling_time_check_on_agent_cgroups():
     """
@@ -154,11 +152,6 @@ def verify_throttling_time_check_on_agent_cgroups():
     # Now disable the check on unexpected processes and enable the check on throttledtime and verify that the agent disables its CPUQuota when it exceeds its throttling limit
     if check_agent_quota_disabled():
         fail("The agent's CPUQuota is not enabled: {0}".format(get_agent_cpu_quota()))
-    quota_drop_in = os.path.join(systemd.get_agent_drop_in_path(), _DROP_IN_FILE_CPU_QUOTA)
-    quota_drop_in_backup = quota_drop_in + ".bk"
-    log.info("Backing up %s to %s...", quota_drop_in, quota_drop_in_backup)
-    shutil.copy(quota_drop_in, quota_drop_in_backup)
-    shellutil.run_command(["systemctl", "daemon-reload"])
     shellutil.run_command(["update-waagent-conf", "Debug.CgroupDisableOnProcessCheckFailure=n", "Debug.CgroupDisableOnQuotaCheckFailure=y", "Debug.AgentCpuThrottledTimeThreshold=5"])
 
     # The log message indicating the check failed is similar to
@@ -171,8 +164,7 @@ def verify_throttling_time_check_on_agent_cgroups():
     wait_for_log_message(
         "Disabling resource usage monitoring. Reason: Check on cgroups failed:.+The agent has been throttled",
         timeout=datetime.timedelta(minutes=10))
-    wait_for_log_message("Stopped tracking cgroup walinuxagent.service", timeout=datetime.timedelta(minutes=10))
-    wait_for_log_message("Executing systemctl daemon-reload...", timeout=datetime.timedelta(minutes=5))
+    wait_for_log_message("Stopped tracking cpu cgroup walinuxagent.service", timeout=datetime.timedelta(minutes=10))
     disabled: bool = retry_if_false(check_agent_quota_disabled)
     if not disabled:
         fail("The agent did not disable its CPUQuota: {0}".format(get_agent_cpu_quota()))
@@ -186,7 +178,7 @@ def cleanup_test_setup():
         os.remove(drop_in_file)
         shellutil.run_command(["systemctl", "daemon-reload"])
 
-    check_time = datetime.datetime.utcnow()
+    check_time = datetime.datetime.now(UTC)
     shellutil.run_command(["agent-service", "restart"])
 
     found: bool = retry_if_false(lambda: check_log_message(" Agent cgroups enabled: True", after_timestamp=check_time))

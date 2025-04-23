@@ -17,17 +17,28 @@
 # limitations under the License.
 #
 from assertpy import fail
+from typing import Any, Dict, List
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
-
 
 class CheckNoOutboundConnections(AgentVmTest):
     """
     Verifies that there is no outbound connectivity on the test VM.
     """
+    def __init__(self, context: AgentTestContext):
+        super().__init__(context)
+        self.__distro: str = None
+
+    @property
+    def distro(self) -> str:
+        if self.__distro is None:
+            raise Exception("The distro has not been initialized")
+        return self.__distro
+
     def run(self):
         # This script is executed on the test VM. It tries to connect to a well-known DNS server (DNS is on port 53).
         script: str = """
@@ -44,6 +55,13 @@ exit(1)
 """
         ssh_client: SshClient = self._context.create_ssh_client()
         try:
+            self.__distro = ssh_client.get_distro()
+            log.info("Distro: %s", self.distro)
+        except Exception as e:
+            log.warning("Could not determine the distro (setting to UNKNOWN): %s", e)
+            self.__distro = "UNKNOWN"
+
+        try:
             log.info("Verifying that there is no outbound connectivity on the test VM")
             ssh_client.run_command("pypy3 -c '{0}'".format(script.replace('"', '\"')))
             log.info("There is no outbound connectivity, as expected.")
@@ -53,6 +71,22 @@ exit(1)
             else:
                 raise Exception(f"Unexpected error while checking outbound connectivity on the test VM: {e}")
 
+    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
+        return [
+            #
+            # RHEL 8.2 uses a very old Daemon (2.3.0.2) that does not create the 'ACCEPT DNS' rule. Even with auto-update enabled, the rule is not created for this test, since outbound connectivity is disabled
+            # and attempts to get the VM Artifacts Profile blob fail after a long timeout (which prevents the self-update Agent to create the rule before the test starts running). Then, this message is
+            # expected and should be ignored.
+            #
+            #   2025-01-16T09:30:54.048522Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['ACCEPT DNS'] due to: ['']), will reset them. Current state:
+            #   ipv4 -t security -A OUTPUT -d 168.63.129.16 -p tcp -m owner --uid-owner 0 -j ACCEPT
+            #   ipv4 -t security -A OUTPUT -d 168.63.129.16 -p tcp -m conntrack --ctstate INVALID,NEW -j DROP
+            #
+            {
+                'message': r"The permanent firewall rules for Azure Fabric are not setup correctly.*The following rules are missing: \['ACCEPT DNS'\]",
+                'if': lambda _: self.distro == 'redhat_82'
+            }
+        ]
 
 if __name__ == "__main__":
     CheckNoOutboundConnections.run_from_command_line()

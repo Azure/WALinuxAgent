@@ -18,7 +18,6 @@
 #
 import datetime
 import re
-import os
 import socket
 import threading
 
@@ -26,12 +25,15 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 
 from azurelinuxagent.common.dhcp import get_dhcp_handler
-from azurelinuxagent.common.event import add_periodic, WALAEventOperation, add_event
+from azurelinuxagent.common import event
+from azurelinuxagent.common.event import WALAEventOperation, add_event
+from azurelinuxagent.common.future import UTC
+from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
-from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
+from azurelinuxagent.common.version import AGENT_NAME
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 CACHE_PATTERNS = [
@@ -99,85 +101,42 @@ class MonitorDhcpClientRestart(PeriodicOperation):
 
 
 class EnableFirewall(PeriodicOperation):
-    def __init__(self, osutil, protocol):
+    def __init__(self, wire_server_address):
         super(EnableFirewall, self).__init__(conf.get_enable_firewall_period())
-        self._osutil = osutil
-        self._protocol = protocol
-        self._try_remove_legacy_firewall_rule = False
-        self._is_first_setup = True
-        self._reset_count = 0
-        self._report_after = datetime.datetime.min
-        self._report_period = None  # None indicates "report immediately"
+        self._wire_server_address = wire_server_address
+        self._firewall_manager = None  # initialized on demand in the _operation method
+        self._message_count = 0
+        self._report_after = datetime.datetime.now(UTC)
 
     def _operation(self):
-        # If the rules ever change we must reset all rules and start over again.
-        #
-        # There was a rule change at 2.2.26, which started dropping non-root traffic
-        # to WireServer.  The previous rules allowed traffic.  Having both rules in
-        # place negated the fix in 2.2.26. Removing only the legacy rule and keeping other rules intact.
-        #
-        # We only try to remove the legacy firewall rule once on service start (irrespective of its exit code).
-        if not self._try_remove_legacy_firewall_rule:
-            self._osutil.remove_legacy_firewall_rule(dst_ip=self._protocol.get_endpoint())
-            self._try_remove_legacy_firewall_rule = True
-
-        success, missing_firewall_rules = self._osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
-
-        if len(missing_firewall_rules) > 0:
-            if self._is_first_setup:
-                msg = "Created firewall rules for the Azure Fabric:\n{0}".format(self._get_firewall_state())
-                logger.info(msg)
-                add_event(op=WALAEventOperation.Firewall, message=msg)
-            else:
-                self._reset_count += 1
-                # We report immediately (when period is None) the first 5 instances, then we switch the period to every few hours
-                if self._report_period is None:
-                    msg = "Some firewall rules were missing: {0}. Re-created all the rules:\n{1}".format(missing_firewall_rules, self._get_firewall_state())
-                    if self._reset_count >= 5:
-                        self._report_period = datetime.timedelta(hours=3)
-                        self._reset_count = 0
-                        self._report_after = datetime.datetime.now() + self._report_period
-                elif datetime.datetime.now() >= self._report_after:
-                    msg = "Some firewall rules were missing: {0}. This has happened {1} time(s) since the last report. Re-created all the rules:\n{2}".format(
-                        missing_firewall_rules, self._reset_count, self._get_firewall_state())
-                    self._reset_count = 0
-                    self._report_after = datetime.datetime.now() + self._report_period
-                else:
-                    msg = ""
-                if msg != "":
-                    logger.info(msg)
-                    add_event(op=WALAEventOperation.ResetFirewall, message=msg)
-
-        add_periodic(
-            logger.EVERY_HOUR,
-            AGENT_NAME,
-            version=CURRENT_VERSION,
-            op=WALAEventOperation.Firewall,
-            is_success=success,
-            log_event=False)
-
-        self._is_first_setup = False
-
-    def _get_firewall_state(self):
         try:
-            return self._osutil.get_firewall_list()
+            if self._firewall_manager is None:
+                self._firewall_manager = FirewallManager.create(self._wire_server_address)
+
+            try:
+                if self._firewall_manager.check():
+                    return  # The firewall is configured correctly
+                self._report(event.warn, "The firewall has not been setup. Will set it up.")
+            except FirewallStateError as e:
+                self._report(event.warn, "The firewall is not configured correctly. {0}. Will reset it. Current state:\n{1}", ustr(e), self._firewall_manager.get_state())
+                self._firewall_manager.remove()
+            self._firewall_manager.setup()
+            self._report(event.info, "The firewall was setup successfully:\n{0}", self._firewall_manager.get_state())
         except Exception as e:
-            return "Failed to get the firewall state: {0}".format(ustr(e))
+            self._report(event.warn, "An error occurred while setting up the firewall: {0}", ustr(e))
 
+    def _report(self, report_function, message, *args):
+        # Report the first 3 messages, then stop reporting for 12 hours
+        if datetime.datetime.now(UTC) < self._report_after:
+            return
 
-class LogFirewallRules(PeriodicOperation):
-    """
-    Log firewall rules state once a day.
-    Goal is to capture the firewall state when the agent service startup,
-    in addition to add more debug data and would be more useful long term.
-    """
-    def __init__(self, osutil):
-        super(LogFirewallRules, self).__init__(conf.get_firewall_rules_log_period())
-        self._osutil = osutil
+        self._message_count += 1
+        if self._message_count > 3:
+            self._report_after = datetime.datetime.now(UTC) + datetime.timedelta(hours=12)
+            self._message_count = 0
+            return
 
-    def _operation(self):
-        # Log firewall rules state once a day
-        logger.info("Current Firewall rules:\n{0}".format(self._osutil.get_firewall_list()))
+        report_function(WALAEventOperation.ResetFirewall, message, *args)
 
 
 class SetRootDeviceScsiTimeout(PeriodicOperation):
@@ -263,8 +222,7 @@ class EnvHandler(ThreadHandlerInterface):
             ]
 
             if conf.enable_firewall():
-                periodic_operations.append(EnableFirewall(osutil, protocol))
-                periodic_operations.append(LogFirewallRules(osutil))
+                periodic_operations.append(EnableFirewall(protocol.get_endpoint()))
             if conf.get_root_device_scsi_timeout() is not None:
                 periodic_operations.append(SetRootDeviceScsiTimeout(osutil))
             if conf.get_monitor_hostname():

@@ -43,10 +43,11 @@ from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension
 from azurelinuxagent.common.protocol import wire
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
+from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, migrate_handler_state, \
     get_exthandlers_handler, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
-    ExtensionStatusValue, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, GoalStateStatus
+    ExtensionStatusValue, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, GoalStateStatus, ExtHandlerState
 
 from tests.lib import wire_protocol_data
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
@@ -427,7 +428,7 @@ class TestHandlerStateMigration(AgentTestCase):
 class TestExtensionBase(AgentTestCase):
     def _assert_handler_status(self, report_vm_status, expected_status,
                                expected_ext_count, version,
-                               expected_handler_name="OSTCExtensions.ExampleHandlerLinux", expected_msg=None):
+                               expected_handler_name="OSTCExtensions.ExampleHandlerLinux", expected_msg=None, expected_code=None):
         self.assertTrue(report_vm_status.called)
         args, kw = report_vm_status.call_args  # pylint: disable=unused-variable
         vm_status = args[0]
@@ -442,6 +443,9 @@ class TestExtensionBase(AgentTestCase):
 
         if expected_msg is not None:
             self.assertIn(expected_msg, handler_status.message)
+
+        if expected_code is not None:
+            self.assertEqual(expected_code, handler_status.code)
 
 
 # Deprecated. New tests should be added to the TestExtension class
@@ -1583,7 +1587,7 @@ class TestExtension_Deprecated(TestExtensionBase):
                 ext_handler = ext_handlers[0]
                 self.assertEqual('OSTCExtensions.ExampleHandlerLinux', ext_handler.name)
                 self.assertEqual(config_version, ext_handler.version, "config version.")
-                ExtHandlerInstance(ext_handler, protocol).decide_version()
+                ExtHandlerInstance(ext_handler, protocol).decide_version(None, None, None)
                 self.assertEqual(decision_version, ext_handler.version, "decision version.")
 
     def test_ext_handler_version_decide_between_minor_versions(self, *args):
@@ -1623,7 +1627,7 @@ class TestExtension_Deprecated(TestExtensionBase):
             ext_handler_instance = ExtHandlerInstance(ext_handler, protocol)
             ext_handler_instance.get_installed_version = Mock(return_value=installed_version)
 
-            ext_handler_instance.decide_version()
+            ext_handler_instance.decide_version(None, None, None)
             self.assertEqual(expected_version, ext_handler.version)
 
     @patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False)
@@ -1649,13 +1653,13 @@ class TestExtension_Deprecated(TestExtensionBase):
         vm_status = args[0]
         self.assertEqual(1, len(vm_status.vmAgent.extensionHandlers))
         exthandler = vm_status.vmAgent.extensionHandlers[0]
-        self.assertEqual(-1, exthandler.code)
+        self.assertEqual(ExtensionErrorCodes.PluginEnableProcessingFailed, exthandler.code)
         self.assertEqual('NotReady', exthandler.status)
-        self.assertEqual("Extension will not be processed since extension processing is disabled. To enable extension processing, set Extensions.Enabled=y in '/etc/waagent.conf'", exthandler.message)
+        self.assertEqual("Extension 'OSTCExtensions.ExampleHandlerLinux' will not be processed since extension processing is disabled. To enable extension processing, set Extensions.Enabled=y in '/etc/waagent.conf'", exthandler.message)
         ext_status = exthandler.extension_status
-        self.assertEqual(-1, ext_status.code)
+        self.assertEqual(ExtensionErrorCodes.PluginEnableProcessingFailed, ext_status.code)
         self.assertEqual('error', ext_status.status)
-        self.assertEqual("Extension will not be processed since extension processing is disabled. To enable extension processing, set Extensions.Enabled=y in '/etc/waagent.conf'", ext_status.message)
+        self.assertEqual("Extension 'OSTCExtensions.ExampleHandlerLinux' will not be processed since extension processing is disabled. To enable extension processing, set Extensions.Enabled=y in '/etc/waagent.conf'", ext_status.message)
 
     def test_extensions_deleted(self, *args):
         # Ensure initial enable is successful
@@ -3409,7 +3413,7 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
                     self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
                     self.assertEqual("1", protocol.report_vm_status.call_args[0][0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status.in_svd_seq_no, "SVD sequence number mismatch")
 
-    def test_it_should_redact_access_tokens_in_extension_output(self):
+    def test_it_should_redact_access_tokens_in_extension_status(self):
         original = r'''ONE https://foo.blob.core.windows.net/bar?sv=2000&ss=bfqt&srt=sco&sp=rw&se=2025&st=2022&spr=https&sig=SI%3D
             TWO:HTTPS://bar.blob.core.com/foo/bar/foo.txt?sv=2018&sr=b&sig=Yx%3D&st=2023%3A52Z&se=9999%3A59%3A59Z&sp=r TWO
             https://bar.com/foo?uid=2018&sr=b THREE'''
@@ -3436,6 +3440,367 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
             self.assertIn('[stdout]\n{0}'.format(expected), message, "The extension's stdout was not redacted correctly")
             self.assertIn('[stderr]\n{0}'.format(expected), message, "The extension's stderr was not redacted correctly")
 
+class TestExtensionHandlerManifest(AgentTestCase):
+
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        self.ext_handler = Extension(name='foo')
+        self.ext_handler.version = "1.2.3"
+        self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=WireProtocol("1.2.3.4"))
+        self.test_file = os.path.join(self.tmp_dir, "HandlerManifest.json")
+
+    def test_handler_manifest_parsed_correctly(self):
+        shutil.copyfile(os.path.join(data_dir, "ext", "handler_manifest", "valid_manifest.json"), self.test_file)
+
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_manifest_file", return_value=self.test_file):
+            manifest = self.ext_handler_instance.load_manifest()
+            self.assertEqual(manifest.get_install_command(), "install_cmd")
+            self.assertEqual(manifest.get_enable_command(), "enable_cmd")
+            self.assertEqual(manifest.get_uninstall_command(), "uninstall_cmd")
+            self.assertEqual(manifest.get_update_command(), "update_cmd")
+            self.assertEqual(manifest.get_disable_command(), "disable_cmd")
+            self.assertTrue(manifest.is_continue_on_update_failure())
+            self.assertTrue(manifest.is_report_heartbeat())
+            self.assertTrue(manifest.supports_multiple_extensions())
+
+    def test_handler_manifest_defaults(self):
+        # Set only the required fields
+        shutil.copyfile(os.path.join(data_dir, "ext", "handler_manifest", "manifest_no_optional_fields.json"), self.test_file)
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_manifest_file", return_value=self.test_file):
+            manifest = self.ext_handler_instance.load_manifest()
+            self.assertFalse(manifest.is_continue_on_update_failure())
+            self.assertFalse(manifest.is_report_heartbeat())
+            self.assertFalse(manifest.supports_multiple_extensions())
+
+    def test_handler_manifest_boolean_fields(self):
+        # Set the boolean fields to strings
+        shutil.copyfile(os.path.join(data_dir, "ext", "handler_manifest", "manifest_boolean_fields_strings.json"), self.test_file)
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_manifest_file", return_value=self.test_file):
+            manifest = self.ext_handler_instance.load_manifest()
+            self.assertTrue(manifest.is_continue_on_update_failure())
+            self.assertTrue(manifest.is_report_heartbeat())
+            self.assertTrue(manifest.supports_multiple_extensions())
+
+        # set the boolean fields to invalid values
+        shutil.copyfile(os.path.join(data_dir, "ext", "handler_manifest", "manifest_boolean_fields_invalid.json"), self.test_file)
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_manifest_file", return_value=self.test_file):
+            manifest = self.ext_handler_instance.load_manifest()
+            self.assertFalse(manifest.is_continue_on_update_failure())
+            self.assertFalse(manifest.is_report_heartbeat())
+            self.assertFalse(manifest.supports_multiple_extensions())
+
+        # set the boolean fields to 'false' string
+        shutil.copyfile(os.path.join(data_dir, "ext", "handler_manifest", "manifest_boolean_fields_false.json"), self.test_file)
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_manifest_file", return_value=self.test_file):
+            manifest = self.ext_handler_instance.load_manifest()
+            self.assertFalse(manifest.is_continue_on_update_failure())
+            self.assertFalse(manifest.is_report_heartbeat())
+            self.assertFalse(manifest.supports_multiple_extensions())
+
+    def test_report_msg_if_handler_manifest_contains_invalid_values(self):
+        # Set the boolean fields to invalid values
+        shutil.copyfile(os.path.join(data_dir, "ext", "handler_manifest", "manifest_boolean_fields_invalid.json"), self.test_file)
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_manifest_file", return_value=self.test_file):
+            with patch("azurelinuxagent.ga.exthandlers.add_event") as mock_add_event:
+                manifest = self.ext_handler_instance.load_manifest()
+                manifest.report_invalid_boolean_properties("test_ext")
+                kw_messages = [kw for _, kw in mock_add_event.call_args_list if kw.get('op') == 'ExtensionHandlerManifest']
+                self.assertEqual(3, len(kw_messages))
+                self.assertIn("'reportHeartbeat' has a non-boolean value", kw_messages[0]['message'])
+                self.assertIn("'continueOnUpdateFailure' has a non-boolean value", kw_messages[1]['message'])
+                self.assertIn("'supportsMultipleExtensions' has a non-boolean value", kw_messages[2]['message'])
+
+
+class TestExtensionPolicy(TestExtensionBase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.01))
+        self.mock_sleep.start()
+        self.policy_path = os.path.join(self.tmp_dir, "waagent_policy.json")
+
+        # Patch attributes to enable policy feature
+        self.patch_policy_path = patch('azurelinuxagent.common.conf.get_policy_file_path',
+                                       return_value=str(self.policy_path))
+        self.patch_policy_path.start()
+        self.patch_conf_flag = patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled',
+                                     return_value=True)
+        self.patch_conf_flag.start()
+        self.maxDiff = None     # When long error messages don't match, display the entire diff.
+
+    def tearDown(self):
+        patch.stopall()
+        AgentTestCase.tearDown(self)
+
+    def _create_policy_file(self, policy):
+        with open(self.policy_path, mode='w') as policy_file:
+            if isinstance(policy, dict):
+                json.dump(policy, policy_file, indent=4)
+            else:
+                policy_file.write(policy)
+            policy_file.flush()
+
+    def _test_policy_case(self, policy, op, expected_status_code, expected_handler_status, expected_ext_count,
+                             expected_status_msg=None):
+
+        # Set up a mock protocol instance.
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            if op == ExtensionRequestedState.Uninstall:
+                # Generate a new mock goal state to uninstall the extension - increment the incarnation
+                protocol.mock_wire_data.set_incarnation(2)
+                protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
+                protocol.client.update_goal_state()
+            protocol.aggregate_status = None
+            protocol.report_vm_status = MagicMock()
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            # Create policy file and process extensions.
+            self._create_policy_file(policy)
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+
+            # Assert that agent is reporting the expected handler status
+            report_vm_status = protocol.report_vm_status
+            self.assertTrue(report_vm_status.called)
+            self._assert_handler_status(report_vm_status, expected_handler_status, expected_ext_count=expected_ext_count,
+                                        version="1.0.0", expected_handler_name='OSTCExtensions.ExampleHandlerLinux',
+                                        expected_msg=expected_status_msg, expected_code=expected_status_code)
+
+    def test_should_fail_enable_if_extension_disallowed(self):
+        policy = \
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": True,
+               }
+            }
+        expected_msg = "failed to run extension 'OSTCExtensions.ExampleHandlerLinux' because it is not specified as an allowed extension."
+        self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
+                          expected_handler_status='NotReady', expected_ext_count=1, expected_status_msg=expected_msg)
+
+    def test_should_fail_enable_for_invalid_policy(self):
+        policy = \
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": "False"
+                }
+            }
+        expected_msg = "attribute 'extensionPolicies.allowListedExtensionsOnly'; must be 'boolean'"
+        self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
+                          expected_handler_status='NotReady', expected_ext_count=1, expected_status_msg=expected_msg)
+
+    def test_should_fail_extension_if_error_thrown_during_policy_engine_init(self):
+        policy = \
+            {
+                "policyVersion": "0.1.0"
+            }
+        with patch('azurelinuxagent.ga.policy.policy_engine.ExtensionPolicyEngine.__init__',
+                   side_effect=Exception("mock exception")):
+            expected_msg = "Extension will not be processed: mock exception"
+            self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled,
+                                      expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
+                                      expected_handler_status='NotReady', expected_ext_count=1, expected_status_msg=expected_msg)
+
+    def test_should_fail_uninstall_if_extension_disallowed(self):
+        policy = \
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": True,
+                    "signatureRequired": False,
+                    "extensions": {}
+                },
+            }
+        expected_msg = "failed to uninstall extension 'OSTCExtensions.ExampleHandlerLinux' because it is not specified as an allowed extension."
+        self._test_policy_case(policy=policy, op=ExtensionRequestedState.Uninstall, expected_status_code=ExtensionErrorCodes.PluginDisableProcessingFailed,
+                                  expected_handler_status='NotReady', expected_ext_count=1, expected_status_msg=expected_msg)
+
+    def test_should_fail_enable_if_dependent_extension_disallowed(self):
+        self._create_policy_file({
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                    "allowListedExtensionsOnly": True,
+                    "extensions": {
+                        "OSTCExtensions.ExampleHandlerLinux": {}
+                    }
+                }
+            })
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_EXT_SEQUENCING) as protocol:
+            protocol.aggregate_status = None
+            protocol.report_vm_status = MagicMock()
+            exthandlers_handler = get_exthandlers_handler(protocol)
+            dep_ext_level_2 = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux")
+            dep_ext_level_1 = extension_emulator(name="OSTCExtensions.OtherExampleHandlerLinux")
+
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+
+            # OtherExampleHandlerLinux should be disallowed by policy, ExampleHandlerLinux should be skipped because
+            # dependent extension failed
+            self._assert_handler_status(protocol.report_vm_status, expected_status="NotReady", expected_ext_count=1,
+                                        version="1.0.0", expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux",
+                                        expected_msg=("failed to run extension 'OSTCExtensions.OtherExampleHandlerLinux' "
+                                                      "because it is not specified as an allowed extension."))
+
+            self._assert_handler_status(protocol.report_vm_status, expected_status="NotReady", expected_ext_count=0,
+                                        version="1.0.0", expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
+                                        expected_msg="Skipping processing of extensions since execution of dependent "
+                                                     "extension OSTCExtensions.OtherExampleHandlerLinux failed")
+
+            # check handler list and dependency levels
+            self.assertTrue(exthandlers_handler.ext_handlers is not None)
+            self.assertTrue(exthandlers_handler.ext_handlers is not None)
+            self.assertEqual(len(exthandlers_handler.ext_handlers), 2)
+            self.assertEqual(1, next(handler for handler in exthandlers_handler.ext_handlers if
+                                     handler.name == dep_ext_level_1.name).settings[0].dependencyLevel)
+            self.assertEqual(2, next(handler for handler in exthandlers_handler.ext_handlers if
+                                     handler.name == dep_ext_level_2.name).settings[0].dependencyLevel)
+
+    def test_enable_should_succeed_if_extension_allowed(self):
+        policy_cases = [
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": False,
+                }
+            },
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": True,
+                    "extensions": {
+                        "OSTCExtensions.ExampleHandlerLinux": {}
+                    }
+                }
+            }
+        ]
+        for policy in policy_cases:
+            self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=0,
+                                   expected_handler_status='Ready', expected_ext_count=1)
+
+    def test_uninstall_should_succeed_if_extension_allowed(self):
+        policy_cases = [
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": False,
+                }
+            },
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": True,
+                    "extensions": {
+                        "OSTCExtensions.ExampleHandlerLinux": {}
+                    }
+                }
+            }
+        ]
+        for policy in policy_cases:
+            with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+                # Generate a new mock goal state to uninstall the extension - increment the incarnation
+                protocol.mock_wire_data.set_incarnation(2)
+                protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
+                protocol.client.update_goal_state()
+                protocol.aggregate_status = None
+                protocol.report_vm_status = MagicMock()
+                exthandlers_handler = get_exthandlers_handler(protocol)
+
+                # Create policy file and process extensions.
+                self._create_policy_file(policy)
+                exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
+
+                # Assert that no status is being reported for the extension, to confirm that uninstall was successful.
+                report_vm_status = protocol.report_vm_status
+                self.assertTrue(report_vm_status.called)
+                args, kw = report_vm_status.call_args  # pylint: disable=unused-variable
+                vm_status = args[0]
+                self.assertEqual(0, len(vm_status.vmAgent.extensionHandlers))
+
+    def test_should_report_both_policy_failure_and_heartbeat_in_status(self):
+        """
+        If an extension reporting heartbeat is blocked by policy, the agent should report policy failure status and
+        concatenate the extension heartbeat.
+        """
+
+        # Mock collect_heartbeat() to return heartbeat in test file
+        test_file = os.path.join(self.tmp_dir, "ext_heartbeat.json")
+        def mock_collect_heartbeat():
+            heartbeat_json = fileutil.read_file(test_file)
+            heartbeat = json.loads(heartbeat_json)[0]['heartbeat']
+            return heartbeat
+
+        # Create a mock heartbeat file reported by an extension
+        extension_heartbeat = [
+            {
+                "version": 1.0,
+                "heartbeat": {
+                    "status": "ready",
+                    "code": 0,
+                    "formattedMessage": {
+                        "lang": "en-US",
+                        "message": "This is a heartbeat message"
+                    }
+                }
+            }
+        ]
+        with open(test_file, 'w') as out_file:
+            out_file.write(json.dumps(extension_heartbeat))
+
+        # Try to install a disallowed extension, then assert that policy failure status is reported instead of heartbeat
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_heartbeat_file", return_value=test_file):
+            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.collect_heartbeat", side_effect=mock_collect_heartbeat):
+                with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_handler_state", return_value=ExtHandlerState.Enabled):
+                    policy = \
+                        {
+                            "policyVersion": "0.1.0",
+                            "extensionPolicies": {
+                                "allowListedExtensionsOnly": True
+                            }
+                        }
+
+                    with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+                        exthandlers_handler = get_exthandlers_handler(protocol)
+                        self._create_policy_file(policy)
+                        exthandlers_handler.run()
+
+                        # Assert that agent is reporting the expected handler status, heartbeat should be concatenated to policy failure message
+                        vm_status = exthandlers_handler.report_ext_handlers_status()
+                        ext_handler = vm_status.vmAgent.extensionHandlers[0]
+                        self.assertTrue("failed to run extension 'OSTCExtensions.ExampleHandlerLinux' because it is not specified as an allowed extension" in ext_handler.message,
+                                        "Should have reported policy failure")
+                        self.assertTrue("Extension was previously enabled and reported the following heartbeat:" in ext_handler.message,
+                                        "Should have concatenated heartbeat to handler status message")
+                        self.assertEqual(ext_handler.status, "NotReady", "Heartbeat should not have overridden policy failure status")
+                        self.assertEqual(ext_handler.code, ExtensionErrorCodes.PluginEnableProcessingFailed, "Heartbeat should not have overridden policy failure code")
+
+    def test_should_save_policy_file_to_history_directory(self):
+        policy_file_name = "waagent_policy.json"
+        policy = {
+            "policyVersion": "0.1.0"
+        }
+        self._create_policy_file(policy)
+
+        # Policy file should be written to history folder when extensions are processed
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS, save_to_history=True) as protocol:
+            # Update goal state with incarnation and etag, so we can search for the correct history folder
+            protocol.mock_wire_data.set_incarnation(999)
+            protocol.mock_wire_data.set_etag(888)
+            protocol.client.update_goal_state()
+            exthandlers_handler = get_exthandlers_handler(protocol)
+            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_enable_overprovisioning', return_value=False):
+                exthandlers_handler.run()
+
+            # Assert that policy file was copied to history folder.
+            root_dir = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME)
+            matches = glob.glob(os.path.join(root_dir, "*_999-888"))
+            self.assertTrue(len(matches) == 1)
+            history_dir = matches[0]
+            file_path = os.path.join(history_dir, policy_file_name)
+            self.assertTrue(os.path.exists(file_path), "Policy file was not copied to history folder")
+            with open(file_path, mode='r') as f:
+                self.assertEqual(policy, json.load(f))
 
 if __name__ == '__main__':
     unittest.main()

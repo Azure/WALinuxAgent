@@ -29,14 +29,14 @@ from datetime import datetime, timedelta
 
 from mock import MagicMock
 
-from azurelinuxagent.common.utils import textutil, fileutil
+from azurelinuxagent.common.utils import textutil, fileutil, timeutil
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.event import add_event, add_periodic, add_log_event, elapsed_milliseconds, \
     WALAEventOperation, parse_xml_event, parse_json_event, AGENT_EVENT_FILE_EXTENSION, EVENTS_DIRECTORY, \
     TELEMETRY_EVENT_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID, TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID, \
     report_metric
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, UTC
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.telemetryevent import CommonTelemetryEventSchema, GuestAgentGenericLogsSchema, \
     GuestAgentExtensionEventsSchema, GuestAgentPerfCounterEventsSchema
@@ -45,7 +45,7 @@ from azurelinuxagent.ga.collect_telemetry_events import _CollectAndEnqueueEvents
 from tests.lib import wire_protocol_data
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
 from tests.lib.http_request_predicates import HttpRequestPredicates
-from tests.lib.tools import AgentTestCase, data_dir, load_data, patch, skip_if_predicate_true, is_python_version_26_or_34
+from tests.lib.tools import AgentTestCase, data_dir, load_data, patch, skip_if_predicate_true
 from tests.lib.event_logger_tools import EventLoggerTools
 
 
@@ -170,7 +170,6 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             protocol.client.update_goal_state()
             contained_id = create_event_and_return_container_id()
             self.assertEqual(contained_id, '11111111-2222-3333-4444-555555555555', "Incorrect container ID")
-
 
     def test_add_event_should_handle_event_errors(self):
         with patch("azurelinuxagent.common.utils.fileutil.mkdir", side_effect=OSError):
@@ -350,7 +349,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
         h = hash("FauxEvent"+WALAEventOperation.Unknown+ustr(True))
         event.__event_logger__.periodic_events[h] = \
-            datetime.now() - logger.EVERY_DAY - logger.EVERY_HOUR
+            datetime.now(UTC) - logger.EVERY_DAY - logger.EVERY_HOUR
         event.add_periodic(logger.EVERY_DAY, "FauxEvent")
         self.assertEqual(2, mock_event.call_count)
 
@@ -375,7 +374,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         add_event('test', message='test event')
         mock_add_event.assert_called_once_with('test', duration=0, is_success=True, log_event=True,
                                                message='test event', op=WALAEventOperation.Unknown,
-                                               version=str(CURRENT_VERSION))
+                                               version=str(CURRENT_VERSION), flush=False)
 
     def test_collect_events_should_delete_event_files(self):
         add_event(name='Event1', op=TestEvent._Operation)
@@ -400,6 +399,49 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(filename.endswith(AGENT_EVENT_FILE_EXTENSION),
                 'Event file does not have the correct extension ({0}): {1}'.format(AGENT_EVENT_FILE_EXTENSION, filename))
 
+    def test_save_event_redact_sas_token(self):
+        add_event('test', message='test event with sas token: https://test.blob.core.windows.net/$system/lrwinmcdn_0.0f3bfecf-f14f-4c7d-8275-9dee7310fe8c.vmSettings?sv=2018-03-28&amp;sr=b&amp;sk=system-1&amp;sig=8YHwmibhasT0r9MZgL09QmFwL7ZV%2bg%2b49QP5Zwe4ksY%3d&amp;se=9999-01-01T00%3a00%3a00Z&amp;sp=r', op=TestEvent._Operation)
+        event_files = self._collect_event_files()
+        self.assertTrue(len(event_files) == 1)
+
+        first_event = event_files[0]
+        with open(first_event) as first_fh:
+            first_event_text = first_fh.read()
+            self.assertTrue('<redacted>' in first_event_text)
+
+    def test_add_event_flush_immediately(self):
+        def http_post_handler(url, body, **__):
+            if self.is_telemetry_request(url):
+                http_post_handler.request_body = body
+                return MockHttpResponse(status=200)
+            return None
+        http_post_handler.request_body = None
+
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_post_handler=http_post_handler):
+            expected_message = 'test event'
+            add_event('test', message=expected_message, op=TestEvent._Operation, flush=True)
+
+            event_message = self._get_event_message_from_http_request_body(http_post_handler.request_body)
+
+            self.assertEqual(event_message, expected_message,
+                         "The Message in the HTTP request does not match the Message in the add_event")
+
+            # If immediate_flush is set, the event should send to wireserver directly and file should not be created
+            self.assertTrue(len(self._collect_event_files()) == 0)
+
+    def test_add_event_flush_fails(self):
+        def http_post_handler(url, **__):
+            if self.is_telemetry_request(url):
+                return MockHttpResponse(status=500)
+            return None
+
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_post_handler=http_post_handler):
+            expected_message = 'test event'
+            add_event('test', message=expected_message, op=TestEvent._Operation, flush=True)
+
+            # In case of failure, the event file should be created
+            self.assertTrue(len(self._collect_event_files()) == 1)
+
     @staticmethod
     def _get_event_message(evt):
         for p in evt.parameters:
@@ -415,7 +457,15 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         self.assertEqual(len(event_list), 1)
         self.assertEqual(TestEvent._get_event_message(event_list[0]), u'World\u05e2\u05d9\u05d5\u05ea \u05d0\u05d7\u05e8\u05d5\u05ea\u0906\u091c')
 
-    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4, they run on containers where the OS commands needed by the test are not present.")
+    def test_collect_events_should_redact_message(self):
+        self._create_test_event_file("event_with_sas_token.tld")
+
+        event_list = self._collect_events()
+
+        self.assertEqual(len(event_list), 1)
+
+        self.assertIn('<redacted>', TestEvent._get_event_message(event_list[0]))
+
     def test_collect_events_should_ignore_invalid_event_files(self):
         self._create_test_event_file("custom_script_1.tld")  # a valid event
         self._create_test_event_file("custom_script_utf-16.tld")
@@ -424,27 +474,29 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         self._create_test_event_file("custom_script_2.tld")  # another valid event
 
         with patch("azurelinuxagent.common.event.add_event") as mock_add_event:
-            event_list = self._collect_events()
+            # mock the max retries on parsing invalid json to avoid the test run delays
+            with patch("azurelinuxagent.ga.collect_telemetry_events.NUM_OF_EVENT_FILE_RETRIES", 1):
+                event_list = self._collect_events()
 
-            self.assertEqual(
-                len(event_list), 2)
-            self.assertTrue(
-                all(TestEvent._get_event_message(evt) == "A test telemetry message." for evt in event_list),
-                "The valid events were not found")
+                self.assertEqual(
+                    len(event_list), 2)
+                self.assertTrue(
+                    all(TestEvent._get_event_message(evt) == "A test telemetry message." for evt in event_list),
+                    "The valid events were not found")
 
-            invalid_events = []
-            total_dropped_count = 0
-            for args, kwargs in mock_add_event.call_args_list:  # pylint: disable=unused-variable
-                match = re.search(r"DroppedEventsCount: (\d+)", kwargs['message'])
-                if match is not None:
-                    invalid_events.append(kwargs['op'])
-                    total_dropped_count += int(match.groups()[0])
+                invalid_events = []
+                total_dropped_count = 0
+                for args, kwargs in mock_add_event.call_args_list:  # pylint: disable=unused-variable
+                    match = re.search(r"DroppedEventsCount: (\d+)", kwargs['message'])
+                    if match is not None:
+                        invalid_events.append(kwargs['op'])
+                        total_dropped_count += int(match.groups()[0])
 
-            self.assertEqual(3, total_dropped_count, "Total dropped events dont match")
-            self.assertIn(WALAEventOperation.CollectEventErrors, invalid_events,
-                          "{0} errors not reported".format(WALAEventOperation.CollectEventErrors))
-            self.assertIn(WALAEventOperation.CollectEventUnicodeErrors, invalid_events,
-                          "{0} errors not reported".format(WALAEventOperation.CollectEventUnicodeErrors))
+                self.assertEqual(3, total_dropped_count, "Total dropped events dont match")
+                self.assertIn(WALAEventOperation.CollectEventErrors, invalid_events,
+                              "{0} errors not reported".format(WALAEventOperation.CollectEventErrors))
+                self.assertIn(WALAEventOperation.CollectEventUnicodeErrors, invalid_events,
+                              "{0} errors not reported".format(WALAEventOperation.CollectEventUnicodeErrors))
 
     def test_save_event_rollover(self):
         # We keep 1000 events only, and the older ones are removed.
@@ -499,7 +551,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         self.assertTrue(len(events) == 1000, "{0} events found, 1000 expected".format(len(events)))
 
     def test_elapsed_milliseconds(self):
-        utc_start = datetime.utcnow() + timedelta(days=1)
+        utc_start = datetime.now(UTC) + timedelta(days=1)
         self.assertEqual(0, elapsed_milliseconds(utc_start))
 
     def _assert_event_includes_all_parameters_in_the_telemetry_schema(self, actual_event, expected_parameters, assert_timestamp):
@@ -531,18 +583,14 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         self.assertIsNotNone(timestamp, "The event does not have a timestamp (Opcode)")
         assert_timestamp(timestamp)
 
-    @staticmethod
-    def _datetime_to_event_timestamp(dt):
-        return dt.strftime(logger.Logger.LogTimeFormatInUTC)
-
     def _test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(self, create_event_function, expected_parameters):
         """
         Helper to tests methods that create events (e.g. add_event, add_log_event, etc).
         """
         # execute the method that creates the event, capturing the time range of the execution
-        timestamp_lower = TestEvent._datetime_to_event_timestamp(datetime.utcnow())
+        timestamp_lower = timeutil.create_utc_timestamp(datetime.now(UTC))
         create_event_function()
-        timestamp_upper = TestEvent._datetime_to_event_timestamp(datetime.utcnow())
+        timestamp_upper = timeutil.create_utc_timestamp(datetime.now(UTC))
 
         event_list = self._collect_events()
 
@@ -638,9 +686,12 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         shutil.copy(source_file_path, target_file_path)
         return target_file_path
 
+    def _collect_test_event_files(self, file_name):
+        return [os.path.join(self.event_dir, f) for f in os.listdir(self.event_dir) if file_name in f]
+
     @staticmethod
     def _get_file_creation_timestamp(file):  # pylint: disable=redefined-builtin
-        return  TestEvent._datetime_to_event_timestamp(datetime.fromtimestamp(os.path.getmtime(file)))
+        return  timeutil.create_utc_timestamp(datetime.fromtimestamp(os.path.getmtime(file)).replace(tzinfo=UTC))
 
     def test_collect_events_should_add_all_the_parameters_in_the_telemetry_schema_to_legacy_agent_events(self):
         # Agents <= 2.2.46 use *.tld as the extension for event files (newer agents use "*.waagent.tld") and they populate
@@ -733,6 +784,39 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
     def test_collect_events_should_ignore_extra_parameters_in_extension_events(self):
         self._assert_extension_event_includes_all_parameters_in_the_telemetry_schema('custom_script_extra_parameters.tld')
 
+    @staticmethod
+    def _get_event_message_from_http_request_body(event_body):
+        # The XML for the event is sent over as a CDATA element ("Event") in the request's body
+        http_request_body = event_body if (
+                event_body is None or type(event_body) is ustr) else textutil.str_to_encoded_ustr(event_body)
+        request_body_xml_doc = textutil.parse_doc(http_request_body)
+
+        event_node = textutil.find(request_body_xml_doc, "Event")
+        if event_node is None:
+            raise ValueError('Could not find the Event node in the XML document')
+        if len(event_node.childNodes) != 1:
+            raise ValueError('The Event node in the XML document should have exactly 1 child')
+
+        event_node_first_child = event_node.childNodes[0]
+        if event_node_first_child.nodeType != xml.dom.Node.CDATA_SECTION_NODE:
+            raise ValueError('The Event node contents should be CDATA')
+
+        event_node_cdata = event_node_first_child.nodeValue
+
+        # The CDATA will contain a sequence of "<Param Name='foo' Value='bar'/>" nodes, which
+        # correspond to the parameters of the telemetry event.  Wrap those into a "Helper" node
+        # and extract the "Message"
+        event_xml_text = '<?xml version="1.0"?><Helper>{0}</Helper>'.format(event_node_cdata)
+        event_xml_doc = textutil.parse_doc(event_xml_text)
+        helper_node = textutil.find(event_xml_doc, "Helper")
+
+        for child in helper_node.childNodes:
+            if child.getAttribute('Name') == GuestAgentExtensionEventsSchema.Message:
+                return child.getAttribute('Value')
+
+        raise ValueError(
+            'Could not find the Message for the telemetry event. Request body: {0}'.format(http_request_body))
+
     def test_report_event_should_encode_call_stack_correctly(self):
         """
         The Message in some telemetry events that include call stacks are being truncated in Kusto. While the issue doesn't seem
@@ -750,37 +834,6 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
             raise ValueError('Could not find the Message for the telemetry event in {0}'.format(event_file))
 
-        def get_event_message_from_http_request_body(event_body):
-            # The XML for the event is sent over as a CDATA element ("Event") in the request's body
-            http_request_body = event_body if (
-                    event_body is None or type(event_body) is ustr) else textutil.str_to_encoded_ustr(event_body)
-            request_body_xml_doc = textutil.parse_doc(http_request_body)
-
-            event_node = textutil.find(request_body_xml_doc, "Event")
-            if event_node is None:
-                raise ValueError('Could not find the Event node in the XML document')
-            if len(event_node.childNodes) != 1:
-                raise ValueError('The Event node in the XML document should have exactly 1 child')
-
-            event_node_first_child = event_node.childNodes[0]
-            if event_node_first_child.nodeType != xml.dom.Node.CDATA_SECTION_NODE:
-                raise ValueError('The Event node contents should be CDATA')
-
-            event_node_cdata = event_node_first_child.nodeValue
-
-            # The CDATA will contain a sequence of "<Param Name='foo' Value='bar'/>" nodes, which
-            # correspond to the parameters of the telemetry event.  Wrap those into a "Helper" node
-            # and extract the "Message"
-            event_xml_text = '<?xml version="1.0"?><Helper>{0}</Helper>'.format(event_node_cdata)
-            event_xml_doc = textutil.parse_doc(event_xml_text)
-            helper_node = textutil.find(event_xml_doc, "Helper")
-
-            for child in helper_node.childNodes:
-                if child.getAttribute('Name') == GuestAgentExtensionEventsSchema.Message:
-                    return child.getAttribute('Value')
-
-            raise ValueError('Could not find the Message for the telemetry event. Request body: {0}'.format(http_request_body))
-
         def http_post_handler(url, body, **__):
             if self.is_telemetry_request(url):
                 http_post_handler.request_body = body
@@ -795,7 +848,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             event_list = self._collect_events()
             self._report_events(protocol, event_list)
 
-            event_message = get_event_message_from_http_request_body(http_post_handler.request_body)
+            event_message = self._get_event_message_from_http_request_body(http_post_handler.request_body)
 
             self.assertEqual(event_message, expected_message, "The Message in the HTTP request does not match the Message in the event's *.tld file")
 

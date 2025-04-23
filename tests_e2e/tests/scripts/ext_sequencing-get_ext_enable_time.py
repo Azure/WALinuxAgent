@@ -23,6 +23,7 @@ import argparse
 import re
 import sys
 from datetime import datetime
+from azurelinuxagent.common.future import UTC
 
 from tests_e2e.tests.lib.agent_log import AgentLog
 
@@ -37,7 +38,7 @@ def main():
     args, _ = parser.parse_known_args()
 
     # Only search the agent log after the provided timestamp: args.after_time
-    after_time = datetime.strptime(args.after_time, u'%Y-%m-%d %H:%M:%S')
+    after_time = datetime.strptime(args.after_time, u'%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
     # Agent logs for extension enable: 2024-02-09T09:29:08.943529Z INFO ExtHandler [Microsoft.Azure.Extensions.CustomScript-2.1.10] Enable extension: [bin/custom-script-shim enable]
     enable_log_regex = r"\[{0}-[.\d]+\] Enable extension: .*".format(args.ext)
 

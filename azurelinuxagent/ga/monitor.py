@@ -22,19 +22,18 @@ import threading
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
-from azurelinuxagent.ga.controllermetrics import MetricValue, MetricsCategory, MetricsCounter
+from azurelinuxagent.ga.cgroupcontroller import MetricValue, MetricsCategory, MetricsCounter
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, UTC
 from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
-from azurelinuxagent.common.utils.textutil import hash_strings
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
@@ -60,9 +59,9 @@ class PollResourceUsage(PeriodicOperation):
 
         for metric in tracked_metrics:
             key = metric.category + metric.counter + metric.instance
-            if key not in self.__periodic_metrics or (self.__periodic_metrics[key] + metric.report_period) <= datetime.datetime.now():
+            if key not in self.__periodic_metrics or (self.__periodic_metrics[key] + metric.report_period) <= datetime.datetime.now(UTC):
                 report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
-                self.__periodic_metrics[key] = datetime.datetime.now()
+                self.__periodic_metrics[key] = datetime.datetime.now(UTC)
 
         CGroupConfigurator.get_instance().check_cgroups(tracked_metrics)
 
@@ -145,9 +144,9 @@ class ReportNetworkConfigurationChanges(PeriodicOperation):
 
     def _operation(self):
         raw_route_list = self.osutil.read_route_table()
-        digest = hash_strings(raw_route_list)
-        if digest != self.last_route_table_hash:
-            self.last_route_table_hash = digest
+        route_table_hash = ":".join([str(hash(r)) for r in raw_route_list])
+        if route_table_hash != self.last_route_table_hash:
+            self.last_route_table_hash = route_table_hash
             route_list = self.osutil.get_list_of_routes(raw_route_list)
             logger.info("Route table: [{0}]".format(",".join(map(networkutil.RouteEntry.to_json, route_list))))
 

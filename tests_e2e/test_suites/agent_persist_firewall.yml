@@ -17,5 +17,3 @@ skip_on_images:
   - "debian_9"  # TODO: Reboot is slow on debian_9. Need to investigate further.
   - "flatcar"
   - "flatcar_arm64"
-  - "ubuntu_2204_minimal" # TODO: Currently Ubuntu minimal does not include the 'iptables' command. Remove it once this has been addressed.
-  - "ubuntu_2404_minimal"

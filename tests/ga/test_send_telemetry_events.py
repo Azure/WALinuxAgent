@@ -26,17 +26,16 @@ from datetime import datetime, timedelta
 
 from mock import MagicMock, Mock, patch, PropertyMock
 
-from azurelinuxagent.common import logger
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import HttpError, ServiceStoppedError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, UTC
 from azurelinuxagent.common.osutil.factory import get_osutil
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import event_to_v1_encoded
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
     GuestAgentExtensionEventsSchema
-from azurelinuxagent.common.utils import restutil, fileutil
+from azurelinuxagent.common.utils import restutil, fileutil, timeutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, AGENT_VERSION, CURRENT_AGENT, \
     DISTRO_CODE_NAME
 from azurelinuxagent.ga.collect_telemetry_events import _CollectAndEnqueueEvents
@@ -69,7 +68,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
     def _create_send_telemetry_events_handler(self, timeout=0.5, start_thread=True, batching_queue_limit=1):
         def http_post_handler(url, body, **__):
             if self.is_telemetry_request(url):
-                send_telemetry_events_handler.event_calls.append((datetime.now(), body))
+                send_telemetry_events_handler.event_calls.append((datetime.now(UTC), body))
                 return MockHttpResponse(status=200)
             return None
 
@@ -81,7 +80,6 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
             with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MIN_EVENTS_TO_BATCH",
                        batching_queue_limit):
                 with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MAX_TIMEOUT", timeout):
-
                     send_telemetry_events_handler.get_mock_wire_protocol = lambda: protocol
                     if start_thread:
                         send_telemetry_events_handler.start()
@@ -141,7 +139,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
         events = [TelemetryEvent(eventId=ustr(uuid.uuid4())), TelemetryEvent(eventId=ustr(uuid.uuid4()))]
 
         with self._create_send_telemetry_events_handler() as telemetry_handler:
-            test_start_time = datetime.now()
+            test_start_time = datetime.now(UTC)
             for test_event in events:
                 telemetry_handler.enqueue_event(test_event)
 
@@ -187,11 +185,11 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
         with patch("time.sleep", lambda *_: orig_sleep(0.05)):
             with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MIN_BATCH_WAIT_TIME", wait_time):
                 with self._create_send_telemetry_events_handler(batching_queue_limit=5) as telemetry_handler:
-                    test_start_time = datetime.now()
+                    test_start_time = datetime.now(UTC)
                     for test_event in events:
                         telemetry_handler.enqueue_event(test_event)
 
-                    while not telemetry_handler.event_calls and (test_start_time + timedelta(seconds=1)) > datetime.now():
+                    while not telemetry_handler.event_calls and (test_start_time + timedelta(seconds=1)) > datetime.now(UTC):
                         # Wait for event calls to be made, wait a max of 1 secs
                         orig_sleep(0.1)
 
@@ -332,7 +330,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
             self._create_extension_event(message="Message-Test")
 
             test_mtime = 1000  # epoch time, in ms
-            test_opcodename = datetime.fromtimestamp(test_mtime).strftime(logger.Logger.LogTimeFormatInUTC)
+            test_opcodename = timeutil.create_utc_timestamp(datetime.fromtimestamp(test_mtime).replace(tzinfo=UTC))
             test_eventtid = 42
             test_eventpid = 24
             test_taskname = "TEST_TaskName"

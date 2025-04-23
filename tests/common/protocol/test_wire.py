@@ -95,11 +95,11 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
                 protocol.get_goal_state().fetch_extension_manifest(ext_handler.name, ext_handler.manifest_uris)
 
             crt1 = os.path.join(self.tmp_dir,
-                                '38B85D88F03D1A8E1C671EB169274C09BC4D4703.crt')
+                                '8979F1AC8C4215827BF3B5A403E6137B504D02A4.crt')
             crt2 = os.path.join(self.tmp_dir,
-                                'BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F.crt')
+                                'F6ABAA61098A301EBB8A571C3C7CF77F355F7FA9.crt')
             prv2 = os.path.join(self.tmp_dir,
-                                'BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F.prv')
+                                'F6ABAA61098A301EBB8A571C3C7CF77F355F7FA9.prv')
             if certsMustBePresent:
                 self.assertTrue(os.path.isfile(crt1))
                 self.assertTrue(os.path.isfile(crt2))
@@ -351,9 +351,11 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
         with mock_wire_protocol(DATA_FILE) as protocol:
 
             def mock_http_put(url, *args, **__):
-                if not HttpRequestPredicates.is_host_plugin_status_request(url):
+                if HttpRequestPredicates.is_host_plugin_status_request(url):
                     # Skip reading the HostGA request data as its encoded
-                    protocol.aggregate_status = json.loads(args[0])
+                    return MockHttpResponse(status=500)
+                protocol.aggregate_status = json.loads(args[0])
+                return MockHttpResponse(status=201)
 
             protocol.aggregate_status = {}
             protocol.set_http_handlers(http_put_handler=mock_http_put)
@@ -421,7 +423,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
 
         event_str = u'a test string'
         client = WireProtocol(WIRESERVER_URL).client
-        client.send_encoded_event("foo", event_str.encode('utf-8'))
+        client._send_encoded_event("foo", event_str.encode('utf-8'), flush=False)
 
         first_call = mock_http_request.call_args_list[0]
         args, kwargs = first_call
@@ -433,7 +435,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
         # the body is encoded, decode and check for equality
         self.assertIn(event_str, body_received.decode('utf-8'))
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient._send_encoded_event")
     def test_report_event_small_event(self, patch_send_event, *args):  # pylint: disable=unused-argument
         event_list = []
         client = WireProtocol(WIRESERVER_URL).client
@@ -455,7 +457,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
         # It merges the messages into one message
         self.assertEqual(patch_send_event.call_count, 1)
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient._send_encoded_event")
     def test_report_event_multiple_events_to_fill_buffer(self, patch_send_event, *args):  # pylint: disable=unused-argument
         event_list = []
         client = WireProtocol(WIRESERVER_URL).client
@@ -469,7 +471,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
         # It merges the messages into one message
         self.assertEqual(patch_send_event.call_count, 2)
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient._send_encoded_event")
     def test_report_event_large_event(self, patch_send_event, *args):  # pylint: disable=unused-argument
         event_list = []
         event_str = random_generator(2 ** 18)
@@ -478,6 +480,30 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
         client.report_event(self._get_telemetry_events_generator(event_list))
 
         self.assertEqual(patch_send_event.call_count, 0)
+        
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_report_event_http_req_should_do_max_retries_on_throttling_error(self, mock_http_request, *args):  # pylint: disable=unused-argument
+        mock_http_request.return_value = MockHttpResponse(429)
+        event_list = []
+        event_str = random_generator(2 ** 15)
+        event_list.append(get_event(message=event_str))
+        client = WireProtocol(WIRESERVER_URL).client
+        with patch("azurelinuxagent.common.utils.restutil.TELEMETRY_THROTTLE_DELAY_IN_SECONDS", 0.001):
+            client.report_event(self._get_telemetry_events_generator(event_list))
+            self.assertEqual(mock_http_request.call_count, 3)
+
+        mock_http_request.reset_mock()
+        self.assertEqual(mock_http_request.call_count, 0)
+        mock_http_request.return_value = MockHttpResponse(429)
+        with patch("azurelinuxagent.common.utils.restutil.TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS", 0.001):
+            client.report_event(self._get_telemetry_events_generator(event_list), flush=True)
+            self.assertEqual(mock_http_request.call_count, 3)
+
+    def test_get_header_for_remote_access_should_use_aes128(self, *_):
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            headers = protocol.client.get_header_for_remote_access()
+            self.assertIn("x-ms-cipher-name", headers)
+            self.assertEqual(headers["x-ms-cipher-name"], "AES128_CBC", "Unexpected x-ms-cipher-name")
 
 
 class TestWireClient(HttpRequestPredicates, AgentTestCase):
@@ -1066,7 +1092,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 self.assertEqual(protocol.client.get_hosting_env().deployment_name, new_hosting_env_deployment_name)
                 self.assertEqual(protocol.client.get_shared_conf().xml_text, new_shared_conf)
                 self.assertEqual(sequence_number, new_sequence_number)
-                self.assertEqual(len(protocol.client.get_certs().cert_list.certificates), 0)
+                self.assertEqual(len(protocol.client.get_certs().summary), 0)
 
                 self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
                 self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)

@@ -21,6 +21,7 @@ import json
 import os
 import re
 import threading
+import time
 from collections import defaultdict
 
 import azurelinuxagent.common.logger as logger
@@ -28,15 +29,20 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_ID, \
     TELEMETRY_LOG_PROVIDER_ID, add_event, WALAEventOperation, add_log_event, get_event_logger, \
-    CollectOrReportEventDebugInfo, EVENT_FILE_REGEX, parse_event
-from azurelinuxagent.common.exception import InvalidExtensionEventError, ServiceStoppedError
-from azurelinuxagent.common.future import ustr
+    CollectOrReportEventDebugInfo, EVENT_FILE_REGEX, parse_event, redact_event_msg
+from azurelinuxagent.common.exception import InvalidExtensionEventError, ServiceStoppedError, EventError
+from azurelinuxagent.common.future import ustr, is_file_not_found_error, UTC
+from azurelinuxagent.common.utils.textutil import redact_sas_token
 from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
     GuestAgentGenericLogsSchema, GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
+
+# Event file specific retries and delays.
+NUM_OF_EVENT_FILE_RETRIES = 3
+EVENT_FILE_RETRY_DELAY = 1  # seconds
 
 
 def get_collect_telemetry_events_handler(send_telemetry_events_handler):
@@ -248,17 +254,39 @@ class _ProcessExtensionEvents(PeriodicOperation):
                                      ustr(error))
                         log_err = False
 
+    @staticmethod
+    def _read_event_file(event_file_path):
+        """
+        Read the event file and return the data.
+        :param event_file_path: Full path of the event file.
+        :return: Event data in list or string format.
+        """
+        # Retry for reading the event file in case file is modified while reading
+        # We except FileNotFoundError and ValueError to handle the case where the file is deleted or modified while reading
+        error_count = 0
+        while True:
+            try:
+                # Read event file and decode it properly
+                with open(event_file_path, "rb") as event_file_descriptor:
+                    event_data = event_file_descriptor.read().decode("utf-8")
+
+                # Parse the string and get the list of events
+                return json.loads(event_data)
+            except Exception as e:
+                if is_file_not_found_error(e) or isinstance(e, ValueError):
+                    error_count += 1
+                    if error_count >= NUM_OF_EVENT_FILE_RETRIES:
+                        raise
+                else:
+                    raise
+            time.sleep(EVENT_FILE_RETRY_DELAY)
+
     def _enqueue_events_and_get_count(self, handler_name, event_file_path, captured_events_count,
                                       dropped_events_with_error_count):
 
-        event_file_time = datetime.datetime.fromtimestamp(os.path.getmtime(event_file_path))
+        event_file_time = datetime.datetime.fromtimestamp(os.path.getmtime(event_file_path)).replace(tzinfo=UTC)
 
-        # Read event file and decode it properly
-        with open(event_file_path, "rb") as event_file_descriptor:
-            event_data = event_file_descriptor.read().decode("utf-8")
-
-        # Parse the string and get the list of events
-        events = json.loads(event_data)
+        events = self._read_event_file(event_file_path)
 
         # We allow multiple events in a file but there can be an instance where the file only has a single
         # JSON event and not a list. Handling that condition too
@@ -330,7 +358,9 @@ class _ProcessExtensionEvents(PeriodicOperation):
                 if isinstance(v, int):
                     if k.lower() in [ExtensionEventSchema.EventPid.lower(), ExtensionEventSchema.EventTid.lower()]:
                         return str(v)
-                return v.strip()
+                unredacted = v.strip()
+                # redact the sas token from the event
+                return redact_sas_token(unredacted)
             return v
 
         event_size = 0
@@ -431,10 +461,8 @@ class _CollectAndEnqueueEvents(PeriodicOperation):
                 try:
                     logger.verbose("Processing event file: {0}", event_file_path)
 
-                    with open(event_file_path, "rb") as event_fd:
-                        event_data = event_fd.read().decode("utf-8")
-
-                    event = parse_event(event_data)
+                    event = self._read_and_parse_event_file(event_file_path)
+                    redact_event_msg(event)
 
                     # "legacy" events are events produced by previous versions of the agent (<= 2.2.46) and extensions;
                     # they do not include all the telemetry fields, so we add them here
@@ -443,7 +471,7 @@ class _CollectAndEnqueueEvents(PeriodicOperation):
                     if is_legacy_event:
                         # We'll use the file creation time for the event's timestamp
                         event_file_creation_time_epoch = os.path.getmtime(event_file_path)
-                        event_file_creation_time = datetime.datetime.fromtimestamp(event_file_creation_time_epoch)
+                        event_file_creation_time = datetime.datetime.fromtimestamp(event_file_creation_time_epoch).replace(tzinfo=UTC)
 
                         if event.is_extension_event():
                             _CollectAndEnqueueEvents._trim_legacy_extension_event_parameters(event)
@@ -458,7 +486,8 @@ class _CollectAndEnqueueEvents(PeriodicOperation):
                     # Todo: We should delete files after ensuring that we sent the data to Wireserver successfully
                     # from our end rather than deleting first and sending later. This is to ensure the data reliability
                     # of the agent telemetry pipeline.
-                    os.remove(event_file_path)
+                    if os.path.exists(event_file_path):
+                        os.remove(event_file_path)
             except ServiceStoppedError as stopped_error:
                 logger.error(
                     "Unable to enqueue events as service stopped: {0}, skipping events collection".format(
@@ -469,6 +498,30 @@ class _CollectAndEnqueueEvents(PeriodicOperation):
                 debug_info.update_op_error(error)
 
         debug_info.report_debug_info()
+
+    @staticmethod
+    def _read_and_parse_event_file(event_file_path):
+        """
+        Read the event file and parse it to a TelemetryEvent object.
+        :param event_file_path: Full path of the event file.
+        :return: TelemetryEvent object.
+        """
+        # Retry for reading the event file in case file is modified while reading
+        # We except FileNotFoundError and ValueError to handle the case where the file is deleted or modified while reading
+        error_count = 0
+        while True:
+            try:
+                with open(event_file_path, "rb") as event_fd:
+                    event_data = event_fd.read().decode("utf-8")
+                return parse_event(event_data)
+            except Exception as e:
+                if is_file_not_found_error(e) or isinstance(e, ValueError):
+                    error_count += 1
+                    if error_count >= NUM_OF_EVENT_FILE_RETRIES:
+                        raise
+                else:
+                    raise EventError("Error parsing event: {0}".format(ustr(e)))
+            time.sleep(EVENT_FILE_RETRY_DELAY)
 
     @staticmethod
     def _update_legacy_agent_event(event, event_creation_time):

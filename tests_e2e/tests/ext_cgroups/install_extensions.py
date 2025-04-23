@@ -16,7 +16,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from datetime import datetime, timedelta
 from pathlib import Path
 
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
@@ -35,7 +34,6 @@ class InstallExtensions:
         self._ssh_client = self._context.create_ssh_client()
 
     def run(self):
-        self._prepare_agent()
         # Install the GATest extension to test service cgroups
         self._install_gatest_extension()
         # Install the Azure Monitor Agent to test long running process cgroup
@@ -44,18 +42,6 @@ class InstallExtensions:
         self._install_vmaccess()
         # Install the CSE extension to test extension cgroup
         self._install_cse()
-
-    def _prepare_agent(self):
-        log.info("=====Executing update-waagent-conf remote script to update monitoring deadline flag for tracking azuremonitoragent service")
-        future_date = datetime.utcnow() + timedelta(days=2)
-        expiry_time = future_date.date().strftime("%Y-%m-%d")
-        # Agent needs extension info and it's services info in the handlermanifest.xml to monitor and limit the resource usage.
-        # As part of pilot testing , agent hardcoded azuremonitoragent service name to monitor it for sometime in production without need of manifest update from extesnion side.
-        # So that they can get sense of resource usage for their extensions. This we did for few months and now we no logner monitoring it in production.
-        # But we are changing the config flag expiry time to future date in this test. So that test agent will start track the cgroups that is used by the service.
-        result = self._ssh_client.run_command(f"update-waagent-conf Debug.CgroupMonitorExpiryTime={expiry_time}", use_sudo=True)
-        log.info(result)
-        log.info("Updated agent cgroups config(CgroupMonitorExpiryTime)")
 
     def _install_ama(self):
         ama_extension = VirtualMachineExtensionClient(

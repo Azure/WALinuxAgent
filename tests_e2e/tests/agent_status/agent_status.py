@@ -28,6 +28,8 @@ from datetime import datetime, timedelta
 from time import sleep
 import json
 
+from azurelinuxagent.common.future import UTC
+
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.logging import log
@@ -138,14 +140,14 @@ class AgentStatus(AgentVmTest):
         log.info("")
         log.info("*******Verifying the agent status updates 3 times*******")
 
-        timeout = datetime.now() + timedelta(minutes=6)
+        timeout = datetime.now(UTC) + timedelta(minutes=6)
         instance_view_exception = None
         status_updated = 0
         prev_status_timestamp = None
         prev_gs_processed_log = None
 
         # Retry validating agent status updates 2 times with timeout of 6 minutes
-        while datetime.now() <= timeout and status_updated < 2:
+        while datetime.now(UTC) <= timeout and status_updated < 2:
             instance_view = self._context.vm.get_instance_view()
             log.info("")
             log.info(

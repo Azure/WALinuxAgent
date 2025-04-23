@@ -1,12 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
-import datetime
 import logging
 import random
 import re
-import traceback
 import urllib.parse
-import uuid
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Type
@@ -17,12 +14,11 @@ from dataclasses_json import dataclass_json  # pylint: disable=E0401
 # Disable those warnings, since 'lisa' is an external, non-standard, dependency
 #     E0401: Unable to import 'lisa' (import-error)
 #     etc
-from lisa import notifier, schema  # pylint: disable=E0401
+from lisa import schema  # pylint: disable=E0401
 from lisa.combinator import Combinator  # pylint: disable=E0401
-from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
 from lisa.util import field_metadata  # pylint: disable=E0401
 
-from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, VmImageInfo, TestSuiteInfo
+from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, VmImageInfo, TestSuiteInfo, CustomImage
 from tests_e2e.tests.lib.logging import set_thread_name
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 from tests_e2e.tests.lib.virtual_machine_scale_set_client import VirtualMachineScaleSetClient
@@ -171,10 +167,10 @@ class AgentTestSuitesCombinator(Combinator):
                     vhd = image.urn
                     image_name = urllib.parse.urlparse(vhd).path.split('/')[-1]  # take the last fragment of the URL's path (e.g. "RHEL_8_Standard-8.3.202006170423.vhd")
                     shared_gallery = ""
-                elif self._is_image_from_gallery(image.urn):
+                elif CustomImage._is_image_from_gallery(image.urn):
                     marketplace_image = ""
                     vhd = ""
-                    image_name = self._get_name_of_image_from_gallery(image.urn)
+                    image_name = CustomImage._get_name_of_image_from_gallery(image.urn)
                     shared_gallery = image.urn
                 else:
                     marketplace_image = image.urn
@@ -451,7 +447,7 @@ class AgentTestSuitesCombinator(Combinator):
             return images
 
         # If it is not image or image set, it must be a URN, VHD, or an image from a gallery
-        if not self._is_urn(self.runbook.image) and not self._is_vhd(self.runbook.image) and not self._is_image_from_gallery(self.runbook.image):
+        if not self._is_urn(self.runbook.image) and not self._is_vhd(self.runbook.image) and not CustomImage._is_image_from_gallery(self.runbook.image):
             raise Exception(f"The 'image' parameter must be an image, image set name, urn, vhd, or an image from a shared gallery: {self.runbook.image}")
 
         i = VmImageInfo()
@@ -472,7 +468,15 @@ class AgentTestSuitesCombinator(Combinator):
         for image in suite.images:
             match = AgentTestLoader.RANDOM_IMAGES_RE.match(image)
             if match is None:
-                image_list = loader.images[image]
+                # Added this condition for galley image as they don't have definition in images.yml
+                if CustomImage._is_image_from_gallery(image):
+                    i = VmImageInfo()
+                    i.urn = image
+                    i.locations = []
+                    i.vm_sizes = []
+                    image_list = [i]
+                else:
+                    image_list = loader.images[image]
             else:
                 count = match.group('count')
                 if count is None:
@@ -565,52 +569,3 @@ class AgentTestSuitesCombinator(Combinator):
         # VHDs are given as URIs to storage; do some basic validation, not intending to be exhaustive.
         parsed = urllib.parse.urlparse(vhd)
         return parsed.scheme == 'https' and parsed.netloc != "" and parsed.path != ""
-
-    # Images from a gallery are given as  "<image_gallery>/<image_definition>/<image_version>".
-    _IMAGE_FROM_GALLERY = re.compile(r"(?P<gallery>[^/]+)/(?P<image>[^/]+)/(?P<version>[^/]+)")
-
-    @staticmethod
-    def _is_image_from_gallery(image: str) -> bool:
-        return AgentTestSuitesCombinator._IMAGE_FROM_GALLERY.match(image) is not None
-
-    @staticmethod
-    def _get_name_of_image_from_gallery(image: str) -> bool:
-        match = AgentTestSuitesCombinator._IMAGE_FROM_GALLERY.match(image)
-        if match is None:
-            raise Exception(f"Invalid image from gallery: {image}")
-        return match.group('image')
-
-    @staticmethod
-    def _report_test_result(
-            suite_name: str,
-            test_name: str,
-            status: TestStatus,
-            start_time: datetime.datetime,
-            message: str = "",
-            add_exception_stack_trace: bool = False
-    ) -> None:
-        """
-        Reports a test result to the junit notifier
-        """
-        # The junit notifier requires an initial RUNNING message in order to register the test in its internal cache.
-        msg: TestResultMessage = TestResultMessage()
-        msg.type = "AgentTestResultMessage"
-        msg.id_ = str(uuid.uuid4())
-        msg.status = TestStatus.RUNNING
-        msg.suite_full_name = suite_name
-        msg.suite_name = msg.suite_full_name
-        msg.full_name = test_name
-        msg.name = msg.full_name
-        msg.elapsed = 0
-
-        notifier.notify(msg)
-
-        # Now send the actual result. The notifier pipeline makes a deep copy of the message so it is OK to re-use the
-        # same object and just update a few fields. If using a different object, be sure that the "id_" is the same.
-        msg.status = status
-        msg.message = message
-        if add_exception_stack_trace:
-            msg.stacktrace = traceback.format_exc()
-        msg.elapsed = (datetime.datetime.now() - start_time).total_seconds()
-
-        notifier.notify(msg)

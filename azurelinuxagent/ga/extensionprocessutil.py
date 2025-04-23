@@ -18,7 +18,6 @@
 #
 
 import os
-import re
 import signal
 import time
 
@@ -31,7 +30,7 @@ from azurelinuxagent.common.future import ustr
 TELEMETRY_MESSAGE_MAX_LEN = 3200
 
 
-def wait_for_process_completion_or_timeout(process, timeout, cpu_metrics):
+def wait_for_process_completion_or_timeout(process, timeout, cpu_controller):
     """
     Utility function that waits for the process to complete within the given time frame. This function will terminate
     the process if when the given time frame elapses.
@@ -47,7 +46,7 @@ def wait_for_process_completion_or_timeout(process, timeout, cpu_metrics):
     throttled_time = 0
 
     if timeout == 0:
-        throttled_time = get_cpu_throttled_time(cpu_metrics)
+        throttled_time = get_cpu_throttled_time(cpu_controller)
         os.killpg(os.getpgid(process.pid), signal.SIGKILL)
     else:
         # process completed or forked; sleep 1 sec to give the child process (if any) a chance to start
@@ -57,7 +56,7 @@ def wait_for_process_completion_or_timeout(process, timeout, cpu_metrics):
     return timeout == 0, return_code, throttled_time
 
 
-def handle_process_completion(process, command, timeout, stdout, stderr, error_code, cpu_metrics=None):
+def handle_process_completion(process, command, timeout, stdout, stderr, error_code, cpu_controller=None):
     """
     Utility function that waits for process completion and retrieves its output (stdout and stderr) if it completed
     before the timeout period. Otherwise, the process will get killed and an ExtensionError will be raised.
@@ -68,15 +67,15 @@ def handle_process_completion(process, command, timeout, stdout, stderr, error_c
     :param stdout: Must be a file since we seek on it when parsing the subprocess output
     :param stderr: Must be a file since we seek on it when parsing the subprocess outputs
     :param error_code: The error code to set if we raise an ExtensionError
-    :param cpu_metrics: References the cpu metrics for the cgroup
+    :param cpu_controller: References the cpu controller for the cgroup
     :return:
     """
     # Wait for process completion or timeout
-    timed_out, return_code, throttled_time = wait_for_process_completion_or_timeout(process, timeout, cpu_metrics)
+    timed_out, return_code, throttled_time = wait_for_process_completion_or_timeout(process, timeout, cpu_controller)
     process_output = read_output(stdout, stderr)
 
     if timed_out:
-        if cpu_metrics is not None: # Report CPUThrottledTime when timeout happens
+        if cpu_controller is not None: # Report CPUThrottledTime when timeout happens
             raise ExtensionError("Timeout({0});CPUThrottledTime({1}secs): {2}\n{3}".format(timeout, throttled_time, command, process_output),
                                  code=ExtensionErrorCodes.PluginHandlerScriptTimedout)
 
@@ -140,9 +139,6 @@ def _check_noexec():
     return None
 
 
-SAS_TOKEN_RE = re.compile(r'(https://\S+\?)((sv|st|se|sr|sp|sip|spr|sig)=\S+)+', flags=re.IGNORECASE)
-
-
 def read_output(stdout, stderr):
     """
     Read the output of the process sent to stdout and stderr and trim them to the max appropriate length.
@@ -159,11 +155,7 @@ def read_output(stdout, stderr):
         stderr = ustr(stderr.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8',
                       errors='backslashreplace')
 
-        def redact(s):
-            # redact query strings that look like SAS tokens
-            return SAS_TOKEN_RE.sub(r'\1<redacted>', s)
-
-        return format_stdout_stderr(redact(stdout), redact(stderr))
+        return format_stdout_stderr(stdout, stderr)
     except Exception as e:
         return format_stdout_stderr("", "Cannot read stdout/stderr: {0}".format(ustr(e)))
 
@@ -211,14 +203,14 @@ def format_stdout_stderr(stdout, stderr):
         return to_s(stdout, -1*max_len_each, stderr, -1*max_len_each)
 
 
-def get_cpu_throttled_time(cpu_metrics):
+def get_cpu_throttled_time(cpu_controller):
     """
     return the throttled time for the given cgroup.
     """
     throttled_time = 0
-    if cpu_metrics is not None:
+    if cpu_controller is not None:
         try:
-            throttled_time = cpu_metrics.get_cpu_throttled_time(read_previous_throttled_time=False)
+            throttled_time = cpu_controller.get_cpu_throttled_time(read_previous_throttled_time=False)
         except Exception as e:
             logger.warn("Failed to get cpu throttled time for the extension: {0}", ustr(e))
 

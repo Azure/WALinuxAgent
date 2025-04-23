@@ -19,15 +19,12 @@ import os
 import tempfile
 import unittest
 
-import azurelinuxagent.common.osutil.default as osutil  # pylint: disable=unused-import
 import azurelinuxagent.common.protocol.metadata_server_migration_util as migration_util
 
 from azurelinuxagent.common.protocol.metadata_server_migration_util import _LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME, \
                                                                            _LEGACY_METADATA_SERVER_TRANSPORT_CERT_FILE_NAME, \
-                                                                           _LEGACY_METADATA_SERVER_P7B_FILE_NAME, \
-                                                                           _KNOWN_METADATASERVER_IP
-from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
-from tests.lib.tools import AgentTestCase, patch, MagicMock
+                                                                           _LEGACY_METADATA_SERVER_P7B_FILE_NAME
+from tests.lib.tools import AgentTestCase, patch
 
 class TestMetadataServerMigrationUtil(AgentTestCase):
     @patch('azurelinuxagent.common.conf.get_lib_dir')
@@ -48,13 +45,13 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
     def test_cleanup_metadata_server_artifacts_does_not_throw_with_no_metadata_certs(self, mock_get_lib_dir, mock_enable_firewall):
         mock_get_lib_dir.return_value = tempfile.gettempdir()
         mock_enable_firewall.return_value = False
-        osutil = MagicMock()  # pylint: disable=redefined-outer-name
-        migration_util.cleanup_metadata_server_artifacts(osutil)
+        migration_util.cleanup_metadata_server_artifacts()
 
     @patch('azurelinuxagent.common.conf.enable_firewall')
     @patch('azurelinuxagent.common.conf.get_lib_dir')
     @patch('os.getuid')
-    def test_cleanup_metadata_server_artifacts_firewall_enabled(self, mock_os_getuid, mock_get_lib_dir, mock_enable_firewall):
+    @patch("azurelinuxagent.common.protocol.metadata_server_migration_util._get_firewall_will_wait", return_value="-w")
+    def test_cleanup_metadata_server_artifacts_firewall_enabled(self, _, mock_os_getuid, mock_get_lib_dir, mock_enable_firewall):
         # Setup Certificate Files
         dir = tempfile.gettempdir()  # pylint: disable=redefined-builtin
         metadata_server_transport_prv_file = os.path.join(dir, _LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME)
@@ -69,11 +66,10 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
         mock_enable_firewall.return_value = True
         fixed_uid = 0
         mock_os_getuid.return_value = fixed_uid
-        osutil = MagicMock()  # pylint: disable=redefined-outer-name
-        osutil.enable_firewall.return_value = (MagicMock(), MagicMock())
 
         # Run
-        migration_util.cleanup_metadata_server_artifacts(osutil)
+        with patch("azurelinuxagent.common.protocol.metadata_server_migration_util._remove_firewall") as mock_remove_firewall:
+            migration_util.cleanup_metadata_server_artifacts()
 
         # Assert files deleted
         self.assertFalse(os.path.exists(metadata_server_transport_prv_file))
@@ -81,13 +77,13 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
         self.assertFalse(os.path.exists(metadata_server_p7b_file))
 
         # Assert Firewall rule calls
-        osutil.remove_firewall.assert_called_once_with(dst_ip=_KNOWN_METADATASERVER_IP, uid=fixed_uid, wait=osutil.get_firewall_will_wait())
-        osutil.enable_firewall.assert_called_once_with(dst_ip=KNOWN_WIRESERVER_IP, uid=fixed_uid)
+        self.assertEqual(1, mock_remove_firewall.call_count, "_remove_firewall should be called once")
 
     @patch('azurelinuxagent.common.conf.enable_firewall')
     @patch('azurelinuxagent.common.conf.get_lib_dir')
     @patch('os.getuid')
-    def test_cleanup_metadata_server_artifacts_firewall_disabled(self, mock_os_getuid, mock_get_lib_dir, mock_enable_firewall):
+    @patch("azurelinuxagent.common.protocol.metadata_server_migration_util._get_firewall_will_wait", return_value="-w")
+    def test_cleanup_metadata_server_artifacts_firewall_disabled(self, _, mock_os_getuid, mock_get_lib_dir, mock_enable_firewall):
         # Setup Certificate Files
         dir = tempfile.gettempdir()  # pylint: disable=redefined-builtin
         metadata_server_transport_prv_file = os.path.join(dir, _LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME)
@@ -102,10 +98,10 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
         mock_enable_firewall.return_value = False
         fixed_uid = 0
         mock_os_getuid.return_value = fixed_uid
-        osutil = MagicMock()  # pylint: disable=redefined-outer-name
 
         # Run
-        migration_util.cleanup_metadata_server_artifacts(osutil)
+        with patch("azurelinuxagent.common.protocol.metadata_server_migration_util._remove_firewall") as mock_remove_firewall:
+            migration_util.cleanup_metadata_server_artifacts()
 
         # Assert files deleted
         self.assertFalse(os.path.exists(metadata_server_transport_prv_file))
@@ -113,8 +109,7 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
         self.assertFalse(os.path.exists(metadata_server_p7b_file))
 
         # Assert Firewall rule calls
-        osutil.remove_firewall.assert_called_once_with(dst_ip=_KNOWN_METADATASERVER_IP, uid=fixed_uid, wait=osutil.get_firewall_will_wait())
-        osutil.enable_firewall.assert_not_called()
+        self.assertEqual(1, mock_remove_firewall.call_count, "_remove_firewall should be called once")
 
     # Cleanup certificate files
     def tearDown(self):

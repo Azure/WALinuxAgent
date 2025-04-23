@@ -28,7 +28,7 @@ from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_HOST_PLUGI
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common.exception import HttpError, ProtocolError, ResourceGoneError
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.future import ustr, httpclient
+from azurelinuxagent.common.future import ustr, httpclient, UTC, datetime_min_utc
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.extensions_goal_state import VmSettingsParseError, GoalStateSource
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
@@ -89,19 +89,13 @@ class HostPluginProtocol(object):
         self.status_last_timestamp = None
         self._version = FlexibleVersion("0.0.0.0")  # Version 0 means "unknown"
         self._supports_vm_settings = None   # Tri-state variable: None == Not Initialized, True == Supports, False == Does Not Support
-        self._supports_vm_settings_next_check = datetime.datetime.now()
+        self._supports_vm_settings_next_check = datetime.datetime.now(UTC)
         self._vm_settings_error_reporter = _VmSettingsErrorReporter()
         self._cached_vm_settings = None  # Cached value of the most recent vmSettings
 
         # restore the state of Fast Track
-        if not os.path.exists(self._get_fast_track_state_file()):
-            self._supports_vm_settings = False
-            self._supports_vm_settings_next_check = datetime.datetime.now()
-            self._fast_track_timestamp = timeutil.create_timestamp(datetime.datetime.min)
-        else:
-            self._supports_vm_settings = True
-            self._supports_vm_settings_next_check = datetime.datetime.now()
-            self._fast_track_timestamp = HostPluginProtocol.get_fast_track_timestamp()
+        self._supports_vm_settings = os.path.exists(self._get_fast_track_state_file())
+        self._fast_track_timestamp = HostPluginProtocol.get_fast_track_timestamp()
 
     @staticmethod
     def _extract_deployment_id(role_config_name):
@@ -215,7 +209,7 @@ class HostPluginProtocol(object):
                               self.fetch_error_state,
                               self.fetch_last_timestamp,
                               HostPluginProtocol.FETCH_REPORTING_PERIOD):
-            self.fetch_last_timestamp = datetime.datetime.utcnow()
+            self.fetch_last_timestamp = datetime.datetime.now(UTC)
             health_signal = self.fetch_error_state.is_triggered() is False
             self.health_service.report_host_plugin_extension_artifact(is_healthy=health_signal,
                                                                       source=source,
@@ -226,7 +220,7 @@ class HostPluginProtocol(object):
                               self.status_error_state,
                               self.status_last_timestamp,
                               HostPluginProtocol.STATUS_REPORTING_PERIOD):
-            self.status_last_timestamp = datetime.datetime.utcnow()
+            self.status_last_timestamp = datetime.datetime.now(UTC)
             health_signal = self.status_error_state.is_triggered() is False
             self.health_service.report_host_plugin_status(is_healthy=health_signal,
                                                           response=response)
@@ -251,9 +245,9 @@ class HostPluginProtocol(object):
             error_state.incr()
 
         if last_timestamp is None:
-            last_timestamp = datetime.datetime.utcnow() - period
+            last_timestamp = datetime.datetime.now(UTC) - period
 
-        return datetime.datetime.utcnow() >= (last_timestamp + period)
+        return datetime.datetime.now(UTC) >= (last_timestamp + period)
 
     def put_vm_log(self, content):
         """
@@ -449,20 +443,20 @@ class HostPluginProtocol(object):
     @staticmethod
     def get_fast_track_timestamp():
         """
-        Returns the timestamp of the most recent FastTrack goal state retrieved by fetch_vm_settings(), or None if the most recent
-        goal state was Fabric or fetch_vm_settings() has not been invoked.
+        Returns the timestamp of the most recent FastTrack goal state retrieved by fetch_vm_settings(), or a timestamp representing datetime.min if
+        the most recent goal state was Fabric or fetch_vm_settings() has not been invoked.
         """
         with HostPluginProtocol._fast_track_state_lock:
-            if not os.path.exists(HostPluginProtocol._get_fast_track_state_file()):
-                return timeutil.create_timestamp(datetime.datetime.min)
+            state_file = HostPluginProtocol._get_fast_track_state_file()
+            if not os.path.exists(state_file):
+                return timeutil.create_utc_timestamp(datetime_min_utc)
 
             try:
-                with open(HostPluginProtocol._get_fast_track_state_file(), "r") as file_:
+                with open(state_file, "r") as file_:
                     return json.load(file_)["timestamp"]
             except Exception as e:
-                logger.warn("Can't retrieve the timestamp for the most recent Fast Track goal state ({0}), will assume the current time. Error: {1}",
-                        HostPluginProtocol._get_fast_track_state_file(), ustr(e))
-            return timeutil.create_timestamp(datetime.datetime.utcnow())
+                logger.warn("Can't retrieve the timestamp for the most recent Fast Track goal state ({0}), will assume the current time. Error: {1}", state_file, ustr(e))
+            return timeutil.create_utc_timestamp(datetime.datetime.now(UTC))
 
     def fetch_vm_settings(self, force_update=False):
         """
@@ -490,7 +484,7 @@ class HostPluginProtocol(object):
                     raise VmSettingsNotSupported()
             finally:
                 self._supports_vm_settings = False
-                self._supports_vm_settings_next_check = datetime.datetime.now() + datetime.timedelta(hours=6)  # check again in 6 hours
+                self._supports_vm_settings_next_check = datetime.datetime.now(UTC) + datetime.timedelta(hours=6)  # check again in 6 hours
 
         def format_message(msg):
             return "GET vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, msg)
@@ -498,7 +492,7 @@ class HostPluginProtocol(object):
         try:
             # Raise if VmSettings are not supported, but check again periodically since the HostGAPlugin could have been updated since the last check
             # Note that self._host_plugin_supports_vm_settings can be None, so we need to compare against False
-            if not self._supports_vm_settings and self._supports_vm_settings_next_check > datetime.datetime.now():
+            if not self._supports_vm_settings and self._supports_vm_settings_next_check > datetime.datetime.now(UTC):
                 # Raise VmSettingsNotSupported directly instead of using raise_not_supported() to avoid resetting the timestamp for the next check
                 raise VmSettingsNotSupported()
 
@@ -626,7 +620,7 @@ class _VmSettingsErrorReporter(object):
         self._request_failure_count = 0  # Total count of requests that could not be issued (does not include timeouts or requests that were actually issued and failed, for example, with 500 or 400 statuses)
         self._server_error_count = 0  # Count of server side errors (HTTP status in the 500s)
         self._timeout_count = 0  # Count of timeouts on vmSettings requests
-        self._next_period = datetime.datetime.now() + _VmSettingsErrorReporter._Period
+        self._next_period = datetime.datetime.now(UTC) + _VmSettingsErrorReporter._Period
 
     def report_request(self):
         self._request_count += 1
@@ -649,7 +643,7 @@ class _VmSettingsErrorReporter(object):
             self._timeout_count += 1
 
     def report_summary(self):
-        if datetime.datetime.now() >= self._next_period:
+        if datetime.datetime.now(UTC) >= self._next_period:
             summary = {
                 "requests":       self._request_count,
                 "errors":         self._error_count,
