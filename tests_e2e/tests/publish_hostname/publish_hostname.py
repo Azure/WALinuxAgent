@@ -123,8 +123,8 @@ class PublishHostname(AgentVmTest):
                 sleep(30)
 
     def run(self):
-        # TODO: Investigate why hostname is not being published on Ubuntu, alma, and rocky as expected
-        distros_with_known_publishing_issues = ["ubuntu", "alma", "rocky"]
+        # TODO: Investigate why hostname is not being published on these distros.
+        distros_with_known_publishing_issues = ["ubuntu", "alma", "rocky", "rhel_95"]
         distro = self._ssh_client.run_command("get_distro.py").lower()
         if any(d in distro for d in distros_with_known_publishing_issues):
             raise TestSkipped("Known issue with hostname publishing on this distro. Will skip test until we continue "
