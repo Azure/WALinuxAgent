@@ -174,10 +174,6 @@ images:
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
-   oracle_95:
-      urn: "Oracle Oracle-Linux ol95-lvm-gen2 latest"
-      locations:
-         AzureChinaCloud: []
    rhel_610: "RedHat RHEL 6.10 latest"
    rhel_75:
       urn: "RedHat RHEL 7.5 latest"
