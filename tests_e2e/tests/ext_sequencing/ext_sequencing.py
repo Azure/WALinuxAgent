@@ -186,7 +186,7 @@ class ExtSequencing(AgentVmssTest):
         }
 
         for case in self._test_cases:
-            test_case_start = random.choice(list(ssh_clients.values())).run_command("date '+%Y-%m-%d %T'").rstrip()
+            test_case_start = random.choice(list(ssh_clients.values())).run_command("date --utc '+%Y-%m-%d %T'").rstrip()
             if self._scenario_start == datetime_min_utc:
                 self._scenario_start = test_case_start
 
