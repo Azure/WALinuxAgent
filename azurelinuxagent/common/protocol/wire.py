@@ -48,7 +48,7 @@ from azurelinuxagent.common.utils.restutil import TELEMETRY_THROTTLE_DELAY_IN_SE
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, gettext, remove_bom, get_bytes_from_pem, parse_json, redact_sas_token
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
-from azurelinuxagent.ga.signature_validation import validate_signature, PackageValidationError, SignatureValidationError
+from azurelinuxagent.ga.signature_validation import validate_signature, SignatureValidationError
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
 HEALTH_REPORT_URI = "http://{0}/machine?comp=health"
@@ -613,7 +613,7 @@ class WireClient(object):
 
         return self._download_with_fallback_channel(download_type, uris, direct_download=direct_download, hgap_download=hgap_download)
 
-    def download_zip_package(self, package_type, uris, target_file, target_directory, use_verify_header, signature=None, package_name=None, package_version=None):
+    def download_zip_package(self, package_type, uris, target_file, target_directory, use_verify_header, signature):
         """
         Downloads the ZIP package specified in 'uris' (which is a list of alternate locations for the ZIP), saving it to 'target_file' and then expanding
         its contents to 'target_directory'. Deletes the target file after it has been expanded.
@@ -623,10 +623,8 @@ class WireClient(object):
 
         The 'use_verify_header' parameter indicates whether the verify header should be added when using the extensionArtifact API of the HostGAPlugin.
 
-        The 'signature' parameter should be a base64-encoded signature string. If specified, package signature will be validated
+        The 'signature' parameter should be a base64-encoded signature string. If signature is not an empty string, package signature will be validated
         immediately after downloading the package but before expanding it.
-
-        'package_name' and 'package_version' are optional and only used to report telemetry during signature validation.
         """
         host_ga_plugin = self.get_host_plugin()
 
@@ -637,19 +635,29 @@ class WireClient(object):
             return self.stream(request_uri, target_file, headers=request_headers, use_proxy=False)
 
         def on_downloaded():
-            # If 'signature' parameter is specified, validate package signature immediately after download.
+            # If 'signature' parameter is not empty, validate the zip package signature immediately after download.
+            # Signature validation errors are caught and stored, allowing download to proceed. After zip package extraction,
+            # the error is re-raised to surface the failure. This ensures we collect telemetry when validation fails.
+            # In future releases, once sufficient telemetry is collected and we gain confidence in the validation process,
+            # extraction will be blocked if signature validation fails, and the zip will be removed.
+            #
+            # TODO: Allow users to opt-in to signature validation enforcement. This function should accept a boolean
+            # flag specifying if package extraction should be blocked when validation fails.
             validation_error = None
-            if signature is not None:
+            if signature != "":
                 try:
-                    validate_signature(target_file, signature, package_name, package_version)
-                except SignatureValidationError as ex:
-                    # TODO: raise error here if signature validation result should be enforced
+                    validate_signature(target_file, signature)
+                except SignatureValidationError as ex:  # validate_signature() will only raise SignatureValidationError
+                    # TODO: raise error and cleanup zip file if signature validation result should be enforced
                     validation_error = ex
 
             WireClient._try_expand_zip_package(package_type, target_file, target_directory)
+
+            # Surface any validation errors after extraction for telemetry collection
             if validation_error is not None:
                 raise validation_error
 
+        # If on_downloaded() raises a SignatureValidationError, _download_with_fallback_channel will not attempt retries with other URIs, error will propagate immediately.
         self._download_with_fallback_channel(package_type, uris, direct_download=direct_download, hgap_download=hgap_download, on_downloaded=on_downloaded)
 
     def _download_with_fallback_channel(self, download_type, uris, direct_download, hgap_download, on_downloaded=None):
@@ -692,7 +700,7 @@ class WireClient(object):
                     on_downloaded()
 
                 return uri, response
-            except PackageValidationError:
+            except SignatureValidationError:
                 # If download fails due to package signature validation, do not retry.
                 raise
             except Exception as exception:

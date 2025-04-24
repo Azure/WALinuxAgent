@@ -24,9 +24,9 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.utils.shellutil import run_command, CommandError
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.ga.signing_certificate_util import get_microsoft_signing_certificate_path
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.future import ustr
 
 
 # This file tracks the state of signature validation for the package. If the file exists, signature has been validated.
@@ -48,13 +48,13 @@ class PackageValidationError(AgentError):
 
 class SignatureValidationError(PackageValidationError):
     """
-    Error raised when signature validation fails for an extension.
+    Error raised when signature validation fails for a package.
     """
 
 
 class ManifestValidationError(PackageValidationError):
     """
-    Error raised when handler manifest 'signingInfo' validation fails for an extension.
+    Error raised when handler manifest 'signingInfo' validation fails for a package.
     """
 
 
@@ -103,19 +103,14 @@ def _write_signature_to_file(sig_string, output_file):
         f.write(binary_signature)
 
 
-def validate_signature(package_path, signature, package_name=None, package_version=None):
+def validate_signature(package_path, signature):
     """
     Validates signature of provided package using OpenSSL CLI. The verification checks the signature against a trusted
     Microsoft root certificate but does not enforce certificate expiration.
     :param package_path: path to package file being validated
     :param signature: base64-encoded signature string
-    :param package_name: name of package used only for telemetry
-    :param package_version: package version only used for telemetry
     :raises SignatureValidationError: if signature validation fails
     """
-    msg ="Validating signature of package '{0}'".format(package_path)
-    logger.info(msg)
-    add_event(op=WALAEventOperation.SignatureValidation, message=msg, name=package_name, version=package_version, is_success=True)
     signature_file_name = os.path.basename(package_path) + "_signature.pem"
     signature_path = os.path.join(conf.get_lib_dir(), str(signature_file_name))
 
@@ -129,8 +124,6 @@ def validate_signature(package_path, signature, package_name=None, package_versi
                 "signing certificate was not found at expected location ('{1}'). "
                 "Try restarting the agent, or see log ('{2}') for additional details."
             ).format(package_path, microsoft_root_cert_file, conf.get_agent_log_file())
-            logger.error(msg)
-            add_event(op=WALAEventOperation.SignatureValidation, message=msg, name=package_name, version=package_version, is_success=False)
             raise SignatureValidationError(msg=msg)
 
         # Use OpenSSL CLI to verify that the provided signature file correctly signs the package. The verification
@@ -151,12 +144,13 @@ def validate_signature(package_path, signature, package_name=None, package_versi
             '-no_check_time'  # Skips checking whether the certificate is expired
         ]
         run_command(command, encode_output=False)
-        msg = "Successfully validated signature for package '{0}'.".format(package_path)
-        logger.info(msg)
-        add_event(op=WALAEventOperation.SignatureValidation, message=msg, name=package_name, version=package_version, is_success=True)
 
     except CommandError as ex:
         msg = "Signature validation failed for package '{0}'. \nReturn code: {1}\nError details:\n{2}".format(package_path, ex.returncode, ex.stderr)
+        raise SignatureValidationError(msg=msg)
+
+    except Exception as ex:
+        msg = "Signature validation failed for package '{0}'. Error: {1}".format(package_path, ustr(ex))
         raise SignatureValidationError(msg=msg)
 
     finally:
@@ -172,13 +166,8 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
 
     :param manifest: HandlerManifest object
     :param ext_handler: Extension object
-    :raises SignatureValidationError: if handler manifest validation fails
+    :raises ManifestValidationError: if handler manifest validation fails
     """
-    msg = "Validating handler manifest 'signingInfo' of package '{0}'".format(ext_handler.name)
-    logger.info(msg)
-    add_event(op=WALAEventOperation.SignatureValidation, message=msg, name=ext_handler.name, version=ext_handler.version,
-              is_success=True)
-
     man_signing_info = manifest.data.get("signingInfo")
     if man_signing_info is None:
         msg = "HandlerManifest.json does not contain 'signingInfo'"
@@ -216,10 +205,6 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
         msg = "expected extension version '{0}' does not match downloaded package version '{1}' (specified in HandlerManifest.json)".format(
             ext_handler.version, signing_info_version)
         raise ManifestValidationError(msg=msg)
-
-    msg = "Successfully validated handler manifest 'signingInfo' for extension '{0}'".format(ext_handler)
-    logger.info(msg)
-    add_event(op=WALAEventOperation.SignatureValidation, message=msg, name=ext_handler.name, version=ext_handler.version, is_success=True)
 
 
 def save_signature_validation_state(target_dir):

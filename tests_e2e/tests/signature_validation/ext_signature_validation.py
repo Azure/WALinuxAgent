@@ -57,7 +57,7 @@ class ExtSignatureValidation(AgentVmTest):
         if should_validate_signature:
             # Confirm that agent logs successful signature validation and handler manifest validation
             log.info("Checking agent log to confirm that package signature was validated successfully.")
-            signature_log_msg = "Successfully validated signature for package"
+            signature_log_msg = "Successfully validated signature for extension"
             self._ssh_client.run_command(f"agent_ext_workflow-check_data_in_agent_log.py --data '{signature_log_msg}' "
                                          f"--after-timestamp '{enable_start_time}'", use_sudo=True)
 
