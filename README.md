@@ -3,8 +3,8 @@
 
 ## Linux distributions support
 
-Our daily automation tests most of the [Linux distributions supported by Azure](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/endorsed-distros); the Agent can be
-used on other distributions as well, but development, testing and support for those are done by the open source community.
+The list of distros we officially support is maintained at: [Linux distributions supported by Azure](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/endorsed-distros). Our daily automation tests most of these distributions. The Agent can be
+used on other distributions as well, but development, testing and support for those are done by the open source community. This repo contains community-driven support for some distributions which are not officially supported by Azure.
 
 Testing is done using the develop branch, which can be unstable. For a stable build please use the master branch instead.
 
