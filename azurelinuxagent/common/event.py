@@ -133,6 +133,8 @@ class WALAEventOperation:
     Restart = "Restart"
     SignatureValidation = "SignatureValidation"
     SignatureValidationMetrics = "SignatureValidationMetrics"
+    SignatureValidationResult = "SignatureValidationResult"
+    ManifestValidationResult = "ManifestValidationResult"
     SetCGroupsLimits = "SetCGroupsLimits"
     SkipUpdate = "SkipUpdate"
     StatusProcessing = "StatusProcessing"

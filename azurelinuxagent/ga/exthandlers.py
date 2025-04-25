@@ -1388,10 +1388,12 @@ class ExtHandlerInstance(object):
             self._log_signature_validation_telemetry("Downloading extension package and validating its signature: '{0}'".format(self.ext_handler), is_success=True)
             validate_signature(package_file, self.ext_handler.encoded_signature)
             self._log_signature_validation_telemetry("Successfully validated signature for extension '{0}'.".format(self.ext_handler), is_success=True)
+            add_event(op=WALAEventOperation.SignatureValidationResult, message="Validation succeeded", name=self.ext_handler.name, version=self.ext_handler.version, is_success=True)
             return True
 
         except SignatureValidationError as ex:
             self._log_signature_validation_telemetry(ustr(ex), is_success=False)
+            add_event(op=WALAEventOperation.SignatureValidationResult, message=ustr(ex), name=self.ext_handler.name, version=self.ext_handler.version, is_success=False)
 
         return False
 
@@ -1399,8 +1401,7 @@ class ExtHandlerInstance(object):
         try:
             self._log_signature_validation_telemetry("Validating handler manifest 'signingInfo' of package '{0}'".format(self.ext_handler), is_success=True)
             validate_handler_manifest_signing_info(self.load_manifest(), self.ext_handler)
-            self._log_signature_validation_telemetry("Successfully validated handler manifest 'signingInfo' for extension '{0}'".format(self.ext_handler),
-                                                     is_success=True)
+            self._log_signature_validation_telemetry("Successfully validated handler manifest 'signingInfo' for extension '{0}'".format(self.ext_handler), is_success=True)
             return True
 
         except ManifestValidationError as ex:
@@ -1475,6 +1476,7 @@ class ExtHandlerInstance(object):
 
                 if signature != "":
                     self._log_signature_validation_telemetry("Successfully validated signature for extension '{0}'.".format(self.ext_handler), is_success=True)
+                    add_event(op=WALAEventOperation.SignatureValidationResult, message="Validation succeeded", name=self.ext_handler.name, version=self.ext_handler.version, is_success=True)
                     signature_validated = True
 
             # download_zip_package() will propagate a SignatureValidationError if validation fails. This is the only exception
@@ -1482,6 +1484,7 @@ class ExtHandlerInstance(object):
             # block extension execution, continue to manifest validation.
             except SignatureValidationError as ex:
                 self._log_signature_validation_telemetry(ustr(ex), is_success=False)
+                add_event(op=WALAEventOperation.SignatureValidationResult, message=ustr(ex), name=self.ext_handler.name, version=self.ext_handler.version, is_success=False)
 
             if should_validate_ext_signature and self.ext_handler.encoded_signature != "":
                 manifest_validated = self._validate_extension_handler_manifest_signing_info()

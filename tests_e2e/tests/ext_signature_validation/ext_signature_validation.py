@@ -58,12 +58,12 @@ class ExtSignatureValidation(AgentVmTest):
             # Confirm that agent logs successful signature validation and handler manifest validation
             log.info("Checking agent log to confirm that package signature was validated successfully.")
             signature_log_msg = "Successfully validated signature for extension"
-            self._ssh_client.run_command(f"agent_ext_workflow-check_data_in_agent_log.py --data '{signature_log_msg}' "
+            self._ssh_client.run_command(f"check_data_in_agent_log.py --data '{signature_log_msg}' "
                                          f"--after-timestamp '{enable_start_time}'", use_sudo=True)
 
             log.info("Checking agent log to confirm that handler manifest was validated successfully.")
             manifest_log_msg = "Successfully validated handler manifest"
-            self._ssh_client.run_command(f"agent_ext_workflow-check_data_in_agent_log.py --data '{manifest_log_msg}' "
+            self._ssh_client.run_command(f"check_data_in_agent_log.py --data '{manifest_log_msg}' "
                                          f"--after-timestamp '{enable_start_time}'", use_sudo=True)
 
             # Check signature validation state

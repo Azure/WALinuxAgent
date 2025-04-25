@@ -19,6 +19,7 @@
 import base64
 import os
 import re
+import json
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.utils.shellutil import run_command, CommandError
@@ -27,6 +28,8 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.ga.signing_certificate_util import get_microsoft_signing_certificate_path
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.event import add_event, WALAEventOperation
+
 
 
 # This file tracks the state of signature validation for the package. If the file exists, signature has been validated.
@@ -56,6 +59,17 @@ class ManifestValidationError(PackageValidationError):
     """
     Error raised when handler manifest 'signingInfo' validation fails for a package.
     """
+
+
+class _ManifestValidationResults:
+    Success = "Success"
+    SigningInfoMissing = "SigningInfoMissing"
+    SigningInfoTypeMissing = "SigningInfoTypeMissing"
+    SigningInfoPublisherMissing = "SigningInfoPublisherMissing"
+    SigningInfoVersionMissing = "SigningInfoVersionMissing"
+    SigningInfoTypeMismatch = "SigningInfoTypeMismatch"
+    SigningInfoPublisherMismatch = "SigningInfoPublisherMismatch"
+    SigningInfoVersionMismatch = "SigningInfoVersionMismatch"
 
 
 def _get_openssl_version():
@@ -168,9 +182,20 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
     :param ext_handler: Extension object
     :raises ManifestValidationError: if handler manifest validation fails
     """
+    def _report_manifest_validation_result(validation_result, error_message=None):
+        data = {
+            "validation_result": validation_result,
+            "error_message": error_message
+        }
+
+        is_success = (validation_result == _ManifestValidationResults.Success)
+        add_event(op=WALAEventOperation.ManifestValidationResult, message=json.dumps(data), name=ext_handler.name,
+                  version = ext_handler.version, is_success = is_success)
+
     man_signing_info = manifest.data.get("signingInfo")
     if man_signing_info is None:
         msg = "HandlerManifest.json does not contain 'signingInfo'"
+        _report_manifest_validation_result(_ManifestValidationResults.SigningInfoMissing, msg)
         raise ManifestValidationError(msg=msg)
 
     # Validate extension name (publisher + type). This comparison should be case-insensitive, because CRP ignores case for extension name.
@@ -179,32 +204,40 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
     signing_info_type = man_signing_info.get("type")
     if signing_info_type is None:
         msg = "HandlerManifest.json does not contain attribute 'signingInfo.type'"
+        _report_manifest_validation_result(_ManifestValidationResults.SigningInfoTypeMissing, msg)
         raise ManifestValidationError(msg=msg)
 
     if signing_info_type.lower() != ext_type.lower():
         msg = "expected extension type '{0}' does not match downloaded package type '{1}'".format(ext_type, signing_info_type)
+        _report_manifest_validation_result(_ManifestValidationResults.SigningInfoTypeMismatch, msg)
         raise ManifestValidationError(msg=msg)
 
     signing_info_publisher = man_signing_info.get("publisher")
     if signing_info_publisher is None:
         msg = "HandlerManifest.json does not contain attribute 'signingInfo.publisher'"
+        _report_manifest_validation_result(_ManifestValidationResults.SigningInfoPublisherMissing, msg)
         raise ManifestValidationError(msg=msg)
 
     if signing_info_publisher.lower() != ext_publisher.lower():
         msg = "expected extension publisher '{0}' does not match downloaded package publisher '{1}' (specified in HandlerManifest.json)".format(
             ext_publisher, signing_info_publisher)
+        _report_manifest_validation_result(_ManifestValidationResults.SigningInfoPublisherMismatch, msg)
         raise ManifestValidationError(msg=msg)
 
     # Validate extension version
     signing_info_version = man_signing_info.get("version")
     if signing_info_version is None:
         msg = "HandlerManifest.json does not contain attribute 'signingInfo.version'"
+        _report_manifest_validation_result(_ManifestValidationResults.SigningInfoVersionMissing, msg)
         raise ManifestValidationError(msg=msg)
 
     if signing_info_version != ext_handler.version:
         msg = "expected extension version '{0}' does not match downloaded package version '{1}' (specified in HandlerManifest.json)".format(
             ext_handler.version, signing_info_version)
+        _report_manifest_validation_result(_ManifestValidationResults.SigningInfoVersionMismatch, msg)
         raise ManifestValidationError(msg=msg)
+
+    _report_manifest_validation_result(_ManifestValidationResults.Success)
 
 
 def save_signature_validation_state(target_dir):
