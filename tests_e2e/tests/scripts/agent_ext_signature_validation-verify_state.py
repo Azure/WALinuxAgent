@@ -31,7 +31,7 @@ def main():
 
     args = parser.parse_args()
 
-    state_file_pattern = f"/var/lib/waagent/*{args.extension_name}*/package_signature_and_manifest_validated"
+    state_file_pattern = f"/var/lib/waagent/*{args.extension_name}*/package_validated"
     matched_files = glob.glob(state_file_pattern)
     if matched_files is None or len(matched_files) == 0:
         raise FileNotFoundError(f"No signature validation state file found for extension '{args.extension_name}'.")

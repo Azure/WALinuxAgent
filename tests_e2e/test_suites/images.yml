@@ -73,6 +73,8 @@ image-sets:
       - "ubuntu_2404_arm64"
 
    # These are distros with default OpenSSL version 1.1.0 or later, as required for signature validation.
+   # TODO: Remove this image set once timestamp validation is implemented and the "no_check_time" flag
+   # (which requires OpenSSL 1.1.0) is no longer needed.
    signature-validation-endorsed:
       - "alma_8"
       - "alma_9"

@@ -132,6 +132,7 @@ class WALAEventOperation:
     ResetFirewall = "ResetFirewall"
     Restart = "Restart"
     SignatureValidation = "SignatureValidation"
+    SignatureValidationMetrics = "SignatureValidationMetrics"
     SetCGroupsLimits = "SetCGroupsLimits"
     SkipUpdate = "SkipUpdate"
     StatusProcessing = "StatusProcessing"

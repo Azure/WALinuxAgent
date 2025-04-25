@@ -30,7 +30,7 @@ from azurelinuxagent.common.future import ustr
 
 
 # This file tracks the state of signature validation for the package. If the file exists, signature has been validated.
-_SIGNATURE_VALIDATION_STATE_FILE = "package_signature_and_manifest_validated"
+_PACKAGE_VALIDATION_STATE_FILE = "package_validated"
 
 # Signature validation requires OpenSSL version 1.1.0 or later. The 'no_check_time' flag used for the 'openssl cms -verify'
 # command is not supported on older versions.
@@ -174,15 +174,15 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
         raise ManifestValidationError(msg=msg)
 
     # Validate extension name (publisher + type). This comparison should be case-insensitive, because CRP ignores case for extension name.
-    gs_publisher, gs_type = ext_handler.name.rsplit(".", 1)
+    ext_publisher, ext_type = ext_handler.name.rsplit(".", 1)
 
     signing_info_type = man_signing_info.get("type")
     if signing_info_type is None:
         msg = "HandlerManifest.json does not contain attribute 'signingInfo.type'"
         raise ManifestValidationError(msg=msg)
 
-    if signing_info_type.lower() != gs_type.lower():
-        msg = "expected extension type '{0}' does not match downloaded package type '{1}'".format(gs_type, signing_info_type)
+    if signing_info_type.lower() != ext_type.lower():
+        msg = "expected extension type '{0}' does not match downloaded package type '{1}'".format(ext_type, signing_info_type)
         raise ManifestValidationError(msg=msg)
 
     signing_info_publisher = man_signing_info.get("publisher")
@@ -190,9 +190,9 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
         msg = "HandlerManifest.json does not contain attribute 'signingInfo.publisher'"
         raise ManifestValidationError(msg=msg)
 
-    if signing_info_publisher.lower() != gs_publisher.lower():
+    if signing_info_publisher.lower() != ext_publisher.lower():
         msg = "expected extension publisher '{0}' does not match downloaded package publisher '{1}' (specified in HandlerManifest.json)".format(
-            gs_publisher, signing_info_publisher)
+            ext_publisher, signing_info_publisher)
         raise ManifestValidationError(msg=msg)
 
     # Validate extension version
@@ -212,7 +212,7 @@ def save_signature_validation_state(target_dir):
     Create signature validation state file in the target directory. Existence of file indicates that signature and manifest
     were successfully validated for the package.
     """
-    validation_state_file = os.path.join(target_dir, _SIGNATURE_VALIDATION_STATE_FILE)
+    validation_state_file = os.path.join(target_dir, _PACKAGE_VALIDATION_STATE_FILE)
     try:
         with open(validation_state_file, 'w'):
             pass
@@ -226,5 +226,12 @@ def signature_has_been_validated(target_dir):
     Returns True if signature validation state file exists in the specified directory.
     Presence of the file indicates that the package signature was successfully validated.
     """
-    validation_state_file = os.path.join(target_dir, _SIGNATURE_VALIDATION_STATE_FILE)
+    validation_state_file = os.path.join(target_dir, _PACKAGE_VALIDATION_STATE_FILE)
     return os.path.exists(validation_state_file)
+
+
+def should_validate_signature():
+    """
+    Returns True if signature validation is enabled in conf file and OpenSSL version supports all validation parameters.
+    """
+    return conf.get_signature_validation_enabled() and openssl_version_supported_for_signature_validation()

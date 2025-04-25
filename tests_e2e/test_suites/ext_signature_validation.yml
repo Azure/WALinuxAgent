@@ -3,7 +3,7 @@
 #
 name: "ExtSignatureValidation"
 tests:
-  - "signature_validation/ext_signature_validation.py"
+  - "ext_signature_validation/ext_signature_validation.py"
 images: "signature-validation-endorsed"
 locations: "AzureCloud:centraluseuap"
 owns_vm: false

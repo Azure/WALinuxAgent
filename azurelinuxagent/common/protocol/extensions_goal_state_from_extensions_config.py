@@ -315,9 +315,15 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         if extension.state in (None, ""):
             raise ExtensionsConfigError("Received empty Extensions.Plugins.Plugin.state, failing Handler")
 
-        # extension.encoded_signature value should be None if the property does not exist for the plugin. getattrib
-        # returns "" if an attribute does not exist in a node, so use hasattrib here to check if the attribute exists
-        extension.encoded_signature = getattrib(plugin, "encodedSignature") if hasattrib(plugin, "encodedSignature") else None
+        # extension.encoded_signature value should be an empty string if the property does not exist for the plugin. getattrib
+        # returns "" if an attribute does not exist in a node.
+        extension.encoded_signature = getattrib(plugin, "encodedSignature")
+        if extension.encoded_signature == "":
+            add_event(op=WALAEventOperation.SignatureValidationMetrics, message=json.dumps({"is_signed": False}),
+                      name=extension.name, version=extension.version, is_success=True)
+        else:
+            add_event(op=WALAEventOperation.SignatureValidationMetrics, message=json.dumps({"is_signed": True}),
+                      name=extension.name, version=extension.version, is_success=True)
 
         def getattrib_wrapped_in_list(node, attr_name):
             attr = getattrib(node, attr_name)
