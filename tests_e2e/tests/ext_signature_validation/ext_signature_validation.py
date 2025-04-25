@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env pypy3
 
 # Microsoft Azure Linux Agent
 #
@@ -29,7 +29,7 @@ from tests_e2e.tests.lib.ssh_client import SshClient
 
 
 class ExtSignatureValidation(AgentVmTest):
-    class TestCase:
+    class _TestCase:
         def __init__(self, extension, settings: Any):
             self.extension = extension
             self.settings = settings
@@ -89,26 +89,27 @@ class ExtSignatureValidation(AgentVmTest):
             log.info("*** Begin test setup")
             log.info("")
             log.info(" - Get VM distro")
-            distro = self._ssh_client.run_command("get_distro.py").rstrip()
+            distro = self._ssh_client.get_distro()
+            log.info("VM distro: '{0}'".format(distro))
 
             # CustomScript 2.1 is a signed, single-config extension.
             cse_id_21 = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript',
                                               version="2.1")
-            custom_script_signed = ExtSignatureValidation.TestCase(
+            custom_script_signed = ExtSignatureValidation._TestCase(
                 VirtualMachineExtensionClient(self._context.vm, cse_id_21, resource_name="CustomScript"),
                 {'commandToExecute': f"echo '{str(uuid.uuid4())}'"}
             )
 
             # CustomScript 2.0 is an unsigned, single-config extension.
             cse_id_20 = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript', version="2.0")
-            custom_script_unsigned = ExtSignatureValidation.TestCase(
+            custom_script_unsigned = ExtSignatureValidation._TestCase(
                 VirtualMachineExtensionClient(self._context.vm, cse_id_20, resource_name="CustomScript"),
                 {'commandToExecute': f"echo '{str(uuid.uuid4())}'"}
             )
 
             # RunCommandHandler 1.3 is a signed, multi-config extension.
             rc_id_1_3 = VmExtensionIdentifier(publisher="Microsoft.CPlat.Core", ext_type="RunCommandHandlerLinux", version="1.3")
-            run_command_signed = ExtSignatureValidation.TestCase(
+            run_command_signed = ExtSignatureValidation._TestCase(
                 VirtualMachineRunCommandClient(self._context.vm, rc_id_1_3, resource_name="RunCommandHandler"),
                 {'source': f"echo '{str(uuid.uuid4())}'"}
             )
@@ -116,14 +117,14 @@ class ExtSignatureValidation(AgentVmTest):
             # VMApplicationManagerLinux is a signed, no-config extension.
             vmapp_id_1_0 = VmExtensionIdentifier(publisher='Microsoft.CPlat.Core', ext_type='VMApplicationManagerLinux',
                                                 version='1.0')
-            vm_app_signed = ExtSignatureValidation.TestCase(
+            vm_app_signed = ExtSignatureValidation._TestCase(
                 VirtualMachineExtensionClient(self._context.vm, vmapp_id_1_0, resource_name="VMApplicationManagerLinux"),
                 None
             )
 
             # AzureMonitorLinuxAgent 1.33 is an unsigned, no-config extension.
             ama_id_1_33 = VmExtensionIdentifier(publisher='Microsoft.Azure.Monitor', ext_type='AzureMonitorLinuxAgent', version="1.33")
-            azure_monitor_unsigned = ExtSignatureValidation.TestCase(
+            azure_monitor_unsigned = ExtSignatureValidation._TestCase(
                 VirtualMachineExtensionClient(self._context.vm, ama_id_1_33, resource_name="AzureMonitorLinuxAgent"),
                 None
             )
@@ -164,11 +165,13 @@ class ExtSignatureValidation(AgentVmTest):
             self._should_uninstall_extension(run_command_signed)
 
             # Test unsigned, no-config extension (AzureMonitorLinuxAgent). Extension should be enabled and uninstalled with no errors.
+            log.info("")
+            log.info("*** Test case 4: should enable and uninstall unsigned no-config extension (AzureMonitorLinuxAgent 1.33) successfully")
             if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(distro):
-                log.info("")
-                log.info("*** Test case 4: should enable and uninstall unsigned no-config extension (AzureMonitorLinuxAgent 1.33) successfully")
                 self._should_enable_extension(azure_monitor_unsigned, should_validate_signature=False)
                 self._should_uninstall_extension(azure_monitor_unsigned)
+            else:
+                log.info("Skipping test case because AzureMonitorLinuxAgent is not supported on distro '{0}'".format(distro))
 
             # Test signed, no-config extension (VMApplicationManagerLinux). Extension signature should be validated, and extension should be enabled and uninstalled with no errors.
             log.info("")
