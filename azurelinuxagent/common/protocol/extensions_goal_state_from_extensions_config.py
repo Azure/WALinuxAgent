@@ -26,7 +26,7 @@ from azurelinuxagent.common.future import ustr, urlparse
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel, GoalStateSource
 from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension, VMAgentFamily, ExtensionState, InVMGoalStateMetaData
 from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall, find, findtext, getattrib, gettext, \
-    format_exception, is_str_none_or_whitespace, is_str_empty, hasattrib, gettextxml
+    format_exception, is_str_none_or_whitespace, is_str_empty, gettextxml
 
 
 class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
