@@ -29,6 +29,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.ga import logcollector, cgroupconfigurator
@@ -225,20 +226,36 @@ class Agent(object):
                 event.warn(WALAEventOperation.LogCollection, "Unable to determine which cgroup version to use: {0}", ustr(e))
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
-            log_collector_cgroup = cgroup_api.get_process_cgroup(process_id="self", cgroup_name=AGENT_LOG_COLLECTOR)
-            tracked_controllers = log_collector_cgroup.get_controllers()
-            for controller in tracked_controllers:
-                logger.info("{0} controller for cgroup: {1}".format(controller.get_controller_type(), controller))
+            def _check_cgroup_in_expected_slice_and_get_controllers():
+                """
+                Validates that the log collector process is running in the expected cgroup slice.
+                If the validation fails after all retries, the function logs a warning event
+                and exits the process with the appropriate error code.
+                """
+                retry_count = 0
+                while retry_count < logcollector.LOG_COLLECTOR_EXPECTED_CGROUP_CHECK_MAX_RETRIES:
+                    try:
+                        log_collector_cgroup = cgroup_api.get_process_cgroup(process_id="self", cgroup_name=AGENT_LOG_COLLECTOR)
+                        tracked_controllers = log_collector_cgroup.get_controllers()
+                        for controller in tracked_controllers:
+                            logger.info("{0} controller for cgroup: {1}".format(controller.get_controller_type(), controller))
+                        if len(tracked_controllers) != len(log_collector_cgroup.get_supported_controller_names()):
+                            raise CGroupsException("At least one required controller is missing. The following controllers are required for the log collector to run: {0}".format(log_collector_cgroup.get_supported_controller_names()))
+                        if not log_collector_cgroup.check_in_expected_slice(cgroupconfigurator.LOGCOLLECTOR_SLICE):
+                            raise CGroupsException("The Log Collector process is not in the proper cgroups. Expected slice: {0}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE))
+                        return tracked_controllers
+                    except CGroupsException as e:
+                        retry_count += 1
+                        if retry_count < logcollector.LOG_COLLECTOR_EXPECTED_CGROUP_CHECK_MAX_RETRIES:
+                            logger.info("Check cgroup in expected slice failed: retrying in {0} secs [Attempt {1}/{2}]".format(logcollector.LOG_COLLECTOR_EXPECTED_CGROUP_CHECK_RETRY_DELAY, retry_count, logcollector.LOG_COLLECTOR_EXPECTED_CGROUP_CHECK_MAX_RETRIES))
+                            time.sleep(logcollector.LOG_COLLECTOR_EXPECTED_CGROUP_CHECK_RETRY_DELAY)
+                        else:
+                            event.warn(WALAEventOperation.LogCollection, ustr(e))
+                            break
 
-            if len(tracked_controllers) != len(log_collector_cgroup.get_supported_controller_names()):
-                event.warn(WALAEventOperation.LogCollection, "At least one required controller is missing. The following controllers are required for the log collector to run: {0}", log_collector_cgroup.get_supported_controller_names())
-                sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
+                sys.exit(logcollector.EXPECTED_CGROUP_CHECK_ERRCODE)
 
-            expected_slice = cgroupconfigurator.LOGCOLLECTOR_SLICE
-            if not log_collector_cgroup.check_in_expected_slice(expected_slice):
-                event.warn(WALAEventOperation.LogCollection, "The Log Collector process is not in the proper cgroups. Expected slice: {0}", expected_slice)
-                sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
-
+            tracked_controllers = _check_cgroup_in_expected_slice_and_get_controllers()
         try:
             log_collector = LogCollector(is_full_mode)
             # Running log collector resource monitoring only if agent starts the log collector.
