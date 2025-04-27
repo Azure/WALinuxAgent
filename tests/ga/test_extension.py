@@ -3868,7 +3868,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
     def test_enable_should_succeed_and_send_telemetry_if_signature_validation_fails(self):
         # Signature validation fails, handler manifest validation succeeds -> enable, send telemetry, state should not be set
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["test_ext"] = "signing/vm_access.zip"
+        data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.5.0.zip"
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_invalid_signature.xml"
         data_file["manifest"] = "wire/manifest_vm_access.xml"
 
@@ -3895,7 +3895,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
         # Signature validation succeeds, handler manifest validation fails -> enable, send telemetry, state should not be set
 
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["test_ext"] = "signing/vm_access.zip"
+        data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.5.0.zip"
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
         data_file["manifest"] = "wire/manifest_vm_access.xml"
 
@@ -3946,7 +3946,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
         # Signature validation fails, handler manifest validation fails -> enable, send telemetry, state should not be set
 
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["test_ext"] = "signing/vm_access.zip"
+        data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.5.0.zip"
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_invalid_signature.xml"
         data_file["manifest"] = "wire/manifest_vm_access.xml"
 
@@ -3996,7 +3996,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
     def test_enable_should_succeed_if_signature_validation_succeeds(self):
         # Signature validation succeeds, handler manifest validation succeeds -> enable, send telemetry, state should be set
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["test_ext"] = "signing/vm_access.zip"
+        data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.5.0.zip"
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
         data_file["manifest"] = "wire/manifest_vm_access.xml"
 
@@ -4048,7 +4048,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
         # Since signature validation is not being enforced, enable should succeed. We also do not send telemetry in this case,
         # because OpenSSL version is sent elsewhere in telemetry.
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["test_ext"] = "signing/vm_access.zip"
+        data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.5.0.zip"
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
         data_file["manifest"] = "wire/manifest_vm_access.xml"
 
@@ -4071,7 +4071,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
         # If conf flag is set to false, enable should succeed but signature validation state should not be set.
         self.patch_conf_flag.stop()
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["test_ext"] = "signing/vm_access.zip"
+        data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.5.0.zip"
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
         data_file["manifest"] = "wire/manifest_vm_access.xml"
 
@@ -4156,7 +4156,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
     def test_uninstall_should_succeed_for_extension_with_signature_validated(self):
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["test_ext"] = "signing/vm_access.zip"
+        data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.5.0.zip"
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
         data_file["manifest"] = "wire/manifest_vm_access.xml"
 
@@ -4199,7 +4199,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
         # If an extension zip package already exists but has not been extracted, signature should be validated successfully,
         # and extension should be enabled.
         package_file = os.path.join(self.tmp_dir, "Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip")
-        test_zip = os.path.join(data_dir, "signing/vm_access.zip")
+        test_zip = os.path.join(data_dir, "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.5.0.zip")
         shutil.copy(test_zip, package_file)
 
         data_file = wire_protocol_data.DATA_FILE.copy()
@@ -4229,7 +4229,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
     def test_should_enable_existing_zip_package_if_signature_validation_fails(self):
         # Signature validation should fail for existing zip package - extension should still be enabled because we are not enforcing signature.
         package_file = os.path.join(self.tmp_dir, "Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip")
-        test_zip = os.path.join(data_dir, "signing/vm_access.zip")
+        test_zip = os.path.join(data_dir, "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.5.0.zip")
         shutil.copy(test_zip, package_file)
 
         data_file = wire_protocol_data.DATA_FILE.copy()
@@ -4258,7 +4258,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
     def test_should_enable_existing_zip_package_if_manifest_validation_fails(self):
         # Manifest validation should fail for existing zip package - extension should still be enabled because we are not enforcing signature.
         package_file = os.path.join(self.tmp_dir, "Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip")
-        test_zip = os.path.join(data_dir, "signing/vm_access.zip")
+        test_zip = os.path.join(data_dir, "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.5.0.zip")
         shutil.copy(test_zip, package_file)
 
         data_file = wire_protocol_data.DATA_FILE.copy()
