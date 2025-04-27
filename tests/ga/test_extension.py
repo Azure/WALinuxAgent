@@ -3824,7 +3824,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
     @staticmethod
     def _make_http_get_handler(data_file):
-        def http_get_handler(url, *_, **kwargs):
+        def http_get_handler(url, *_, **__):
             resp = MagicMock()
             resp.status = 200
             if "manifest.xml" in url:
@@ -3837,6 +3837,8 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
                 content = load_bin_data(data_file.get("test_ext"))
                 resp.read = Mock(return_value=content)
                 return resp
+
+            return None
 
         return http_get_handler
 

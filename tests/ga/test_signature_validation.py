@@ -64,7 +64,7 @@ class TestSignatureValidation(AgentTestCase):
 
     def test_should_raise_error_if_package_is_tampered_with(self):
         # This is the VMAccess test extension zip package with one byte modified, signature validation should fail
-        modified_ext = os.path.join(data_dir, "signing/Modified_Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.5.0.zip.zip")
+        modified_ext = os.path.join(data_dir, "signing/Modified_Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.5.0.zip")
         with self.assertRaises(SignatureValidationError, msg="Zip package does not match signature, should have raised error"):
             validate_signature(modified_ext, self.vm_access_signature)
 
