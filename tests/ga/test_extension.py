@@ -55,7 +55,7 @@ from tests.lib import wire_protocol_data
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
 from tests.lib.http_request_predicates import HttpRequestPredicates
 from tests.lib.wire_protocol_data import DATA_FILE, DATA_FILE_EXT_ADDITIONAL_LOCATIONS
-from tests.lib.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep
+from tests.lib.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep, load_bin_data, load_data
 from tests.lib.extension_emulator import Actions, ExtensionCommandNames, extension_emulator, \
     enable_invocations, generate_put_handler
 
@@ -3822,6 +3822,24 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
         patch.stopall()
         AgentTestCase.tearDown(self)
 
+    @staticmethod
+    def _make_http_get_handler(data_file):
+        def http_get_handler(url, *_, **kwargs):
+            resp = MagicMock()
+            resp.status = 200
+            if "manifest.xml" in url:
+                content = load_data(data_file.get("manifest"))
+                resp.read = Mock(return_value=content.encode("utf-8"))
+                resp.getheaders = Mock(return_value=[])
+                return resp
+
+            if "VMAccess" in url:
+                content = load_bin_data(data_file.get("test_ext"))
+                resp.read = Mock(return_value=content)
+                return resp
+
+        return http_get_handler
+
     def _test_enable_extension(self, data_file, signature_should_be_validated, expected_status_code, expected_handler_status,expected_ext_count,
                                expected_status_msg=None, expected_handler_name="OSTCExtensions.ExampleHandlerLinux", expected_version="1.0.0"):
 
@@ -3832,6 +3850,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
             protocol.report_vm_status = MagicMock()
             exthandlers_handler = get_exthandlers_handler(protocol)
 
+            protocol.set_http_handlers(http_get_handler=self._make_http_get_handler(data_file))
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
 
@@ -3853,7 +3872,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_invalid_signature.xml"
         data_file["manifest"] = "wire/manifest_vm_access.xml"
 
-        with patch('azurelinuxagent.ga.exthandlers.add_event') as patched_add_event:
+        with patch('azurelinuxagent.ga.signature_validation.add_event') as patched_add_event:
             self._test_enable_extension(data_file=data_file,
                                         signature_should_be_validated=False,
                                         expected_status_code=0,
@@ -3863,15 +3882,14 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
                                         expected_version="1.7.0")
 
             # Telemetry should report signature validation failure
-            expected_msg = "Signature validation failed for package"
             signing_errors = [kw for _, kw in patched_add_event.call_args_list if
-                              kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['message']]
+                              kw['op'] == WALAEventOperation.SignatureValidationResult and not kw['is_success']]
             self.assertEqual(1, len(signing_errors), "Signature validation error not sent as telemetry")
 
             # Telemetry should report handler manifest validation success
-            expected_msg = "Successfully validated handler manifest 'signingInfo' for extension"
-            telemetry = [kw for _, kw in patched_add_event.call_args_list if expected_msg in kw['message']]
-            self.assertEqual(1, len(telemetry), "Handler manifest validation not sent as telemetry")
+            telemetry = [kw for _, kw in patched_add_event.call_args_list if
+                         kw['op'] == WALAEventOperation.ManifestValidationResult and kw['is_success']]
+            self.assertEqual(1, len(telemetry), "Handler manifest validation success not sent as telemetry")
 
     def test_enable_should_succeed_and_send_telemetry_if_handler_manifest_validation_fails(self):
         # Signature validation succeeds, handler manifest validation fails -> enable, send telemetry, state should not be set
@@ -3902,7 +3920,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
         manifest = HandlerManifest(manifest_data)
 
-        with patch('azurelinuxagent.ga.exthandlers.add_event') as patched_add_event:
+        with patch('azurelinuxagent.ga.signature_validation.add_event') as patched_add_event:
             with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.load_manifest', return_value=manifest):
                 self._test_enable_extension(data_file=data_file,
                                             signature_should_be_validated=False,
@@ -3914,13 +3932,14 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
                                             expected_version="1.7.0")
 
                 # Telemetry should report successful signature validation
-                expected_msg = "Successfully validated signature for extension"
-                telemetry = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['message']]
+                telemetry = [kw for _, kw in patched_add_event.call_args_list
+                             if kw['op'] == WALAEventOperation.SignatureValidationResult and kw['is_success']]
                 self.assertEqual(1, len(telemetry), "Signature validation success not sent as telemetry")
 
                 # Telemetry should report failed handler manifest validation
                 expected_msg = "expected extension version '1.7.0' does not match downloaded package version '1.5.0'"
-                telemetry = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['message']]
+                telemetry = [kw for _, kw in patched_add_event.call_args_list
+                             if kw['op'] == WALAEventOperation.ManifestValidationResult and expected_msg in kw['message']]
                 self.assertEqual(1, len(telemetry), "Manifest validation error not reported")
 
     def test_enable_should_succeed_and_send_telemetry_if_signature_and_handler_manifest_validation_fails(self):
@@ -3952,7 +3971,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
         manifest = HandlerManifest(manifest_data)
 
-        with patch('azurelinuxagent.ga.exthandlers.add_event') as patched_add_event:
+        with patch('azurelinuxagent.ga.signature_validation.add_event') as patched_add_event:
             with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.load_manifest', return_value=manifest):
                 self._test_enable_extension(data_file=data_file,
                                             signature_should_be_validated=False,
@@ -3964,13 +3983,14 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
                                             expected_version="1.7.0")
 
             # Telemetry should report signature validation failure
-            expected_msg = "Signature validation failed for package"
-            signing_errors = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['message']]
+            signing_errors = [kw for _, kw in patched_add_event.call_args_list
+                              if kw['op'] == WALAEventOperation.SignatureValidationResult and not kw['is_success']]
             self.assertEqual(1, len(signing_errors), "Signature validation error not sent as telemetry")
 
             # Telemetry should report failed handler manifest validation
             expected_msg = "expected extension version '1.7.0' does not match downloaded package version '1.5.0'"
-            telemetry = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['message']]
+            telemetry = [kw for _, kw in patched_add_event.call_args_list
+                         if kw['op'] == WALAEventOperation.ManifestValidationResult and expected_msg in kw['message']]
             self.assertEqual(1, len(telemetry), "Manifest validation error not reported")
 
     def test_enable_should_succeed_if_signature_validation_succeeds(self):
@@ -3980,7 +4000,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
         data_file["manifest"] = "wire/manifest_vm_access.xml"
 
-        with patch('azurelinuxagent.ga.exthandlers.add_event') as patched_add_event:
+        with patch('azurelinuxagent.ga.signature_validation.add_event') as patched_add_event:
             self._test_enable_extension(data_file=data_file,
                                         signature_should_be_validated=True,
                                         expected_status_code=0,
@@ -3991,11 +4011,11 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
                                         expected_version="1.7.0")
 
             # Telemetry should report successful signature validation and manifest validation
-            expected_msg = "Successfully validated signature for extension"
-            telemetry = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['message']]
+            telemetry = [kw for _, kw in patched_add_event.call_args_list
+                         if kw['op'] == WALAEventOperation.SignatureValidationResult and kw['is_success']]
             self.assertEqual(1, len(telemetry), "Signature validation success not sent as telemetry")
-            expected_msg = "Successfully validated handler manifest 'signingInfo' for extension"
-            telemetry = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['message']]
+            telemetry = [kw for _, kw in patched_add_event.call_args_list
+                         if kw['op'] == WALAEventOperation.ManifestValidationResult and kw['is_success']]
             self.assertEqual(1, len(telemetry), "Handler manifest validation success not sent as telemetry")
 
             # Should not have reported any signature validation errors
@@ -4014,7 +4034,8 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
             # Should have sent telemetry that extension is unsigned
             expected_msg = "Extension 'OSTCExtensions.ExampleHandlerLinux-1.0.0' is not signed"
-            telemetry = [kw for _, kw in add_event.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['message']]
+            telemetry = [kw for _, kw in add_event.call_args_list
+                         if kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['message']]
             self.assertEqual(1, len(telemetry), "Missing signature not sent as telemetry")
 
             # Should not have reported any signature validation errors
@@ -4146,6 +4167,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
             exthandlers_handler = get_exthandlers_handler(protocol)
 
             # Enable extension - extension signature validation should succeed and state should be set
+            protocol.set_http_handlers(http_get_handler=self._make_http_get_handler(data_file))
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
             report_vm_status = protocol.report_vm_status
@@ -4184,7 +4206,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
         data_file["manifest"] = "wire/manifest_vm_access.xml"
 
-        with patch('azurelinuxagent.ga.exthandlers.add_event') as patched_add_event:
+        with patch('azurelinuxagent.ga.signature_validation.add_event') as patched_add_event:
             self._test_enable_extension(data_file=data_file,
                                         signature_should_be_validated=True,
                                         expected_status_code=0,
@@ -4195,15 +4217,13 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
                                         expected_version="1.7.0")
 
             # Telemetry should report successful signature validation and manifest validation
-            expected_msg = "Successfully validated signature for extension"
-            telemetry = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['message']]
+            telemetry = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.SignatureValidationResult and kw['is_success']]
             self.assertEqual(1, len(telemetry), "Signature validation success not sent as telemetry")
-            expected_msg = "Successfully validated handler manifest 'signingInfo' for extension"
-            telemetry = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['message']]
+            telemetry = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.ManifestValidationResult and kw['is_success']]
             self.assertEqual(1, len(telemetry), "Handler manifest validation success not sent as telemetry")
 
             # Should not have reported any signature validation errors
-            errors = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.SignatureValidation and kw['is_success'] == False]
+            errors = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.SignatureValidationResult and not kw['is_success']]
             self.assertEqual(0, len(errors), "Signature validation should have completed without errors. Errors: {0}".format(errors))
 
     def test_should_enable_existing_zip_package_if_signature_validation_fails(self):
@@ -4266,7 +4286,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
         manifest = HandlerManifest(manifest_data)
 
-        with patch('azurelinuxagent.ga.exthandlers.add_event') as patched_add_event:
+        with patch('azurelinuxagent.ga.signature_validation.add_event') as patched_add_event:
             with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.load_manifest', return_value=manifest):
                 self._test_enable_extension(data_file=data_file,
                                             signature_should_be_validated=False,
@@ -4278,17 +4298,15 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
                                             expected_version="1.7.0")
 
                 # Telemetry should report successful signature validation
-                expected_msg = "Successfully validated signature for extension"
                 telemetry = [kw for _, kw in patched_add_event.call_args_list if
-                             kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['message']]
+                             kw['op'] == WALAEventOperation.SignatureValidationResult and kw['is_success']]
                 self.assertEqual(1, len(telemetry), "Signature validation success not sent as telemetry")
 
                 # Telemetry should report failed handler manifest validation
                 expected_msg = "expected extension version '1.7.0' does not match downloaded package version '1.5.0'"
                 telemetry = [kw for _, kw in patched_add_event.call_args_list if
-                             kw['op'] == WALAEventOperation.SignatureValidation and expected_msg in kw['message']]
+                             kw['op'] == WALAEventOperation.ManifestValidationResult and expected_msg in kw['message']]
                 self.assertEqual(1, len(telemetry), "Manifest validation error not reported")
-
 
 
 if __name__ == '__main__':
