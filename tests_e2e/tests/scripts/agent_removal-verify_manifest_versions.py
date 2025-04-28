@@ -33,7 +33,7 @@ from tests_e2e.tests.lib.shell import run_command
 
 
 def _get_manifest_uris(wire_protocol: WireProtocol, family: str) -> List[str]:
-    wire_protocol.client.update_goal_state()
+    retry(lambda: wire_protocol.client.update_goal_state)
     goal_state = wire_protocol.client.get_goal_state()
     manifest_uris = next((gs_family.uris for gs_family in goal_state.extensions_goal_state.agent_families if gs_family.name == family), [])
     if len(manifest_uris) == 0:
@@ -64,7 +64,8 @@ def main():
     for uri in manifest_uris:
         log.info("")
         log.info("URI: {0}".format(uri))
-        xml_text = run_command(["curl", "-s", "{0}".format(uri)])
+        # xml_text = run_command(["curl", "-s", "{0}".format(uri)])
+        xml_text = run_command(["http_get.py", "{0}".format(uri)])
         manifest = ExtensionManifest(xml_text)
         agent_versions = [pkg.version for pkg in manifest.pkg_list.versions]
         log.info("Agent versions in manifest: {0}".format(agent_versions))

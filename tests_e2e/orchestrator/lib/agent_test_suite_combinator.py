@@ -66,17 +66,23 @@ class AgentTestSuitesCombinator(Combinator):
         if self.runbook.vm_name != '' and self.runbook.vmss_name != '':
             raise Exception("Invalid runbook parameters: 'vm_name' and 'vmss_name' are mutually exclusive.")
 
+        locations = self.runbook.locations.split(',')
+
         if self.runbook.vm_name != '':
             if self.runbook.image != '' or self.runbook.vm_size != '':
                 raise Exception("Invalid runbook parameters: The 'vm_name' parameter indicates an existing VM, 'image' and 'vm_size' should not be specified.")
             if self.runbook.resource_group_name == '':
                 raise Exception("Invalid runbook parameters: The 'vm_name' parameter indicates an existing VM, a 'resource_group_name' must be specified.")
+            if len(locations) != 1:
+                raise Exception("Invalid runbook parameters: The 'vm_name' parameter indicates an existing VM, exactly one location should be specified in the 'locations' parameter.")
 
         if self.runbook.vmss_name != '':
             if self.runbook.image != '' or self.runbook.vm_size != '':
                 raise Exception("Invalid runbook parameters: The 'vmss_name' parameter indicates an existing VMSS, 'image' and 'vm_size' should not be specified.")
             if self.runbook.resource_group_name == '':
                 raise Exception("Invalid runbook parameters: The 'vmss_name' parameter indicates an existing VMSS, a 'resource_group_name' must be specified.")
+            if len(locations) != 1:
+                raise Exception("Invalid runbook parameters: The 'vmss_name' parameter indicates an existing VMSS, exactly one location should be specified in the 'locations' parameter.")
 
         if self.runbook.test_suites != "":
             test_suites = [t.strip() for t in self.runbook.test_suites.split(',')]
@@ -266,10 +272,9 @@ class AgentTestSuitesCombinator(Combinator):
     def create_existing_vm_environment(self, test_suites: List[str]) -> Dict[str, Any]:
         loader = AgentTestLoader(test_suites, self.runbook.cloud)
 
-        location = self.runbook.locations.split(',')[0]
         vm: VirtualMachineClient = VirtualMachineClient(
             cloud=self.runbook.cloud,
-            location=location,
+            location=self.runbook.locations,
             subscription=self.runbook.subscription_id,
             resource_group=self.runbook.resource_group_name,
             name=self.runbook.vm_name)
@@ -300,17 +305,16 @@ class AgentTestSuitesCombinator(Combinator):
                     }
                 ]
             },
-            "c_location": location,
+            "c_location": self.runbook.locations,
             "c_test_suites": loader.test_suites,
         }
 
     def create_existing_vmss_environment(self, test_suites: List[str]) -> Dict[str, Any]:
         loader = AgentTestLoader(test_suites, self.runbook.cloud)
 
-        location = self.runbook.locations.split(',')[0]
         vmss = VirtualMachineScaleSetClient(
             cloud=self.runbook.cloud,
-            location=location,
+            location=self.runbook.locations,
             subscription=self.runbook.subscription_id,
             resource_group=self.runbook.resource_group_name,
             name=self.runbook.vmss_name)
@@ -341,7 +345,7 @@ class AgentTestSuitesCombinator(Combinator):
                     "capture_vm_information": False
                 }
             ],
-            "c_location": location,
+            "c_location": self.runbook.locations,
             "c_test_suites": loader.test_suites,
         }
 
