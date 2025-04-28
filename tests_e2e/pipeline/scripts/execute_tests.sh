@@ -60,8 +60,8 @@ fi
 if [[ $IMAGE == "-" ]]; then
     IMAGE=""
 fi
-if [[ $LOCATION == "-" ]]; then
-    LOCATION=""
+if [[ $LOCATIONS == "-" ]]; then
+    LOCATIONS=""
 fi
 if [[ $VM_SIZE == "-" ]]; then
     VM_SIZE=""
@@ -99,7 +99,7 @@ docker run --rm \
           -v collect_logs:\"$COLLECT_LOGS\" \
           -v keep_environment:\"$KEEP_ENVIRONMENT\" \
           -v image:\"$IMAGE\" \
-          -v location:\"$LOCATION\" \
+          -v locations:\"$LOCATIONS\" \
           -v vm_size:\"$VM_SIZE\" \
           -v allow_ssh:\"$IP_ADDRESS\" \
           -v test_args:\"$TEST_ARGS\" \

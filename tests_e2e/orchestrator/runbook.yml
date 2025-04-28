@@ -73,7 +73,7 @@ variable:
   - name: cloud
     value: "AzureCloud"
     is_case_visible: true
-  - name: location
+  - name: locations
     value: ""
   - name: image
     value: ""
@@ -189,7 +189,7 @@ variable:
   #
   # These parameters are used by the AgentTestSuite to create the test scale sets.
   #
-  # Note that there are other 3 variables named 'image', 'vm_size' and 'location', which can be passed
+  # Note that there are other 3 variables named 'image', 'vm_size' and 'locations', which can be passed
   # from the command line. The combinator generates the values for these parameters using test metadata,
   # but they can be overriden with these command line variables. The final values are passed to the
   # AgentTestSuite in the corresponding 'c_*' variables.
@@ -222,7 +222,7 @@ combinator:
   identity_file: $(identity_file)
   image: $(image)
   keep_environment: $(keep_environment)
-  location: $(location)
+  locations: $(locations)
   resource_group_name: $(resource_group_name)
   subscription_id: $(subscription_id)
   test_suites: $(test_suites)
