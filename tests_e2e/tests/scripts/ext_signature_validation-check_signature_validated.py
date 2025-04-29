@@ -29,7 +29,7 @@ from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.agent_log import AgentLog
 
 # This script verifies that signature was validated for the specified extension.
-# Usage: agent_ext_signature_validation-check_signature_validated.py --extension-name "CustomScript"
+# Usage: ext_signature_validation-check_signature_validated.py --extension-name "CustomScript"
 
 
 def main():

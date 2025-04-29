@@ -1371,13 +1371,18 @@ class ExtHandlerInstance(object):
             return False
         return True
 
-    def _log_signature_validation_telemetry(self, msg, is_success, op=WALAEventOperation.SignatureValidation):
+    def _log_signature_validation_telemetry(self, msg, is_success):
+        """
+        Send telemetry for SignatureValidation operation. Log as info when event succeeded, and log as warning
+        when event failed.
+        """
         if is_success:
             self.logger.info(msg)
         else:
-            self.logger.error(msg)
-        add_event(op=op, message=msg, name=self.ext_handler.name,
-                  version=self.ext_handler.version, is_success=is_success)
+            # TODO: log as error when signature validation is enforced
+            msg = "[WARNING]" + msg
+            self.logger.warn(msg)
+        add_event(op=WALAEventOperation.SignatureValidation, message=msg, name=self.ext_handler.name, version=self.ext_handler.version, is_success=is_success)
 
     def _validate_extension_package_signature(self, package_file):
         if self.ext_handler.encoded_signature == "":
@@ -1448,7 +1453,7 @@ class ExtHandlerInstance(object):
 
                 package_exists = True
             else:
-                self.logger.info("The existing extension package is invalid, will ignore it.")
+                self._log_signature_validation_telemetry("The existing extension package is invalid, will ignore it.")
 
         # Handle the case where the extension package does not exist. Download the zip package, validate the signature
         # if present, and extract the package. If package is signed, validate handler manifest.
@@ -1456,24 +1461,22 @@ class ExtHandlerInstance(object):
             is_fast_track_goal_state = self.protocol.get_goal_state().extensions_goal_state.source == GoalStateSource.FastTrack
 
             signature_validated = False
-            # If signature should not be validated, set a 'signature' variable to an empty string. 'signature' will be
-            # passed to download_zip_package(), which will skip validation when the signature parameter is empty.
-            if should_validate_ext_signature:
-                if self.ext_handler.encoded_signature == "":
-                    self._log_signature_validation_telemetry("Extension '{0}' is not signed".format(self.ext_handler), is_success=True)
-                signature = self.ext_handler.encoded_signature
-            else:
-                signature = ""
+            if should_validate_ext_signature and self.ext_handler.encoded_signature == "":
+                self._log_signature_validation_telemetry("Extension '{0}' is not signed".format(self.ext_handler), is_success=True)
 
             try:
-                if signature != "":
+                if should_validate_signature and self.ext_handler.encoded_signature != "":
                     self._log_signature_validation_telemetry("Downloading extension package and validating its signature: '{0}'".format(self.ext_handler), is_success=True)
+
+                # If signature should not be validated, pass an empty string as 'signature' to download_zip_package(),
+                # which will skip validation when the signature parameter is empty.
+                signature = self.ext_handler.encoded_signature if should_validate_signature else ""
                 self.protocol.client.download_zip_package("extension package", self.pkg.uris, package_file,
                                                           self.get_base_dir(),
                                                           use_verify_header=is_fast_track_goal_state,
                                                           signature=signature)
 
-                if signature != "":
+                if should_validate_signature and self.ext_handler.encoded_signature != "":
                     self._log_signature_validation_telemetry("Successfully validated signature for extension '{0}'.".format(self.ext_handler), is_success=True)
                     signature_validated = True
 

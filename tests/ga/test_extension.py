@@ -3842,7 +3842,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
         return http_get_handler
 
-    def _test_enable_extension(self, data_file, signature_should_be_validated, expected_status_code, expected_handler_status,expected_ext_count,
+    def _test_enable_extension(self, data_file, signature_validation_should_succeed, expected_status_code, expected_handler_status, expected_ext_count,
                                expected_status_msg=None, expected_handler_name="OSTCExtensions.ExampleHandlerLinux", expected_version="1.0.0"):
 
         # Set up a mock protocol instance.
@@ -3865,7 +3865,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
             # Assert signature validation state
             base_dir = os.path.join(conf.get_lib_dir(), '{0}-{1}'.format(expected_handler_name, expected_version))
-            self.assertEqual(signature_should_be_validated, signature_has_been_validated(base_dir))
+            self.assertEqual(signature_validation_should_succeed, signature_has_been_validated(base_dir))
 
     def test_enable_should_succeed_and_send_telemetry_if_signature_validation_fails(self):
         # Signature validation fails, handler manifest validation succeeds -> enable, send telemetry, state should not be set
@@ -3876,7 +3876,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
         with patch('azurelinuxagent.ga.signature_validation_util.add_event') as patched_add_event:
             self._test_enable_extension(data_file=data_file,
-                                        signature_should_be_validated=False,
+                                        signature_validation_should_succeed=False,
                                         expected_status_code=0,
                                         expected_handler_status='Ready',
                                         expected_ext_count=1, expected_status_msg='Plugin enabled',
@@ -3925,7 +3925,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
         with patch('azurelinuxagent.ga.signature_validation_util.add_event') as patched_add_event:
             with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.load_manifest', return_value=manifest):
                 self._test_enable_extension(data_file=data_file,
-                                            signature_should_be_validated=False,
+                                            signature_validation_should_succeed=False,
                                             expected_status_code=0,
                                             expected_handler_status='Ready',
                                             expected_ext_count=1,
@@ -3976,7 +3976,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
         with patch('azurelinuxagent.ga.signature_validation_util.add_event') as patched_add_event:
             with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.load_manifest', return_value=manifest):
                 self._test_enable_extension(data_file=data_file,
-                                            signature_should_be_validated=False,
+                                            signature_validation_should_succeed=False,
                                             expected_status_code=0,
                                             expected_handler_status='Ready',
                                             expected_ext_count=1,
@@ -4004,7 +4004,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
         with patch('azurelinuxagent.ga.signature_validation_util.add_event') as patched_add_event:
             self._test_enable_extension(data_file=data_file,
-                                        signature_should_be_validated=True,
+                                        signature_validation_should_succeed=True,
                                         expected_status_code=0,
                                         expected_handler_status='Ready',
                                         expected_ext_count=1,
@@ -4031,7 +4031,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
         data_file["ext_conf"] = "wire/ext_conf-no_encoded_signature.xml"
 
         with patch('azurelinuxagent.ga.exthandlers.add_event') as add_event:
-            self._test_enable_extension(data_file=data_file, signature_should_be_validated=False,
+            self._test_enable_extension(data_file=data_file, signature_validation_should_succeed=False,
                                         expected_status_code=0, expected_handler_status='Ready', expected_ext_count=1)
 
             # Should have sent telemetry that extension is unsigned
@@ -4057,7 +4057,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
         with patch("azurelinuxagent.ga.signature_validation_util._get_openssl_version", return_value="1.0.2"):
             with patch('azurelinuxagent.ga.exthandlers.event.error') as patched_add_event:
                 self._test_enable_extension(data_file=data_file,
-                                            signature_should_be_validated=False,
+                                            signature_validation_should_succeed=False,
                                             expected_status_code=0,
                                             expected_handler_status='Ready',
                                             expected_ext_count=1,
@@ -4079,7 +4079,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
         with patch('azurelinuxagent.ga.exthandlers.conf.get_signature_validation_enabled', return_value=False):
             self._test_enable_extension(data_file=data_file,
-                                        signature_should_be_validated=False,
+                                        signature_validation_should_succeed=False,
                                         expected_status_code=0,
                                         expected_handler_status='Ready',
                                         expected_ext_count=1,
@@ -4210,7 +4210,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
         with patch('azurelinuxagent.ga.signature_validation_util.add_event') as patched_add_event:
             self._test_enable_extension(data_file=data_file,
-                                        signature_should_be_validated=True,
+                                        signature_validation_should_succeed=True,
                                         expected_status_code=0,
                                         expected_handler_status='Ready',
                                         expected_ext_count=1,
@@ -4240,7 +4240,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
         with patch('azurelinuxagent.ga.exthandlers.add_event') as patched_add_event:
             self._test_enable_extension(data_file=data_file,
-                                        signature_should_be_validated=False,
+                                        signature_validation_should_succeed=False,
                                         expected_status_code=0,
                                         expected_handler_status='Ready',
                                         expected_ext_count=1,
@@ -4291,7 +4291,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
         with patch('azurelinuxagent.ga.signature_validation_util.add_event') as patched_add_event:
             with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.load_manifest', return_value=manifest):
                 self._test_enable_extension(data_file=data_file,
-                                            signature_should_be_validated=False,
+                                            signature_validation_should_succeed=False,
                                             expected_status_code=0,
                                             expected_handler_status='Ready',
                                             expected_ext_count=1,

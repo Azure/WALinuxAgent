@@ -61,7 +61,7 @@ class ExtSignatureValidation(AgentVmTest):
             # Check that signature and manifest were successfully validated, and that state file was created.
             log.info("Check that signature and manifest were successfully validated in agent log, and that state file was created.")
             self._ssh_client.run_command(
-                f"agent_ext_signature_validation-check_signature_validated.py "
+                f"ext_signature_validation-check_signature_validated.py "
                 f"--extension-name '{extension_case.extension._identifier.type}' --after_timestamp {enable_start_time}",
                 use_sudo=True
             )
@@ -107,7 +107,7 @@ class ExtSignatureValidation(AgentVmTest):
             for case in ext_to_enable:
                 log.info(f"Checking that signature was successfully validated for extension '{case.extension._identifier.type}'.")
                 self._ssh_client.run_command(
-                    f"agent_ext_signature_validation-check_signature_validated.py --extension-name '{case.extension._identifier.type}'",
+                    f"ext_signature_validation-check_signature_validated.py --extension-name '{case.extension._identifier.type}'",
                     use_sudo=True
                 )
         except Exception as ex:
