@@ -22,8 +22,7 @@ import sys
 from tests.lib.tools import AgentTestCase, data_dir, patch, skip_if_predicate_true
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 from azurelinuxagent.ga.signature_validation_util import validate_signature, SignatureValidationError, validate_handler_manifest_signing_info, \
-    ManifestValidationError
-from azurelinuxagent.ga.signature_validation_util import _get_openssl_version, openssl_version_supported_for_signature_validation
+    ManifestValidationError, _get_openssl_version, openssl_version_supported_for_signature_validation
 from azurelinuxagent.ga.exthandlers import HandlerManifest
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.protocol.restapi import Extension
@@ -72,7 +71,7 @@ class TestSignatureValidation(AgentTestCase):
         # The root certificate used here is valid (unexpired) and issued by the Microsoft CA, but it does not match the
         # one that signed the package - signature validation should fail.
         incorrect_root_cert_path = os.path.join(data_dir, "signing/incorrect_microsoft_root_cert.pem")
-        with patch("azurelinuxagent.ga.signature_validation.get_microsoft_signing_certificate_path", return_value=incorrect_root_cert_path):
+        with patch("azurelinuxagent.ga.signature_validation_util.get_microsoft_signing_certificate_path", return_value=incorrect_root_cert_path):
             with self.assertRaises(SignatureValidationError, msg="Signing certificate does not match, should have raised error") as ex:
                 validate_signature(self.vm_access_zip_path, self.vm_access_signature)
             expected_error_regex = r"Verify\s*error\s*:\s*unable\s*to\s*get\s*local\s*issuer\s*certificate"
@@ -80,7 +79,7 @@ class TestSignatureValidation(AgentTestCase):
 
     def test_should_raise_error_on_missing_signing_certificate(self):
         root_cert_path = os.path.join(self.tmp_dir, "missing_root_cert.pem")
-        with patch("azurelinuxagent.ga.signature_validation.get_microsoft_signing_certificate_path", return_value=root_cert_path):
+        with patch("azurelinuxagent.ga.signature_validation_util.get_microsoft_signing_certificate_path", return_value=root_cert_path):
             with self.assertRaises(SignatureValidationError, msg="Signing certificate missing, should have raised error") as ex:
                 validate_signature(self.vm_access_zip_path, self.vm_access_signature)
             self.assertIn("signing certificate was not found", ex.exception.args[0], msg="Error message did not indicate that certificate is missing.")
@@ -104,18 +103,18 @@ class TestSignatureValidation(AgentTestCase):
             ("OpenSSL 1.1.1  1 Aug 2023", "1.1.1")
         ]
         for case in test_cases:
-            with patch("azurelinuxagent.ga.signature_validation.run_command", return_value=case[0]):
+            with patch("azurelinuxagent.ga.signature_validation_util.run_command", return_value=case[0]):
                 version = _get_openssl_version()
                 self.assertEqual(version, case[1], "Returned incorrect openssl version")
 
     def test_should_not_support_signature_validation_if_fail_to_get_openssl_version(self):
-        with patch("azurelinuxagent.ga.signature_validation.run_command", side_effect=CommandError("cmd", 1, "", "error")):
+        with patch("azurelinuxagent.ga.signature_validation_util.run_command", side_effect=CommandError("cmd", 1, "", "error")):
             self.assertFalse(openssl_version_supported_for_signature_validation())
 
-        with patch("azurelinuxagent.ga.signature_validation.run_command", return_value=None):
+        with patch("azurelinuxagent.ga.signature_validation_util.run_command", return_value=None):
             self.assertFalse(openssl_version_supported_for_signature_validation())
 
-        with patch("azurelinuxagent.ga.signature_validation.run_command", return_value="some junk output"):
+        with patch("azurelinuxagent.ga.signature_validation_util.run_command", return_value="some junk output"):
             self.assertFalse(openssl_version_supported_for_signature_validation())
 
     @skip_if_predicate_true(lambda: True, "Enable this test when timestamp validation has been implemented.")
