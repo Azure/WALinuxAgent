@@ -1385,7 +1385,7 @@ class ExtHandlerInstance(object):
             return False
 
         try:
-            self._log_signature_validation_telemetry("Downloading extension package and validating its signature: '{0}'".format(self.ext_handler), is_success=True)
+            self._log_signature_validation_telemetry("Validating extension package signature: '{0}'".format(self.ext_handler), is_success=True)
             validate_signature(package_file, self.ext_handler.encoded_signature)
             self._log_signature_validation_telemetry("Successfully validated signature for extension '{0}'.".format(self.ext_handler), is_success=True)
             return True

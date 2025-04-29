@@ -99,6 +99,13 @@ def _get_openssl_version():
 
 
 def openssl_version_supported_for_signature_validation():
+    # Signature validation currently requires OpenSSL >= 1.1.0 to support the 'no_check_time' flag
+    # used with the 'openssl cms verify' command. This flag bypasses timestamp checks, and will be removed once
+    # proper timestamp validation is implemented.
+    #
+    # For private preview release only, signature validation is only supported on distros with OpenSSL >= 1.1.0, and
+    # users will be informed accordingly. If the OpenSSL version is too old, we log this and return False rather than
+    # raising an error.
     openssl_version = _get_openssl_version()
     if FlexibleVersion(openssl_version) < _MIN_OPENSSL_VERSION_FOR_SIG_VALIDATION:
         msg = ("Signature validation requires OpenSSL version {0}, but the current version is {1}. "
