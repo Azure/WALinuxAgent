@@ -315,6 +315,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         if extension.state in (None, ""):
             raise ExtensionsConfigError("Received empty Extensions.Plugins.Plugin.state, failing Handler")
 
+        # The 'encodedSignature' property is an optional property in the HGAP/agent contract.
         # extension.encoded_signature value should be an empty string if the property does not exist for the plugin. getattrib
         # returns "" if an attribute does not exist in a node.
         extension.encoded_signature = getattrib(plugin, "encodedSignature")

@@ -379,6 +379,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                 extension.name = extension_gs['name']
                 extension.version = extension_gs['version']
                 extension.state = extension_gs['state']
+                # The 'encodedSignature' property is an optional property in the HGAP/agent contract.
                 # extension.encoded_signature should be an empty string if 'encodedSignature' key does not exist for the extension.
                 encoded_signature = extension_gs.get('encodedSignature')
                 if encoded_signature is None:
