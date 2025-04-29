@@ -1453,7 +1453,7 @@ class ExtHandlerInstance(object):
 
                 package_exists = True
             else:
-                self._log_signature_validation_telemetry("The existing extension package is invalid, will ignore it.")
+                self._log_signature_validation_telemetry("The existing extension package is invalid, will ignore it.", is_success=True)
 
         # Handle the case where the extension package does not exist. Download the zip package, validate the signature
         # if present, and extract the package. If package is signed, validate handler manifest.
@@ -1465,18 +1465,18 @@ class ExtHandlerInstance(object):
                 self._log_signature_validation_telemetry("Extension '{0}' is not signed".format(self.ext_handler), is_success=True)
 
             try:
-                if should_validate_signature and self.ext_handler.encoded_signature != "":
+                if should_validate_ext_signature and self.ext_handler.encoded_signature != "":
                     self._log_signature_validation_telemetry("Downloading extension package and validating its signature: '{0}'".format(self.ext_handler), is_success=True)
 
                 # If signature should not be validated, pass an empty string as 'signature' to download_zip_package(),
                 # which will skip validation when the signature parameter is empty.
-                signature = self.ext_handler.encoded_signature if should_validate_signature else ""
+                signature = self.ext_handler.encoded_signature if should_validate_ext_signature else ""
                 self.protocol.client.download_zip_package("extension package", self.pkg.uris, package_file,
                                                           self.get_base_dir(),
                                                           use_verify_header=is_fast_track_goal_state,
                                                           signature=signature)
 
-                if should_validate_signature and self.ext_handler.encoded_signature != "":
+                if should_validate_ext_signature and self.ext_handler.encoded_signature != "":
                     self._log_signature_validation_telemetry("Successfully validated signature for extension '{0}'.".format(self.ext_handler), is_success=True)
                     signature_validated = True
 
