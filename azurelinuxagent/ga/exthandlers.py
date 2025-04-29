@@ -57,7 +57,7 @@ from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
-from azurelinuxagent.ga.signature_validation import validate_handler_manifest_signing_info, SignatureValidationError, \
+from azurelinuxagent.ga.signature_validation_util import validate_handler_manifest_signing_info, SignatureValidationError, \
     ManifestValidationError, save_signature_validation_state, should_validate_signature, validate_signature
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
@@ -1441,6 +1441,7 @@ class ExtHandlerInstance(object):
             # Unzip package and validate manifest
             if self._unzip_extension_package(package_file, self.get_base_dir()):
                 if should_validate_ext_signature and self.ext_handler.encoded_signature != "":
+                    # Helper function logs telemetry and handles any ManifestValidationError raised
                     manifest_validated = self._validate_extension_handler_manifest_signing_info()
                     if manifest_validated and signature_validated:
                         save_signature_validation_state(self.get_base_dir())
@@ -1483,6 +1484,7 @@ class ExtHandlerInstance(object):
                 self._log_signature_validation_telemetry(ustr(ex), is_success=False)
 
             if should_validate_ext_signature and self.ext_handler.encoded_signature != "":
+                # Helper function logs telemetry and handles any ManifestValidationError raised
                 manifest_validated = self._validate_extension_handler_manifest_signing_info()
                 # Only save state if manifest and signature were both successfully validated.
                 if signature_validated and manifest_validated:

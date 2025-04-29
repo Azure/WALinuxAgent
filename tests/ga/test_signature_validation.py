@@ -21,9 +21,9 @@ import sys
 
 from tests.lib.tools import AgentTestCase, data_dir, patch, skip_if_predicate_true
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
-from azurelinuxagent.ga.signature_validation import validate_signature, SignatureValidationError, validate_handler_manifest_signing_info, \
+from azurelinuxagent.ga.signature_validation_util import validate_signature, SignatureValidationError, validate_handler_manifest_signing_info, \
     ManifestValidationError
-from azurelinuxagent.ga.signature_validation import _get_openssl_version, openssl_version_supported_for_signature_validation
+from azurelinuxagent.ga.signature_validation_util import _get_openssl_version, openssl_version_supported_for_signature_validation
 from azurelinuxagent.ga.exthandlers import HandlerManifest
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.protocol.restapi import Extension

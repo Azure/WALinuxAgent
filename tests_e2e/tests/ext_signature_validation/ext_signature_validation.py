@@ -58,21 +58,11 @@ class ExtSignatureValidation(AgentVmTest):
         log.info("")
 
         if should_validate_signature:
-            # Confirm that agent logs successful signature validation and handler manifest validation
-            log.info("Checking agent log to confirm that package signature was validated successfully.")
-            signature_log_msg = "Successfully validated signature for extension"
-            self._ssh_client.run_command(f"check_data_in_agent_log.py --data '{signature_log_msg}' "
-                                         f"--after-timestamp '{enable_start_time}'", use_sudo=True)
-
-            log.info("Checking agent log to confirm that handler manifest was validated successfully.")
-            manifest_log_msg = "Successfully validated handler manifest"
-            self._ssh_client.run_command(f"check_data_in_agent_log.py --data '{manifest_log_msg}' "
-                                         f"--after-timestamp '{enable_start_time}'", use_sudo=True)
-
-            # Check signature validation state
-            log.info("Checking that signature validation state file exists.")
+            # Check that signature and manifest were successfully validated, and that state file was created.
+            log.info("Check that signature and manifest were successfully validated in agent log, and that state file was created.")
             self._ssh_client.run_command(
-                f"agent_ext_signature_validation-verify_state.py --extension-name '{extension_case.extension._identifier.type}'",
+                f"agent_ext_signature_validation-check_signature_validated.py "
+                f"--extension-name '{extension_case.extension._identifier.type}' --after_timestamp {enable_start_time}",
                 use_sudo=True
             )
         log.info(f"Enable succeeded for {extension_case.extension} as expected")
@@ -115,139 +105,133 @@ class ExtSignatureValidation(AgentVmTest):
         try:
             rg_client.deploy_template(template=base_template)
             for case in ext_to_enable:
-                log.info(f"Checking that signature validation state file exist for extension '{case.extension._identifier.type}'.")
+                log.info(f"Checking that signature was successfully validated for extension '{case.extension._identifier.type}'.")
                 self._ssh_client.run_command(
-                    f"agent_ext_signature_validation-verify_state.py --extension-name '{case.extension._identifier.type}'",
+                    f"agent_ext_signature_validation-check_signature_validated.py --extension-name '{case.extension._identifier.type}'",
                     use_sudo=True
                 )
         except Exception as ex:
             fail(f"Extension deployment unexpectedly failed: {ex}")
 
     def run(self):
-        try:
-            # Setup test
-            log.info("*** Begin test setup")
-            log.info("")
-            log.info(" - Get VM distro")
-            distro = self._ssh_client.get_distro()
-            log.info("VM distro: '{0}'".format(distro))
+        # Setup test
+        log.info("*** Begin test setup")
+        log.info("")
+        log.info(" - Get VM distro")
+        distro = self._ssh_client.get_distro()
+        log.info("VM distro: '{0}'".format(distro))
 
-            # CustomScript 2.1 is a signed, single-config extension.
-            cse_id_21 = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript',
-                                              version="2.1")
-            custom_script_signed = ExtSignatureValidation._TestCase(
-                VirtualMachineExtensionClient(self._context.vm, cse_id_21, resource_name="CustomScript"),
-                {'commandToExecute': f"echo '{str(uuid.uuid4())}'"}
-            )
+        # CustomScript 2.1 is a signed, single-config extension.
+        cse_id_21 = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript',
+                                          version="2.1")
+        custom_script_signed = ExtSignatureValidation._TestCase(
+            VirtualMachineExtensionClient(self._context.vm, cse_id_21, resource_name="CustomScript"),
+            {'commandToExecute': f"echo '{str(uuid.uuid4())}'"}
+        )
 
-            # CustomScript 2.0 is an unsigned, single-config extension.
-            cse_id_20 = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript', version="2.0")
-            custom_script_unsigned = ExtSignatureValidation._TestCase(
-                VirtualMachineExtensionClient(self._context.vm, cse_id_20, resource_name="CustomScript"),
-                {'commandToExecute': f"echo '{str(uuid.uuid4())}'"}
-            )
+        # CustomScript 2.0 is an unsigned, single-config extension.
+        cse_id_20 = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript', version="2.0")
+        custom_script_unsigned = ExtSignatureValidation._TestCase(
+            VirtualMachineExtensionClient(self._context.vm, cse_id_20, resource_name="CustomScript"),
+            {'commandToExecute': f"echo '{str(uuid.uuid4())}'"}
+        )
 
-            # RunCommandHandler 1.3 is a signed, multi-config extension.
-            rc_id_1_3 = VmExtensionIdentifier(publisher="Microsoft.CPlat.Core", ext_type="RunCommandHandlerLinux", version="1.3")
-            run_command_signed = ExtSignatureValidation._TestCase(
-                VirtualMachineRunCommandClient(self._context.vm, rc_id_1_3, resource_name="RunCommandHandler"),
-                {'source': f"echo '{str(uuid.uuid4())}'"}
-            )
+        # RunCommandHandler 1.3 is a signed, multi-config extension.
+        rc_id_1_3 = VmExtensionIdentifier(publisher="Microsoft.CPlat.Core", ext_type="RunCommandHandlerLinux", version="1.3")
+        run_command_signed = ExtSignatureValidation._TestCase(
+            VirtualMachineRunCommandClient(self._context.vm, rc_id_1_3, resource_name="RunCommandHandler"),
+            {'source': f"echo '{str(uuid.uuid4())}'"}
+        )
 
-            # VMApplicationManagerLinux is a signed, no-config extension.
-            vmapp_id_1_0 = VmExtensionIdentifier(publisher='Microsoft.CPlat.Core', ext_type='VMApplicationManagerLinux',
-                                                version='1.0')
-            vm_app_signed = ExtSignatureValidation._TestCase(
-                VirtualMachineExtensionClient(self._context.vm, vmapp_id_1_0, resource_name="VMApplicationManagerLinux"),
-                None
-            )
+        # VMApplicationManagerLinux is a signed, no-config extension.
+        vmapp_id_1_0 = VmExtensionIdentifier(publisher='Microsoft.CPlat.Core', ext_type='VMApplicationManagerLinux',
+                                            version='1.0')
+        vm_app_signed = ExtSignatureValidation._TestCase(
+            VirtualMachineExtensionClient(self._context.vm, vmapp_id_1_0, resource_name="VMApplicationManagerLinux"),
+            None
+        )
 
-            # AzureMonitorLinuxAgent 1.33 is an unsigned, no-config extension.
-            ama_id_1_33 = VmExtensionIdentifier(publisher='Microsoft.Azure.Monitor', ext_type='AzureMonitorLinuxAgent', version="1.33")
-            azure_monitor_unsigned = ExtSignatureValidation._TestCase(
-                VirtualMachineExtensionClient(self._context.vm, ama_id_1_33, resource_name="AzureMonitorLinuxAgent"),
-                None
-            )
+        # AzureMonitorLinuxAgent 1.33 is an unsigned, no-config extension.
+        ama_id_1_33 = VmExtensionIdentifier(publisher='Microsoft.Azure.Monitor', ext_type='AzureMonitorLinuxAgent', version="1.33")
+        azure_monitor_unsigned = ExtSignatureValidation._TestCase(
+            VirtualMachineExtensionClient(self._context.vm, ama_id_1_33, resource_name="AzureMonitorLinuxAgent"),
+            None
+        )
 
-            # VmAccess 1.5 is a signed, single-config extension.
-            vmaccess_id_1_5 = VmExtensionIdentifier(publisher='Microsoft.OSTCExtensions.Edp', ext_type='VMAccessForLinux', version="1.5")
-            vm_access_signed = ExtSignatureValidation._TestCase(
-                VirtualMachineExtensionClient(self._context.vm, vmaccess_id_1_5, resource_name="VMAccessForLinux"),
-                settings = None,
-                protected_settings={'username': 'testuser'}
-            )
+        # VmAccess 1.5 (signed, single-config) and ApplicationHealthLinux 2.0 (signed, no-config)
+        # are additional extensions used to stress test signature validation by including multiple
+        # signed extensions in a single goal state.
+        vmaccess_id_1_5 = VmExtensionIdentifier(publisher='Microsoft.OSTCExtensions.Edp', ext_type='VMAccessForLinux', version="1.5")
+        vm_access_signed = ExtSignatureValidation._TestCase(
+            VirtualMachineExtensionClient(self._context.vm, vmaccess_id_1_5, resource_name="VMAccessForLinux"),
+            settings = None,
+            protected_settings={'username': 'testuser'}
+        )
+        ahl_id_2_0 = VmExtensionIdentifier(publisher='Microsoft.ManagedServices.Edp', ext_type='ApplicationHealthLinux', version="2.0")
+        application_health_signed = ExtSignatureValidation._TestCase(
+            VirtualMachineExtensionClient(self._context.vm, ahl_id_2_0, resource_name="ApplicationHealthLinux"),
+            None
+        )
 
-            # ApplicationHealthLinux 2.0 is a signed, no-config extension.
-            ahl_id_2_0 = VmExtensionIdentifier(publisher='Microsoft.ManagedServices.Edp', ext_type='ApplicationHealthLinux', version="2.0")
-            application_health_signed = ExtSignatureValidation._TestCase(
-                VirtualMachineExtensionClient(self._context.vm, ahl_id_2_0, resource_name="ApplicationHealthLinux"),
-                None
-            )
+        # Delete any existing extensions on the VM to ensure a clean test setup.
+        # Signature validation occurs only during download, so extensions must be removed
+        # beforehand to force a fresh download and trigger validation.
+        log.info(" - Clean up existing extensions that we want to test on VM")
+        extensions_on_vm = self._context.vm.get_extensions().value
+        extension_names_on_vm = {ext.name for ext in extensions_on_vm}
+        extensions_to_cleanup = [custom_script_unsigned, run_command_signed, vm_app_signed, azure_monitor_unsigned]
+        for ext in extensions_to_cleanup:
+            if ext.extension._resource_name in extension_names_on_vm:
+                ext.extension.delete()
 
-            # Delete any existing extensions on VM that we want to clean up before testing
-            log.info(" - Clean up existing extensions that we want to test on VM")
-            extensions_on_vm = self._context.vm.get_extensions().value
-            extension_names_on_vm = {ext.name for ext in extensions_on_vm}
-            extensions_to_cleanup = [custom_script_unsigned, run_command_signed, vm_app_signed, azure_monitor_unsigned]
-            for ext in extensions_to_cleanup:
-                if ext.extension._resource_name in extension_names_on_vm:
-                    ext.extension.delete()
+        # This set of test cases will test behavior when signature is validated, but not enforced (telemetry only).
+        # Both signed and unsigned extensions should succeed.
+        log.info("")
+        log.info("*** Begin test cases for signature validation without enforcement. All operations should succeed.")
+        # Test unsigned, single-config extension (CustomScript). Extension should be enabled and uninstalled with no errors.
+        log.info("")
+        log.info("*** Test case 1: should enable and uninstall unsigned single-config extension (CustomScript 2.0) successfully")
+        self._should_enable_extension(custom_script_unsigned, should_validate_signature=False)
+        self._should_uninstall_extension(custom_script_unsigned)
 
-            # This set of test cases will test behavior when signature is validated, but not enforced (telemetry only).
-            # Both signed and unsigned extensions should succeed.
-            log.info("")
-            log.info("*** Begin test cases for signature validation without enforcement. All operations should succeed.")
-            # Test unsigned, single-config extension (CustomScript). Extension should be enabled and uninstalled with no errors.
-            log.info("")
-            log.info("*** Test case 1: should enable and uninstall unsigned single-config extension (CustomScript 2.0) successfully")
-            self._should_enable_extension(custom_script_unsigned, should_validate_signature=False)
-            self._should_uninstall_extension(custom_script_unsigned)
+        # Test signed, single-config extension (CustomScript). Extension signature should be validated, and extension should be enabled and uninstalled with no errors.
+        log.info("")
+        log.info("*** Test case 2: should validate signature, enable, and uninstall signed single-config extension (CustomScript 2.1) successfully")
+        self._should_enable_extension(custom_script_signed, should_validate_signature=True)
+        self._should_uninstall_extension(custom_script_signed)
 
-            # Test signed, single-config extension (CustomScript). Extension signature should be validated, and extension should be enabled and uninstalled with no errors.
-            log.info("")
-            log.info("*** Test case 2: should validate signature, enable, and uninstall signed single-config extension (CustomScript 2.1) successfully")
-            self._should_enable_extension(custom_script_signed, should_validate_signature=True)
-            self._should_uninstall_extension(custom_script_signed)
+        # Test signed, multi-config extension (RunCommandHandler). Extension signature should be validated, and extension should be enabled and uninstalled with no errors.
+        #
+        # Note: Currently, the VirtualMachineRunCommand client does not support restricting RunCommandHandler to a specific unsigned version.
+        # Therefore, we only test the signed version of RunCommandHandler for now.
+        # TODO: Add tests for the unsigned version once the "ForceRunCommandV2Version" flag is fixed for VirtualMachineRunCommandClient
+        log.info("")
+        log.info("*** Test case 3: should validate signature, enable, and uninstall signed multi-config extension (RunCommandHandler) successfully")
+        self._should_enable_extension(run_command_signed, should_validate_signature=True)
+        self._should_uninstall_extension(run_command_signed)
 
-            # Test signed, multi-config extension (RunCommandHandler). Extension signature should be validated, and extension should be enabled and uninstalled with no errors.
-            #
-            # Note: Currently, the VirtualMachineRunCommand client does not support restricting RunCommandHandler to a specific unsigned version.
-            # Therefore, we only test the signed version of RunCommandHandler for now.
-            # TODO: Add tests for the unsigned version once the "ForceRunCommandV2Version" flag is fixed for VirtualMachineRunCommandClient
-            log.info("")
-            log.info("*** Test case 3: should validate signature, enable, and uninstall signed multi-config extension (RunCommandHandler) successfully")
-            self._should_enable_extension(run_command_signed, should_validate_signature=True)
-            self._should_uninstall_extension(run_command_signed)
+        # Test unsigned, no-config extension (AzureMonitorLinuxAgent). Extension should be enabled and uninstalled with no errors.
+        log.info("")
+        log.info("*** Test case 4: should enable and uninstall unsigned no-config extension (AzureMonitorLinuxAgent 1.33) successfully")
+        if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(distro):
+            self._should_enable_extension(azure_monitor_unsigned, should_validate_signature=False)
+            self._should_uninstall_extension(azure_monitor_unsigned)
+        else:
+            log.info("Skipping test case because AzureMonitorLinuxAgent is not supported on distro '{0}'".format(distro))
 
-            # Test unsigned, no-config extension (AzureMonitorLinuxAgent). Extension should be enabled and uninstalled with no errors.
-            log.info("")
-            log.info("*** Test case 4: should enable and uninstall unsigned no-config extension (AzureMonitorLinuxAgent 1.33) successfully")
-            if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(distro):
-                self._should_enable_extension(azure_monitor_unsigned, should_validate_signature=False)
-                self._should_uninstall_extension(azure_monitor_unsigned)
-            else:
-                log.info("Skipping test case because AzureMonitorLinuxAgent is not supported on distro '{0}'".format(distro))
+        # Test signed, no-config extension (VMApplicationManagerLinux). Extension signature should be validated, and extension should be enabled and uninstalled with no errors.
+        log.info("")
+        log.info("*** Test case 5: should validate signature, enable, and uninstall signed no-config extension (VMApplicationManagerLinux) successfully")
+        self._should_enable_extension(vm_app_signed, should_validate_signature=True)
+        self._should_uninstall_extension(vm_app_signed)
 
-            # Test signed, no-config extension (VMApplicationManagerLinux). Extension signature should be validated, and extension should be enabled and uninstalled with no errors.
-            log.info("")
-            log.info("*** Test case 5: should validate signature, enable, and uninstall signed no-config extension (VMApplicationManagerLinux) successfully")
-            self._should_enable_extension(vm_app_signed, should_validate_signature=True)
-            self._should_uninstall_extension(vm_app_signed)
+        # TODO: Add test cases for package published with invalid signature and invalid manifest signingInfo, when
+        # PIR allows for publication of invalid packages.
 
-            # TODO: Add test cases for package published with invalid signature and invalid manifest signingInfo, when
-            # PIR allows for publication of invalid packages.
-
-            log.info("")
-            log.info("*** Test case 6: should enable multiple signed extensions in single goal state")
-            ext_to_enable = [custom_script_signed, run_command_signed, vm_access_signed, application_health_signed]
-            self._should_enable_multiple_signed_extensions(ext_to_enable)
-
-        finally:
-            log.info("")
-            log.info("*** Begin test cleanup")
-            self._ssh_client.run_command("update-waagent-conf Debug.EnableSignatureValidation=n", use_sudo=True)
-            log.info("Successfully disabled signature validation via config (Debug.EnableSignatureValidation=n)")
-            log.info("*** Test cleanup complete.")
+        log.info("")
+        log.info("*** Test case 6: should enable multiple signed extensions in single goal state")
+        ext_to_enable = [custom_script_signed, run_command_signed, vm_access_signed, application_health_signed]
+        self._should_enable_multiple_signed_extensions(ext_to_enable)
 
 
 if __name__ == "__main__":

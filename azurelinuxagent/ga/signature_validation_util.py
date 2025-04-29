@@ -32,7 +32,8 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 
 
-# This file tracks the state of signature validation for the package. If the file exists, signature has been validated.
+# This file tracks the state of signature and manifest validation for the package. If the file exists, signature and
+# manifest have both been successfully validated.
 _PACKAGE_VALIDATION_STATE_FILE = "package_validated"
 
 # Signature validation requires OpenSSL version 1.1.0 or later. The 'no_check_time' flag used for the 'openssl cms -verify'

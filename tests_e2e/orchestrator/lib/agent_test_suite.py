@@ -474,6 +474,11 @@ class AgentTestSuite(LisaTestSuite):
             command = f"tar xvf {target_path/self._test_tools_tarball_path.name} && ~/bin/install-tools"
             log.info("Remote command [%s] completed:\n%s", command, ssh_client.run_command(command))
 
+            # Update waagent.conf on test node
+            log.info("Updating conf file on test node: setting 'Debug.EnableSignatureValidation' to true")
+            command = "update-waagent-conf Debug.EnableSignatureValidation=y"
+            log.info("%s\n%s", command, ssh_client.run_command(command, use_sudo=True))
+
             if self._is_vhd:
                 log.info("Using a VHD; will not install the Test Agent.")
             elif not install_test_agent:
@@ -482,11 +487,6 @@ class AgentTestSuite(LisaTestSuite):
                 log.info("Installing the Test Agent on the test node")
                 command = f"install-agent --package ~/tmp/{self._test_agent_package_path.name} --version {AGENT_VERSION}"
                 log.info("%s\n%s", command, ssh_client.run_command(command, use_sudo=True))
-
-            # Update waagent.conf on test node
-            log.info("Updating conf file on test node: setting 'Debug.EnableSignatureValidation' to true")
-            command = "update-waagent-conf Debug.EnableSignatureValidation=y"
-            log.info("%s\n%s", command, ssh_client.run_command(command, use_sudo=True))
 
             log.info("Completed test node setup")
 
