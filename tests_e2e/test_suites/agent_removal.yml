@@ -27,7 +27,6 @@ tests:
   - "agent_removal/agent_removal.py"
 images:
   - "ubuntu_2404"
-  - "ubuntu_2404_arm64"
 locations:
   - "AzureCloud:centraluseuap"
   - "AzureCloud:eastus2euap"
