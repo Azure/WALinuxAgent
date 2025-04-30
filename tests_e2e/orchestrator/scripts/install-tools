@@ -69,7 +69,7 @@ if [[ "$distro_path" != "" ]]; then
   echo "Copying the system's distro module to Pypy"
   cp -v "$distro_path" ~/bin/pypy*/site-packages
 else
-  echo "The distro module is not is not installing on the system; skipping."
+  echo "The distro module is not is not installed on the system; skipping."
 fi
 
 has_linux_distribution=$($python -c 'import platform; print(hasattr(platform, "linux_distribution"))')
@@ -81,7 +81,7 @@ else
   uname=$(uname -v)
   test -f /etc/almalinux-release && grep -qiE "AlmaLinux.*8\." /etc/almalinux-release # Only Alma 8 requires the patch (file contents are similar to "AlmaLinux release 8.10 (Cerulean Leopard)")
   alma_linux=$?
-  test -f /etc/oracle-release
+  test -f /etc/oracle-release && true
   oracle_linux=$?
   if [[ "$uname" == *~18*-Ubuntu* || "$uname" == *~16*-Ubuntu* || "$alma_linux" == "0"  || "$oracle_linux" == "0" ]]; then
     echo "Copying the system's platform module to Pypy"
@@ -110,7 +110,7 @@ echo "Pypy   get_distro(): $pypy_get_distro"
 echo "Python get_distro(): $python_get_distro"
 if [[ "$pypy_get_distro" != "$python_get_distro" ]]; then
   echo "*** ERROR: azurelinuxagent.common.version.get_distro() returns different values in Pypy and Python. This can lead to subtle test bugs. Stopping node setup."
-#  exit 1
+  exit 1
 fi
 echo "get_distro() is consistent across Pypy and the system Python"
 
