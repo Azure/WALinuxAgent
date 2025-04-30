@@ -43,7 +43,7 @@ def __get_last_reported_status(after_timestamp):
     # after that timestamp, and raise error if not found after 2 tries.
     agent_log = AgentLog(Path('/var/log/waagent.log'))
 
-    retries = 2
+    retries = 10
     for attempt in range(retries):
         phrase = "All extensions in the goal state have reached a terminal state"
         latest_status = None
