@@ -116,7 +116,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             configurator.initialize()
 
             self.assertFalse(os.path.exists(agent_drop_in_file_cpu_quota),
-                             "{0} was not created".format(agent_drop_in_file_cpu_quota))
+                             "{0} was not cleaned up".format(agent_drop_in_file_cpu_quota))
             cmd = 'systemctl set-property walinuxagent.service CPUQuota= --runtime'
             self.assertIn(cmd, configurator.mocks.commands_call_list,
                           "The command to reset the CPU quota was not called")
