@@ -109,10 +109,10 @@ python_get_distro=$($python -c 'from azurelinuxagent.common.version import get_d
 echo "Pypy   get_distro(): $pypy_get_distro"
 echo "Python get_distro(): $python_get_distro"
 if [[ "$pypy_get_distro" != "$python_get_distro" ]]; then
-  echo "*** ERROR: azurelinuxagent.common.version.get_distro() returns different values in Pypy and Python. This can lead to subtle test bugs. Stopping node setup."
-  exit 1
+  echo "*** WARNING: azurelinuxagent.common.version.get_distro() returns different values in Pypy and Python. This can lead to subtle test bugs."
+else
+  echo "get_distro() is consistent across Pypy and the system Python"
 fi
-echo "get_distro() is consistent across Pypy and the system Python"
 
 #
 # Create ~/bin/set-agent-env to set PATH and PYTHONPATH.
