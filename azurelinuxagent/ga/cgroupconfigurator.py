@@ -140,9 +140,8 @@ class CGroupConfigurator(object):
                     # If a distro is not supported, attempt to clean up any existing drop in files in case it was
                     # previously supported. It is necessary to cleanup in this scenario in case the OS hits any bugs on
                     # the kernel related to cgroups.
-                    if not self.using_cgroup_v2():
-                        log_cgroup_info("Agent will reset the quotas in case cgroup usage went from enabled to disabled")
-                        self._reset_agent_cgroup_setup()
+                    log_cgroup_info("Agent will reset the quotas in case cgroup usage went from enabled to disabled")
+                    self._reset_agent_cgroup_setup()
                     return
 
                 # We check the agent unit 'Slice' property before setting up azure.slice. This check is done first
@@ -156,6 +155,7 @@ class CGroupConfigurator(object):
                     return
 
                 # Before agent setup, cleanup the old agent setup (drop-in files) since new agent uses different approach(systemctl) to setup cgroups.
+                log_cgroup_info("Cleaning up old agent setup (drop-in files), if any")
                 self._cleanup_old_agent_setup()
 
                 # Notes about slice setup:
@@ -197,6 +197,11 @@ class CGroupConfigurator(object):
             finally:
                 log_cgroup_info('Agent cgroups enabled: {0}'.format(self._agent_cgroups_enabled))
                 self._initialized = True
+
+                if self._cgroups_api is not None and not self._cgroups_api.can_enforce_cpu():
+                    # If agent cgroups are not enabled or quotas not enabled, reset the quota for the agent unit
+                    log_cgroup_info("Reset CPU quota if agent cgroups were not enabled for enforcement")
+                    self._reset_cpu_quota(systemd.get_agent_unit_name())
 
         def _check_cgroups_supported(self):
             distro_supported = CGroupUtil.distro_supported()
@@ -484,13 +489,12 @@ class CGroupConfigurator(object):
             NOTE: This resets the quota on the agent's default dropin file; any local overrides on the VM will take precedence
             over this setting.
             """
-            if self._cgroups_api.can_enforce_cpu():
-                log_cgroup_info("Resetting {0}'s CPUQuota".format(unit_name), send_event=False)
-                if CGroupConfigurator._Impl._try_set_cpu_quota(unit_name, "infinity"): # systemd expresses no-quota as infinity, following the same convention
-                    try:
-                        log_cgroup_info('Current CPUQuota: {0}'.format(systemd.get_unit_property(unit_name, "CPUQuotaPerSecUSec")))
-                    except Exception as e:
-                        log_cgroup_warning('Failed to get current CPUQuotaPerSecUSec after reset: {0}'.format(ustr(e)))
+            log_cgroup_info("Resetting {0}'s CPUQuota".format(unit_name), send_event=False)
+            if CGroupConfigurator._Impl._try_set_cpu_quota(unit_name, "infinity"): # systemd expresses no-quota as infinity, following the same convention
+                try:
+                    log_cgroup_info('Current CPUQuota: {0}'.format(systemd.get_unit_property(unit_name, "CPUQuotaPerSecUSec")))
+                except Exception as e:
+                    log_cgroup_warning('Failed to get current CPUQuotaPerSecUSec after reset: {0}'.format(ustr(e)))
 
         # W0238: Unused private member `_Impl.__try_set_cpu_quota(quota)` (unused-private-member)
         @staticmethod
