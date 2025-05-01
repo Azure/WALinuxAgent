@@ -23,7 +23,7 @@
 # It also makes Pypy the default python for the current user.
 #
 
-set -euox pipefail
+set -euo pipefail
 
 PATH="$HOME/bin:$PATH"
 
