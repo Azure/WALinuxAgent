@@ -9,7 +9,7 @@
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
+# distributed under the License is distrfibuted on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
@@ -379,12 +379,18 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                 extension.name = extension_gs['name']
                 extension.version = extension_gs['version']
                 extension.state = extension_gs['state']
-                # The 'encodedSignature' property is an optional property in the HGAP/agent contract.
-                # extension.encoded_signature should be an empty string if 'encodedSignature' key does not exist for the extension.
+                # The 'encodedSignature' property is an optional property in the HGAP/agent contract. extension.encoded_signature
+                # value should be an empty string if the 'encodedSignature' key does not exist for the extension.
+                #
+                # We emit telemetry to indicate whether extension signature is present in the goal state:
+                # - if signature is present, send ExtensionSigned event with is_success=True (message field not required).
+                # - if signature is missing, send ExtensionSigned event with is_success=False ONLY when the extension state is "enabled". Signatures
+                #   are not provided in goal states for "uninstall".
                 encoded_signature = extension_gs.get('encodedSignature')
                 if encoded_signature is None:
                     extension.encoded_signature = ""
-                    add_event(op=WALAEventOperation.ExtensionSigned, message="", name=extension.name, version=extension.version, is_success=False, log_event=False)
+                    if extension.state == "enabled":
+                        add_event(op=WALAEventOperation.ExtensionSigned, message="", name=extension.name, version=extension.version, is_success=False, log_event=False)
                 else:
                     extension.encoded_signature = encoded_signature
                     add_event(op=WALAEventOperation.ExtensionSigned, message="", name=extension.name, version=extension.version, is_success=True, log_event=False)

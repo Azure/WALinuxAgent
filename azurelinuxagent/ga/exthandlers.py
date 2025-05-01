@@ -1380,21 +1380,9 @@ class ExtHandlerInstance(object):
             self.logger.info(msg)
         else:
             # TODO: log as error when signature validation is enforced
-            self.logger.warn("[WARNING] " + msg)
+            self.logger.warn("[WARNING] " + msg + "\nThe failure can be ignored; will continue processing the extension.")
         add_event(op=WALAEventOperation.SignatureValidation, message=msg, name=self.ext_handler.name,
                   version=self.ext_handler.version, is_success=is_success, log_event=False)
-
-    def _validate_extension_handler_manifest_signing_info(self):
-        try:
-            self._log_signature_validation_telemetry("Validating handler manifest 'signingInfo' of package '{0}'".format(self.ext_handler), is_success=True)
-            validate_handler_manifest_signing_info(self.load_manifest(), self.ext_handler)
-            self._log_signature_validation_telemetry("Successfully validated handler manifest 'signingInfo' for extension '{0}'".format(self.ext_handler), is_success=True)
-            return True
-
-        except ManifestValidationError as ex:
-            self._log_signature_validation_telemetry(ustr(ex), is_success=False)
-
-        return False
 
     def download(self):
         """
