@@ -1380,25 +1380,8 @@ class ExtHandlerInstance(object):
             self.logger.info(msg)
         else:
             # TODO: log as error when signature validation is enforced
-            msg = "[WARNING]" + msg
-            self.logger.warn(msg)
+            self.logger.warn("[WARNING] " + msg)
         add_event(op=WALAEventOperation.SignatureValidation, message=msg, name=self.ext_handler.name, version=self.ext_handler.version, is_success=is_success)
-
-    def _validate_extension_package_signature(self, package_file):
-        if self.ext_handler.encoded_signature == "":
-            self._log_signature_validation_telemetry("Extension '{0}' is not signed".format(self.ext_handler), is_success=True)
-            return False
-
-        try:
-            self._log_signature_validation_telemetry("Validating extension package signature: '{0}'".format(self.ext_handler), is_success=True)
-            validate_signature(package_file, self.ext_handler.encoded_signature)
-            self._log_signature_validation_telemetry("Successfully validated signature for extension '{0}'.".format(self.ext_handler), is_success=True)
-            return True
-
-        except SignatureValidationError as ex:
-            self._log_signature_validation_telemetry(ustr(ex), is_success=False)
-
-        return False
 
     def _validate_extension_handler_manifest_signing_info(self):
         try:
@@ -1441,17 +1424,44 @@ class ExtHandlerInstance(object):
             # Validate package signature
             signature_validated = False
             if should_validate_ext_signature:
-                signature_validated = self._validate_extension_package_signature(package_file)
+                if self.ext_handler.encoded_signature == "":
+                    self._log_signature_validation_telemetry("Extension '{0}' is not signed".format(self.ext_handler),
+                                                             is_success=True)
+                else:
+
+                    try:
+                        self._log_signature_validation_telemetry("Validating extension package signature: '{0}'".format(self.ext_handler), is_success=True)
+                        validate_signature(package_file, self.ext_handler.encoded_signature, package_name_and_version=str(self.ext_handler))
+                        self._log_signature_validation_telemetry("Successfully validated signature for extension '{0}'.".format(self.ext_handler), is_success=True)
+                        signature_validated = True
+
+                    except SignatureValidationError as ex:
+                        # TODO: raise error once signature validation is enforced
+                        self._log_signature_validation_telemetry(ustr(ex), is_success=False)
 
             # Unzip package and validate manifest
             if self._unzip_extension_package(package_file, self.get_base_dir()):
                 if should_validate_ext_signature and self.ext_handler.encoded_signature != "":
-                    # Helper function logs telemetry and handles any ManifestValidationError raised
-                    manifest_validated = self._validate_extension_handler_manifest_signing_info()
-                    if manifest_validated and signature_validated:
-                        save_signature_validation_state(self.get_base_dir())
+                    try:
+                        self._log_signature_validation_telemetry(
+                            "Validating handler manifest 'signingInfo' of package '{0}'".format(self.ext_handler),
+                            is_success=True)
+                        validate_handler_manifest_signing_info(self.load_manifest(), self.ext_handler)
+                        self._log_signature_validation_telemetry(
+                            "Successfully validated handler manifest 'signingInfo' for extension '{0}'".format(
+                                self.ext_handler), is_success=True)
+
+                        # If both manifest and signature were validated successfully, save state.
+                        if signature_validated:
+                            save_signature_validation_state(self.get_base_dir())
+
+                    # validate_handler_manifest_signing_info() is only expected to raise ManifestValidationError
+                    except ManifestValidationError as ex:
+                        # TODO: raise error once signature validation is enforced
+                        self._log_signature_validation_telemetry(ustr(ex), is_success=False)
 
                 package_exists = True
+
             else:
                 self._log_signature_validation_telemetry("The existing extension package is invalid, will ignore it.", is_success=True)
 
@@ -1471,7 +1481,7 @@ class ExtHandlerInstance(object):
                 # If signature should not be validated, pass an empty string as 'signature' to download_zip_package(),
                 # which will skip validation when the signature parameter is empty.
                 signature = self.ext_handler.encoded_signature if should_validate_ext_signature else ""
-                self.protocol.client.download_zip_package("extension package", self.pkg.uris, package_file,
+                self.protocol.client.download_zip_package(str(self.ext_handler), self.pkg.uris, package_file,
                                                           self.get_base_dir(),
                                                           use_verify_header=is_fast_track_goal_state,
                                                           signature=signature)
@@ -1484,14 +1494,23 @@ class ExtHandlerInstance(object):
             # type expected from the validation step. Catch and report the error for telemetry purposes, but do not
             # block extension execution, continue to manifest validation.
             except SignatureValidationError as ex:
+                # TODO: raise error once signature validation is enforced
                 self._log_signature_validation_telemetry(ustr(ex), is_success=False)
 
             if should_validate_ext_signature and self.ext_handler.encoded_signature != "":
-                # Helper function logs telemetry and handles any ManifestValidationError raised
-                manifest_validated = self._validate_extension_handler_manifest_signing_info()
-                # Only save state if manifest and signature were both successfully validated.
-                if signature_validated and manifest_validated:
-                    save_signature_validation_state(self.get_base_dir())
+                try:
+                    self._log_signature_validation_telemetry("Validating handler manifest 'signingInfo' of package '{0}'".format(self.ext_handler), is_success=True)
+                    validate_handler_manifest_signing_info(self.load_manifest(), self.ext_handler)
+                    self._log_signature_validation_telemetry("Successfully validated handler manifest 'signingInfo' for extension '{0}'".format(self.ext_handler), is_success=True)
+
+                    # If both manifest and signature were validated successfully, save state.
+                    if signature_validated:
+                        save_signature_validation_state(self.get_base_dir())
+
+                # validate_handler_manifest_signing_info() is only expected to raise ManifestValidationError
+                except ManifestValidationError as ex:
+                    # TODO: raise error once signature validation is enforced
+                    self._log_signature_validation_telemetry(ustr(ex), is_success=False)
 
             self.report_event(message="Download succeeded", duration=elapsed_milliseconds(begin_utc))
 

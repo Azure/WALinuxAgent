@@ -384,12 +384,10 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                 encoded_signature = extension_gs.get('encodedSignature')
                 if encoded_signature is None:
                     extension.encoded_signature = ""
-                    add_event(op=WALAEventOperation.SignatureValidationMetrics, message=json.dumps({"is_signed": False}),
-                              name=extension.name, version=extension.version, is_success=True)
+                    add_event(op=WALAEventOperation.ExtensionSigned, message="", name=extension.name, version=extension.version, is_success=False)
                 else:
                     extension.encoded_signature = encoded_signature
-                    add_event(op=WALAEventOperation.SignatureValidationMetrics, message=json.dumps({"is_signed": True}),
-                              name=extension.name, version=extension.version, is_success=True)
+                    add_event(op=WALAEventOperation.ExtensionSigned, message="", name=extension.name, version=extension.version, is_success=True)
                 if extension.state not in ExtensionRequestedState.All:
                     raise Exception('Invalid extension state: {0} ({1})'.format(extension.state, extension.name))
                 is_multi_config = extension_gs.get('isMultiConfig')

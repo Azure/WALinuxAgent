@@ -320,11 +320,9 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         # returns "" if an attribute does not exist in a node.
         extension.encoded_signature = getattrib(plugin, "encodedSignature")
         if extension.encoded_signature == "":
-            add_event(op=WALAEventOperation.SignatureValidationMetrics, message=json.dumps({"is_signed": False}),
-                      name=extension.name, version=extension.version, is_success=True)
+            add_event(op=WALAEventOperation.ExtensionSigned, message="", name=extension.name, version=extension.version, is_success=False)
         else:
-            add_event(op=WALAEventOperation.SignatureValidationMetrics, message=json.dumps({"is_signed": True}),
-                      name=extension.name, version=extension.version, is_success=True)
+            add_event(op=WALAEventOperation.ExtensionSigned, message="", name=extension.name, version=extension.version, is_success=True)
 
         def getattrib_wrapped_in_list(node, attr_name):
             attr = getattrib(node, attr_name)

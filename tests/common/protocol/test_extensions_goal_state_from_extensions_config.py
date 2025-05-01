@@ -5,7 +5,7 @@ from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateChannel
 from tests.lib.mock_wire_protocol import wire_protocol_data, mock_wire_protocol
 from tests.lib.tools import AgentTestCase, patch
-
+from azurelinuxagent.common.event import WALAEventOperation
 
 class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
     def test_it_should_parse_in_vm_metadata(self):
@@ -110,9 +110,7 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
                 extensions = protocol.get_goal_state().extensions_goal_state.extensions
                 self.assertEqual(expected_signature, extensions[0].encoded_signature)
                 # Should send telemetry for signed extension
-                expected_msg = json.dumps({"is_signed": True})
-                telemetry = [kw for _, kw in add_event.call_args_list if
-                             expected_msg in kw['message'] and kw['name'] == extensions[0].name]
+                telemetry = [kw for _, kw in add_event.call_args_list if kw['op'] == WALAEventOperation.ExtensionSigned and kw['is_success']]
                 self.assertEqual(1, len(telemetry), "Should send telemetry for signed extension")
 
                 data_file["ext_conf"] = "wire/ext_conf-no_encoded_signature.xml"
@@ -122,6 +120,5 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
                     self.assertEqual(extensions[0].encoded_signature, "")
 
                     # Should send telemetry for unsigned extension
-                    expected_msg = json.dumps({"is_signed": False})
-                    telemetry = [kw for _, kw in add_event.call_args_list if expected_msg in kw['message'] and kw['name'] == extensions[0].name]
+                    telemetry = [kw for _, kw in add_event.call_args_list if kw['op'] == WALAEventOperation.ExtensionSigned and not kw['is_success']]
                     self.assertEqual(1, len(telemetry), "Should send telemetry for unsigned extension")

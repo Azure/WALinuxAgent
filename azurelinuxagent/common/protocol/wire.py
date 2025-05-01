@@ -618,8 +618,9 @@ class WireClient(object):
         Downloads the ZIP package specified in 'uris' (which is a list of alternate locations for the ZIP), saving it to 'target_file' and then expanding
         its contents to 'target_directory'. Deletes the target file after it has been expanded.
 
-        The 'package_type' is only used in log messages and has no other semantics. It should specify the contents of the ZIP, e.g. "extension package"
-        or "agent package"
+        The 'package_type' is only used in log messages/telemetry and has no other semantics. It should specify the contents of the ZIP, e.g. "extension package",
+         "agent package", or package information in the format "Name-Version". If signature validation is performed, the package name and version will
+         be extracted from the package_type parameter for use in telemetry only.
 
         The 'use_verify_header' parameter indicates whether the verify header should be added when using the extensionArtifact API of the HostGAPlugin.
 
@@ -646,7 +647,7 @@ class WireClient(object):
             validation_error = None
             if signature != "":
                 try:
-                    validate_signature(target_file, signature)
+                    validate_signature(target_file, signature, package_name_and_version=package_type)
                 except SignatureValidationError as ex:  # validate_signature() will only raise SignatureValidationError
                     # TODO: raise error and cleanup zip file if signature validation result should be enforced
                     validation_error = ex

@@ -17,10 +17,10 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import base64
+import datetime
 import os
 import re
 import json
-import time
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.utils.shellutil import run_command, CommandError
@@ -28,8 +28,8 @@ from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common import logger
 from azurelinuxagent.ga.signing_certificate_util import get_microsoft_signing_certificate_path
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.future import ustr, UTC
+from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 
 
 # This file tracks the state of signature and manifest validation for the package. If the file exists, signature and
@@ -125,29 +125,30 @@ def _write_signature_to_file(sig_string, output_file):
         f.write(binary_signature)
 
 
-def validate_signature(package_path, signature):
+def validate_signature(package_path, signature, package_name_and_version):
     """
     Validates signature of provided package using OpenSSL CLI. The verification checks the signature against a trusted
     Microsoft root certificate but does not enforce certificate expiration.
     :param package_path: path to package file being validated
     :param signature: base64-encoded signature string
+    :param package_name_and_version: string in the format "Name-Version", only used for telemetry purposes
     :raises SignatureValidationError: if signature validation fails
     """
     def report_signature_validation_result(return_code, error_message=None):
         data = {
-            "return_code": return_code,
-            "error_message": ustr(error_message),
-            "validation_duration": time.time() - start_time,
+            "code": return_code,
+            "message": ustr(error_message),
         }
-        is_success = (return_code == 0)
-        add_event(op=WALAEventOperation.SignatureValidationResult, message=json.dumps(data), name=name, version=version,
-                  is_success=is_success)
 
-    start_time = time.time()
-    file_name, _ = os.path.splitext(os.path.basename(package_path))
-    signature_file_name = file_name + "_signature.pem"
+        duration = elapsed_milliseconds(start_time)
+        is_success = (return_code == 0)
+        add_event(op=WALAEventOperation.OnPluginSignatureVerifyEnd, message=json.dumps(data), name=name, version=version,
+                  is_success=is_success, duration=duration)
+
+    start_time = datetime.datetime.now(UTC)
+    signature_file_name = os.path.basename(package_path) + "_signature.pem"
     signature_path = os.path.join(conf.get_lib_dir(), str(signature_file_name))
-    name, version = file_name.split('__')   # Get package name and version from package_path for telemetry purposes
+    name, version = package_name_and_version.split('-')
 
     try:
         _write_signature_to_file(signature, signature_path)
@@ -212,13 +213,15 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
     def report_manifest_validation_result(validation_result, error_message=None):
         data = {
             "validation_result": validation_result,
-            "error_message": error_message
+            "message": error_message
         }
 
+        duration = elapsed_milliseconds(start_time)
         is_success = (validation_result == _ManifestValidationResults.Success)
-        add_event(op=WALAEventOperation.ManifestValidationResult, message=json.dumps(data), name=ext_handler.name,
-                  version=ext_handler.version, is_success=is_success)
+        add_event(op=WALAEventOperation.OnPluginSigningInfoVerifyEnd, message=json.dumps(data), name=ext_handler.name,
+                  version=ext_handler.version, is_success=is_success, duration=duration)
 
+    start_time = datetime.datetime.now(UTC)
     man_signing_info = manifest.data.get("signingInfo")
     if man_signing_info is None:
         msg = "HandlerManifest.json does not contain 'signingInfo'"

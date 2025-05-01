@@ -37,6 +37,7 @@ class TestSignatureValidation(AgentTestCase):
         vm_access_signature_path = os.path.join(data_dir, "signing/vm_access_signature.txt")
         with open(vm_access_signature_path, 'r') as f:
             self.vm_access_signature = f.read()
+        self.package_name_and_version = "Microsoft.OSTCExtensions.Edp.VMAccessForLinux-1.5.0"
 
     def tearDown(self):
         patch.stopall()
@@ -51,7 +52,7 @@ class TestSignatureValidation(AgentTestCase):
         could request newly signed versions, leaf certs expire fairly quickly (within a year) and we would
         need to frequently update the test with a new signature and package.
         """
-        validate_signature(self.vm_access_zip_path, self.vm_access_signature)
+        validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
 
     def test_should_raise_error_if_signature_does_not_match_package(self):
         # This signature is correctly formatted but belongs to a different extension (CSE),
@@ -59,13 +60,13 @@ class TestSignatureValidation(AgentTestCase):
         with open(os.path.join(data_dir, "signing/invalid_signature.txt"), 'r') as f:
             invalid_signature = f.read()
             with self.assertRaises(SignatureValidationError, msg="Signature is invalid, should have raised error"):
-                validate_signature(self.vm_access_zip_path, invalid_signature)
+                validate_signature(self.vm_access_zip_path, invalid_signature, self.package_name_and_version)
 
     def test_should_raise_error_if_package_is_tampered_with(self):
         # This is the VMAccess test extension zip package with one byte modified, signature validation should fail
         modified_ext = os.path.join(data_dir, "signing/Modified_Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.5.0.zip")
         with self.assertRaises(SignatureValidationError, msg="Zip package does not match signature, should have raised error"):
-            validate_signature(modified_ext, self.vm_access_signature)
+            validate_signature(modified_ext, self.vm_access_signature, self.package_name_and_version)
 
     def test_should_raise_error_on_incorrect_signing_certificate(self):
         # The root certificate used here is valid (unexpired) and issued by the Microsoft CA, but it does not match the
@@ -73,7 +74,7 @@ class TestSignatureValidation(AgentTestCase):
         incorrect_root_cert_path = os.path.join(data_dir, "signing/incorrect_microsoft_root_cert.pem")
         with patch("azurelinuxagent.ga.signature_validation_util.get_microsoft_signing_certificate_path", return_value=incorrect_root_cert_path):
             with self.assertRaises(SignatureValidationError, msg="Signing certificate does not match, should have raised error") as ex:
-                validate_signature(self.vm_access_zip_path, self.vm_access_signature)
+                validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
             expected_error_regex = r"Verify\s*error\s*:\s*unable\s*to\s*get\s*local\s*issuer\s*certificate"
             self.assertRegex(ex.exception.args[0], expected_error_regex, msg="Raised SignatureValidationError but error did not indicate certificate failure")
 
@@ -81,7 +82,7 @@ class TestSignatureValidation(AgentTestCase):
         root_cert_path = os.path.join(self.tmp_dir, "missing_root_cert.pem")
         with patch("azurelinuxagent.ga.signature_validation_util.get_microsoft_signing_certificate_path", return_value=root_cert_path):
             with self.assertRaises(SignatureValidationError, msg="Signing certificate missing, should have raised error") as ex:
-                validate_signature(self.vm_access_zip_path, self.vm_access_signature)
+                validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
             self.assertIn("signing certificate was not found", ex.exception.args[0], msg="Error message did not indicate that certificate is missing.")
 
     def test_should_handle_and_report_error_raised_when_writing_signing_certificate(self):

@@ -3885,12 +3885,12 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
             # Telemetry should report signature validation failure
             signing_errors = [kw for _, kw in patched_add_event.call_args_list if
-                              kw['op'] == WALAEventOperation.SignatureValidationResult and not kw['is_success']]
+                              kw['op'] == WALAEventOperation.OnPluginSignatureVerifyEnd and not kw['is_success']]
             self.assertEqual(1, len(signing_errors), "Signature validation error not sent as telemetry")
 
             # Telemetry should report handler manifest validation success
             telemetry = [kw for _, kw in patched_add_event.call_args_list if
-                         kw['op'] == WALAEventOperation.ManifestValidationResult and kw['is_success']]
+                         kw['op'] == WALAEventOperation.OnPluginSigningInfoVerifyEnd and kw['is_success']]
             self.assertEqual(1, len(telemetry), "Handler manifest validation success not sent as telemetry")
 
     def test_enable_should_succeed_and_send_telemetry_if_handler_manifest_validation_fails(self):
@@ -3935,13 +3935,13 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
                 # Telemetry should report successful signature validation
                 telemetry = [kw for _, kw in patched_add_event.call_args_list
-                             if kw['op'] == WALAEventOperation.SignatureValidationResult and kw['is_success']]
+                             if kw['op'] == WALAEventOperation.OnPluginSignatureVerifyEnd and kw['is_success']]
                 self.assertEqual(1, len(telemetry), "Signature validation success not sent as telemetry")
 
                 # Telemetry should report failed handler manifest validation
                 expected_msg = "expected extension version '1.7.0' does not match downloaded package version '1.5.0'"
                 telemetry = [kw for _, kw in patched_add_event.call_args_list
-                             if kw['op'] == WALAEventOperation.ManifestValidationResult and expected_msg in kw['message']]
+                             if kw['op'] == WALAEventOperation.OnPluginSigningInfoVerifyEnd and expected_msg in kw['message']]
                 self.assertEqual(1, len(telemetry), "Manifest validation error not reported")
 
     def test_enable_should_succeed_and_send_telemetry_if_signature_and_handler_manifest_validation_fails(self):
@@ -3986,13 +3986,13 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
             # Telemetry should report signature validation failure
             signing_errors = [kw for _, kw in patched_add_event.call_args_list
-                              if kw['op'] == WALAEventOperation.SignatureValidationResult and not kw['is_success']]
+                              if kw['op'] == WALAEventOperation.OnPluginSignatureVerifyEnd and not kw['is_success']]
             self.assertEqual(1, len(signing_errors), "Signature validation error not sent as telemetry")
 
             # Telemetry should report failed handler manifest validation
             expected_msg = "expected extension version '1.7.0' does not match downloaded package version '1.5.0'"
             telemetry = [kw for _, kw in patched_add_event.call_args_list
-                         if kw['op'] == WALAEventOperation.ManifestValidationResult and expected_msg in kw['message']]
+                         if kw['op'] == WALAEventOperation.OnPluginSigningInfoVerifyEnd and expected_msg in kw['message']]
             self.assertEqual(1, len(telemetry), "Manifest validation error not reported")
 
     def test_enable_should_succeed_if_signature_validation_succeeds(self):
@@ -4014,10 +4014,10 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
             # Telemetry should report successful signature validation and manifest validation
             telemetry = [kw for _, kw in patched_add_event.call_args_list
-                         if kw['op'] == WALAEventOperation.SignatureValidationResult and kw['is_success']]
+                         if kw['op'] == WALAEventOperation.OnPluginSignatureVerifyEnd and kw['is_success']]
             self.assertEqual(1, len(telemetry), "Signature validation success not sent as telemetry")
             telemetry = [kw for _, kw in patched_add_event.call_args_list
-                         if kw['op'] == WALAEventOperation.ManifestValidationResult and kw['is_success']]
+                         if kw['op'] == WALAEventOperation.OnPluginSigningInfoVerifyEnd and kw['is_success']]
             self.assertEqual(1, len(telemetry), "Handler manifest validation success not sent as telemetry")
 
             # Should not have reported any signature validation errors
@@ -4219,13 +4219,13 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
                                         expected_version="1.7.0")
 
             # Telemetry should report successful signature validation and manifest validation
-            telemetry = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.SignatureValidationResult and kw['is_success']]
+            telemetry = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.OnPluginSignatureVerifyEnd and kw['is_success']]
             self.assertEqual(1, len(telemetry), "Signature validation success not sent as telemetry")
-            telemetry = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.ManifestValidationResult and kw['is_success']]
+            telemetry = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.OnPluginSigningInfoVerifyEnd and kw['is_success']]
             self.assertEqual(1, len(telemetry), "Handler manifest validation success not sent as telemetry")
 
             # Should not have reported any signature validation errors
-            errors = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.SignatureValidationResult and not kw['is_success']]
+            errors = [kw for _, kw in patched_add_event.call_args_list if kw['op'] == WALAEventOperation.OnPluginSignatureVerifyEnd and not kw['is_success']]
             self.assertEqual(0, len(errors), "Signature validation should have completed without errors. Errors: {0}".format(errors))
 
     def test_should_enable_existing_zip_package_if_signature_validation_fails(self):
@@ -4301,13 +4301,13 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
 
                 # Telemetry should report successful signature validation
                 telemetry = [kw for _, kw in patched_add_event.call_args_list if
-                             kw['op'] == WALAEventOperation.SignatureValidationResult and kw['is_success']]
+                             kw['op'] == WALAEventOperation.OnPluginSignatureVerifyEnd and kw['is_success']]
                 self.assertEqual(1, len(telemetry), "Signature validation success not sent as telemetry")
 
                 # Telemetry should report failed handler manifest validation
                 expected_msg = "expected extension version '1.7.0' does not match downloaded package version '1.5.0'"
                 telemetry = [kw for _, kw in patched_add_event.call_args_list if
-                             kw['op'] == WALAEventOperation.ManifestValidationResult and expected_msg in kw['message']]
+                             kw['op'] == WALAEventOperation.OnPluginSigningInfoVerifyEnd and expected_msg in kw['message']]
                 self.assertEqual(1, len(telemetry), "Manifest validation error not reported")
 
 
