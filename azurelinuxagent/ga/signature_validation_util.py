@@ -143,7 +143,7 @@ def validate_signature(package_path, signature, package_name_and_version):
         duration = elapsed_milliseconds(start_time)
         is_success = (return_code == 0)
         add_event(op=WALAEventOperation.OnPluginSignatureVerifyEnd, message=json.dumps(data), name=name, version=version,
-                  is_success=is_success, duration=duration)
+                  is_success=is_success, duration=duration, log_event=False)
 
     start_time = datetime.datetime.now(UTC)
     signature_file_name = os.path.basename(package_path) + "_signature.pem"
@@ -219,7 +219,7 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
         duration = elapsed_milliseconds(start_time)
         is_success = (validation_result == _ManifestValidationResults.Success)
         add_event(op=WALAEventOperation.OnPluginSigningInfoVerifyEnd, message=json.dumps(data), name=ext_handler.name,
-                  version=ext_handler.version, is_success=is_success, duration=duration)
+                  version=ext_handler.version, is_success=is_success, duration=duration, log_event=False)
 
     start_time = datetime.datetime.now(UTC)
     man_signing_info = manifest.data.get("signingInfo")

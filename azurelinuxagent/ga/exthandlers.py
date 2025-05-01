@@ -1381,7 +1381,8 @@ class ExtHandlerInstance(object):
         else:
             # TODO: log as error when signature validation is enforced
             self.logger.warn("[WARNING] " + msg)
-        add_event(op=WALAEventOperation.SignatureValidation, message=msg, name=self.ext_handler.name, version=self.ext_handler.version, is_success=is_success)
+        add_event(op=WALAEventOperation.SignatureValidation, message=msg, name=self.ext_handler.name,
+                  version=self.ext_handler.version, is_success=is_success, log_event=False)
 
     def _validate_extension_handler_manifest_signing_info(self):
         try:

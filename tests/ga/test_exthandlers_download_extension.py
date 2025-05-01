@@ -260,7 +260,7 @@ class DownloadExtensionTestCase(AgentTestCase):
 
         self.assertEqual(mock_stream.call_count, len(self.pkg.uris))
 
-        self.assertRegex(str(context_manager.exception), "Failed to download extension")
+        self.assertRegex(str(context_manager.exception), "Failed to download .* from all URIs")
         self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginManifestDownloadError)
 
         self.assertFalse(os.path.exists(self.extension_dir), "The extension directory was not removed")
