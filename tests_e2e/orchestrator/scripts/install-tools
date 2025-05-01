@@ -23,7 +23,7 @@
 # It also makes Pypy the default python for the current user.
 #
 
-set -euo pipefail
+set -euox pipefail
 
 PATH="$HOME/bin:$PATH"
 
@@ -79,9 +79,9 @@ if [[ "$has_linux_distribution" == "False" ]]; then
 else
   echo "Python has platform.linux_distribution"
   uname=$(uname -v)
-  test -f /etc/almalinux-release && grep -qiE "AlmaLinux.*8\." /etc/almalinux-release # Only Alma 8 requires the patch (file contents are similar to "AlmaLinux release 8.10 (Cerulean Leopard)")
+  test -f /etc/almalinux-release && grep -qiE "AlmaLinux .*release 8\." /etc/almalinux-release # Only Alma 8 requires the patch (file contents are similar to "AlmaLinux release 8.10 (Cerulean Leopard)")
   alma_linux=$?
-  test -f /etc/oracle-release && true
+  test -f /etc/oracle-release && grep -qiE "Oracle .*release 8\." /etc/oracle-release && true # Only Oracle 8 requires the patch (file contents are similar to "Oracle Linux Server release 8.10")
   oracle_linux=$?
   if [[ "$uname" == *~18*-Ubuntu* || "$uname" == *~16*-Ubuntu* || "$alma_linux" == "0"  || "$oracle_linux" == "0" ]]; then
     echo "Copying the system's platform module to Pypy"
