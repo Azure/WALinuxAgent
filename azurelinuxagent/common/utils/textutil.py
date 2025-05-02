@@ -17,7 +17,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import base64
-import hashlib
 import re
 import struct
 import sys
@@ -75,6 +74,19 @@ def gettext(node):
     return None
 
 
+def gettextxml(node):
+    """
+    Get the raw XML of a text node
+    """
+    if node is None:
+        return None
+
+    for child in node.childNodes:
+        if child.nodeType == child.TEXT_NODE:
+            return child.toxml()
+    return None
+
+
 def findtext(root, tag, namespace=None):
     """
     Get text of node by tag and namespace under Node root.
@@ -85,12 +97,22 @@ def findtext(root, tag, namespace=None):
 
 def getattrib(node, attr_name):
     """
-    Get attribute of xml node
+    Get attribute of xml node. Returns None if node is None. Returns "" if node does not have attribute attr_name
     """
     if node is not None:
         return node.getAttribute(attr_name)
     else:
         return None
+
+
+def hasattrib(node, attr_name):
+    """
+    Return True if xml node has attribute, False if node is None or node does not have attribute attr_name
+    """
+    if node is not None:
+        return node.hasAttribute(attr_name)
+    else:
+        return False
 
 
 def unpack(buf, offset, value_range):
@@ -360,19 +382,6 @@ def is_str_none_or_whitespace(s):
 
 def is_str_empty(s):
     return is_str_none_or_whitespace(s) or is_str_none_or_whitespace(s.rstrip(' \t\r\n\0'))
-
-
-def hash_strings(string_list):
-    """
-    Compute a cryptographic hash of a list of strings
-
-    :param string_list: The strings to be hashed
-    :return: The cryptographic hash (digest) of the strings in the order provided
-    """
-    sha1_hash = hashlib.sha1()
-    for item in string_list:
-        sha1_hash.update(item.encode())
-    return sha1_hash.digest()
 
 
 def format_memory_value(unit, value):

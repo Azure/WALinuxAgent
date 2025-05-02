@@ -34,7 +34,6 @@ from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
-from azurelinuxagent.common.utils.textutil import hash_strings
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
@@ -145,9 +144,9 @@ class ReportNetworkConfigurationChanges(PeriodicOperation):
 
     def _operation(self):
         raw_route_list = self.osutil.read_route_table()
-        digest = hash_strings(raw_route_list)
-        if digest != self.last_route_table_hash:
-            self.last_route_table_hash = digest
+        route_table_hash = ":".join([str(hash(r)) for r in raw_route_list])
+        if route_table_hash != self.last_route_table_hash:
+            self.last_route_table_hash = route_table_hash
             route_list = self.osutil.get_list_of_routes(raw_route_list)
             logger.info("Route table: [{0}]".format(",".join(map(networkutil.RouteEntry.to_json, route_list))))
 

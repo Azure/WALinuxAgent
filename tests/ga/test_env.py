@@ -18,8 +18,10 @@ import datetime
 
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil, shellutil
-from azurelinuxagent.ga.env import MonitorDhcpClientRestart
+from azurelinuxagent.ga.env import MonitorDhcpClientRestart, EnableFirewall
+
 from tests.lib.tools import AgentTestCase, patch
+from tests.lib.mock_firewall_command import MockIpTables
 
 
 class MonitorDhcpClientRestartTestCase(AgentTestCase):
@@ -158,3 +160,31 @@ class MonitorDhcpClientRestartTestCase(AgentTestCase):
                 with patch.object(monitor_dhcp_client_restart, "_get_dhcp_client_pid", side_effect=Exception("get_dhcp_client_pid should not have been invoked")):
                     monitor_dhcp_client_restart.run()
                     self.assertEqual(mock_conf_routes.call_count, 2)  # count did not change
+
+class TestEnableFirewall(AgentTestCase):
+    def test_it_should_restore_missing_firewall_rules(self):
+        with MockIpTables() as mock_iptables:
+            enable_firewall = EnableFirewall('168.63.129.16')
+
+            test_cases = [  # Exit codes for the "-C" (check) command
+                {"accept_dns": 1, "accept": 0, "drop": 0, "legacy": 0},
+                {"accept_dns": 0, "accept": 1, "drop": 0, "legacy": 0},
+                {"accept_dns": 0, "accept": 1, "drop": 0, "legacy": 0},
+                {"accept_dns": 1, "accept": 1, "drop": 1, "legacy": 0},
+            ]
+
+            for test_case in test_cases:
+                mock_iptables.set_return_values("-C", **test_case)
+
+                enable_firewall.run()
+
+                self.assertGreaterEqual(len(mock_iptables.call_list), 3, "Expected at least 3 iptables commands, got {0} (Test case: {1})".format(mock_iptables.call_list, test_case))
+
+                self.assertEqual(
+                    [
+                        mock_iptables.get_accept_dns_command("-A"),
+                        mock_iptables.get_accept_command("-A"),
+                        mock_iptables.get_drop_command("-A"),
+                    ],
+                    mock_iptables.call_list[-3:],
+                    "Expected the 3 firewall rules to be restored (Test case: {0})".format(test_case))

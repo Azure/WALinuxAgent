@@ -15,7 +15,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import hashlib
 import unittest
 
 import azurelinuxagent.common.utils.textutil as textutil
@@ -115,21 +114,6 @@ class TestTextUtil(AgentTestCase):
     def test_compress(self):
         result = textutil.compress('[stdout]\nHello World\n\n[stderr]\n\n')
         self.assertEqual('eJyLLi5JyS8tieXySM3JyVcIzy/KSeHiigaKphYVxXJxAQDAYQr2', result)
-
-    def test_hash_empty_list(self):
-        result = textutil.hash_strings([])
-        self.assertEqual(b'\xda9\xa3\xee^kK\r2U\xbf\xef\x95`\x18\x90\xaf\xd8\x07\t', result)
-
-    def test_hash_list(self):
-        test_list = ["abc", "123"]
-        result_from_list = textutil.hash_strings(test_list)
-
-        test_string = "".join(test_list)
-        hash_from_string = hashlib.sha1()
-        hash_from_string.update(test_string.encode())
-
-        self.assertEqual(result_from_list, hash_from_string.digest())
-        self.assertEqual(hash_from_string.hexdigest(), '6367c48dd193d56ea7b0baad25b19455e529f5ee')
 
     def test_empty_strings(self):
         self.assertTrue(textutil.is_str_none_or_whitespace(None))

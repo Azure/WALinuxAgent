@@ -19,12 +19,33 @@
 #
 # Script adds cron job on reboot to make sure iptables rules are added to allow access to Wireserver and also, enable the firewall config flag
 #
+set -eao pipefail
 
 if [[ $# -ne 1 ]]; then
     echo "Usage: agent_persist_firewall-test_setup <test-user>"
     exit 1
 fi
 
-echo "@reboot /home/$1/bin/agent_persist_firewall-access_wireserver $1 > /tmp/reboot-cron-root.log 2>&1" | crontab -u root -
-echo "@reboot /home/$1/bin/agent_persist_firewall-access_wireserver $1 > /tmp/reboot-cron-$1.log 2>&1" | crontab -u $1 -
+
+# crontab and ping are not installed on some distros, e.g. Ubuntu Minimal
+if ! command -v crontab; then
+    echo "crontab is not available. Installing cron."
+    apt-get update
+    apt-get install -y cron
+fi
+if ! command -v ping; then
+    echo "ping is not available. Installing iputils-ping."
+    apt-get update
+    apt-get install -y iputils-ping
+fi
+
+echo "Creating cron jobs to access Wireserver on reboot"
+set -x  # echo the commands used to set up the cron jobs
+(
+    echo "@reboot /home/$1/bin/agent_persist_firewall-access_wireserver $1 > /tmp/reboot-cron-root.log 2>&1" | crontab -u root -
+    echo "@reboot /home/$1/bin/agent_persist_firewall-access_wireserver $1 > /tmp/reboot-cron-$1.log 2>&1" | crontab -u $1 -
+) 2>&1
+set +x
+
+echo "Enabling firewall in waagent.conf"
 update-waagent-conf OS.EnableFirewall=y

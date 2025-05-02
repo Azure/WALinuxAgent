@@ -45,10 +45,9 @@ Debug.CgroupCheckPeriod = 300
 Debug.CgroupDisableOnProcessCheckFailure = True
 Debug.CgroupDisableOnQuotaCheckFailure = True
 Debug.CgroupLogMetrics = False
-Debug.CgroupMonitorExpiryTime = 2022-03-31
-Debug.CgroupMonitorExtensionName = Microsoft.Azure.Monitor.AzureMonitorLinuxAgent
 Debug.EnableAgentMemoryUsageCheck = False
 Debug.EnableCgroupV2ResourceLimiting = False
+Debug.EnableExtensionPolicy = True
 Debug.EnableFastTrack = True
 Debug.EnableGAVersioning = True
 Debug.EtpCollectionPeriod = 300
@@ -87,6 +86,7 @@ OS.SshDir = /notareal/path
 OS.SudoersDir = /etc/sudoers.d
 OS.UpdateRdmaDriver = False
 Pid.File = /var/run/waagent.pid
+Policy.PolicyFilePath = /etc/waagent_policy.json
 Provisioning.Agent = auto
 Provisioning.AllowResetSysUser = False
 Provisioning.DecodeCustomData = False
@@ -310,13 +310,13 @@ class TestAgent(AgentTestCase):
             mock_log_collector.run = Mock()
 
             # Mock cgroup api to raise CGroupsException
-            def mock_get_cgroup_api():
+            def mock_create_cgroup_api():
                 raise CGroupsException("")
 
             def raise_on_sys_exit(*args):
                 raise RuntimeError(args[0] if args else "Exiting")
 
-            with patch("azurelinuxagent.agent.get_cgroup_api", side_effect=mock_get_cgroup_api):
+            with patch("azurelinuxagent.agent.create_cgroup_api", side_effect=mock_create_cgroup_api):
                 agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
 
                 with patch("sys.exit", side_effect=raise_on_sys_exit) as mock_exit:
@@ -398,7 +398,7 @@ class TestAgent(AgentTestCase):
         finally:
             CollectLogsHandler.disable_monitor_cgroups_check()
 
-    @patch('azurelinuxagent.agent.get_cgroup_api', side_effect=InvalidCgroupMountpointException("Test"))
+    @patch('azurelinuxagent.agent.create_cgroup_api', side_effect=InvalidCgroupMountpointException("Test"))
     @patch("azurelinuxagent.agent.LogCollector")
     def test_doesnt_call_collect_logs_on_non_systemd_cgroups_v1_mountpoints(self, mock_log_collector, _):
         try:
@@ -491,40 +491,22 @@ class TestAgent(AgentTestCase):
             CollectLogsHandler.disable_monitor_cgroups_check()
 
     def test_it_should_parse_setup_firewall_properly(self):
-
-        test_firewall_meta = {
-            "dst_ip": "1.2.3.4",
-            "uid": "9999",
-            "wait": "-w"
-        }
-        cmd, _, _, _, _, _, firewall_metadata = parse_args(
-            ["-{0}".format(AgentCommands.SetupFirewall), "-dst_ip=1.2.3.4", "-uid=9999", "-w"])
+        cmd, _, _, _, _, _, wire_server_address = parse_args(["-{0}={1}".format(AgentCommands.SetupFirewall, "1.2.3.4")])
 
         self.assertEqual(cmd, AgentCommands.SetupFirewall)
-        self.assertEqual(firewall_metadata, test_firewall_meta)
+        self.assertEqual(wire_server_address, "1.2.3.4")
 
         # Defaults to None if command is different
-        test_firewall_meta = {
-            "dst_ip": None,
-            "uid": None,
-            "wait": ""
-        }
-        cmd, _, _, _, _, _, firewall_metadata = parse_args(["-{0}".format(AgentCommands.Help)])
+        cmd, _, _, _, _, _, wire_server_address = parse_args(["-{0}".format(AgentCommands.Help)])
         self.assertEqual(cmd, AgentCommands.Help)
-        self.assertEqual(test_firewall_meta, firewall_metadata)
+        self.assertEqual(None, wire_server_address)
 
     def test_it_should_ignore_empty_arguments(self):
 
-        test_firewall_meta = {
-            "dst_ip": "1.2.3.4",
-            "uid": "9999",
-            "wait": ""
-        }
-        cmd, _, _, _, _, _, firewall_metadata = parse_args(
-            ["-{0}".format(AgentCommands.SetupFirewall), "-dst_ip=1.2.3.4", "-uid=9999", ""])
+        cmd, _, _, _, _, _, wire_server_address = parse_args(["-{0}={1}".format(AgentCommands.SetupFirewall, "1.2.3.4"), ""])
 
         self.assertEqual(cmd, AgentCommands.SetupFirewall)
-        self.assertEqual(firewall_metadata, test_firewall_meta)
+        self.assertEqual(wire_server_address, "1.2.3.4")
 
     def test_agent_usage_message(self):
         message = usage()

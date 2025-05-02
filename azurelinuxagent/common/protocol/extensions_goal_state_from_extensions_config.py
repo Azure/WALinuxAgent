@@ -22,11 +22,11 @@ from collections import defaultdict
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionsConfigError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, urlparse
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel, GoalStateSource
 from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension, VMAgentFamily, ExtensionState, InVMGoalStateMetaData
-from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall, find, findtext, getattrib, gettext, format_exception, \
-    is_str_none_or_whitespace, is_str_empty
+from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall, find, findtext, getattrib, gettext, \
+    format_exception, is_str_none_or_whitespace, is_str_empty, hasattrib, gettextxml
 
 
 class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
@@ -38,6 +38,8 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         self._text = xml_text
         self._status_upload_blob = None
         self._status_upload_blob_type = None
+        self._status_upload_blob_xml_node = None
+        self._artifacts_profile_blob_xml_node = None
         self._required_features = []
         self._on_hold = False
         self._activity_id = None
@@ -81,13 +83,13 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         if required_features_list is not None:
             self._parse_required_features(required_features_list)
 
-        self._status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
-
-        status_upload_node = find(xml_doc, "StatusUploadBlob")
-        self._status_upload_blob_type = getattrib(status_upload_node, "statusBlobType")
+        self._status_upload_blob_xml_node = find(xml_doc, "StatusUploadBlob")
+        self._status_upload_blob = gettext(self._status_upload_blob_xml_node)
+        self._status_upload_blob_type = getattrib(self._status_upload_blob_xml_node, "statusBlobType")
         logger.verbose("Extension config shows status blob type as [{0}]", self._status_upload_blob_type)
 
-        self._on_hold = ExtensionsGoalStateFromExtensionsConfig._fetch_extensions_on_hold(xml_doc, wire_client)
+        self._artifacts_profile_blob_xml_node = find(xml_doc, "InVMArtifactsProfileBlob")
+        self._on_hold = ExtensionsGoalStateFromExtensionsConfig._fetch_extensions_on_hold(self._artifacts_profile_blob_xml_node, wire_client)
 
         in_vm_gs_metadata = InVMGoalStateMetaData(find(xml_doc, "InVMGoalStateMetaData"))
         self._activity_id = self._string_to_id(in_vm_gs_metadata.activity_id)
@@ -95,7 +97,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         self._created_on_timestamp = self._ticks_to_utc_timestamp(in_vm_gs_metadata.created_on_ticks)
 
     @staticmethod
-    def _fetch_extensions_on_hold(xml_doc, wire_client):
+    def _fetch_extensions_on_hold(artifacts_profile_blob_xml_node, wire_client):
         def log_info(message):
             logger.info(message)
             add_event(op=WALAEventOperation.ArtifactsProfileBlob, message=message, is_success=True, log_event=False)
@@ -104,7 +106,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             logger.warn(message)
             add_event(op=WALAEventOperation.ArtifactsProfileBlob, message=message, is_success=False, log_event=False)
 
-        artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
+        artifacts_profile_blob = gettext(artifacts_profile_blob_xml_node)
         if is_str_none_or_whitespace(artifacts_profile_blob):
             log_info("ExtensionsConfig does not include a InVMArtifactsProfileBlob; will assume the VM is not on hold")
             return False
@@ -187,12 +189,30 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         return self._extensions
 
     def get_redacted_text(self):
-        text = self._text
-        for ext_handler in self._extensions:
-            for extension in ext_handler.settings:
-                if extension.protectedSettings is not None:
-                    text = text.replace(extension.protectedSettings, "*** REDACTED ***")
-        return text
+        def redact_url(unredacted, xml_node, name):
+            text_xml = gettextxml(xml_node)  # Note that we need to redact the raw XML text (which may contain escape sequences)
+            if text_xml is None:
+                return unredacted
+            parsed = urlparse(text_xml)
+            redacted = unredacted.replace(parsed.query, "***REDACTED***")
+            if redacted == unredacted:
+                raise Exception('Could not redact {0}'.format(name))
+            return redacted
+
+        try:
+            text = self._text
+            text = redact_url(text, self._status_upload_blob_xml_node, "StatusUploadBlob")
+            text = redact_url(text, self._artifacts_profile_blob_xml_node, "InVMArtifactsProfileBlob")
+            for ext_handler in self._extensions:
+                for extension in ext_handler.settings:
+                    if extension.protectedSettings is not None:
+                        original = text
+                        text = text.replace(extension.protectedSettings, "***REDACTED***")
+                        if text == original:
+                            return 'Could not redact protectedSettings for {0}'.format(extension.name)
+            return text
+        except Exception as e:
+            return "Error redacting text: {0}".format(e)
 
     def _parse_required_features(self, required_features_list):
         for required_feature in findall(required_features_list, "RequiredFeature"):
@@ -205,8 +225,8 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         Sample ExtensionConfig Plugin and PluginSettings:
 
         <Plugins>
-          <Plugin name="Microsoft.CPlat.Core.NullSeqB" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbz06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
-          <Plugin name="Microsoft.CPlat.Core.NullSeqA" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbn06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+          <Plugin name="Microsoft.CPlat.Core.NullSeqB" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbz06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true"/>
+          <Plugin name="Microsoft.CPlat.Core.NullSeqA" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbn06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" encodedSignature="MII..." />
         </Plugins>
         <PluginSettings>
           <Plugin name="Microsoft.CPlat.Core.NullSeqA" version="2.0.1">
@@ -260,13 +280,14 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         Sample config:
 
         <Plugins>
-          <Plugin name="Microsoft.CPlat.Core.NullSeqB" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbz06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true"><Plugin name="Microsoft.Azure.Extensions.CustomScript" version="1.0" location="https://rdfecurrentuswestcache.blob.core.test-cint.azure-test.net/0e53c53ef0be4178bacb0a1fecf12a74/Microsoft.Azure.Extensions_CustomScript_usstagesc_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://rdfecurrentuswestcache2.blob.core.test-cint.azure-test.net/0e53c53ef0be4178bacb0a1fecf12a74/Microsoft.Azure.Extensions_CustomScript_usstagesc_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
+          <Plugin name="Microsoft.CPlat.Core.NullSeqB" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbz06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
+          <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="1.0" location="https://rdfecurrentuswestcache.blob.core.test-cint.azure-test.net/0e53c53ef0be4178bacb0a1fecf12a74/Microsoft.Azure.Extensions_CustomScript_usstagesc_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://rdfecurrentuswestcache2.blob.core.test-cint.azure-test.net/0e53c53ef0be4178bacb0a1fecf12a74/Microsoft.Azure.Extensions_CustomScript_usstagesc_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
             <additionalLocations>
               <additionalLocation>https://rdfecurrentuswestcache3.blob.core.test-cint.azure-test.net/0e53c53ef0be4178bacb0a1fecf12a74/Microsoft.Azure.Extensions_CustomScript_usstagesc_manifest.xml</additionalLocation>
               <additionalLocation>https://rdfecurrentuswestcache4.blob.core.test-cint.azure-test.net/0e53c53ef0be4178bacb0a1fecf12a74/Microsoft.Azure.Extensions_CustomScript_usstagesc_manifest.xml</additionalLocation>
             </additionalLocations>
           </Plugin>
-          <Plugin name="Microsoft.CPlat.Core.NullSeqA" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbn06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+          <Plugin name="Microsoft.CPlat.Core.NullSeqA" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbn06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" encodedSignature="MIIn..." />
         </Plugins>
 
 
@@ -293,6 +314,10 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         extension.state = getattrib(plugin, "state")
         if extension.state in (None, ""):
             raise ExtensionsConfigError("Received empty Extensions.Plugins.Plugin.state, failing Handler")
+
+        # extension.encoded_signature value should be None if the property does not exist for the plugin. getattrib
+        # returns "" if an attribute does not exist in a node, so use hasattrib here to check if the attribute exists
+        extension.encoded_signature = getattrib(plugin, "encodedSignature") if hasattrib(plugin, "encodedSignature") else None
 
         def getattrib_wrapped_in_list(node, attr_name):
             attr = getattrib(node, attr_name)

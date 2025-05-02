@@ -17,13 +17,12 @@
 # Requires Python 2.6+ and Openssl 1.0+
 import datetime
 import json
-import re
 import sys
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.event import WALAEventOperation, add_event
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, urlparse
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel, VmSettingsParseError
 from azurelinuxagent.common.protocol.restapi import VMAgentFamily, Extension, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -143,7 +142,27 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         return self._extensions
 
     def get_redacted_text(self):
-        return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', self._text)
+        try:
+            text = self._text
+
+            if self.status_upload_blob is not None:
+                parsed = urlparse(self.status_upload_blob)
+                original = text
+                text = text.replace(parsed.query, "***REDACTED***")
+                if text == original:
+                    raise Exception('Could not redact the status upload blob')
+
+            for ext_handler in self._extensions:
+                for extension in ext_handler.settings:
+                    if extension.protectedSettings is not None:
+                        original = text
+                        text = text.replace(extension.protectedSettings, "***REDACTED***")
+                        if text == original:
+                            return 'Could not redact protectedSettings for {0}'.format(extension.name)
+
+            return text
+        except Exception as e:
+            return "Error redacting text: {0}".format(e)
 
     def _parse_vm_settings(self, json_text):
         vm_settings = _CaseFoldedDict.from_dict(json.loads(json_text))
@@ -296,6 +315,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #             "runAsStartupTask": false,
         #             "isJson": true,
         #             "useExactVersion": true,
+        #             "encodedSignature": "MIIn...",
         #             "settingsSeqNo": 0,
         #             "settings": [
         #                 {
@@ -361,6 +381,8 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                 extension.name = extension_gs['name']
                 extension.version = extension_gs['version']
                 extension.state = extension_gs['state']
+                # extension.encoded_signature should be None if 'encodedSignature' key does not exist for the extension
+                extension.encoded_signature = extension_gs.get('encodedSignature')
                 if extension.state not in ExtensionRequestedState.All:
                     raise Exception('Invalid extension state: {0} ({1})'.format(extension.state, extension.name))
                 is_multi_config = extension_gs.get('isMultiConfig')

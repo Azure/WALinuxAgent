@@ -35,6 +35,7 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common import version
+from azurelinuxagent.common import event
 from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions, \
     SupportedFeatureNames, get_supported_feature_by_name, get_agent_supported_features_list_for_crp
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
@@ -279,6 +280,8 @@ class ExtHandlersHandler(object):
         # extensions on goal state change, we need to maintain its state.
         # Setting the status to None here. This would be overridden as soon as the first GoalState is processed
         self.__gs_aggregate_status = None
+        # CRP Activity ID for the goal state that is being processed. Initialized once we start processing the goal state.
+        self._gs_activity_id = '00000000-0000-0000-0000-000000000000'
 
         self.report_status_error_state = ErrorState()
 
@@ -293,6 +296,8 @@ class ExtHandlersHandler(object):
         try:
             gs = self.protocol.get_goal_state()
             egs = gs.extensions_goal_state
+            self._gs_activity_id = egs.activity_id
+
 
             # self.ext_handlers needs to be initialized before returning, since status reporting depends on it; also
             # we make a deep copy of the extensions, since changes are made to self.ext_handlers while processing the extensions
@@ -476,6 +481,7 @@ class ExtHandlersHandler(object):
 
         depends_on_err_msg = None
         extensions_enabled = conf.get_extensions_enabled()
+
         for extension, ext_handler in all_extensions:
 
             handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)
@@ -608,8 +614,7 @@ class ExtHandlersHandler(object):
             # If the extension version is unregistered and the customers wants to uninstall the extension,
             # we should let it go through even if the installed version doesnt exist in Handler manifest (PIR) anymore.
             # If target state is enabled and version not found in manifest, do not process the extension.
-            if ext_handler_i.decide_version(target_state=handler_state,
-                                            extension=extension) is None and handler_state == ExtensionRequestedState.Enabled:
+            if ext_handler_i.decide_version(target_state=handler_state, extension=extension, gs_activity_id=self._gs_activity_id) is None and handler_state == ExtensionRequestedState.Enabled:
                 handler_version = ext_handler_i.ext_handler.version
                 name = ext_handler_i.ext_handler.name
                 err_msg = "Unable to find version {0} in manifest for extension {1}".format(handler_version, name)
@@ -621,6 +626,8 @@ class ExtHandlersHandler(object):
             if handler_state == ExtensionRequestedState.Enabled:
                 self.handle_enable(ext_handler_i, extension)
             elif handler_state == ExtensionRequestedState.Disabled:
+                # The "disabled" state is now deprecated. Send telemetry if it is still being used on any VMs
+                event.info(WALAEventOperation.RequestedStateDisabled, 'Goal State is requesting "disabled" state on {0} [Activity ID: {1}]',  ext_handler_i.ext_handler.name, self._gs_activity_id)
                 self.handle_disable(ext_handler_i, extension)
             elif handler_state == ExtensionRequestedState.Uninstall:
                 self.handle_uninstall(ext_handler_i, extension=extension)
@@ -1097,7 +1104,7 @@ class ExtHandlerInstance(object):
                         logger.warn("Exception occurred while attempting to remove file '{0}': {1}", f,
                                     cleanup_exception)
 
-    def decide_version(self, target_state=None, extension=None):
+    def decide_version(self, target_state, extension, gs_activity_id):
         self.logger.verbose("Decide which version to use")
         try:
             manifest = self.protocol.get_goal_state().fetch_extension_manifest(self.ext_handler.name, self.ext_handler.manifest_uris)
@@ -1142,6 +1149,11 @@ class ExtHandlerInstance(object):
         else:
             self.pkg = selected_pkg
             if self.pkg is not None:
+                if self.ext_handler.version != str(selected_pkg.version):
+                    # The Agent should not change the version requested by the Goal State. Send telemetry if this happens.
+                    event.info(
+                        WALAEventOperation.RequestedVersionMismatch,
+                        'Goal State requesting {0} version {1}, but Agent overriding with version {2} [Activity ID: {3}]',  self.ext_handler.name, self.ext_handler.version, selected_pkg.version, gs_activity_id)
                 self.ext_handler.version = str(selected_pkg.version)
 
         if self.pkg is not None:
@@ -1295,6 +1307,9 @@ class ExtHandlerInstance(object):
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionDownloadError(u"Failed to save HandlerManifest.json", e)
 
+        man = self.load_manifest()
+        man.report_invalid_boolean_properties(ext_name=self.get_full_name())
+
         self.ensure_consistent_data_for_mc()
 
         # Create status and config dir
@@ -1321,12 +1336,11 @@ class ExtHandlerInstance(object):
         extension_name = self.get_full_name()
         # setup the resource limits for extension operations and it's services.
         man = self.load_manifest()
-        resource_limits = man.get_resource_limits(extension_name, self.ext_handler.version)
-        if not CGroupConfigurator.get_instance().is_extension_resource_limits_setup_completed(extension_name,
-                                                                                              cpu_quota=resource_limits.get_extension_slice_cpu_quota()):
-            CGroupConfigurator.get_instance().setup_extension_slice(
-                extension_name=extension_name, cpu_quota=resource_limits.get_extension_slice_cpu_quota())
-            CGroupConfigurator.get_instance().set_extension_services_cpu_memory_quota(resource_limits.get_service_list())
+        resource_limits = man.get_resource_limits()
+
+        CGroupConfigurator.get_instance().setup_extension_slice(
+            extension_name=extension_name, cpu_quota=resource_limits.get_extension_slice_cpu_quota())
+        CGroupConfigurator.get_instance().set_extension_services_cpu_memory_quota(resource_limits.get_service_list())
 
     def create_status_file_if_not_exist(self, extension, status, code, operation, message):
         _, status_path = self.get_status_file_path(extension)
@@ -1391,7 +1405,7 @@ class ExtHandlerInstance(object):
             self.__set_extension_state(extension, ExtensionState.Enabled)
 
         # start tracking the extension services cgroup.
-        resource_limits = man.get_resource_limits(self.get_full_name(), self.ext_handler.version)
+        resource_limits = man.get_resource_limits()
         CGroupConfigurator.get_instance().start_tracking_extension_services_cgroups(
             resource_limits.get_service_list())
 
@@ -1458,10 +1472,10 @@ class ExtHandlerInstance(object):
         man = self.load_manifest()
 
         # stop tracking extension services cgroup.
-        resource_limits = man.get_resource_limits(self.get_full_name(), self.ext_handler.version)
+        resource_limits = man.get_resource_limits()
         CGroupConfigurator.get_instance().stop_tracking_extension_services_cgroups(
             resource_limits.get_service_list())
-        CGroupConfigurator.get_instance().remove_extension_services_drop_in_files(
+        CGroupConfigurator.get_instance().reset_extension_services_quota(
             resource_limits.get_service_list())
 
         uninstall_cmd = man.get_uninstall_command()
@@ -1487,8 +1501,9 @@ class ExtHandlerInstance(object):
 
                 shutil.rmtree(base_dir, onerror=on_rmtree_error)
 
+            CGroupConfigurator.get_instance().stop_tracking_extension_cgroups(self.get_full_name())
             self.logger.info("Remove the extension slice: {0}".format(self.get_full_name()))
-            CGroupConfigurator.get_instance().remove_extension_slice(
+            CGroupConfigurator.get_instance().reset_extension_quota(
                 extension_name=self.get_full_name())
 
         except IOError as e:
@@ -2129,14 +2144,6 @@ class ExtHandlerInstance(object):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
 
     @staticmethod
-    def is_azuremonitorlinuxagent(extension_name):
-        cgroup_monitor_extension_name = conf.get_cgroup_monitor_extension_name()
-        if re.match(r"\A" + cgroup_monitor_extension_name, extension_name) is not None\
-            and datetime.datetime.utcnow() < datetime.datetime.strptime(conf.get_cgroup_monitor_expiry_time(), "%Y-%m-%d"):
-            return True
-        return False
-
-    @staticmethod
     def _read_status_file(ext_status_file):
         err_count = 0
         while True:
@@ -2237,7 +2244,8 @@ class HandlerManifest(object):
         return self.data['handlerManifest']["disableCommand"]
 
     def is_report_heartbeat(self):
-        return self.data['handlerManifest'].get('reportHeartbeat', False)
+        value = self.data['handlerManifest'].get('reportHeartbeat', False)
+        return self._parse_boolean_value(value, default_val=False)
 
     def is_update_with_install(self):
         update_mode = self.data['handlerManifest'].get('updateMode')
@@ -2246,41 +2254,38 @@ class HandlerManifest(object):
         return update_mode.lower() == "updatewithinstall"
 
     def is_continue_on_update_failure(self):
-        return self.data['handlerManifest'].get('continueOnUpdateFailure', False)
+        value = self.data['handlerManifest'].get('continueOnUpdateFailure', False)
+        return self._parse_boolean_value(value, default_val=False)
 
     def supports_multiple_extensions(self):
-        return self.data['handlerManifest'].get('supportsMultipleExtensions', False)
+        value = self.data['handlerManifest'].get('supportsMultipleExtensions', False)
+        return self._parse_boolean_value(value, default_val=False)
 
-    def get_resource_limits(self, extension_name, str_version):
-        """
-        Placeholder values for testing and monitoring the monitor extension resource usage.
-        This is not effective after nov 30th.
-        """
-        if ExtHandlerInstance.is_azuremonitorlinuxagent(extension_name):
-            if FlexibleVersion(str_version) < FlexibleVersion("1.12"):
-                test_man = {
-                    "resourceLimits": {
-                        "services": [
-                            {
-                                "name": "mdsd.service"
-                            }
-                        ]
-                    }
-                }
-                return ResourceLimits(test_man.get('resourceLimits', None))
-            else:
-                test_man = {
-                    "resourceLimits": {
-                        "services": [
-                            {
-                                "name": "azuremonitoragent.service"
-                            }
-                        ]
-                    }
-                }
-                return ResourceLimits(test_man.get('resourceLimits', None))
-
+    def get_resource_limits(self):
         return ResourceLimits(self.data.get('resourceLimits', None))
+
+    def report_invalid_boolean_properties(self, ext_name):
+        """
+        Check that the specified keys in the handler manifest has boolean values.
+        """
+        for key in ['reportHeartbeat', 'continueOnUpdateFailure', 'supportsMultipleExtensions']:
+            value = self.data['handlerManifest'].get(key)
+            if value is not None and not isinstance(value, bool):
+                msg = "In the handler manifest: '{0}' has a non-boolean value [{1}] for boolean type. Please change it to a boolean value.".format(key, value)
+                logger.info(msg)
+                add_event(name=ext_name, message=msg, op=WALAEventOperation.ExtensionHandlerManifest, log_event=False)
+
+    @staticmethod
+    def _parse_boolean_value(value, default_val):
+        """
+        Expects boolean value but
+        for backward compatibility, 'true' (case-insensitive) is accepted, and other values default to False
+        Note: Json module returns unicode on py2. In py3, unicode removed
+        ustr is a unicode object for Py2 and a str object for Py3.
+        """
+        if not isinstance(value, bool):
+            return True if isinstance(value, ustr) and value.lower() == "true" else default_val
+        return value
 
 
 class ResourceLimits(object):

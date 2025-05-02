@@ -31,24 +31,25 @@ from datetime import datetime, timedelta
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
+from azurelinuxagent.common import event
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames, \
     get_agent_supported_features_list_for_crp
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
+from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters_and_protocol, \
     WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExitException, AgentUpgradeExitException, AgentMemoryExceededException
+from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.ga.persist_firewall_rules import PersistFirewallRulesHandler
+from azurelinuxagent.common.protocol.goal_state import GoalStateSource
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol, VmSettingsNotSupported
 from azurelinuxagent.common.protocol.restapi import VERSION_0
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.archive import StateArchiver, AGENT_STATUS_FILE
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.networkutil import AddFirewallRules
-from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.version import AGENT_LONG_NAME, AGENT_NAME, AGENT_DIR_PATTERN, CURRENT_AGENT, AGENT_VERSION, \
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, get_lis_version, \
     has_logrotate, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, get_daemon_version
@@ -61,8 +62,6 @@ from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, list_agent_lib_di
 from azurelinuxagent.ga.guestagent import GuestAgent
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
-
-AGENT_PARTITION_FILE = "partition"
 
 CHILD_HEALTH_INTERVAL = 15 * 60
 CHILD_LAUNCH_INTERVAL = 5 * 60
@@ -156,7 +155,7 @@ class UpdateHandler(object):
         # these members are used to avoid reporting errors too frequently
         self._heartbeat_update_goal_state_error_count = 0
         self._update_goal_state_error_count = 0
-        self._update_goal_state_last_error_report = datetime.min
+        self._update_goal_state_next_error_report = datetime.min
         self._report_status_last_failed_goal_state = None
 
         # incarnation of the last goal state that has been fully processed
@@ -325,6 +324,7 @@ class UpdateHandler(object):
                 u"Python: {py_major}.{py_minor}.{py_micro}; "\
                 u"Arch: {vm_arch}; "\
                 u"systemd: {systemd}; "\
+                u"systemd_version: {systemd_version}; "\
                 u"LISDrivers: {lis_ver}; "\
                 u"logrotate: {has_logrotate};".format(
                     dist_name=DISTRO_NAME, dist_ver=DISTRO_VERSION,
@@ -332,6 +332,7 @@ class UpdateHandler(object):
                     service_name=self.osutil.service_name,
                     py_major=PY_VERSION_MAJOR, py_minor=PY_VERSION_MINOR,
                     py_micro=PY_VERSION_MICRO, vm_arch=vm_arch, systemd=systemd.is_systemd(),
+                    systemd_version=systemd.get_version(),
                     lis_ver=get_lis_version(), has_logrotate=has_logrotate()
                 )
             logger.info(os_info_msg)
@@ -345,7 +346,7 @@ class UpdateHandler(object):
             self._initialize_goal_state(protocol)
 
             # Initialize the common parameters for telemetry events
-            initialize_event_logger_vminfo_common_parameters(protocol)
+            initialize_event_logger_vminfo_common_parameters_and_protocol(protocol)
 
             # Send telemetry for the OS-specific info.
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
@@ -354,23 +355,23 @@ class UpdateHandler(object):
             #
             # Perform initialization tasks
             #
+            self._initialize_firewall(protocol.get_endpoint())
+
             from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
             exthandlers_handler = get_exthandlers_handler(protocol)
             migrate_handler_state()
 
             from azurelinuxagent.ga.remoteaccess import get_remote_access_handler
             remote_access_handler = get_remote_access_handler(protocol)
+
             agent_update_handler = get_agent_update_handler(protocol)
 
             self._ensure_no_orphans()
             self._emit_restart_event()
             self._emit_changes_in_default_configuration()
-            self._ensure_partition_assigned()
             self._ensure_readonly_files()
             self._ensure_cgroups_initialized()
             self._ensure_extension_telemetry_state_configured_properly(protocol)
-            self._ensure_firewall_rules_persisted(dst_ip=protocol.get_endpoint())
-            self._add_accept_tcp_firewall_rule_if_not_enabled(dst_ip=protocol.get_endpoint())
             self._cleanup_legacy_goal_state_history()
 
             # Get all thread handlers
@@ -394,7 +395,7 @@ class UpdateHandler(object):
                 self._check_daemon_running(debug)
                 self._check_threads_running(all_thread_handlers)
                 self._process_goal_state(exthandlers_handler, remote_access_handler, agent_update_handler)
-                self._send_heartbeat_telemetry(protocol, agent_update_handler)
+                self._send_heartbeat_telemetry(agent_update_handler)
                 self._check_agent_memory_usage()
                 time.sleep(self._goal_state_period)
 
@@ -442,8 +443,10 @@ class UpdateHandler(object):
         #
         # Block until we can fetch the first goal state (self._try_update_goal_state() does its own logging and error handling).
         #
+        event.info(WALAEventOperation.GoalState, "Initializing the goal state...")
         while not self._try_update_goal_state(protocol):
             time.sleep(conf.get_goal_state_period())
+        event.info(WALAEventOperation.GoalState, "Goal state initialization completed.")
 
         #
         # If FastTrack is disabled we need to check if the current goal state (which will be retrieved using the WireServer and
@@ -455,7 +458,9 @@ class UpdateHandler(object):
                 egs = protocol.client.get_goal_state().extensions_goal_state
                 if egs.created_on_timestamp < last_fast_track_timestamp:
                     egs.is_outdated = True
-                    logger.info("The current Fabric goal state is older than the most recent FastTrack goal state; will skip it.\nFabric:    {0}\nFastTrack: {1}",
+                    event.info(
+                        WALAEventOperation.GoalState,
+                       "The current Fabric goal state is older than the most recent FastTrack goal state; will skip it.\nFabric:    {0}\nFastTrack: {1}",
                         egs.created_on_timestamp, last_fast_track_timestamp)
 
     def _wait_for_cloud_init(self):
@@ -497,18 +502,51 @@ class UpdateHandler(object):
         """
         Attempts to update the goal state and returns True on success or False on failure, sending telemetry events about the failures.
         """
-        try:
-            max_errors_to_log = 3
+        max_errors_to_log = 3
 
-            protocol.client.update_goal_state(silent=self._update_goal_state_error_count >= max_errors_to_log, save_to_history=True)
+        try:
+            #
+            # For Fast Track goal states we need to ensure that the tenant certificate is in the goal state.
+            #
+            # Some scenarios can produce inconsistent goal states. For example, during hibernation/resume, the Fabric goal state changes (the
+            # tenant certificate is re-generated when the VM is restarted) *without* the incarnation necessarily changing (e.g. if the incarnation
+            # is 1 before the hibernation; on resume the incarnation is set to 1 even though the goal state has a new certificate). If a Fast
+            # Track goal state comes after that, the extensions will need the new certificate.
+            #
+            # For new Fast Track goal states, we check the certificates and, if an inconsistency is detected,  re-fetch the entire goal state
+            # (update_goal_state(force_update=True). We re-fetch 2 times, one without waiting (to address scenarios like hibernation) and one with
+            # a delay (to address situations in which the HGAP and the WireServer are temporarily out of sync).
+            #
+            for attempt in range(3):
+                protocol.client.update_goal_state(force_update=attempt > 0, silent=self._update_goal_state_error_count >= max_errors_to_log, save_to_history=True)
+
+                goal_state = protocol.get_goal_state()
+                new_goal_state = self._goal_state is None or self._goal_state.extensions_goal_state.id != goal_state.extensions_goal_state.id
+
+                if not new_goal_state or goal_state.extensions_goal_state.source != GoalStateSource.FastTrack:
+                    break
+
+                if self._check_certificates(goal_state):
+                    if attempt > 0:
+                        event.info(WALAEventOperation.FetchGoalState, "The extensions goal state is now in sync with the tenant cert.")
+                    break
+
+                if attempt == 0:
+                    event.info(WALAEventOperation.FetchGoalState, "The extensions are out of sync with the tenant cert. Will refresh the goal state.")
+                elif attempt == 1:
+                    event.info(WALAEventOperation.FetchGoalState, "The extensions are still out of sync with the tenant cert. Will refresh the goal state one more time after a short delay.")
+                    time.sleep(conf.get_goal_state_period())
+                else:
+                    event.warn(WALAEventOperation.FetchGoalState, "The extensions are still out of sync with the tenant cert. Will continue execution, but some extensions may fail.")
+                    break
 
             self._goal_state = protocol.get_goal_state()
 
             if self._update_goal_state_error_count > 0:
-                message = u"Fetching the goal state recovered from previous errors. Fetched {0} (certificates: {1})".format(
+                event.info(
+                    WALAEventOperation.FetchGoalState,
+                    "Fetching the goal state recovered from previous errors. Fetched {0} (certificates: {1})",
                     self._goal_state.extensions_goal_state.id, self._goal_state.certs.summary)
-                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
-                logger.info(message)
                 self._update_goal_state_error_count = 0
 
             try:
@@ -516,22 +554,36 @@ class UpdateHandler(object):
             except VmSettingsNotSupported:
                 self._supports_fast_track = False
 
+            return True
+
         except Exception as e:
             self._update_goal_state_error_count += 1
             self._heartbeat_update_goal_state_error_count += 1
             if self._update_goal_state_error_count <= max_errors_to_log:
-                message = u"Error fetching the goal state: {0}".format(textutil.format_exception(e))
-                logger.error(message)
-                add_event(op=WALAEventOperation.FetchGoalState, is_success=False, message=message, log_event=False)
-                self._update_goal_state_last_error_report = datetime.now()
+                # Report up to 'max_errors_to_log' immediately
+                self._update_goal_state_next_error_report = datetime.now()
+                event.error(WALAEventOperation.FetchGoalState, "Error fetching the goal state: {0}", textutil.format_exception(e))
             else:
-                if self._update_goal_state_last_error_report + timedelta(hours=6) > datetime.now():
-                    self._update_goal_state_last_error_report = datetime.now()
-                    message = u"Fetching the goal state is still failing: {0}".format(textutil.format_exception(e))
-                    logger.error(message)
-                    add_event(op=WALAEventOperation.FetchGoalState, is_success=False, message=message, log_event=False)
+                # Report one single periodic error every 6 hours
+                if datetime.now() >= self._update_goal_state_next_error_report:
+                    self._update_goal_state_next_error_report = datetime.now() + timedelta(hours=6)
+                    event.error(WALAEventOperation.FetchGoalState, "Fetching the goal state is still failing: {0}", textutil.format_exception(e))
             return False
 
+    @staticmethod
+    def _check_certificates(goal_state):
+        # Check that the certificates needed by extensions are in the goal state certificates summary
+        for extension in goal_state.extensions_goal_state.extensions:
+            for settings in extension.settings:
+                if settings.protectedSettings is None:
+                    continue
+                certificates = goal_state.certs.summary
+                if not any(settings.certificateThumbprint == c['thumbprint'] for c in certificates):
+                    event.warn(
+                        WALAEventOperation.FetchGoalState,
+                        "The extensions goal state is out of sync with the tenant cert. Certificate {0}, needed by {1}, is missing.",
+                        settings.certificateThumbprint, extension.name)
+                    return False
         return True
 
     def _processing_new_incarnation(self):
@@ -806,21 +858,6 @@ class UpdateHandler(object):
                     ustr(e))
         return
 
-    def _ensure_partition_assigned(self):
-        """
-        Assign the VM to a partition (0 - 99). Downloaded updates may be configured
-        to run on only some VMs; the assigned partition determines eligibility.
-        """
-        if not os.path.exists(self._partition_file):
-            partition = ustr(int(datetime.utcnow().microsecond / 10000))
-            fileutil.write_file(self._partition_file, partition)
-            add_event(
-                AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.Partition,
-                is_success=True,
-                message=partition)
-
     def _ensure_readonly_files(self):
         for g in READONLY_FILE_GLOBS:
             for path in glob.iglob(os.path.join(conf.get_lib_dir(), g)):
@@ -912,13 +949,6 @@ class UpdateHandler(object):
         path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
         return [GuestAgent.from_installed_agent(agent_dir)
                 for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)]
-
-    def _partition(self):
-        return int(fileutil.read_file(self._partition_file))
-
-    @property
-    def _partition_file(self):
-        return os.path.join(conf.get_lib_dir(), AGENT_PARTITION_FILE)
 
     def _purge_agents(self):
         """
@@ -1016,22 +1046,18 @@ class UpdateHandler(object):
 
         return pid_files, pid_file
 
-    def _send_heartbeat_telemetry(self, protocol, agent_update_handler):
+    def _send_heartbeat_telemetry(self, agent_update_handler):
         if self._last_telemetry_heartbeat is None:
             self._last_telemetry_heartbeat = datetime.utcnow() - UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD
 
         if datetime.utcnow() >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
-            dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
             auto_update_enabled = 1 if conf.get_auto_update_to_latest_version() else 0
             update_mode = agent_update_handler.get_current_update_mode()
 
             # Note: When we add new values to the heartbeat message, please add a semicolon at the end of the value.
             # This helps to parse the message easily in kusto queries with regex
-            heartbeat_msg = "HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
-                            "UpdateGSErrors: {3};AutoUpdate: {4};UpdateMode: {5};".format(self._heartbeat_counter,
-                                                                          self._heartbeat_id, dropped_packets,
-                                                                          self._heartbeat_update_goal_state_error_count,
-                                                                          auto_update_enabled, update_mode)
+            heartbeat_msg = "HeartbeatCounter: {0};HeartbeatId: {1};UpdateGSErrors: {2};AutoUpdate: {3};UpdateMode: {4};".format(
+            	self._heartbeat_counter, self._heartbeat_id, self._heartbeat_update_goal_state_error_count, auto_update_enabled, update_mode)
 
             # Write Heartbeat events/logs
             add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
@@ -1073,9 +1099,7 @@ class UpdateHandler(object):
         for name, path in list_agent_lib_directory(skip_agent_package=True):
 
             try:
-                handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path(name=name,
-                                                                                         path=path,
-                                                                                         protocol=protocol)
+                handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path(name=name, path=path,  protocol=protocol)
             except Exception:
                 # Ignore errors if any
                 continue
@@ -1106,75 +1130,37 @@ class UpdateHandler(object):
             logger.warn("Error when trying to delete existing Extension events directory. Error: {0}".format(ustr(e)))
 
     @staticmethod
-    def _ensure_firewall_rules_persisted(dst_ip):
-
-        if not conf.enable_firewall():
-            logger.info("Not setting up persistent firewall rules as OS.EnableFirewall=False")
-            return
-
-        is_success = False
-        logger.info("Starting setup for Persistent firewall rules")
+    def _initialize_firewall(wire_server_address):
         try:
-            PersistFirewallRulesHandler(dst_ip=dst_ip, uid=os.getuid()).setup()
-            msg = "Persistent firewall rules setup successfully"
-            is_success = True
-            logger.info(msg)
-        except Exception as error:
-            msg = "Unable to setup the persistent firewall rules: {0}".format(ustr(error))
-            logger.error(msg)
-
-        add_event(
-            op=WALAEventOperation.PersistFirewallRules,
-            is_success=is_success,
-            message=msg,
-            log_event=False)
-
-    def _add_accept_tcp_firewall_rule_if_not_enabled(self, dst_ip):
-
-        if not conf.enable_firewall():
-            return
-
-        def _execute_run_command(command):
-            # Helper to execute a run command, returns True if no exception
-            # Here we primarily check if an  iptable rule exist. True if it exits , false if not
-            try:
-                shellutil.run_command(command)
-                return True
-            except CommandError as err:
-                # return code 1 is expected while using the check command. Raise if encounter any other return code
-                if err.returncode != 1:
-                    raise
-            return False
-
-        try:
-            wait = self.osutil.get_firewall_will_wait()
-
-            # "-C" checks if the iptable rule is available in the chain. It throws an exception with return code 1 if the ip table rule doesnt exist
-            drop_rule = AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND, dst_ip, wait=wait)
-            if not _execute_run_command(drop_rule):
-                # DROP command doesn't exist indicates then none of the firewall rules are set yet
-                # exiting here as the environment thread will set up all firewall rules
-                logger.info("DROP rule is not available which implies no firewall rules are set yet. Environment thread will set it up.")
+            if not conf.enable_firewall():
+                event.info(WALAEventOperation.Firewall, "Skipping firewall initialization, since OS.EnableFirewall=False")
                 return
-            else:
-                # DROP rule exists in the ip table chain. Hence checking if the DNS TCP to wireserver rule exists. If not we add it.
-                accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND, dst_ip, wait=wait)
-                if not _execute_run_command(accept_tcp_rule):
-                    try:
-                        logger.info(
-                            "Firewall rule to allow DNS TCP request to wireserver for a non root user unavailable. Setting it now.")
-                        accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.INSERT_COMMAND, dst_ip, wait=wait)
-                        shellutil.run_command(accept_tcp_rule)
-                        logger.info(
-                            "Succesfully added firewall rule to allow non root users to do a DNS TCP request to wireserver")
-                    except CommandError as error:
-                        msg = "Unable to set the non root tcp access firewall rule :" \
-                              "Run command execution for {0} failed with error:{1}.Return Code:{2}"\
-                            .format(error.command, error.stderr, error.returncode)
-                        logger.error(msg)
+
+            firewall_manager = FirewallManager.create(wire_server_address)
+
+            try:
+                firewall_manager.remove_legacy_rule()
+            except Exception as error:
+                event.error(WALAEventOperation.Firewall, "Unable to remove legacy firewall rule. Error: {0}", ustr(error))
+
+            logger.info("Checking state of the firewall")
+            try:
+                if firewall_manager.check():
+                    event.info(WALAEventOperation.Firewall, "The firewall rules for Azure Fabric are already setup:\n{0}", firewall_manager.get_state())
                 else:
-                    logger.info(
-                        "Not setting the firewall rule to allow DNS TCP request to wireserver for a non root user since it already exists")
+                    firewall_manager.setup()
+                    event.info(WALAEventOperation.Firewall, "Created firewall rules for Azure Fabric:\n{0}", firewall_manager.get_state())
+            except FirewallStateError as e:
+                event.warn(WALAEventOperation.Firewall, "The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): {0}. Current state:\n{1}", ustr(e), firewall_manager.get_state())
+
+            #
+            # Ensure firewall rules are persisted across reboots
+            #
+            event.info(WALAEventOperation.PersistFirewallRules, "Setting up persistent firewall rules")
+            try:
+                PersistFirewallRulesHandler(dst_ip=wire_server_address).setup()
+            except Exception as error:
+                event.error(WALAEventOperation.PersistFirewallRules, "Unable to setup the persistent firewall rules: {0}", ustr(error))
+
         except Exception as e:
-            msg = "Error while checking ip table rules:{0}".format(ustr(e))
-            logger.error(msg)
+            event.error(WALAEventOperation.Firewall, "Error initializing firewall: {0}", ustr(e))

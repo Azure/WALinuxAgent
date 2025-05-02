@@ -229,6 +229,8 @@ class AgentTestSuite(LisaTestSuite):
         self._skip_setup = variables["skip_setup"]
         self._keep_environment = variables["keep_environment"]
         self._collect_logs = variables["collect_logs"]
+        if self._collect_logs not in [CollectLogs.Always, CollectLogs.Failed, CollectLogs.No]:
+            raise ValueError(f"Invalid value for the collect_logs parameter: {self._collect_logs}")
 
         # The AgentTestSuiteCombinator can create 4 kinds of platform/environment combinations:
         #

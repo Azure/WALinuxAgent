@@ -16,6 +16,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+from typing import Any, Dict, List
+
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.logging import log
@@ -35,13 +37,14 @@ class AgentPersistFirewallTest(AgentVmTest):
         self._test_setup()
         # Test case 1: After test agent install, verify firewalld or network.setup is running
         self._verify_persist_firewall_service_running()
-        # Test case 2: Perform reboot and ensure firewall rules added on boot and working as expected
+        # Test case 2: Disable the agent(so that agent won't get started after reboot)
+        # perform reboot and ensure firewall rules added on boot even after agent is disabled
+        self._disable_agent()
         self._context.vm.restart(wait_for_boot=True, ssh_client=self._ssh_client)
         self._verify_persist_firewall_service_running()
         self._verify_firewall_rules_on_boot("first_boot")
-        # Test case 3: Disable the agent(so that agent won't get started after reboot)
-        # perform reboot and ensure firewall rules added on boot even after agent is disabled
-        self._disable_agent()
+        # Test case 3: Re-enable the agent and do an additional reboot. The intention is to check for conflicts between the agent and the persist firewall service
+        self._enable_agent()
         self._context.vm.restart(wait_for_boot=True, ssh_client=self._ssh_client)
         self._verify_persist_firewall_service_running()
         self._verify_firewall_rules_on_boot("second_boot")
@@ -50,29 +53,50 @@ class AgentPersistFirewallTest(AgentVmTest):
 
     def _test_setup(self):
         log.info("Doing test setup")
-        self._run_remote_test(self._ssh_client, f"agent_persist_firewall-test_setup {self._context.username}",
-                              use_sudo=True)
-        log.info("Successfully completed test setup\n")
+        output = self._ssh_client.run_command(f"agent_persist_firewall-test_setup {self._context.username}", use_sudo=True)
+        log.info(f"Successfully completed test setup\n{output}")
 
     def _verify_persist_firewall_service_running(self):
         log.info("Verifying persist firewall service is running")
-        self._run_remote_test(self._ssh_client, "agent_persist_firewall-verify_persist_firewall_service_running.py",
-                              use_sudo=True)
+        self._run_remote_test(self._ssh_client, "agent_persist_firewall-verify_persist_firewall_service_running.py", use_sudo=True)
         log.info("Successfully verified persist firewall service is running\n")
 
     def _verify_firewall_rules_on_boot(self, boot_name):
         log.info("Verifying firewall rules on {0}".format(boot_name))
-        self._run_remote_test(self._ssh_client, f"agent_persist_firewall-verify_firewall_rules_on_boot.py --user {self._context.username} --boot_name {boot_name}",
-                              use_sudo=True)
+        self._run_remote_test(self._ssh_client, f"agent_persist_firewall-verify_firewall_rules_on_boot.py --user {self._context.username} --boot_name {boot_name}", use_sudo=True)
         log.info("Successfully verified firewall rules on {0}".format(boot_name))
-
-    def _disable_agent(self):
-        log.info("Disabling agent")
-        self._run_remote_test(self._ssh_client, "agent-service disable", use_sudo=True)
-        log.info("Successfully disabled agent\n")
 
     def _verify_firewall_rules_readded(self):
         log.info("Verifying firewall rules readded")
-        self._run_remote_test(self._ssh_client, "agent_persist_firewall-verify_firewalld_rules_readded.py",
-                              use_sudo=True)
+        self._run_remote_test(self._ssh_client, "agent_persist_firewall-verify_firewalld_rules_readded.py", use_sudo=True)
         log.info("Successfully verified firewall rules readded\n")
+
+    def _enable_agent(self):
+        log.info("Enabling agent")
+        output = self._ssh_client.run_command("agent-service enable", use_sudo=True)
+        log.info(f"Successfully enabled agent\n{output}")
+
+    def _disable_agent(self):
+        log.info("Disabling agent")
+        output = self._ssh_client.run_command("agent-service disable", use_sudo=True)
+        log.info(f"Successfully disabled agent\n{output}")
+
+    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
+        return [
+            #
+            # The test deletes those rules, so the messages are expected
+            #
+            # 2024-07-30T23:36:35.705717Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['ACCEPT DNS']), will reset them.
+            # 2024-07-30T23:37:23.612352Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['ACCEPT']), will reset them.
+            # 2024-07-30T23:38:11.083028Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['DROP']), will reset them.
+            # 2024-12-27T19:42:51.531056Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['ACCEPT'] due to: ['']), will reset them
+            #
+            {
+                'message': r"The permanent firewall rules for Azure Fabric are not setup correctly \(The following rules are missing: \[('ACCEPT DNS'|'ACCEPT'|'DROP'|, )+\] due to.*\), will reset them.",
+                'if': lambda r: r.level == "WARNING"
+            }
+        ]
+
+
+if __name__ == "__main__":
+    AgentPersistFirewallTest.run_from_command_line()

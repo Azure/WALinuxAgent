@@ -104,50 +104,6 @@ class AgentLog(object):
         #
         ignore_rules = [
             #
-            # NOTE: This list was taken from the older agent tests and needs to be cleaned up. Feel free to un-comment rules as new tests are added.
-            #
-            # # The following message is expected to log an error if systemd is not enabled on it
-            # {
-            #     'message': r"Did not detect Systemd, unable to set wa(|linux)agent-network-setup.service",
-            #     'if': lambda _: not self._is_systemd()
-            # },
-            # #
-            # # Journalctl in Debian 8.11 does not have the --utc option by default.
-            # # Ignoring this error for Deb 8 as its not a blocker and since Deb 8 is old and not widely used
-            # {
-            #     'message': r"journalctl: unrecognized option '--utc'",
-            #     'if': lambda r: re.match(r"(debian8\.11)\D*", DISTRO_NAME, flags=re.IGNORECASE) is not None and r.level == "WARNING"
-            # },
-            # # Sometimes it takes the Daemon some time to identify primary interface and the route to Wireserver,
-            # # ignoring those errors if they come from the Daemon.
-            # {
-            #     'message': r"(No route exists to \d+\.\d+\.\d+\.\d+|"
-            #                r"Could not determine primary interface, please ensure \/proc\/net\/route is correct|"
-            #                r"Contents of \/proc\/net\/route:|Primary interface examination will retry silently)",
-            #     'if': lambda r: r.prefix == "Daemon"
-            # },
-            #
-            # # This happens in CENTOS and RHEL when waagent attempt to format and mount the error while cloud init is already doing it
-            # # 2021-09-20T06:45:57.253801Z WARNING Daemon Daemon Could not mount resource disk: mount: /dev/sdb1 is already mounted or /mnt/resource busy
-            # # /dev/sdb1 is already mounted on /mnt/resource
-            # {
-            #     'message': r"Could not mount resource disk: mount: \/dev\/sdb1 is already mounted or \/mnt\/resource busy",
-            #     'if': lambda r:
-            #     re.match(r"((centos7\.8)|(redhat7\.8)|(redhat7\.6)|(redhat8\.2))\D*", DISTRO_NAME, flags=re.IGNORECASE)
-            #     and r.level == "WARNING"
-            #     and r.prefix == "Daemon"
-            # },
-            # #
-            # # 2021-09-20T06:45:57.246593Z ERROR Daemon Daemon Command: [mkfs.ext4 -F /dev/sdb1], return code: [1], result: [mke2fs 1.42.9 (28-Dec-2013)
-            # # /dev/sdb1 is mounted; will not make a filesystem here!
-            # {
-            #     'message': r"Command: \[mkfs.ext4 -F \/dev\/sdb1\], return code: \[1\]",
-            #     'if': lambda r:
-            #     re.match(r"((centos7\.8)|(redhat7\.8)|(redhat7\.6)|(redhat8\.2))\D*", DISTRO_NAME, flags=re.IGNORECASE)
-            #     and r.level == "ERROR"
-            #     and r.prefix == "Daemon"
-            # },
-            #
             # 2023-06-28T09:31:38.903835Z WARNING EnvHandler ExtHandler Move rules file 75-persistent-net-generator.rules to /var/lib/waagent/75-persistent-net-generator.rules
             #  The environment thread performs this operation periodically
             #
@@ -312,7 +268,7 @@ class AgentLog(object):
             # Reasons (first 5 errors): [ProtocolError] [Wireserver Exception] [ProtocolError] [Wireserver Failed] URI http://168.63.129.16/machine?comp=telemetrydata  [HTTP Failed] Status Code 400: Traceback (most recent call last):
             #
             {
-                'message': r"(?s)\[ProtocolError\].*http://168.63.129.16/machine\?comp=telemetrydata.*Status Code 400",
+                'message': r"(?s)\[ProtocolError\].*http:\/\/168.63.129.16\/machine\?comp=telemetrydata.*Status Code 400",
                 'if': lambda r: r.thread == 'SendTelemetryHandler' and self._increment_counter("SendTelemetryHandler-telemetrydata-Status Code 400") < 2  # ignore unless there are 2 or more instances
             },
             #
@@ -369,18 +325,21 @@ class AgentLog(object):
                 'if': lambda r: r.prefix == 'ExtHandler' and r.thread == 'ExtHandler'
             },
             #
-            # TODO: Currently Ubuntu minimal does not include the 'iptables' command. Remove this rule once this has been addressed.
+            # Some distros are running older agents, which do not add the DNS rule
             #
-            # We don't have an easy way to distinguish Ubuntu minimal, so this rule suppresses for any Ubuntu. This is OK; if 'iptables' was missing from the regular Ubuntu images, the firewall tests would fail.
-            #
-            # 2024-03-27T16:12:35.666460Z ERROR ExtHandler ExtHandler Unable to setup the persistent firewall rules: Unable to determine version of iptables: [Errno 2] No such file or directory: 'iptables'
-            # 2024-03-27T16:12:35.667253Z WARNING ExtHandler ExtHandler Unable to determine version of iptables: [Errno 2] No such file or directory: 'iptables'
-            #
+            # 2024-08-02T21:44:44.330727Z WARNING ExtHandler ExtHandler The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): The following rules are missing: ['ACCEPT DNS']
+            # 2024-08-08T22:05:26.561896Z WARNING EnvHandler ExtHandler The firewall is not configured correctly. The following rules are missing: ['ACCEPT DNS']. Will reset it.
+            # 2024-09-16T15:50:12.473500Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['ACCEPT DNS']), will reset them.
+            # 2024-12-27T19:42:03.895387Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['ACCEPT DNS'] due to: ['']), will reset them.
+            # 2024-12-27T19:38:14.093727Z WARNING EnvHandler ExtHandler The firewall is not configured correctly. The following rules are missing: ['ACCEPT DNS'] due to: ['iptables: Bad rule (does a matching rule exist in that chain?).\n']. Will reset it.
             {
-                'message': r"Unable to determine version of iptables: \[Errno 2\] No such file or directory: 'iptables'",
-                'if': lambda r: DISTRO_NAME == 'ubuntu'
+                'message': r"(The firewall rules for Azure Fabric are not setup correctly \(the environment thread will fix it\): The following rules are missing: \['ACCEPT DNS'\])"
+                           "|"
+                           r"(The firewall is not configured correctly. The following rules are missing: \['ACCEPT DNS'\].* Will reset it.)"
+                           "|"
+                           r"The permanent firewall rules for Azure Fabric are not setup correctly \(The following rules are missing: \['ACCEPT DNS'\]\).* will reset them.",
+                'if': lambda r: r.level == "WARNING"
             },
-            #
             # TODO: The Daemon has not been updated on Azure Linux 3; remove this message when it is.
             #
             # 2024-08-05T14:36:48.004865Z WARNING Daemon Daemon Unable to load distro implementation for azurelinux. Using default distro implementation instead.
@@ -397,6 +356,71 @@ class AgentLog(object):
             {
                 'message': r"name=Microsoft\.EnterpriseCloud\.Monitoring\.OmsAgentForLinux.+Non-zero exit code: 51",
                 'if': lambda r: DISTRO_NAME == 'azurelinux' and DISTRO_VERSION == '3.0'
+            },
+
+            # Ubuntu 16 has an issue representing no quota as infinity, instead it outputs weird values. https://github.com/systemd/systemd/issues/5965, so ignoring in ubuntu 16
+            # 2024-11-26T00:07:38.716162Z INFO ExtHandler ExtHandler [CGW] Error parsing current CPUQuotaPerSecUSec: could not convert string to float: '584542y 2w 2d 20h 1min 49.549568'
+            {'message': r"Error parsing current CPUQuotaPerSecUSec: could not convert string to float",
+             'if': lambda r: DISTRO_NAME == 'ubuntu' and DISTRO_VERSION == '16.04'
+             },
+            #
+            # GuestConfiguration produces a lot of errors in test runs due to issues in the extension. Some samples:
+            #
+            # 2024-12-08T06:28:34.480675Z ERROR ExtHandler ExtHandler Event: name=Microsoft.GuestConfiguration.ConfigurationforLinux, op=Install, message=[ExtensionOperationError] Non-zero exit code: 126, /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim install
+            # [stdout]
+            # Linux distribution version is 9.0.
+            # Linux distribution is Red Hat.
+            # + /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-extension install
+            # /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim: line 211: /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-extension: cannot execute binary file: Exec format error
+            # [stderr]
+            #
+            # 2024-12-26T06:35:24.233438Z ERROR ExtHandler ExtHandler Event: name=Microsoft.GuestConfiguration.ConfigurationforLinux, op=Install, message=[ExtensionOperationError] Non-zero exit code: 51, /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim install
+            # [stdout]
+            # Linux distribution version is 4081.2.1.
+            # [stderr]
+            # [2024-12-26T06:35:22+0000]: Unexpected Linux distribution. Expected Linux distributions include only Ubuntu, Red Hat, SUSE, CentOS, Debian or Mariner.
+            #
+            # 2025-01-07T11:32:28.121056Z ERROR ExtHandler ExtHandler Event: name=Microsoft.GuestConfiguration.ConfigurationforLinux, op=Install, message=[ExtensionOperationError] Non-zero exit code: 1, /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim install
+            # [stdout]
+            # Linux distribution version is 12.5.
+            # Linux distribution is SUSE.
+            # /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-extension install
+            # /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim: line 211:
+            # /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-extension: Text file busy
+            # [stderr]
+            #
+            # Also, enable not always completes before the new goal state is received
+            #
+            # 2025-01-07T13:33:25.636847Z WARNING ExtHandler ExtHandler A new goal state was received, but not all the extensions in the previous goal state have completed:
+            # [('Microsoft.Azure.Extensions.CustomScript', 'success'), ('Microsoft.GuestConfiguration.ConfigurationforLinux', 'transitioning'), ('RunCommandHandler', 'success')]
+            #
+            {
+                'message': r"(?s)name=Microsoft.GuestConfiguration.ConfigurationforLinux.*op=Install.*Non-zero exit code: (1.*Text file busy|51.*Unexpected Linux distribution|126.*Exec format error)",
+            },
+            {
+                'message': r"A new goal state was received, but not all the extensions in the previous goal state have completed.*'Microsoft.GuestConfiguration.ConfigurationforLinux',\s+'transitioning'",
+            },
+            #
+            # Below systemd errors are transient and will not block extension execution
+            #
+            # 2025-01-05T09:38:44.046292Z INFO ExtHandler ExtHandler [CGW] Failed to set the extension azure-vmextensions-Microsoft.CPlat.Core.RunCommandHandlerLinux.slice slice and quotas:
+            # 'systemctl show azure-vmextensions-Microsoft.CPlat.Core.RunCommandHandlerLinux.slice --property CPUAccounting' failed: 1 (Failed to get properties: Message recipient disconnected from message bus without replying)
+            #
+            # 2025-01-06T09:32:42.594033Z INFO ExtHandler ExtHandler [CGW] Failed to set the extension azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice slice and quotas:
+            # 'systemctl show azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice --property CPUAccounting' failed: 1 (Failed to get properties: Connection reset by peer)
+            #
+            {
+                'message': r"Failed to set the extension.*systemctl show.*--property.*failed: 1.*(Message recipient disconnected from message bus without replying|Connection reset by peer)",
+            },
+            #
+            # 2025-01-06T09:32:44.641948Z INFO ExtHandler ExtHandler [CGW] Disabling resource usage monitoring. Reason: Failed to start Microsoft.Azure.Extensions.CustomScript-2.1.10 using systemd-run, will try invoking the extension directly. Error: [SystemdRunError] Systemd process exited with code 1 and output [stdout]
+            #
+            #
+            # [stderr]
+            # Failed to start transient scope unit: Message recipient disconnected from message bus without replying
+            #
+            {
+                'message': r"(?s)Disabling resource usage monitoring. Reason: Failed to start.*using systemd-run, will try invoking the extension directly. Error: \[SystemdRunError\].*Failed to start transient scope unit: (Message recipient disconnected from message bus without replying|Connection reset by peer)",
             },
         ]
 

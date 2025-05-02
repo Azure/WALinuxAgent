@@ -20,7 +20,7 @@ jobs:
     name: "Python ${{ matrix.python-version }} Unit Tests"
     runs-on: ubuntu-20.04
     container:
-      image: ubuntu:16.04
+      image: ubuntu:24.04
       volumes:
         - /home/waagent:/home/waagent
     defaults:
@@ -29,25 +29,32 @@ jobs:
 
     env:
       NOSEOPTS: "--verbose"
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
-    
+
     steps:
     - uses: actions/checkout@v3
 
-    - name: Install Python ${{ matrix.python-version }}
+    - name: Install Python ${{ matrix.python-version }} Virtual Environment
       run: |
         apt-get update
-        apt-get install -y curl bzip2 sudo python3
-        curl https://dcrdata.blob.core.windows.net/python/python-${{ matrix.python-version }}.tar.bz2 -o python-${{ matrix.python-version }}.tar.bz2
-        sudo tar xjvf python-${{ matrix.python-version }}.tar.bz2 --directory /
-
-    - name: Test with nosetests
-      run: |
-        if [[ ${{ matrix.python-version }} == "2.6" ]]; then
-          source /home/waagent/virtualenv/python2.6.9/bin/activate
-        else
-          source /home/waagent/virtualenv/python3.4.8/bin/activate
+        apt-get install -y curl bzip2 sudo
+        curl -sSf --retry 5 -o /tmp/python-${{ matrix.python-version }}.tar.bz2 https://dcrdata.blob.core.windows.net/python/python-${{ matrix.python-version }}.tar.bz2
+        sudo tar xjf /tmp/python-${{ matrix.python-version }}.tar.bz2 --directory /
+        #
+        # TODO: Some unit tests create helper scripts that use 'python3' as shebang; we should probably port them to Bash, but installing Python 3 as a workaround for now.
+        #
+        if [[ "${{ matrix.python-version }}" == "2.6" ]]; then
+            apt-get -y install python3
         fi
+        #
+        # The virtual environments for 2.6 and 3.4 have dependencies on OpenSSL 1.0, which is not available beyond Ubuntu 16. We use this script to patch the environments.
+        #
+        if [[ "${{ matrix.python-version }}" =~ ^2\.6|3\.4$ ]]; then
+          ./tests/python_eol/patch_python_venv.sh "${{ matrix.python-version }}"
+        fi
+
+    - name: Execute Tests
+      run: |
+        source /home/waagent/virtualenv/python${{ matrix.python-version }}/bin/activate
         ./ci/nosetests.sh
         exit $?
 

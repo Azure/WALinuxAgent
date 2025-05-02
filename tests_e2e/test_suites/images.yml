@@ -19,6 +19,7 @@ image-sets:
       - "suse_12"
       - "mariner_2"
       - "azure-linux_3"
+      - "azure-linux_3_fips"
       - "suse_15"
       - "rhel_79"
       - "rhel_82"
@@ -100,11 +101,16 @@ image-sets:
 #
 images:
    alma_9:
-      urn: "almalinux almalinux 9-gen2 latest"
+      urn: "almalinux almalinux-x86_64 9-gen2 latest"
       locations:
          AzureChinaCloud: []
    azure-linux_3:
       urn: "microsoftcblmariner azure-linux-3 azure-linux-3 latest"
+      locations:
+         AzureUSGovernment: []
+         AzureChinaCloud: []
+   azure-linux_3_fips:
+      urn: "microsoftcblmariner azure-linux-3 azure-linux-3-gen2-fips latest"
       locations:
          AzureUSGovernment: []
          AzureChinaCloud: []
@@ -190,6 +196,7 @@ images:
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
+   rhel_94: "RedHat RHEL 9_4 latest"
    rocky_9:
       urn: "resf rockylinux-x86_64 9-base latest"
       locations:
@@ -201,6 +208,7 @@ images:
    ubuntu_1804: "Canonical UbuntuServer 18.04-LTS latest"
    ubuntu_2004: "Canonical 0001-com-ubuntu-server-focal 20_04-lts latest"
    ubuntu_2204: "Canonical 0001-com-ubuntu-server-jammy 22_04-lts latest"
+   ubuntu_2204_pro: "Canonical 0001-com-ubuntu-pro-microsoft pro-22_04 latest"
    ubuntu_2204_arm64:
       urn: "Canonical 0001-com-ubuntu-server-jammy 22_04-lts-arm64 latest"
       locations:

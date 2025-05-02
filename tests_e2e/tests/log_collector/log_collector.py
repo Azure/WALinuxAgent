@@ -21,9 +21,9 @@ import time
 
 from assertpy import fail
 
-import tests_e2e.tests.lib.logging
 from azurelinuxagent.common.utils.shellutil import CommandError
 from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.logging import log
 
 
 class LogCollector(AgentVmTest):
@@ -32,7 +32,16 @@ class LogCollector(AgentVmTest):
     """
     def run(self):
         ssh_client = self._context.create_ssh_client()
-        ssh_client.run_command("update-waagent-conf Logs.Collect=y Debug.EnableCgroupV2ResourceLimiting=y Debug.LogCollectorInitialDelay=60", use_sudo=True)
+
+        # Rename the agent log file so that the test does not pick up any incomplete log collector runs that started
+        # before the config is updated
+        # Reduce log collector initial delay via config
+        log.info("Renaming agent log file and modifying log collector conf flags")
+        setup_script = ("agent-service stop &&  mv /var/log/waagent.log /var/log/waagent.$(date --iso-8601=seconds).log && "
+            "update-waagent-conf Logs.Collect=y Debug.LogCollectorInitialDelay=60")
+        ssh_client.run_command(f"sh -c '{setup_script}'", use_sudo=True)
+        log.info('Renamed log file and updated log collector config flags')
+
         # Wait for log collector to finish uploading logs
         for _ in range(3):
             time.sleep(90)
@@ -40,7 +49,7 @@ class LogCollector(AgentVmTest):
                 ssh_client.run_command("grep 'Successfully uploaded logs' /var/log/waagent.log")
                 break
             except CommandError:
-                tests_e2e.tests.lib.logging.log.info("The Agent has not finished log collection, will check again after a short delay")
+                log.info("The Agent has not finished log collection, will check again after a short delay")
         else:
             raise Exception("Timeout while waiting for the Agent to finish log collection")
 
@@ -57,7 +66,7 @@ class LogCollector(AgentVmTest):
         expected = [
             r'.*Starting log collection',
             r'.*Using cgroup v\d for resource enforcement and monitoring',
-            r'.*cpu(,cpuacct)? controller for cgroup: azure-walinuxagent-logcollector \[\/sys\/fs\/cgroup(\/cpu,cpuacct)?\/azure.slice\/azure-walinuxagent.slice\/azure-walinuxagent\-logcollector.slice\/collect\-logs.scope\]',
+            r'.*cpu controller for cgroup: azure-walinuxagent-logcollector \[\/sys\/fs\/cgroup(\/cpu,cpuacct)?\/azure.slice\/azure-walinuxagent.slice\/azure-walinuxagent\-logcollector.slice\/collect\-logs.scope\]',
             r'.*memory controller for cgroup: azure-walinuxagent-logcollector \[\/sys\/fs\/cgroup(\/memory)?\/azure.slice\/azure-walinuxagent.slice\/azure-walinuxagent\-logcollector.slice\/collect\-logs.scope\]',
             r'.*Log collection successfully completed',
             r'.*Successfully collected logs',
@@ -70,7 +79,7 @@ class LogCollector(AgentVmTest):
         # Check that all expected logs exist and are in the correct order
         indent = lambda lines: "\n".join([f"        {ln}" for ln in lines])
         if len(lc_logs) == len(expected) and all([re.match(expected[i], lc_logs[i]) is not None for i in range(len(expected))]):
-            tests_e2e.tests.lib.logging.log.info("The log collector run completed as expected.\nLog messages:\n%s", indent(lc_logs))
+            log.info("The log collector run completed as expected.\nLog messages:\n%s", indent(lc_logs))
         else:
             fail(f"The log collector run did not complete as expected.\nExpected:\n{indent(expected)}\nActual:\n{indent(lc_logs)}")
 
