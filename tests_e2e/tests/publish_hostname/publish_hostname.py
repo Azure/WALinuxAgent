@@ -124,8 +124,8 @@ class PublishHostname(AgentVmTest):
 
     def run(self):
         # TODO: Investigate why hostname is not being published on these distros.
-        distros_with_known_publishing_issues = ["ubuntu", "alma", "rocky", "redhat_810", "rhel_95"]
-        distro = self._ssh_client.run_command("get_distro.py").lower()
+        distros_with_known_publishing_issues = ["alma", "oracle_95", "oracle_810", "redhat_810", "rhel_95", "rocky", "ubuntu"]
+        distro = self._ssh_client.run_command("get_distro.py").rstrip().lower()
         if any(d in distro for d in distros_with_known_publishing_issues):
             raise TestSkipped("Known issue with hostname publishing on this distro. Will skip test until we continue "
                               "investigation.")
@@ -140,6 +140,7 @@ class PublishHostname(AgentVmTest):
         # Check if this distro monitors hostname changes. If it does, we should check that the agent detects the change
         # and publishes the host name. If it doesn't, we should check that the hostname is automatically published.
         monitors_hostname = self._ssh_client.run_command("get-waagent-conf-value Provisioning.MonitorHostName", use_sudo=True).rstrip().lower()
+        log.info(f"Distro: {distro} Provisioning.MonitorHostName: {monitors_hostname}")
 
         hostname_change_ctr = 0
         # Update the hostname 3 times
