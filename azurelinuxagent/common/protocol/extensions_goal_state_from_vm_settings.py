@@ -381,19 +381,9 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                 extension.state = extension_gs['state']
                 # The 'encodedSignature' property is an optional property in the HGAP/agent contract. extension.encoded_signature
                 # value should be an empty string if the 'encodedSignature' key does not exist for the extension.
-                #
-                # We emit telemetry to indicate whether extension signature is present in the goal state:
-                # - if signature is present, send ExtensionSigned event with is_success=True (message field not required).
-                # - if signature is missing, send ExtensionSigned event with is_success=False ONLY when the extension state is "enabled". Signatures
-                #   are not provided in goal states for "uninstall".
                 encoded_signature = extension_gs.get('encodedSignature')
-                if encoded_signature is None:
-                    extension.encoded_signature = ""
-                    if extension.state == "enabled":
-                        add_event(op=WALAEventOperation.ExtensionSigned, message="", name=extension.name, version=extension.version, is_success=False, log_event=False)
-                else:
-                    extension.encoded_signature = encoded_signature
-                    add_event(op=WALAEventOperation.ExtensionSigned, message="", name=extension.name, version=extension.version, is_success=True, log_event=False)
+                extension.encoded_signature = "" if encoded_signature is None else encoded_signature
+
                 if extension.state not in ExtensionRequestedState.All:
                     raise Exception('Invalid extension state: {0} ({1})'.format(extension.state, extension.name))
                 is_multi_config = extension_gs.get('isMultiConfig')

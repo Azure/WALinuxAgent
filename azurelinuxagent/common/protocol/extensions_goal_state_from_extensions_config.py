@@ -316,19 +316,9 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             raise ExtensionsConfigError("Received empty Extensions.Plugins.Plugin.state, failing Handler")
 
         # The 'encodedSignature' property is an optional property in the HGAP/agent contract. extension.encoded_signature
-        # value should be an empty string if the property does not exist for the plugin. getattrib returns "" if an attribute
-        # does not exist in a node.
-        #
-        # We emit telemetry to indicate whether extension signature is present in the goal state:
-        # - if signature is present, send ExtensionSigned event with is_success=True (message field not required).
-        # - if signature is missing, send ExtensionSigned event with is_success=False ONLY when the extension state is "enabled". Signatures
-        #   are not provided in goal states for "uninstall".
+        # value should be an empty string if the 'encodedSignature' key does not exist for the extension. getattrib
+        # returns an empty string if an attribute does not exist in a node.
         extension.encoded_signature = getattrib(plugin, "encodedSignature")
-        if extension.encoded_signature == "":
-            if extension.state == "enabled":
-                add_event(op=WALAEventOperation.ExtensionSigned, message="", name=extension.name, version=extension.version, is_success=False, log_event=False)
-        else:
-            add_event(op=WALAEventOperation.ExtensionSigned, message="", name=extension.name, version=extension.version, is_success=True, log_event=False)
 
         def getattrib_wrapped_in_list(node, attr_name):
             attr = getattrib(node, attr_name)

@@ -613,14 +613,15 @@ class WireClient(object):
 
         return self._download_with_fallback_channel(download_type, uris, direct_download=direct_download, hgap_download=hgap_download)
 
-    def download_zip_package(self, package_type, uris, target_file, target_directory, use_verify_header, signature):
+    def download_zip_package(self, package_name, uris, target_file, target_directory, use_verify_header, signature):
         """
         Downloads the ZIP package specified in 'uris' (which is a list of alternate locations for the ZIP), saving it to 'target_file' and then expanding
         its contents to 'target_directory'. Deletes the target file after it has been expanded.
 
-        The 'package_type' is only used in log messages/telemetry and has no other semantics. It should specify the contents of the ZIP, e.g. "extension package",
-         "agent package", or package information in the format "Name-Version". If signature validation is performed, the package name and version will
-         be extracted from the package_type parameter for use in telemetry only.
+        The 'package_name' parameter is used only for logging and telemetry. It should be the full name of the ZIP package,
+        formatted as "Name-Version" (e.g., "Microsoft.Azure.Extensions.CustomScript-2.1.13" for an extension package,
+        or "WALinuxAgent-9.9.9.9" for the agent package). The name and version will be extracted from this string
+        for telemetry purposes only.
 
         The 'use_verify_header' parameter indicates whether the verify header should be added when using the extensionArtifact API of the HostGAPlugin.
 
@@ -647,19 +648,19 @@ class WireClient(object):
             validation_error = None
             if signature != "":
                 try:
-                    validate_signature(target_file, signature, package_name_and_version=package_type)
+                    validate_signature(target_file, signature, package_full_name=package_name)
                 except SignatureValidationError as ex:  # validate_signature() will only raise SignatureValidationError
                     # TODO: raise error and cleanup zip file if signature validation result should be enforced
                     validation_error = ex
 
-            WireClient._try_expand_zip_package(package_type, target_file, target_directory)
+            WireClient._try_expand_zip_package(package_name, target_file, target_directory)
 
             # Surface any validation errors after extraction for telemetry collection
             if validation_error is not None:
                 raise validation_error
 
         # If on_downloaded() raises a SignatureValidationError, _download_with_fallback_channel will not attempt retries with other URIs, error will propagate immediately.
-        self._download_with_fallback_channel(package_type, uris, direct_download=direct_download, hgap_download=hgap_download, on_downloaded=on_downloaded)
+        self._download_with_fallback_channel(package_name, uris, direct_download=direct_download, hgap_download=hgap_download, on_downloaded=on_downloaded)
 
     def _download_with_fallback_channel(self, download_type, uris, direct_download, hgap_download, on_downloaded=None):
         """
@@ -669,7 +670,7 @@ class WireClient(object):
         but the default can be depending on the success/failure of each channel (see _download_using_appropriate_channel() for the logic to do this).
 
         The 'download_type' is added to any log messages produced by this method; it should describe the type of content of the given URIs
-        (e.g. "manifest", "extension package, "agent package", etc).
+        (e.g. "manifest", "Microsoft.Azure.Extensions.CustomScript-2.1.13, "WALinuxAgent-9.9.9.9", etc).
 
         When the download is successful, _download_with_fallback_channel invokes the 'on_downloaded' function, which can be used to process the results of the download. This
         function should return True on success, and False on failure (it should not raise any exceptions). If the return value is False, the download is considered
