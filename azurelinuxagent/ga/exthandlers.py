@@ -1407,6 +1407,7 @@ class ExtHandlerInstance(object):
                         # validate_signature() sends telemetry for all signature validation events. Logging is done here to use self.logger.
                         self.logger.info("Validating signature for existing extension package: '{0}'".format(self.get_full_name()))
                         validate_signature(package_file, self.ext_handler.encoded_signature, package_full_name=self.get_full_name())
+                        self.logger.info("Successfully validated signature for package '{0}'".format(self.get_full_name()))
                         signature_validated = True
 
                     # validate_signature() is only expected to raise SignatureValidationError, and will send telemetry for any error.
@@ -1460,7 +1461,7 @@ class ExtHandlerInstance(object):
                                                           signature=signature)
 
                 if should_validate_ext_signature and self.ext_handler.encoded_signature != "":
-                    self.logger.info("Successfully validated signature for extension '{0}'.".format(self.get_full_name()))
+                    self.logger.info("Successfully validated signature for package '{0}'.".format(self.get_full_name()))
                     signature_validated = True
 
             # download_zip_package() will propagate a SignatureValidationError if validation fails. This is the only exception

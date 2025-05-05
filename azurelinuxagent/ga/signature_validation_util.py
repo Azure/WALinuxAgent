@@ -192,7 +192,7 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
     :param ext_handler: Extension object
     :raises ManifestValidationError: if handler manifest validation fails
     """
-    add_event(op=WALAEventOperation.SignatureValidation, message="Validating handler manifest 'signingInfo' of package '{0}'".format(ext_handler), name=ext_handler.name, version=ext_handler.version, is_success=True, log_event=False)
+    add_event(op=WALAEventOperation.SignatureValidation, message="Validating handler manifest 'signingInfo' of extension '{0}'".format(ext_handler), name=ext_handler.name, version=ext_handler.version, is_success=True, log_event=False)
     start_time = datetime.datetime.now(UTC)
 
     # Check that 'signingInfo' exists in the manifest structure
@@ -223,7 +223,7 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
     validate_attribute(attribute="publisher", extension_value=ext_publisher)
     validate_attribute(attribute="version", extension_value=ext_handler.version)
 
-    add_event(op=WALAEventOperation.PackageSigningInfoResult, message="Successfully validated handler manifest 'signingInfo' for package '{0}'".format(ext_handler),
+    add_event(op=WALAEventOperation.PackageSigningInfoResult, message="Successfully validated handler manifest 'signingInfo' for extension '{0}'".format(ext_handler),
               name=ext_handler.name, version=ext_handler.version, is_success=True, duration=elapsed_milliseconds(start_time), log_event=False)
 
 
