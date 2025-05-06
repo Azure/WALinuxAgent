@@ -3,8 +3,8 @@
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateChannel
 from tests.lib.mock_wire_protocol import wire_protocol_data, mock_wire_protocol
-from tests.lib.tools import AgentTestCase, patch
-from azurelinuxagent.common.event import WALAEventOperation
+from tests.lib.tools import AgentTestCase
+
 
 class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
     def test_it_should_parse_in_vm_metadata(self):

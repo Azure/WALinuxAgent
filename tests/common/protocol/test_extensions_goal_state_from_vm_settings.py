@@ -6,8 +6,7 @@ from azurelinuxagent.common.protocol.goal_state import GoalState
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateChannel
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 from tests.lib.mock_wire_protocol import wire_protocol_data, mock_wire_protocol
-from tests.lib.tools import AgentTestCase, patch
-from azurelinuxagent.common.event import WALAEventOperation
+from tests.lib.tools import AgentTestCase
 
 
 class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
