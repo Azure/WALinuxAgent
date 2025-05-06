@@ -3519,12 +3519,9 @@ class TestExtensionPolicy(TestExtensionBase):
         self.policy_path = os.path.join(self.tmp_dir, "waagent_policy.json")
 
         # Patch attributes to enable policy feature
-        self.patch_policy_path = patch('azurelinuxagent.common.conf.get_policy_file_path',
+        self.patch_policy_path = patch('azurelinuxagent.ga.exthandlers.conf.get_policy_file_path',
                                        return_value=str(self.policy_path))
         self.patch_policy_path.start()
-        self.patch_conf_flag = patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled',
-                                     return_value=True)
-        self.patch_conf_flag.start()
         self.maxDiff = None     # When long error messages don't match, display the entire diff.
 
     def tearDown(self):

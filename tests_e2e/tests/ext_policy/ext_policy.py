@@ -230,11 +230,6 @@ class ExtPolicy(AgentVmTest):
                 if ext.extension._resource_name in extension_names_on_vm:
                     ext.extension.delete()
 
-            # Enable policy via conf file
-            log.info("")
-            log.info("Enabling policy via conf file on the test VM [%s]", self._context.vm.name)
-            self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
-
             # Azure Policy automatically installs the GuestConfig extension on test machines, which may occur while CRP
             # is waiting for a disallowed delete request to time out (test case 5). In this case, the GuestConfig enable
             # request would be merged with the delete request into a new goal state. CRP would report success for GuestConfig
@@ -428,12 +423,11 @@ class ExtPolicy(AgentVmTest):
             self._operation_should_succeed("delete", custom_script)
 
         finally:
-            # Cleanup after test: disable policy enforcement via conf and delete policy file
+            # Cleanup after test: delete policy
             log.info("")
             log.info("*** Begin test cleanup")
-            self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
             self._ssh_client.run_command("rm -f /etc/waagent_policy.json", use_sudo=True)
-            log.info("Successfully disabled policy via config (Debug.EnableExtensionPolicy=n) and removed policy file at /etc/waagent_policy.json")
+            log.info("Successfully removed policy file at /etc/waagent_policy.json")
             log.info("*** Test cleanup complete.")
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:

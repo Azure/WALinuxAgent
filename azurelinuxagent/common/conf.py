@@ -148,7 +148,7 @@ __SWITCH_OPTIONS__ = {
     "Debug.EnableFastTrack": True,
     "Debug.EnableGAVersioning": True,
     "Debug.EnableCgroupV2ResourceLimiting": False,
-    "Debug.EnableExtensionPolicy": False
+    "Debug.EnableExtensionPolicy": True
 }
 
 
@@ -689,7 +689,7 @@ def get_extension_policy_enabled(conf=__conf__):
     Determine whether extension policy is enabled. If true, policy will be enforced before installing any extensions.
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.EnableExtensionPolicy", False)
+    return conf.get_switch("Debug.EnableExtensionPolicy", True)
 
   
 def get_enable_cgroup_v2_resource_limiting(conf=__conf__):
