@@ -236,7 +236,6 @@ def save_signature_validation_state(target_dir):
     try:
         with open(validation_state_file, 'w'):
             pass
-        raise Exception
     except Exception as e:
         msg = "Error saving signature validation state file ({0}): {1}".format(validation_state_file, e)
         raise PackageValidationError(msg=msg)

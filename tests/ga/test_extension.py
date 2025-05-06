@@ -3864,7 +3864,7 @@ class TestSignatureValidationNotEnforced(TestExtensionBase):
                     kw['version'] == version and
                     not kw['is_success']
             ):
-                telemetry.append(kw)
+                errors.append(kw)
         self.assertEqual(0, len(errors), "Signature validation should have completed with no errors. Errors: {0}".format(errors))
 
     def _test_enable_extension(self, data_file, signature_validation_should_succeed, expected_status_code, expected_handler_status, expected_ext_count,
