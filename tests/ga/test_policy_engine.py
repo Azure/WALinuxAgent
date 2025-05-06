@@ -317,13 +317,13 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
         """
         When conf flag turned off, should allow all extensions and not enforce signature.
         """
-        self.patch_conf_flag.stop()
-        self._create_policy_file({})
-        engine = ExtensionPolicyEngine()
-        should_allow = engine.should_allow_extension(TEST_EXTENSION_NAME)
-        self.assertTrue(should_allow, msg="Policy feature is disabled because conf flag false, so all extensions should be allowed.")
-        should_enforce = engine.should_enforce_signature_validation(TEST_EXTENSION_NAME)
-        self.assertFalse(should_enforce, msg="Policy feature is disabled because conf flag false, so signature should not be enforced.")
+        with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=False):
+            self._create_policy_file({})
+            engine = ExtensionPolicyEngine()
+            should_allow = engine.should_allow_extension(TEST_EXTENSION_NAME)
+            self.assertTrue(should_allow, msg="Policy feature is disabled because conf flag false, so all extensions should be allowed.")
+            should_enforce = engine.should_enforce_signature_validation(TEST_EXTENSION_NAME)
+            self.assertFalse(should_enforce, msg="Policy feature is disabled because conf flag false, so signature should not be enforced.")
 
     def test_should_use_default_policy_if_no_extension_policy_specified(self):
         """
