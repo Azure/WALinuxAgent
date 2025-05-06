@@ -76,7 +76,7 @@ class RsmUpdateBvt(AgentVmTest):
         log.info("Current agent version running on the vm before update is \n%s", stdout)
         self._downgrade_version: str = "2.3.15.0"
         log.info("Attempting downgrade version %s", self._downgrade_version)
-        request_rsm_update(self._downgrade_version, self._context.vm, arch_type)
+        request_rsm_update(self._downgrade_version, self._context.vm, arch_type, True)
         self._check_rsm_gs(self._downgrade_version)
         self._prepare_agent()
         # Verify downgrade scenario
@@ -89,7 +89,7 @@ class RsmUpdateBvt(AgentVmTest):
         log.info("Current agent version running on the vm before update is \n%s", stdout)
         upgrade_version: str = "2.3.15.1"
         log.info("Attempting upgrade version %s", upgrade_version)
-        request_rsm_update(upgrade_version, self._context.vm, arch_type)
+        request_rsm_update(upgrade_version, self._context.vm, arch_type, False)
         self._check_rsm_gs(upgrade_version)
         self._verify_guest_agent_update(upgrade_version)
         self._verify_agent_reported_update_status(upgrade_version)
@@ -100,7 +100,7 @@ class RsmUpdateBvt(AgentVmTest):
         log.info("Current agent version running on the vm before update is \n%s", stdout)
         current_version: str = "2.3.15.1"
         log.info("Attempting update version same as current version %s", current_version)
-        request_rsm_update(current_version, self._context.vm, arch_type)
+        request_rsm_update(current_version, self._context.vm, arch_type, False)
         self._check_rsm_gs(current_version)
         self._verify_guest_agent_update(current_version)
         self._verify_agent_reported_update_status(current_version)
@@ -112,7 +112,7 @@ class RsmUpdateBvt(AgentVmTest):
         log.info("Current agent version running on the vm before update is \n%s", stdout)
         version: str = "1.5.0.0"
         log.info("Attempting requested version %s", version)
-        request_rsm_update(version, self._context.vm, arch_type)
+        request_rsm_update(version, self._context.vm, arch_type, True)
         self._check_rsm_gs(version)
         self._verify_no_guest_agent_update(version)
         self._verify_agent_reported_update_status(version)
