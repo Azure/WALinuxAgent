@@ -132,7 +132,7 @@ class AgentPublishTest(AgentVmTest):
 
         self._verify_agent_reported_supported_feature_flag()
         arch_type = self._ssh_client.get_architecture()
-        request_rsm_update(self._published_version, self._context.vm, arch_type, False)
+        request_rsm_update(self._published_version, self._context.vm, arch_type, is_downgrade=False)
         self._check_rsm_gs(self._published_version)
 
         output: str = self._ssh_client.run_command(
