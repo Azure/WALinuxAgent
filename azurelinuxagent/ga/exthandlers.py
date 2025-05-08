@@ -1404,7 +1404,8 @@ class ExtHandlerInstance(object):
             if should_validate_ext_signature:
                 if self.ext_handler.encoded_signature != "":
                     try:
-                        # validate_signature() sends telemetry for all signature validation events. Logging is done here to use self.logger.
+                        # validate_signature() sends telemetry for all signature validation events. Logging is done here so
+                        # that self.logger can be used to prepend the extension name and version to the log message.
                         self.logger.info("Validating signature for existing extension package: '{0}'".format(self.get_full_name()))
                         validate_signature(package_file, self.ext_handler.encoded_signature, package_full_name=self.get_full_name())
                         self.logger.info("Successfully validated signature for package '{0}'".format(self.get_full_name()))
@@ -1420,14 +1421,15 @@ class ExtHandlerInstance(object):
                 if should_validate_ext_signature and self.ext_handler.encoded_signature != "":
                     try:
                         self.logger.info("Validating handler manifest 'signingInfo' of extension '{0}'".format(self.get_full_name()))
-                        # validate_handler_manifest_signing_info() sends telemetry for all events. Logging is done here to use self.logger.
+                        # validate_handler_manifest_signing_info() sends telemetry for all events. Logging is done here so
+                        # that self.logger can be used to prepend the extension name and version to the log message.
                         validate_handler_manifest_signing_info(self.load_manifest(), self.ext_handler)
                         self.logger.info("Successfully validated handler manifest 'signingInfo' for extension '{0}'".format(self.get_full_name()))
 
                         # If both manifest and signature were validated successfully, save state.
                         if signature_validated:
                             self.logger.info("Saving signature validation state file for extension '{0}'".format(self.get_full_name()))
-                            save_signature_validation_state(self.get_base_dir())
+                            save_signature_validation_state(self.get_base_dir(), self.ext_handler.name, self.ext_handler.version)
 
                     # validate_handler_manifest_signing_info() raises only ManifestValidationError, save_signature_validation_state()
                     # raises only PackageValidationError. Both will send telemetry for any error.
@@ -1475,14 +1477,15 @@ class ExtHandlerInstance(object):
             if should_validate_ext_signature and self.ext_handler.encoded_signature != "":
                 try:
                     self.logger.info("Validating handler manifest 'signingInfo' of extension '{0}'".format(self.get_full_name()))
-                    # validate_handler_manifest_signing_info() sends telemetry for all events. Logging is done here to use self.logger.
+                    # validate_handler_manifest_signing_info() sends telemetry for all events. Logging is done here so
+                    # that self.logger can be used to prepend the extension name and version to the log message.
                     validate_handler_manifest_signing_info(self.load_manifest(), self.ext_handler)
                     self.logger.info("Successfully validated handler manifest 'signingInfo' for extension '{0}'".format(self.get_full_name()))
 
                     # If both manifest and signature were validated successfully, save state.
                     if signature_validated:
                         self.logger.info("Saving signature validation state file for extension '{0}'".format(self.get_full_name()))
-                        save_signature_validation_state(self.get_base_dir())
+                        save_signature_validation_state(self.get_base_dir(), self.ext_handler.name, self.ext_handler.version)
 
                 # validate_handler_manifest_signing_info() raises only ManifestValidationError, save_signature_validation_state()
                 # raises only PackageValidationError. Both will send telemetry for any error.

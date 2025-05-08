@@ -130,7 +130,16 @@ def validate_signature(package_path, signature, package_full_name):
     start_time = datetime.datetime.now(UTC)
     signature_file_name = os.path.basename(package_path) + "_signature.pem"
     signature_path = os.path.join(conf.get_lib_dir(), str(signature_file_name))
-    name, version = package_full_name.split('-')
+
+    # Extract package name and version from 'package_full_name' for telemetry. If format is invalid, report telemetry,
+    # and use 'package_full_name' as the name, with an empty string for version.
+    try:
+        name, version = package_full_name.rsplit('-', 1)
+    except ValueError:
+        name = package_full_name
+        version = ""
+        msg = "Package name format is invalid: {0}. Expected format '<name>-<version>'".format(package_full_name)
+        add_event(op=WALAEventOperation.SignatureValidation, message="[WARNING] " + msg, name=name, version=version, is_success=False, log_event=False)
 
     try:
         add_event(op=WALAEventOperation.SignatureValidation, message="Validating signature for package '{0}'".format(package_full_name),
@@ -192,14 +201,16 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
     :param ext_handler: Extension object
     :raises ManifestValidationError: if handler manifest validation fails
     """
-    add_event(op=WALAEventOperation.SignatureValidation, message="Validating handler manifest 'signingInfo' of extension '{0}'".format(ext_handler), name=ext_handler.name, version=ext_handler.version, is_success=True, log_event=False)
+    add_event(op=WALAEventOperation.SignatureValidation, message="Validating handler manifest 'signingInfo' of extension '{0}'".format(ext_handler),
+              name=ext_handler.name, version=ext_handler.version, is_success=True, log_event=False)
     start_time = datetime.datetime.now(UTC)
 
     # Check that 'signingInfo' exists in the manifest structure
     man_signing_info = manifest.data.get("signingInfo")
     if man_signing_info is None:
         msg = "HandlerManifest.json does not contain 'signingInfo'"
-        add_event(op=WALAEventOperation.PackageSigningInfoResult, message=msg, name=ext_handler.name, version=ext_handler.version, is_success=False, duration=elapsed_milliseconds(start_time), log_event=False)
+        add_event(op=WALAEventOperation.PackageSigningInfoResult, message="[WARNING] " + msg, name=ext_handler.name,
+                  version=ext_handler.version, is_success=False, duration=elapsed_milliseconds(start_time), log_event=False)
         raise ManifestValidationError(msg=msg)
 
     def validate_attribute(attribute, extension_value):
@@ -208,13 +219,15 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
         signing_info_value = man_signing_info.get(attribute)
         if signing_info_value is None:
             message = "HandlerManifest.json does not contain attribute 'signingInfo.{0}'".format(attribute)
-            add_event(op=WALAEventOperation.PackageSigningInfoResult, message=message, name=ext_handler.name, version=ext_handler.version, is_success=False, duration=elapsed_milliseconds(start_time), log_event=False)
+            add_event(op=WALAEventOperation.PackageSigningInfoResult, message="[WARNING] " + message, name=ext_handler.name,
+                      version=ext_handler.version, is_success=False, duration=elapsed_milliseconds(start_time), log_event=False)
             raise ManifestValidationError(msg=message)
 
         # Comparison should be case-insensitive, because CRP ignores case for extension name.
         if extension_value.lower() != signing_info_value.lower():
             message = "expected extension {0} '{1}' does not match downloaded package {0} '{2}'".format(attribute, extension_value, signing_info_value)
-            add_event(op=WALAEventOperation.PackageSigningInfoResult, message=message, name=ext_handler.name, version=ext_handler.version, is_success=False, duration=elapsed_milliseconds(start_time), log_event=False)
+            add_event(op=WALAEventOperation.PackageSigningInfoResult, message="[WARNING] " + message, name=ext_handler.name,
+                      version=ext_handler.version, is_success=False, duration=elapsed_milliseconds(start_time), log_event=False)
             raise ManifestValidationError(msg=message)
 
     # Compare extension attributes against the attributes specified in 'signingInfo'
@@ -227,10 +240,11 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
               name=ext_handler.name, version=ext_handler.version, is_success=True, duration=elapsed_milliseconds(start_time), log_event=False)
 
 
-def save_signature_validation_state(target_dir):
+def save_signature_validation_state(target_dir, name, version):
     """
     Create signature validation state file in the target directory. Existence of file indicates that signature and manifest
     were successfully validated for the package.
+    'name' and 'version' are used only for telemetry purposes.
     """
     validation_state_file = os.path.join(target_dir, _PACKAGE_VALIDATION_STATE_FILE)
     try:
@@ -238,6 +252,7 @@ def save_signature_validation_state(target_dir):
             pass
     except Exception as e:
         msg = "Error saving signature validation state file ({0}): {1}".format(validation_state_file, e)
+        add_event(op=WALAEventOperation.SignatureValidation, message="[WARNING] " + msg, name=name, version=version, is_success=False, log_event=False)
         raise PackageValidationError(msg=msg)
 
 

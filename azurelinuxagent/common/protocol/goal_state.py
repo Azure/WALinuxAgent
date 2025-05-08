@@ -28,7 +28,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, LogEvent
 from azurelinuxagent.common.exception import ProtocolError, ResourceGoneError
 from azurelinuxagent.common.future import ustr, UTC
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
-from azurelinuxagent.common.protocol.extensions_goal_state import VmSettingsParseError, GoalStateSource
+from azurelinuxagent.common.protocol.extensions_goal_state import VmSettingsParseError, GoalStateSource, GoalStateChannel
 from azurelinuxagent.common.protocol.hostplugin import VmSettingsNotSupported, VmSettingsSupportStopped
 from azurelinuxagent.common.protocol.restapi import RemoteAccessUser, RemoteAccessUsersList, ExtHandlerPackage, ExtHandlerPackageList
 from azurelinuxagent.common.utils import fileutil, shellutil
@@ -278,16 +278,20 @@ class GoalState(object):
         if self._extensions_goal_state is None or most_recent.created_on_timestamp >= self._extensions_goal_state.created_on_timestamp:
             self._extensions_goal_state = most_recent
 
-        # For each extension in the goal state, we emit telemetry to indicate whether a signature is present for the extension.
-        # The "is_success" field reflects whether the extension was signed (message is left empty).
+        # For each extension in the goal state being executed, we emit telemetry to indicate whether a signature is present
+        # for the extension. The "is_success" field reflects whether each extension was signed (message is left empty).
         # - If the signature is present: always send an event with is_success=True.
         # - If the signature is missing:
         #      - Do not send telemetry for 'uninstall' state, as uninstall extension goal states never include signatures.
-        #      - For extensionsConfig goal states, send event with is_success=False.
-        #      - For vmSettings goal states, send event with is_success=False only if HGAP version supports the signature property.
+        #      - If goal state channel is HostGAPlugin (vmSettings), send event with is_success=False only if HGAP version supports the signature property.
+        #      - If goal state channel is not HostGAPlugin (extensionsConfig), always send event with is_success=False.
         #
         # Note: the 'encodedSignature' property is optional in the HGAP/agent contract.
-        host_ga_plugin_version = most_recent.host_ga_plugin_version if most_recent == vm_settings else None
+        host_ga_plugin_version = (
+            self._extensions_goal_state.host_ga_plugin_version
+            if self._extensions_goal_state.channel == GoalStateChannel.HostGAPlugin
+            else None
+        )
         for ext in self._extensions_goal_state.extensions:
             if ext.encoded_signature == "":
                 if ext.state != "uninstall" and (host_ga_plugin_version is None or host_ga_plugin_version >= _MIN_HGAP_VERSION_FOR_EXT_SIGNATURE_VALIDATION):

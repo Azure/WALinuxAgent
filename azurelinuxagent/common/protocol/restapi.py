@@ -136,7 +136,7 @@ class Extension(object):
         self.manifest_uris = []
         self.supports_multi_config = False
         # An empty string for encoded_signature indicates that the extension is not signed.
-        self.encoded_signature = None
+        self.encoded_signature = ""
         self.__invalid_handler_setting_reason = None
 
     @property

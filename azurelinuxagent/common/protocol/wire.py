@@ -637,9 +637,9 @@ class WireClient(object):
             return self.stream(request_uri, target_file, headers=request_headers, use_proxy=False)
 
         def on_downloaded():
-            # If 'signature' parameter is not empty, validate the zip package signature immediately after download.
+            # If 'signature' parameter is not an empty string, validate the zip package signature immediately after download.
             # Signature validation errors are caught and stored, allowing download to proceed. After zip package extraction,
-            # the error is re-raised to surface the failure. This ensures we collect telemetry when validation fails.
+            # the error is re-raised to surface the failure, so the error can be logged and handled appropriately.
             # In future releases, once sufficient telemetry is collected and we gain confidence in the validation process,
             # extraction will be blocked if signature validation fails, and the zip will be removed.
             #
@@ -655,7 +655,7 @@ class WireClient(object):
 
             WireClient._try_expand_zip_package(package_name, target_file, target_directory)
 
-            # Surface any validation errors after extraction for telemetry collection
+            # Surface any validation errors after extraction for logging by the caller
             if validation_error is not None:
                 raise validation_error
 
