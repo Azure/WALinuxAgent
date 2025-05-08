@@ -50,6 +50,9 @@ class ExtSignatureValidation(AgentVmTest):
         log.info("")
         log.info(f"Enabling extension {extension_case.extension}, should succeed")
         enable_start_time = self._ssh_client.run_command("date -u +'%Y-%m-%dT%H:%M:%SZ'").rstrip()
+
+        # Currently, VirtualMachineRunCommandClient does not support restricting RunCommandHandler to a specific version,
+        # and therefore, does not support the 'auto_upgrade_minor_version' parameter.
         if not isinstance(extension_case.extension, VirtualMachineRunCommandClient):
             extension_case.extension.enable(settings=extension_case.settings, auto_upgrade_minor_version=False)
         else:
@@ -103,11 +106,12 @@ class ExtSignatureValidation(AgentVmTest):
         rg_client = ResourceGroupClient(self._context.vm.cloud, self._context.vm.subscription,
                                         self._context.vm.resource_group, self._context.vm.location)
         try:
+            enable_start_time = self._ssh_client.run_command("date -u +'%Y-%m-%dT%H:%M:%SZ'").rstrip()
             rg_client.deploy_template(template=base_template)
             for case in ext_to_enable:
                 log.info(f"Checking that signature was successfully validated for extension '{case.extension._identifier.type}'.")
                 self._ssh_client.run_command(
-                    f"ext_signature_validation-check_signature_validated.py --extension-name '{case.extension._identifier.type}'",
+                    f"ext_signature_validation-check_signature_validated.py --extension-name '{case.extension._identifier.type}' --after_timestamp {enable_start_time}",
                     use_sudo=True
                 )
         except Exception as ex:

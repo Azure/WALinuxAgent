@@ -29,6 +29,7 @@ from azurelinuxagent.ga.signing_certificate_util import get_microsoft_signing_ce
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr, UTC
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
+from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
 
 
 # This file tracks the state of signature and manifest validation for the package. If the file exists, signature and
@@ -117,6 +118,16 @@ def _write_signature_to_file(sig_string, output_file):
         f.write(binary_signature)
 
 
+def _report_validation_event(op, message, name, version, is_success=True, duration=0):
+    # TODO: for extension signature validation, add '[Name-Version]' prefix to log messages
+    if is_success:
+        logger.info(message)
+        add_event(op=op, message=message, name=name, version=version, is_success=is_success, duration=duration, log_event=False)
+    else:
+        logger.warn(message + "\nThe failure can be ignored; will continue processing the extension.")
+        add_event(op=op, message="[WARNING] " + message, name=name, version=version, is_success=is_success, duration=duration, log_event=False)
+
+
 def validate_signature(package_path, signature, package_full_name):
     """
     Validates signature of provided package using OpenSSL CLI. The verification checks the signature against a trusted
@@ -126,32 +137,27 @@ def validate_signature(package_path, signature, package_full_name):
     :param package_full_name: string in the format "Name-Version", only used for telemetry purposes
     :raises SignatureValidationError: if signature validation fails
     """
-
     start_time = datetime.datetime.now(UTC)
     signature_file_name = os.path.basename(package_path) + "_signature.pem"
     signature_path = os.path.join(conf.get_lib_dir(), str(signature_file_name))
 
-    # Extract package name and version from 'package_full_name' for telemetry. If format is invalid, report telemetry,
-    # and use 'package_full_name' as the name, with an empty string for version.
-    try:
-        name, version = package_full_name.rsplit('-', 1)
-    except ValueError:
-        name = package_full_name
-        version = ""
-        msg = "Package name format is invalid: {0}. Expected format '<name>-<version>'".format(package_full_name)
-        add_event(op=WALAEventOperation.SignatureValidation, message="[WARNING] " + msg, name=name, version=version, is_success=False, log_event=False)
+    # Extract package name and version from 'package_full_name'. If format is not <name>-<version>, use
+    # 'package_full_name' as the name and an empty string for version.
+    name, version = package_full_name.rsplit('-', 1) if '-' in package_full_name else (package_full_name, "")
 
     try:
-        add_event(op=WALAEventOperation.SignatureValidation, message="Validating signature for package '{0}'".format(package_full_name),
-                  name=name, version=version, is_success=True, log_event=False)
+        _report_validation_event(op=WALAEventOperation.SignatureValidation, message="Validating signature for package '{0}'".format(package_full_name),
+                                 name=name, version=version, is_success=True)
+
         _write_signature_to_file(signature, signature_path)
         microsoft_root_cert_file = get_microsoft_signing_certificate_path()
 
         if not os.path.isfile(microsoft_root_cert_file):
-            raise Exception(
-                "signing certificate was not found at expected location ('{0}'). Try restarting the agent, or see log ('{1}') for additional details."
-                .format(microsoft_root_cert_file, conf.get_agent_log_file())
-            )
+            msg = ("signing certificate was not found at expected location ('{0}'). Try restarting the agent, "
+                   "or see log ('{1}') for additional details.").format(microsoft_root_cert_file, conf.get_agent_log_file())
+            _report_validation_event(op=WALAEventOperation.PackageSignatureResult, message=msg, name=name, version=version,
+                                     duration=elapsed_milliseconds(start_time), is_success=False)
+            raise Exception(msg)
 
         # Use OpenSSL CLI to verify that the provided signature file correctly signs the package. The verification
         # process checks the certificate chain against the specified root certificate file, but the certificate's
@@ -171,19 +177,18 @@ def validate_signature(package_path, signature, package_full_name):
             '-no_check_time'  # Skips checking whether the certificate is expired
         ]
         run_command(command, encode_output=False)
-        add_event(op=WALAEventOperation.PackageSignatureResult, message="Successfully validated signature for package '{0}'".format(package_full_name),
-                  name=name, version=version, is_success=True, duration=elapsed_milliseconds(start_time), log_event=False)
+        _report_validation_event(op=WALAEventOperation.PackageSignatureResult, message="Successfully validated signature for package '{0}'".format(package_full_name),
+                                 name=name, version=version, duration=elapsed_milliseconds(start_time), is_success=True)
 
     except CommandError as ex:
         msg = "Signature validation failed for package '{0}'. \nReturn code: {1}\nError details:\n{2}".format(package_full_name, ex.returncode, ex.stderr)
-        add_event(op=WALAEventOperation.PackageSignatureResult, message="[WARNING] " + msg, name=name, version=version,
-                  is_success=False, duration=elapsed_milliseconds(start_time), log_event=False)
+        _report_validation_event(op=WALAEventOperation.PackageSignatureResult, message=msg, name=name, version=version,
+                                 duration=elapsed_milliseconds(start_time), is_success=False)
         raise SignatureValidationError(msg)
 
     except Exception as ex:
         msg = "Signature validation failed for package '{0}'. Error: {1}".format(package_full_name, ustr(ex))
-        add_event(op=WALAEventOperation.PackageSignatureResult, message="[WARNING] " + msg, name=name, version=version,
-                  is_success=False, duration=elapsed_milliseconds(start_time), log_event=False)
+        _report_validation_event(op=WALAEventOperation.PackageSignatureResult, message=msg, name=name, version=version, duration=elapsed_milliseconds(start_time), is_success=False)
         raise SignatureValidationError(msg)
 
     finally:
@@ -201,16 +206,15 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
     :param ext_handler: Extension object
     :raises ManifestValidationError: if handler manifest validation fails
     """
-    add_event(op=WALAEventOperation.SignatureValidation, message="Validating handler manifest 'signingInfo' of extension '{0}'".format(ext_handler),
-              name=ext_handler.name, version=ext_handler.version, is_success=True, log_event=False)
+    _report_validation_event(op=WALAEventOperation.SignatureValidation, message="Validating handler manifest 'signingInfo' of extension '{0}'".format(ext_handler),
+                             name=ext_handler.name, version=ext_handler.version, is_success=True)
     start_time = datetime.datetime.now(UTC)
 
     # Check that 'signingInfo' exists in the manifest structure
     man_signing_info = manifest.data.get("signingInfo")
     if man_signing_info is None:
         msg = "HandlerManifest.json does not contain 'signingInfo'"
-        add_event(op=WALAEventOperation.PackageSigningInfoResult, message="[WARNING] " + msg, name=ext_handler.name,
-                  version=ext_handler.version, is_success=False, duration=elapsed_milliseconds(start_time), log_event=False)
+        _report_validation_event(op=WALAEventOperation.PackageSigningInfoResult, message=msg, name=ext_handler.name, version=ext_handler.version, duration=elapsed_milliseconds(start_time), is_success=False)
         raise ManifestValidationError(msg=msg)
 
     def validate_attribute(attribute, extension_value):
@@ -218,17 +222,15 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
         # If not, report telemetry with is_success=False and raise a ManifestValidationError.
         signing_info_value = man_signing_info.get(attribute)
         if signing_info_value is None:
-            message = "HandlerManifest.json does not contain attribute 'signingInfo.{0}'".format(attribute)
-            add_event(op=WALAEventOperation.PackageSigningInfoResult, message="[WARNING] " + message, name=ext_handler.name,
-                      version=ext_handler.version, is_success=False, duration=elapsed_milliseconds(start_time), log_event=False)
-            raise ManifestValidationError(msg=message)
+            msg = "HandlerManifest.json does not contain attribute 'signingInfo.{0}'".format(attribute)
+            _report_validation_event(op=WALAEventOperation.PackageSigningInfoResult, message=msg, name=ext_handler.name, version=ext_handler.version, duration=elapsed_milliseconds(start_time), is_success=False)
+            raise ManifestValidationError(msg=msg)
 
         # Comparison should be case-insensitive, because CRP ignores case for extension name.
         if extension_value.lower() != signing_info_value.lower():
-            message = "expected extension {0} '{1}' does not match downloaded package {0} '{2}'".format(attribute, extension_value, signing_info_value)
-            add_event(op=WALAEventOperation.PackageSigningInfoResult, message="[WARNING] " + message, name=ext_handler.name,
-                      version=ext_handler.version, is_success=False, duration=elapsed_milliseconds(start_time), log_event=False)
-            raise ManifestValidationError(msg=message)
+            msg = "expected extension {0} '{1}' does not match downloaded package {0} '{2}'".format(attribute, extension_value, signing_info_value)
+            _report_validation_event(op=WALAEventOperation.PackageSigningInfoResult, message=msg, name=ext_handler.name, version=ext_handler.version, duration=elapsed_milliseconds(start_time), is_success=False)
+            raise ManifestValidationError(msg=msg)
 
     # Compare extension attributes against the attributes specified in 'signingInfo'
     ext_publisher, ext_type = ext_handler.name.rsplit(".", 1)
@@ -236,23 +238,25 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
     validate_attribute(attribute="publisher", extension_value=ext_publisher)
     validate_attribute(attribute="version", extension_value=ext_handler.version)
 
-    add_event(op=WALAEventOperation.PackageSigningInfoResult, message="Successfully validated handler manifest 'signingInfo' for extension '{0}'".format(ext_handler),
-              name=ext_handler.name, version=ext_handler.version, is_success=True, duration=elapsed_milliseconds(start_time), log_event=False)
+    _report_validation_event(op=WALAEventOperation.PackageSigningInfoResult, message="Successfully validated handler manifest 'signingInfo' for extension '{0}'".format(ext_handler),
+                             name=ext_handler.name, version=ext_handler.version, duration=elapsed_milliseconds(start_time), is_success=True)
 
 
-def save_signature_validation_state(target_dir, name, version):
+def save_signature_validation_state(target_dir):
     """
     Create signature validation state file in the target directory. Existence of file indicates that signature and manifest
     were successfully validated for the package.
     'name' and 'version' are used only for telemetry purposes.
     """
     validation_state_file = os.path.join(target_dir, _PACKAGE_VALIDATION_STATE_FILE)
+    _report_validation_event(op=WALAEventOperation.SignatureValidation, name=AGENT_NAME, version=AGENT_VERSION,
+                             message="Saving signature validation state file: {0}".format(validation_state_file))
     try:
         with open(validation_state_file, 'w'):
             pass
     except Exception as e:
         msg = "Error saving signature validation state file ({0}): {1}".format(validation_state_file, e)
-        add_event(op=WALAEventOperation.SignatureValidation, message="[WARNING] " + msg, name=name, version=version, is_success=False, log_event=False)
+        _report_validation_event(op=WALAEventOperation.SignatureValidation, name=AGENT_NAME, version=AGENT_VERSION, message=msg, is_success=False)
         raise PackageValidationError(msg=msg)
 
 

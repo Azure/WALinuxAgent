@@ -738,7 +738,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
                 goal_state.update()
 
             telemetry = [kw for _, kw in add_event.call_args_list if kw['op'] == WALAEventOperation.ExtensionSigned and not kw['is_success']]
-            self.assertEqual(0, len(telemetry), "Should send telemetry for signed extension")
+            self.assertEqual(0, len(telemetry), "Should not send telemetry for unsigned extension when requested operation is uninstall")
 
     def test_it_should_not_send_telemetry_for_unsupported_hgap_version(self):
         # This vm settings extensions goal state has a version of HGAP that does not support the 'encodedSignature'
