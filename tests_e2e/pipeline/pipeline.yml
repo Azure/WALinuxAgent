@@ -56,7 +56,7 @@ parameters:
   - name: keep_environment
     displayName: Keep the test VMs (do not delete them)
     type: string
-    default: failed
+    default: no
     values:
     - always
     - failed
