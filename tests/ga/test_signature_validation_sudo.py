@@ -32,7 +32,7 @@ class TestSignatureValidationSudo(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
         write_signing_certificates()
-        self.vm_access_zip_path = os.path.join(data_dir, "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.5.0.zip")
+        self.vm_access_zip_path = os.path.join(data_dir, "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip")
         vm_access_signature_path = os.path.join(data_dir, "signing/vm_access_signature.txt")
         with open(vm_access_signature_path, 'r') as f:
             self.vm_access_signature = f.read()
