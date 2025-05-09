@@ -1429,7 +1429,7 @@ class ExtHandlerInstance(object):
                         # raises only PackageValidationError. Both send logs/telemetry for any error. If signature is not being enforced,
                         # add a message here that the error can be ignored.
                         # TODO: Raise error once signature validation is enforced.
-                        msg = "The signature validation failure can be ignored; will continue processing the extension."
+                        msg = "The 'signingInfo' validation failure can be ignored; will continue processing the extension."
                         self.logger.info(msg)
                         add_event(op=WALAEventOperation.SignatureValidation, message=msg, name=self.ext_handler.name,
                                   version=self.ext_handler.version, is_success=True, log_event=False)
@@ -1451,7 +1451,7 @@ class ExtHandlerInstance(object):
                 if should_validate_ext_signature and self.ext_handler.encoded_signature == "":
                     # Extension signature status is already reported in telemetry during goal state processing, so here,
                     # we log locally only for debugging purposes if extension is unsigned.
-                    self.logger.info("Extension '{0}' is not signed.".format(self.get_full_name()))
+                    self.logger.info("No signature for extension '{0}' in goal state, skipping signature validation.".format(self.get_full_name()))
 
                 # If signature should not be validated, pass an empty string as 'signature' to download_zip_package(),
                 # which will skip validation when the signature parameter is empty.
@@ -1466,13 +1466,10 @@ class ExtHandlerInstance(object):
 
             except SignatureValidationError:
                 # download_zip_package() will propagate a SignatureValidationError if validation fails. This is the only exception
-                # expected from validation, and the error has already been reported. If signature is not being enforced,
-                # add a message here that the error can be ignored, and do not block extension execution.
+                # expected from validation, and the error has already been reported with additional context, so we do nothing here.
+                # Do not block extension execution, continue to manifest validation.
                 # TODO: Raise error once signature validation is enforced.
-                msg = "The signature validation failure can be ignored; will continue processing the extension."
-                self.logger.info(msg)
-                add_event(op=WALAEventOperation.SignatureValidation, message=msg, name=self.ext_handler.name,
-                          version=self.ext_handler.version, is_success=True, log_event=False)
+                pass
 
             # Validate 'signingInfo' - the publisher, type, and version specified in handler manifest 'signingInfo' should match the extension
             if should_validate_ext_signature and self.ext_handler.encoded_signature != "":
@@ -1487,7 +1484,7 @@ class ExtHandlerInstance(object):
                     # raises only PackageValidationError. Both send logs/telemetry for any error. If signature is not being enforced,
                     # add a message here that the error can be ignored.
                     # TODO: Raise error once signature validation is enforced.
-                    msg = "The signature validation failure can be ignored; will continue processing the extension."
+                    msg = "The 'signingInfo' validation failure can be ignored; will continue processing the extension."
                     self.logger.info(msg)
                     add_event(op=WALAEventOperation.SignatureValidation, message=msg, name=self.ext_handler.name,
                               version=self.ext_handler.version, is_success=True, log_event=False)
