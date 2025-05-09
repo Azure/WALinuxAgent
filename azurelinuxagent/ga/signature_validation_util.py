@@ -119,12 +119,15 @@ def _write_signature_to_file(sig_string, output_file):
 
 
 def _report_validation_event(op, message, name, version, is_success=True, duration=0):
+    # Logs and reports telemetry for a signature validation event.
+    # If reporting a validation error, log just the error message here and let the caller handle additional logging
+    # (i.e. adding a message that error can be ignored, that extension will be blocked, etc.).
     # TODO: for extension signature validation, add '[Name-Version]' prefix to log messages
     if is_success:
         logger.info(message)
         add_event(op=op, message=message, name=name, version=version, is_success=is_success, duration=duration, log_event=False)
     else:
-        logger.warn(message + "\nThe failure can be ignored; will continue processing the extension.")
+        logger.warn(message)
         add_event(op=op, message="[WARNING] " + message, name=name, version=version, is_success=is_success, duration=duration, log_event=False)
 
 
