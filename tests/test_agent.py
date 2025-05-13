@@ -330,7 +330,7 @@ class TestAgent(AgentTestCase):
             CollectLogsHandler.disable_monitor_cgroups_check()
 
     @patch("azurelinuxagent.agent.LogCollector")
-    def test_doesnt_call_collect_logs_on_invalid_cgroups_v1(self, mock_log_collector):
+    def test_doesnt_call_collect_logs_if_process_in_wrong_cgroups_v1(self, mock_log_collector):
         try:
             CollectLogsHandler.enable_monitor_cgroups_check()
             mock_log_collector.run = Mock()
@@ -361,13 +361,13 @@ class TestAgent(AgentTestCase):
                         try:
                             agent.collect_logs(is_full_mode=True)
                         except RuntimeError as re:
-                            self.assertEqual(logcollector.INVALID_CGROUPS_ERRCODE, re.args[0])
-                        mock_exit.assert_called_once_with(logcollector.INVALID_CGROUPS_ERRCODE)
+                            self.assertEqual(logcollector.UNEXPECTED_CGROUP_PATH_ERRCODE, re.args[0])
+                        mock_exit.assert_called_once_with(logcollector.UNEXPECTED_CGROUP_PATH_ERRCODE)
         finally:
             CollectLogsHandler.disable_monitor_cgroups_check()
 
     @patch("azurelinuxagent.agent.LogCollector")
-    def test_doesnt_call_collect_logs_on_invalid_cgroups_v2(self, mock_log_collector):
+    def test_doesnt_call_collect_logs_if_process_in_wrong_cgroups_v2(self, mock_log_collector):
         try:
             CollectLogsHandler.enable_monitor_cgroups_check()
             mock_log_collector.run = Mock()
@@ -394,8 +394,8 @@ class TestAgent(AgentTestCase):
                         try:
                             agent.collect_logs(is_full_mode=True)
                         except RuntimeError as re:
-                            self.assertEqual(logcollector.INVALID_CGROUPS_ERRCODE, re.args[0])
-                        mock_exit.assert_called_once_with(logcollector.INVALID_CGROUPS_ERRCODE)
+                            self.assertEqual(logcollector.UNEXPECTED_CGROUP_PATH_ERRCODE, re.args[0])
+                        mock_exit.assert_called_once_with(logcollector.UNEXPECTED_CGROUP_PATH_ERRCODE)
         finally:
             CollectLogsHandler.disable_monitor_cgroups_check()
 
