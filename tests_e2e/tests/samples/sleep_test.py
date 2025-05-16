@@ -24,7 +24,7 @@ from tests_e2e.tests.lib.logging import log
 
 class SleepTest(AgentVmTest):
     """
-    A trivial test that passes.
+    A trivial test that sleeps for 2 hours, then passes.
     """
     def run(self):
         log.info("Sleeping for 2 hours")
