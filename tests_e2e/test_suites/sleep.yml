@@ -1,0 +1,4 @@
+name: "Sleep"
+tests:
+  - "samples/sleep_test.py"
+images: "ubuntu_2204"
