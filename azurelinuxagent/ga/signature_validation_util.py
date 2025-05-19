@@ -201,7 +201,9 @@ def validate_signature(package_path, signature, package_full_name, enforce_signa
 
         # For validation-related errors only, send the full signature string in telemetry for debugging purposes.
         # Send as a separate event to avoid dropping the main error event due to buffer overflow.
-        _report_validation_info(op=WALAEventOperation.SignatureValidation, message=signature, name=name, version=version)
+        add_event(op=WALAEventOperation.SignatureValidation, message="Package encoded signature: '{0}'".format(signature),
+                  name=name, version=version, log_event=False)
+
         raise SignatureValidationError(msg)
 
     except Exception as ex:
