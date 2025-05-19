@@ -285,8 +285,7 @@ class GoalState(object):
         for ext in self._extensions_goal_state.extensions:
             if ext.state == "uninstall" or not self._extensions_goal_state.supports_encoded_signature():
                 continue
-            is_success = ext.encoded_signature != ""
-            add_event(op=WALAEventOperation.ExtensionSigned, message=ext.encoded_signature, name=ext.name, version=ext.version, is_success=is_success, log_event=False)
+            add_event(op=WALAEventOperation.ExtensionSigned, message="", name=ext.name, version=ext.version, is_success=ext.encoded_signature != "", log_event=False)
 
         # Ensure all certificates are downloaded on Fast Track goal states in order to maintain backwards compatibility with previous
         # versions of the Agent, which used to download certificates from the WireServer on every goal state. Some customer applications
