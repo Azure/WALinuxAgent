@@ -251,3 +251,6 @@ class EmptyExtensionsGoalState(ExtensionsGoalState):
 
     def get_redacted_text(self):
         return ''
+
+    def supports_encoded_signature(self):
+        return False

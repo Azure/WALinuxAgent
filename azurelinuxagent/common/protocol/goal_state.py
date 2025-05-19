@@ -28,7 +28,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, LogEvent
 from azurelinuxagent.common.exception import ProtocolError, ResourceGoneError
 from azurelinuxagent.common.future import ustr, UTC
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
-from azurelinuxagent.common.protocol.extensions_goal_state import VmSettingsParseError, GoalStateSource, GoalStateChannel
+from azurelinuxagent.common.protocol.extensions_goal_state import VmSettingsParseError, GoalStateSource
 from azurelinuxagent.common.protocol.hostplugin import VmSettingsNotSupported, VmSettingsSupportStopped
 from azurelinuxagent.common.protocol.restapi import RemoteAccessUser, RemoteAccessUsersList, ExtHandlerPackage, ExtHandlerPackageList
 from azurelinuxagent.common.utils import fileutil, shellutil
