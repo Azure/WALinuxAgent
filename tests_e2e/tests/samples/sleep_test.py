@@ -33,4 +33,4 @@ class SleepTest(AgentVmTest):
 
 
 if __name__ == "__main__":
-    PassTest.run_from_command_line()
+    SleepTest.run_from_command_line()
