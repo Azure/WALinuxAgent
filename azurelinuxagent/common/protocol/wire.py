@@ -613,7 +613,7 @@ class WireClient(object):
 
         return self._download_with_fallback_channel(download_type, uris, direct_download=direct_download, hgap_download=hgap_download)
 
-    def download_zip_package(self, package_name, uris, target_file, target_directory, use_verify_header, signature):
+    def download_zip_package(self, package_name, uris, target_file, target_directory, use_verify_header, signature, enforce_signature):
         """
         Downloads the ZIP package specified in 'uris' (which is a list of alternate locations for the ZIP), saving it to 'target_file' and then expanding
         its contents to 'target_directory'. Deletes the target file after it has been expanded.
@@ -627,6 +627,10 @@ class WireClient(object):
 
         The 'signature' parameter should be a base64-encoded signature string. If signature is not an empty string, package signature will be validated
         immediately after downloading the package but before expanding it.
+
+        Currently, the 'enforce_signature' flag only affects logging and telemetry. If set to False, a message is appended
+        to any validation failure indicating that the error can be safely ignored.
+        TODO: Update logic so that 'enforce_signature' also controls whether validation failures raise an exception.
         """
         host_ga_plugin = self.get_host_plugin()
 
@@ -643,21 +647,16 @@ class WireClient(object):
             # In future releases, once sufficient telemetry is collected and we gain confidence in the validation process,
             # extraction will be blocked if signature validation fails, and the zip will be removed.
             #
-            # TODO: Allow users to opt-in to signature validation enforcement. This function should accept a boolean
-            # flag specifying if package extraction should be blocked when validation fails.
+            # TODO: Implement logic to block packages failing signature validation when 'enforce_signature' is True
             validation_error = None
 
             if signature != "":
                 try:
-                    validate_signature(target_file, signature, package_full_name=package_name)
+                    validate_signature(target_file, signature, package_full_name=package_name, enforce_signature=enforce_signature)
                 except SignatureValidationError as ex:
-                    # validate_signature() only raises SignatureValidationError, and sends logs/telemetry for the error.
-                    # If signature is not being enforced, add a message here that the error can be ignored.
-                    # TODO: raise error, do not log "ignore failure", and and cleanup zip file if signature validation result should be enforced
-                    msg = "The signature validation failure can be ignored; will continue processing the package."
-                    logger.info(msg)
-                    name, version = package_name.rsplit('-', 1) if '-' in package_name else (package_name, "")   # Only used for telemetry
-                    add_event(op=WALAEventOperation.SignatureValidation, message=msg, name=name, version=version, is_success=True, log_event=False)
+                    # validate_signature() only raises SignatureValidationError, and already sends logs/telemetry for the error.
+                    # If signature is not being enforced, catch the error and re-raise after expanding the zip.
+                    # TODO: if signature is being enforced, raise error and and cleanup zip file
                     validation_error = ex
 
             WireClient._try_expand_zip_package(package_name, target_file, target_directory)

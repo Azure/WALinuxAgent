@@ -315,9 +315,10 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         if extension.state in (None, ""):
             raise ExtensionsConfigError("Received empty Extensions.Plugins.Plugin.state, failing Handler")
 
-        # 'encodedSignature' is an optional property. extension.encoded_signature value should be an empty string if
-        # the 'encodedSignature' key does not exist for the extension. getattrib returns an empty string if an
-        # attribute does not exist in a node.
+        # The 'encodedSignature' property is optional. If absent, it may mean the ExtensionsConfig API does not support
+        # it, or the extension is not signed. In either case, we set extension.encoded_signature to an empty string.
+        # We set extension.encoded_signature to an empty string in both cases (note that getattrib returns an empty
+        # string if an attribute does not exist in a node).
         extension.encoded_signature = getattrib(plugin, "encodedSignature")
 
         def getattrib_wrapped_in_list(node, attr_name):
@@ -570,6 +571,9 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             thumbprint = handler_settings.get("protectedSettingsCertThumbprint")
             extension_settings.certificateThumbprint = thumbprint
             extension.settings.append(extension_settings)
+
+    def supports_encoded_signature(self):
+        return True
 
 
 # Do not extend this class

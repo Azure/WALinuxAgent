@@ -35,7 +35,6 @@ from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.utils.archive import GoalStateHistory, SHARED_CONF_FILE_NAME
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
-from azurelinuxagent.ga.signature_validation_util import _MIN_HGAP_VERSION_FOR_EXT_SIGNATURE_VALIDATION
 
 
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
@@ -279,26 +278,15 @@ class GoalState(object):
             self._extensions_goal_state = most_recent
 
         # For each extension in the goal state being executed, we emit telemetry to indicate whether a signature is present
-        # for the extension. The "is_success" field reflects whether each extension was signed. If signature is present,
-        # send the full encoded signature string in the "message" field for debug purposes.
-        # - If the signature is present: always send an event with is_success=True, and signature in message field.
-        # - If the signature is missing:
-        #      - Do not send telemetry for 'uninstall' state, as uninstall extension goal states never include signatures.
-        #      - If goal state channel is HostGAPlugin (vmSettings), send event with is_success=False and empty message only if HGAP version supports the signature property.
-        #      - If goal state channel is not HostGAPlugin (extensionsConfig), always send event with is_success=False and empty message.
-        #
-        # Note: the 'encodedSignature' property is optional in the HGAP/agent contract.
-        host_ga_plugin_version = (
-            self._extensions_goal_state.host_ga_plugin_version
-            if self._extensions_goal_state.channel == GoalStateChannel.HostGAPlugin
-            else None
-        )
+        # for the extension. The "is_success" field reflects whether the extension was signed.
+        # If signature is missing, skip telemetry in the following cases:
+        #   - Extension requested state is 'uninstall' (uninstall goal states never include signature).
+        #   - The goal state API does not support the 'encoded_signature' property (e.g., fast track goal states where HGAP version does not support signature).
         for ext in self._extensions_goal_state.extensions:
-            if ext.encoded_signature == "":
-                if ext.state != "uninstall" and (host_ga_plugin_version is None or host_ga_plugin_version >= _MIN_HGAP_VERSION_FOR_EXT_SIGNATURE_VALIDATION):
-                    add_event(op=WALAEventOperation.ExtensionSigned, message="", name=ext.name, version=ext.version, is_success=False, log_event=False)
-            else:
-                add_event(op=WALAEventOperation.ExtensionSigned, message=ext.encoded_signature, name=ext.name, version=ext.version, is_success=True, log_event=False)
+            if ext.state == "uninstall" or not self._extensions_goal_state.supports_encoded_signature():
+                continue
+            is_success = ext.encoded_signature != ""
+            add_event(op=WALAEventOperation.ExtensionSigned, message=ext.encoded_signature, name=ext.name, version=ext.version, is_success=is_success, log_event=False)
 
         # Ensure all certificates are downloaded on Fast Track goal states in order to maintain backwards compatibility with previous
         # versions of the Agent, which used to download certificates from the WireServer on every goal state. Some customer applications
