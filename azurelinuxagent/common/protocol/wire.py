@@ -647,9 +647,8 @@ class WireClient(object):
             # In future releases, once sufficient telemetry is collected and we gain confidence in the validation process,
             # extraction will be blocked if signature validation fails, and the zip will be removed.
             #
-            # TODO: Implement logic to block packages failing signature validation when 'enforce_signature' is True
+            # TODO: Block packages failing signature validation when 'enforce_signature' is True
             validation_error = None
-
             if signature != "":
                 try:
                     validate_signature(target_file, signature, package_full_name=package_name, enforce_signature=enforce_signature)

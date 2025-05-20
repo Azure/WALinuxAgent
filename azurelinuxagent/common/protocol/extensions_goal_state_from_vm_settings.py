@@ -28,7 +28,7 @@ from azurelinuxagent.common.utils import timeutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 # The 'encodedSignature' property is only supported on newer versions of HGAP.
-_MIN_HGAP_VERSION_FOR_EXT_SIGNATURE_VALIDATION = FlexibleVersion("1.0.8.159")
+_MIN_HGAP_VERSION_FOR_EXT_SIGNATURE = FlexibleVersion("1.0.8.159")
 
 class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
     def __init__(self, etag, json_text, correlation_id):
@@ -560,7 +560,10 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                 settings.dependencyLevel = dependency["dependencyLevel"]
 
     def supports_encoded_signature(self):
-        return self._host_ga_plugin_version >= _MIN_HGAP_VERSION_FOR_EXT_SIGNATURE_VALIDATION
+        """
+        Returns True if the HGAP version supports the 'encoded_signature' extension property.
+        """
+        return self._host_ga_plugin_version >= _MIN_HGAP_VERSION_FOR_EXT_SIGNATURE
 
 
 #

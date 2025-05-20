@@ -1417,13 +1417,13 @@ class ExtHandlerInstance(object):
                 msg = "The existing extension package is invalid, will ignore it."
                 self.logger.info(msg)
                 add_event(op=WALAEventOperation.Download, message=msg, name=self.ext_handler.name, version=self.ext_handler.version, is_success=True, log_event=False)
+                signature_validated = False
 
         # Handle the case where the extension package does not exist. Download the zip package, validate the signature
         # if present, and extract the package. If package is signed, validate handler manifest.
         if not package_exists:
             is_fast_track_goal_state = self.protocol.get_goal_state().extensions_goal_state.source == GoalStateSource.FastTrack
 
-            signature_validated = False
             try:
                 if should_validate_ext_signature and self.ext_handler.encoded_signature == "":
                     # Extension signature status is already reported in telemetry during goal state processing, so here,

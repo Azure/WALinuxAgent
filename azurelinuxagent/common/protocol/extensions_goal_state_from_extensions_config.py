@@ -317,8 +317,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
 
         # The 'encodedSignature' property is optional. If absent, it may mean the ExtensionsConfig API does not support
         # it, or the extension is not signed. In either case, we set extension.encoded_signature to an empty string.
-        # We set extension.encoded_signature to an empty string in both cases (note that getattrib returns an empty
-        # string if an attribute does not exist in a node).
+        # Note that getattrib returns an empty string already if an attribute does not exist in a node.
         extension.encoded_signature = getattrib(plugin, "encodedSignature")
 
         def getattrib_wrapped_in_list(node, attr_name):
@@ -573,6 +572,9 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             extension.settings.append(extension_settings)
 
     def supports_encoded_signature(self):
+        """
+        Returns bool indicating if the ExtensionsConfig API supports the 'encoded_signature' extension property. Should always return True.
+        """
         return True
 
 
