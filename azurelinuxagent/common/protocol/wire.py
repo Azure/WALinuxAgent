@@ -651,7 +651,8 @@ class WireClient(object):
             validation_error = None
             if signature != "":
                 try:
-                    validate_signature(target_file, signature, package_full_name=package_name, enforce_signature=enforce_signature)
+                    failure_log_level = logger.LogLevel.ERROR if enforce_signature else logger.LogLevel.WARNING
+                    validate_signature(target_file, signature, package_full_name=package_name, failure_log_level=failure_log_level)
                 except SignatureValidationError as ex:
                     # validate_signature() only raises SignatureValidationError, and already sends logs/telemetry for the error.
                     # If signature is not being enforced, catch the error and re-raise after expanding the zip.
