@@ -226,7 +226,7 @@ class Agent(object):
                 event.warn(WALAEventOperation.LogCollection, "Unable to determine which cgroup version to use: {0}", ustr(e))
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
-            def _check_cgroup_in_expected_slice_and_get_logcollector_cgroup():
+            def _get_log_collector_cgroup_in_expected_slice():
                 """
                 Validates that the log collector process is running in the expected cgroup slice.
 
@@ -254,12 +254,13 @@ class Agent(object):
 
                 sys.exit(logcollector.UNEXPECTED_CGROUP_PATH_ERRCODE)
 
-            log_collector_cgroup = _check_cgroup_in_expected_slice_and_get_logcollector_cgroup()
+            log_collector_cgroup = _get_log_collector_cgroup_in_expected_slice()
 
             tracked_controllers = log_collector_cgroup.get_controllers()
             for controller in tracked_controllers:
                 logger.info("{0} controller for cgroup: {1}".format(controller.get_controller_type(), controller))
             if len(tracked_controllers) != len(log_collector_cgroup.get_supported_controller_names()):
+                event.warn(WALAEventOperation.LogCollection, "At least one required controller is missing. The following controllers are required for the log collector to run: {0}", log_collector_cgroup.get_supported_controller_names())
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
                 
         try:
