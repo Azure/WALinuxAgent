@@ -257,7 +257,7 @@ def validate_handler_manifest_signing_info(manifest, ext_handler, failure_log_le
             # If not, report telemetry with is_success=False and raise a ManifestValidationError.
             signing_info_value = man_signing_info.get(attribute)
             if signing_info_value is None:
-                raise("HandlerManifest.json does not contain attribute 'signingInfo.{0}'".format(attribute))
+                raise ManifestValidationError("HandlerManifest.json does not contain attribute 'signingInfo.{0}'".format(attribute))
 
             # Comparison should be case-insensitive, because CRP ignores case for extension name.
             if extension_value.lower() != signing_info_value.lower():
