@@ -244,8 +244,11 @@ images:
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
-   suse_12: "SUSE sles-12-sp5-basic gen1 latest"
-   suse_15: "SUSE sles-15-sp2-basic gen2 latest"
+   suse_12:
+      urn: "SUSE sles-12-sp5 gen1 latest"
+      locations:
+         AzureChinaCloud: []
+   suse_15: "SUSE sles-15-sp6-basic gen2 latest"
    ubuntu_1604: "Canonical UbuntuServer 16.04-LTS latest"
    ubuntu_1804: "Canonical UbuntuServer 18.04-LTS latest"
    ubuntu_2004: "Canonical 0001-com-ubuntu-server-focal 20_04-lts latest"
