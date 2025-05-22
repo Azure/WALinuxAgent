@@ -39,11 +39,28 @@ import warnings
 from pwd import getpwall
 
 from azurelinuxagent.common.exception import OSUtilError
-# 'crypt' was removed in Python 3.13; the crypt-r dependency provided crypt for
-# newer Python versions.
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", category=DeprecationWarning)
-    from crypt import crypt  # pylint: disable=deprecated-module
+
+#
+# The 'crypt' package was removed in Python 3.13.
+#
+# To work around this, WALinuxAgent 2.12 and 2.13 added a dependency on legacycrypt and imported crypt from there. From 2.14,
+# we instead get crypt from the crypt-r package. The code below needs to handle the case where the self-update WALinuxAgent
+# is running on a machine where the pre-installed WALinuxAgent is 2.12/2.13 (and crypt may be coming from legacycrypt).
+#
+# We first try importing from crypt, which may have been installed from the crypt or crypt-r packages, then try
+# importing from legacy crypt, then fallback to a dummy function that raises an exception when invoked. The Provisioning Agent
+# and JIT requests use the crypt function, so those features would fail if none of the required dependencies are installed.
+#
+try:
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+        from crypt import crypt  # pylint: disable=deprecated-module
+except ImportError:
+    try:
+        from legacycrypt import crypt
+    except ImportError:
+        def crypt(password, salt):
+            raise OSUtilError("This feature requires one of the 'crypt', 'legacycrypt' or 'crypt-r' Python packages to be installed.")
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
