@@ -148,7 +148,7 @@ def validate_signature(package_path, signature, package_full_name, failure_log_l
     :param package_path: path to package file being validated
     :param signature: base64-encoded signature string
     :param package_full_name: string in the format "Name-Version", only used for telemetry purposes
-    :param failure_log_level: expected to be of type logger.LogLevel.WARNING or logger.LogLevel.ERROR. If level is warning,
+    :param failure_log_level: expected to be logger.LogLevel.WARNING or logger.LogLevel.ERROR. If level is warning,
                               a message is appended to any failure log/telemetry indicating that the failure can be safely ignored.
     :raises SignatureValidationError: if signature validation fails
     """
@@ -236,7 +236,7 @@ def validate_handler_manifest_signing_info(manifest, ext_handler, failure_log_le
 
     :param manifest: HandlerManifest object
     :param ext_handler: Extension object
-    :param failure_log_level: expected to be of type logger.LogLevel.WARNING or logger.LogLevel.ERROR. If level is warning,
+    :param failure_log_level: expected to be logger.LogLevel.WARNING or logger.LogLevel.ERROR. If level is warning,
                               a message is appended to any failure log/telemetry indicating that the failure can be safely ignored.
     :raises ManifestValidationError: if handler manifest validation fails
     """
@@ -278,8 +278,9 @@ def validate_handler_manifest_signing_info(manifest, ext_handler, failure_log_le
         raise
 
     except Exception as ex:
-        msg = "Error during manifest 'signingInfo' validation failed for extension '{0}'. Error: {1}".format(ext_handler, ustr(ex))
-        _report_validation_event(op=WALAEventOperation.PackageSigningInfoResult, level=failure_log_level, message=msg, name=ext_handler.name,
+        # Catch exceptions unrelated to 'signingInfo' validation (e.g. incorrectly formatted extension name). Report "SignatureValidation" event with no duration.
+        msg = "Error during manifest 'signingInfo' validation for extension '{0}'. Error: {1}".format(ext_handler, ustr(ex))
+        _report_validation_event(op=WALAEventOperation.SignatureValidation, level=failure_log_level, message=msg, name=ext_handler.name,
                                  version=ext_handler.version, duration=0)
         raise ManifestValidationError(msg=msg)
 

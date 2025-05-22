@@ -1375,7 +1375,7 @@ class ExtHandlerInstance(object):
         """
         If extension is signed, validate extension package signature immediately after download, and validate handler
         manifest 'signingInfo' after package extraction. If both signature and handler manifest are successfully validated,
-        save state file indicating this. If validation fails,  the error is captured and reported via telemetry, but
+        save state file indicating this. If validation fails, the error is captured and reported via telemetry, but
         download and extraction are not blocked. In future releases, once sufficient telemetry has been collected to
         gain confidence in the validation process, package extraction will be blocked if signature validation fails.
 
@@ -1445,8 +1445,8 @@ class ExtHandlerInstance(object):
                     signature_validated = True
 
             except SignatureValidationError:
-                # download_zip_package() will propagate a SignatureValidationError if validation fails. This is the only exception
-                # expected from validation, and the error has already been reported with additional context, so we do nothing here.
+                # download_zip_package() will propagate a SignatureValidationError if validation fails. This is the only
+                # exception expected from validation, and the error has already been reported, so we do nothing here.
                 # Do not block extension execution, continue to manifest validation.
                 # TODO: Raise error once signature validation is enforced.
                 pass
