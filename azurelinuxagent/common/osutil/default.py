@@ -56,9 +56,14 @@ try:
         warnings.filterwarnings("ignore", category=DeprecationWarning)
         from crypt import crypt  # pylint: disable=deprecated-module
 except ImportError:
-    try:
-        from legacycrypt import crypt
-    except ImportError:
+    __CRYPT_IMPORTED__ = False
+    if sys.version_info[0] == 3 and sys.version_info[1] >= 13 or sys.version_info[0] > 3:
+        try:
+            from legacycrypt import crypt
+            __CRYPT_IMPORTED__ = True
+        except ImportError:
+            pass
+    if not __CRYPT_IMPORTED__:
         def crypt(password, salt):
             raise OSUtilError("This feature requires one of the 'crypt', 'legacycrypt' or 'crypt-r' Python packages to be installed.")
 
