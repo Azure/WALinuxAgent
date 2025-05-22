@@ -32,6 +32,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
 
     def __init__(self):
         super(FreeBSDOSUtil, self).__init__()
+        self.agent_conf_file_path = '/usr/local/etc/waagent.conf'
         self._scsi_disks_timeout_set = False
         self.jit_enabled = True
 
