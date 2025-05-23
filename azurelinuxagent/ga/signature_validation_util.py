@@ -133,7 +133,7 @@ def _report_validation_event(op, level, message, name, version, duration):
         event_msg = "[WARNING] {0}".format(message)
         is_success = False
     else:
-        # If log level is invalid, log as info and add a message that level is invalid.
+        # Log as INFO. If the level is invalid (i.e., not INFO, WARNING, or ERROR), treat it as INFO and prepend a warning to the message.
         if level != logger.LogLevel.INFO:
             message = "Invalid log level '{0}', reporting event at 'INFO' level instead. {1}".format(level, message)
         logger.info(message)
