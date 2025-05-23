@@ -27,7 +27,7 @@ from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common import logger
 from azurelinuxagent.ga.signing_certificate_util import get_microsoft_signing_certificate_path
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.future import ustr, UTC
+from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
 
@@ -125,7 +125,7 @@ def _report_validation_event(op, level, message, name, version, duration):
     """
     if level == logger.LogLevel.ERROR:
         logger.error(message)
-        event_msg = "[ERROR] {0}".format(message)
+        event_msg = message
         is_success = False
     elif level == logger.LogLevel.WARNING:
         message = "{0}\nThis failure can be safely ignored; will continue processing the package.".format(message)
@@ -133,6 +133,9 @@ def _report_validation_event(op, level, message, name, version, duration):
         event_msg = "[WARNING] {0}".format(message)
         is_success = False
     else:
+        # If log level is invalid, log as info and add a message that level is invalid.
+        if level != logger.LogLevel.INFO:
+            message = "Invalid log level '{0}', reporting event at 'INFO' level instead. {1}".format(level, message)
         logger.info(message)
         event_msg = message
         is_success = True
@@ -154,7 +157,7 @@ def validate_signature(package_path, signature, package_full_name, failure_log_l
     """
     # Initialize variables that will be used in the except/finally blocks. These are assigned inside the try block,
     # but defining them here ensures safe access if an exception occurs before assignment.
-    start_time = datetime.datetime.min
+    start_time = datetime_min_utc
     signature_path = ""
     name, version = "", ""
 
@@ -225,7 +228,9 @@ def validate_signature(package_path, signature, package_full_name, failure_log_l
             if signature_path != "" and os.path.isfile(signature_path):
                 os.remove(signature_path)
         except Exception as ex:
-            logger.warn("Failed to cleanup signature file ('{0}'). Error: {1}".format(signature_path, ex))
+            msg = "Failed to cleanup signature file ('{0}'). Error: {1}".format(signature_path, ex)
+            _report_validation_event(op=WALAEventOperation.SignatureValidation, level=logger.LogLevel.WARNING, message=msg,
+                                     name=name, version=version, duration=0)
 
 
 def validate_handler_manifest_signing_info(manifest, ext_handler, failure_log_level):
@@ -240,7 +245,7 @@ def validate_handler_manifest_signing_info(manifest, ext_handler, failure_log_le
                               a message is appended to any failure log/telemetry indicating that the failure can be safely ignored.
     :raises ManifestValidationError: if handler manifest validation fails
     """
-    start_time = datetime.datetime.min
+    start_time = datetime_min_utc
     try:
         start_time = datetime.datetime.now(UTC)
         _report_validation_event(op=WALAEventOperation.SignatureValidation, level=logger.LogLevel.INFO,
