@@ -101,7 +101,7 @@ class RedhatOSUtil(Redhat6xOSUtil):
 
     @staticmethod
     def get_systemd_unit_file_install_path():
-        return "/usr/lib/systemd/system"
+        return "/etc/systemd/system"
 
     def set_hostname(self, hostname):
         """
