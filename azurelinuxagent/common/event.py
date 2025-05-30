@@ -89,6 +89,7 @@ class WALAEventOperation:
     Enable = "Enable"
     ExtensionHandlerManifest = "ExtensionHandlerManifest"
     ExtensionPolicy = "ExtensionPolicy"
+    ExtensionSignaturePolicy = "ExtensionSignaturePolicy"
     ExtensionProcessing = "ExtensionProcessing"
     ExtensionResourceGovernance = "ExtensionResourceGovernance"
     ExtensionTelemetryEventProcessing = "ExtensionTelemetryEventProcessing"

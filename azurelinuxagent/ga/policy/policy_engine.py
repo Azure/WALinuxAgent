@@ -22,7 +22,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.exception import AgentError
+from azurelinuxagent.common.exception import AgentError, ExtensionError
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
@@ -43,6 +43,35 @@ class InvalidPolicyError(AgentError):
     def __init__(self, msg, inner=None):
         msg = "Customer-provided policy file ('{0}') is invalid, please correct the following error: {1}".format(conf.get_policy_file_path(), msg)
         super(InvalidPolicyError, self).__init__(msg, inner)
+
+
+class ExtensionPolicyError(ExtensionError):
+    """
+    Error raised when extension is blocked by policy.
+    """
+    # Note: The parameter order differs from the parent class ExtensionError. In ExtensionError, 'code' has a default
+    # value and comes after 'inner', but in ExtensionPolicyError, 'code' is required and comes before 'inner'
+    def __init__(self, msg, code, inner=None):
+        self.report_op = WALAEventOperation.ExtensionPolicy    # Used by error handling code to report correct telemetry event
+        super(ExtensionPolicyError, self).__init__(msg=msg, inner=inner, code=code)
+
+
+class ExtensionSignaturePolicyError(ExtensionPolicyError):
+    """
+    Error raised when policy requires signature, but extension is not signed and was not previously validated.
+    """
+    def __init__(self, msg, code, inner=None):
+        self.report_op = WALAEventOperation.ExtensionSignaturePolicy    # Used by error handling code to report correct telemetry event
+        super(ExtensionSignaturePolicyError, self).__init__(msg=msg, code=code, inner=inner)
+
+
+class ExtensionDisallowedError(ExtensionPolicyError):
+    """
+    Error raised when extension is not present in the policy allowlist.
+    """
+    def __init__(self, msg, code, inner=None):
+        self.report_op = WALAEventOperation.ExtensionPolicy    # Used by error handling code to report correct event
+        super(ExtensionDisallowedError, self).__init__(msg=msg, code=code, inner=inner)
 
 
 class _PolicyEngine(object):

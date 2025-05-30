@@ -627,10 +627,8 @@ class WireClient(object):
 
         The 'signature' parameter should be a base64-encoded signature string. If signature is not an empty string, package signature will be validated
         immediately after downloading the package but before expanding it.
-
-        Currently, the 'enforce_signature' flag only affects logging and telemetry. If set to False, a message is appended
-        to any validation failure indicating that the error can be safely ignored.
-        TODO: Update logic so that 'enforce_signature' also controls whether validation failures raise an exception.
+        If 'enforce_signature' is True, any validation error will block package extraction and be immediately re-raised.
+        If 'enforce_signature' is False, the package will still be extracted, and the validation error will be re-raised afterward.
         """
         host_ga_plugin = self.get_host_plugin()
 
@@ -641,27 +639,28 @@ class WireClient(object):
             return self.stream(request_uri, target_file, headers=request_headers, use_proxy=False)
 
         def on_downloaded():
-            # If 'signature' parameter is not an empty string, validate the zip package signature immediately after download.
-            # Signature validation errors are caught and stored, allowing download to proceed. After zip package extraction,
-            # the error is re-raised to surface the failure, so the caller has knowledge of the failure and can handle appropriately.
-            # In future releases, once sufficient telemetry is collected and we gain confidence in the validation process,
-            # extraction will be blocked if signature validation fails, and the zip will be removed.
-            #
-            # TODO: Block packages failing signature validation when 'enforce_signature' is True
+            # If the 'signature' parameter is not an empty string, validate the zip package signature immediately after download.
+            # If signature is enforced, any validation error will block package extraction and the error will be immediately re-raised.
+            # If signature is not enforced, the validation error is caught and stored, allowing extraction to proceed. After extraction,
+            # the error is re-raised so caller has knowledge of the failure and can handle appropriately.
             validation_error = None
             if signature != "":
                 try:
                     failure_log_level = logger.LogLevel.ERROR if enforce_signature else logger.LogLevel.WARNING
                     validate_signature(target_file, signature, package_full_name=package_name, failure_log_level=failure_log_level)
                 except SignatureValidationError as ex:
-                    # validate_signature() only raises SignatureValidationError, and already sends logs/telemetry for the error.
-                    # If signature is not being enforced, catch the error and re-raise after expanding the zip.
-                    # TODO: if signature is being enforced, raise error and and cleanup zip file
+                    # If signature is enforced, cleanup zip file and raise error.
+                    if enforce_signature:
+                        try:
+                            os.remove(target_file)
+                        except Exception as cleanup_ex:
+                            logger.warn("Cannot delete {0}: {1}", target_file, ustr(cleanup_ex))
+                        raise
                     validation_error = ex
 
             WireClient._try_expand_zip_package(package_name, target_file, target_directory)
 
-            # Surface any validation errors after extraction so the caller can decide how to handle.
+            # If signature is not enforced, surface any validation errors after extraction so the caller can decide how to handle.
             if validation_error is not None:
                 raise validation_error
 

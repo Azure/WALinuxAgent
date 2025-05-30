@@ -124,7 +124,7 @@ class DownloadExtensionTestCase(AgentTestCase):
 
         with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
             with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.report_event") as mock_report_event:
-                self.ext_handler_instance.download()
+                self.ext_handler_instance.download(enforce_signature=False)
 
         # first download attempt should succeed
         self.assertEqual(1, mock_stream.call_count, "wireserver stream should be called once")
@@ -136,7 +136,7 @@ class DownloadExtensionTestCase(AgentTestCase):
         DownloadExtensionTestCase._create_zip_file(self._get_extension_package_file())
 
         with DownloadExtensionTestCase.create_mock_stream(lambda: None) as mock_stream:
-            self.ext_handler_instance.download()
+            self.ext_handler_instance.download(enforce_signature=False)
 
         mock_stream.assert_not_called()
 
@@ -150,7 +150,7 @@ class DownloadExtensionTestCase(AgentTestCase):
         DownloadExtensionTestCase._create_invalid_zip_file(self._get_extension_package_file())
 
         with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
-            self.ext_handler_instance.download()
+            self.ext_handler_instance.download(enforce_signature=False)
 
         self.assertEqual(1, mock_stream.call_count, "wireserver stream should be called once")
 
@@ -159,7 +159,7 @@ class DownloadExtensionTestCase(AgentTestCase):
     def test_it_should_maintain_extension_handler_state_when_good_zip_exists(self):
         DownloadExtensionTestCase._create_zip_file(self._get_extension_package_file())
         self.ext_handler_instance.set_handler_state(ExtHandlerState.NotInstalled)
-        self.ext_handler_instance.download()
+        self.ext_handler_instance.download(enforce_signature=False)
         self._assert_download_and_expand_succeeded()
         self.assertTrue(os.path.exists(os.path.join(self.ext_handler_instance.get_conf_dir(), "HandlerState")),
                         "Ensure that the HandlerState file exists on disk")
@@ -175,7 +175,7 @@ class DownloadExtensionTestCase(AgentTestCase):
         self.ext_handler_instance.set_handler_state(ExtHandlerState.NotInstalled)
 
         with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
-            self.ext_handler_instance.download()
+            self.ext_handler_instance.download(enforce_signature=False)
 
         self.assertEqual(1, mock_stream.call_count, "wireserver stream should be called once")
 
@@ -192,7 +192,7 @@ class DownloadExtensionTestCase(AgentTestCase):
 
         with DownloadExtensionTestCase.create_mock_stream(stream):
             with self.assertRaises(ExtensionDownloadError):
-                self.ext_handler_instance.download()
+                self.ext_handler_instance.download(enforce_signature=False)
 
         self.assertFalse(os.path.exists(self._get_extension_package_file()), "The bad zip extension package should not be downloaded to the expected location")
         self.assertFalse(os.path.exists(self._get_extension_command_file()), "The extension package should not expanded be to the expected location due to bad zip")
@@ -208,7 +208,7 @@ class DownloadExtensionTestCase(AgentTestCase):
             return True
 
         with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
-            self.ext_handler_instance.download()
+            self.ext_handler_instance.download(enforce_signature=False)
 
         self.assertEqual(mock_stream.call_count, mock_stream.download_failures + 1)
 
@@ -224,7 +224,7 @@ class DownloadExtensionTestCase(AgentTestCase):
             return True
 
         with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
-            self.ext_handler_instance.download()
+            self.ext_handler_instance.download(enforce_signature=False)
 
         self.assertEqual(mock_stream.call_count, mock_stream.download_failures + 1)
 
@@ -241,7 +241,7 @@ class DownloadExtensionTestCase(AgentTestCase):
             return True
 
         with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
-            self.ext_handler_instance.download()
+            self.ext_handler_instance.download(enforce_signature=False)
 
         self.assertEqual(mock_stream.call_count, mock_stream.download_failures + 1)
 
@@ -256,7 +256,7 @@ class DownloadExtensionTestCase(AgentTestCase):
 
         with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
             with self.assertRaises(ExtensionDownloadError) as context_manager:
-                self.ext_handler_instance.download()
+                self.ext_handler_instance.download(enforce_signature=False)
 
         self.assertEqual(mock_stream.call_count, len(self.pkg.uris))
 

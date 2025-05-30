@@ -16,9 +16,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import re
 import uuid
+import json
+import os
 from typing import Any
-from assertpy import fail
+from assertpy import assert_that, fail
+from typing import List, Dict, Any
+
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIdentifier, VmExtensionIds
@@ -40,6 +45,25 @@ class ExtSignatureValidation(AgentVmTest):
     def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
         self._ssh_client: SshClient = self._context.create_ssh_client()
+
+    def _create_policy_file(self, policy):
+        """
+        Create policy json file and copy to /etc/waagent_policy.json on test machine.
+        """
+        unique_id = uuid.uuid4()
+        file_path = f"/tmp/waagent_policy_{unique_id}.json"
+        with open(file_path, mode='w') as policy_file:
+            json.dump(policy, policy_file, indent=4)
+            policy_file.flush()
+            log.info(f"Policy file contents: {json.dumps(policy, indent=4)}")
+
+            remote_path = "/tmp/waagent_policy.json"
+            local_path = policy_file.name
+            self._ssh_client.copy_to_node(local_path=local_path, remote_path=remote_path)
+            policy_file_final_dest = "/etc/waagent_policy.json"
+            log.info("Copying policy file to test VM [%s]", self._context.vm.name)
+            self._ssh_client.run_command(f"mv {remote_path} {policy_file_final_dest}", use_sudo=True)
+        os.remove(file_path)
 
     def _should_enable_extension(self, extension_case, should_validate_signature):
         """
@@ -69,6 +93,30 @@ class ExtSignatureValidation(AgentVmTest):
                 use_sudo=True
             )
         log.info(f"Enable succeeded for {extension_case.extension} as expected")
+
+    @staticmethod
+    def _should_fail_to_enable_extension(extension_case):
+        """
+        Extension 'enable' should fail.
+        """
+        try:
+            log.info("")
+            log.info(f"Attempting to enable {extension_case.extension} - should fail fast because policy requires signature, but extension is unsigned")
+            timeout = (6 * 60)  # Fail fast.
+            if not isinstance(extension_case.extension, VirtualMachineRunCommandClient):
+                extension_case.extension.enable(settings=extension_case.settings, timeout=timeout, auto_upgrade_minor_version=False)
+            else:
+                extension_case.extension.enable(settings=extension_case.settings, timeout=timeout)
+            fail(f"The agent should have reported an error trying to enable {extension_case.extension} because the extension is unsigned and policy requires signature.")
+
+        except Exception as error:
+            # We exclude the extension name from regex because CRP sometimes installs test extensions with different
+            # names (ex: Microsoft.Azure.Extensions.Edp.RunCommandHandlerLinuxTest instead of Microsoft.CPlat.Core.RunCommandHandlerLinux)
+            pattern = r".*Extension will not be processed: failed to run extension .* because policy specifies that extension must be signed, but extension package is not signed.*"
+            assert_that(re.search(pattern, str(error))) \
+                .described_as(
+                f"Error message is expected to contain '{pattern}', but actual error message was '{error}'").is_not_none()
+            log.info(f"{extension_case.extension} enable failed as expected due to policy")
 
     def _should_uninstall_extension(self, extension_case):
         log.info("")
@@ -236,6 +284,61 @@ class ExtSignatureValidation(AgentVmTest):
         log.info("*** Test case 6: should enable multiple signed extensions in single goal state")
         ext_to_enable = [custom_script_signed, run_command_signed, vm_access_signed, application_health_signed]
         self._should_enable_multiple_signed_extensions(ext_to_enable)
+
+        # This set of test cases will test behavior when signature is validated AND enforced. Unsigned extensions should fail.
+        log.info("")
+        log.info("*** Begin test cases for signature validation with enforcement.")
+        log.info(" - Create policy to disallow unsigned extensoins")
+        policy = \
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "signatureRequired": True,
+                    "extensions": {
+                        # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                        "Microsoft.GuestConfiguration.ConfigurationforLinux": {
+                            "signatureRequired": False
+                        }
+                    }
+                }
+            }
+        self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
+        self._create_policy_file(policy)
+
+        # Test unsigned, single-config extension (CustomScript). Extension should fail to be enabled.
+        log.info("")
+        log.info("*** Test case 7: should fail to enable unsigned single-config extension (CustomScript 2.0)")
+        ExtSignatureValidation._should_fail_to_enable_extension(custom_script_unsigned)
+
+        # Test unsigned, no-config extension (AzureMonitorLinuxAgent). Extension should fail to be enabled.
+        log.info("*** Test case 8: should fail to enable unsigned no-config extension (AzureMonitorLinuxAgent 1.33)")
+        if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(distro):
+            ExtSignatureValidation._should_fail_to_enable_extension(azure_monitor_unsigned)
+        else:
+            log.info("Skipping test case because AzureMonitorLinuxAgent is not supported on distro '{0}'".format(distro))
+
+        # Note: Currently, the VirtualMachineRunCommand client does not support restricting RunCommandHandler to a specific unsigned version.
+        # Therefore, we cannot test unsigned multi-config extensions.
+        # TODO: Add tests for unsigned multi-config extension once "ForceRunCommandV2Version" flag is fixed for VirtualMachineRunCommandClient
+
+        log.info("*** Test case 9: should successfully uninstall unsigned extensions that were not installed (CustomScript, AzureMonitorLinuxAgent")
+        self._should_uninstall_extension(custom_script_unsigned)
+        self._should_uninstall_extension(azure_monitor_unsigned)
+
+        log.info("*** Test case 10: should successfully install signed single-config (CustomScript 2.1), no-config (VMApplicationManagerLinux) and multi-config (RunCommandHandler) extensions ")
+        self._should_enable_extension(custom_script_signed, should_validate_signature=True)
+        self._should_enable_extension(vm_app_signed, should_validate_signature=True)
+        self._should_enable_extension(run_command_signed, should_validate_signature=True)
+
+    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
+        ignore_rules = [
+            # 2025-05-11T20:00:12.310328Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Extensions.CustomScript, op=ExtensionPolicy, message=Extension will not be processed: failed to run extension 'Microsoft.Azure.Extensions.CustomScript' because policy specifies that extension must be signed, but extension package is not signed. To run, set 'signatureRequired' to false in the policy file ('/etc/waagent_policy.json')., duration=0
+            # We intentionally block unsigned extensions with policy and expect this failure message
+            {
+                'message': r"Extension will not be processed: failed to .* extension .* because policy specifies that extension must be signed"
+            }
+        ]
+        return ignore_rules
 
 
 if __name__ == "__main__":
