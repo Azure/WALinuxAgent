@@ -75,6 +75,31 @@ image-sets:
       - "ubuntu_2404"
       - "ubuntu_2404_arm64"
 
+   # These are distros with default OpenSSL version 1.1.0 or later, as required for signature validation.
+   # TODO: Remove this image set once timestamp validation is implemented and the "no_check_time" flag
+   # (which requires OpenSSL 1.1.0) is no longer needed.
+   signature-validation-endorsed:
+      - "alma_8"
+      - "alma_9"
+      - "centos_82"
+      - "debian_9"
+      - "debian_10"
+      - "debian_11"
+      - "flatcar"
+      - "mariner_2"
+      - "azure-linux_3"
+      - "azure-linux_3_fips"
+      - "suse_15"
+      - "rhel_810"
+      - "rhel_95"
+      - "rocky_9"
+      - "ubuntu_1804"
+      - "ubuntu_2004"
+      - "ubuntu_2204"
+      - "ubuntu_2204_minimal"
+      - "ubuntu_2404"
+      - "ubuntu_2404_minimal"
+
 #
 # An image can be specified by a string giving its urn, as in
 #

@@ -50,6 +50,7 @@ Debug.EnableCgroupV2ResourceLimiting = False
 Debug.EnableExtensionPolicy = False
 Debug.EnableFastTrack = True
 Debug.EnableGAVersioning = True
+Debug.EnableSignatureValidation = False
 Debug.EtpCollectionPeriod = 300
 Debug.FirewallRulesLogPeriod = 86400
 Debug.LogCollectorInitialDelay = 300

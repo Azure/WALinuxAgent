@@ -170,9 +170,9 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
             extensions = protocol.get_goal_state().extensions_goal_state.extensions
             self.assertEqual(expected_signature, extensions[0].encoded_signature)
 
-            # extension.encoded_signature should be None if the property does not exist for the extension
+            # extension.encoded_signature should be an empty string if the property does not exist for the extension
             for i in range(1, 5):
-                self.assertIsNone(extensions[i].encoded_signature)
+                self.assertEqual(extensions[i].encoded_signature, "")
 
 
 class CaseFoldedDictionaryTestCase(AgentTestCase):
