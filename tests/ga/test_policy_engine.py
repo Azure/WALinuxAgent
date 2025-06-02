@@ -315,7 +315,7 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
         """
         # No policy file is present - feature is disabled.
         engine = ExtensionPolicyEngine()
-        should_allow = engine.should_allow_extension(TEST_EXTENSION_NAME)
+        should_allow = engine._should_allow_extension(TEST_EXTENSION_NAME)
         self.assertTrue(should_allow, msg="Policy feature is disabled because no policy file present, so all extensions should be allowed.")
         should_enforce = engine.should_enforce_signature_validation(TEST_EXTENSION_NAME)
         self.assertFalse(should_enforce, msg="Policy feature is disabled because no policy file present, so signature should not be enforced.")
@@ -327,7 +327,7 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
         self.patch_conf_flag.stop()
         self._create_policy_file({})
         engine = ExtensionPolicyEngine()
-        should_allow = engine.should_allow_extension(TEST_EXTENSION_NAME)
+        should_allow = engine._should_allow_extension(TEST_EXTENSION_NAME)
         self.assertTrue(should_allow, msg="Policy feature is disabled because conf flag false, so all extensions should be allowed.")
         should_enforce = engine.should_enforce_signature_validation(TEST_EXTENSION_NAME)
         self.assertFalse(should_enforce, msg="Policy feature is disabled because conf flag false, so signature should not be enforced.")
@@ -348,7 +348,7 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
         for policy in policy_cases:
             self._create_policy_file(policy)
             engine = ExtensionPolicyEngine()
-            should_allow = engine.should_allow_extension(TEST_EXTENSION_NAME)
+            should_allow = engine._should_allow_extension(TEST_EXTENSION_NAME)
             self.assertEqual(should_allow, not _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY,
                              msg="Extension policy is not specified, so should use default policy.")
             should_enforce = engine.should_enforce_signature_validation(TEST_EXTENSION_NAME)
@@ -376,9 +376,9 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
             }
         self._create_policy_file(policy)
         engine = ExtensionPolicyEngine()
-        should_allow = engine.should_allow_extension(TEST_EXTENSION_NAME)
+        should_allow = engine._should_allow_extension(TEST_EXTENSION_NAME)
         self.assertTrue(should_allow, msg="Extension is in allowlist, so should be allowed.")
-        should_allow = engine.should_allow_extension(TEST_EXTENSION_NAME_2)
+        should_allow = engine._should_allow_extension(TEST_EXTENSION_NAME_2)
         self.assertTrue(should_allow, msg="Extension is in allowlist, so should be allowed.")
 
     def test_should_not_allow_if_allowListedExtensionsOnly_true_and_extension_not_in_list(self):
@@ -396,7 +396,7 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
             }
         self._create_policy_file(policy)
         engine = ExtensionPolicyEngine()
-        should_allow = engine.should_allow_extension(TEST_EXTENSION_NAME)
+        should_allow = engine._should_allow_extension(TEST_EXTENSION_NAME)
         self.assertFalse(should_allow,
                             msg="allowListedExtensionsOnly is true and extension is not in allowlist, so should not be allowed.")
 
@@ -420,9 +420,9 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
             }
         self._create_policy_file(policy)
         engine = ExtensionPolicyEngine()
-        self.assertTrue(engine.should_allow_extension(TEST_EXTENSION_NAME),
+        self.assertTrue(engine._should_allow_extension(TEST_EXTENSION_NAME),
                         msg="allowListedExtensionsOnly is false, so extension should be allowed.")
-        self.assertTrue(engine.should_allow_extension("Random.Ext"),
+        self.assertTrue(engine._should_allow_extension("Random.Ext"),
                         msg="allowListedExtensionsOnly is false, so extension should be allowed.")
 
     def test_should_enforce_signature_if_individual_signatureRequired_true(self):
@@ -531,7 +531,7 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
 
             self._create_policy_file(policy)
             engine = ExtensionPolicyEngine()
-            should_allow = engine.should_allow_extension(ext_name_to_test)
+            should_allow = engine._should_allow_extension(ext_name_to_test)
             should_enforce_signature = engine.should_enforce_signature_validation(ext_name_to_test)
             self.assertTrue(should_allow,
                             msg="Extension should have been found in allowlist regardless of extension name case.")

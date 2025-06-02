@@ -42,7 +42,7 @@ from azurelinuxagent.common.agent_supported_feature import get_agent_supported_f
 from azurelinuxagent.common.utils.textutil import redact_sas_token
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, ExtensionDisallowedError, \
-    ExtensionSignaturePolicyError, ExtensionPolicyError
+    ExtensionSignaturePolicyError, ExtensionPolicyError, EXT_DISALLOWED_ERROR_MAP
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEventOperation, \
@@ -92,26 +92,6 @@ _STATUS_FILE_RETRY_DELAY = 2  # seconds
 
 # This is the default sequence number we use when there are no settings available for Handlers
 _DEFAULT_SEQ_NO = "0"
-
-# For extension disallowed errors (e.g. blocked by policy, extensions disabled), this mapping is used to generate
-# user-friendly error messages and determine the appropriate terminal error code based on the blocked operation.
-# Format: {<ExtensionRequestedState>: (<str>, <ExtensionErrorCodes>)}
-# - The first element of the tuple is a user-friendly operation name included in error messages.
-# - The second element of the tuple is the CRP terminal error code for the operation.
-_EXT_DISALLOWED_ERROR_MAP = \
-    {
-        ExtensionRequestedState.Enabled: ('run', ExtensionErrorCodes.PluginEnableProcessingFailed),
-        # TODO: CRP does not currently have a terminal error code for uninstall. Once this code is added, use
-        #       it instead of PluginDisableProcessingFailed below.
-        #
-        # Note: currently, when uninstall is requested for an extension, CRP polls until the agent does not
-        #       report status for that extension, or until timeout is reached. In the case of an extension disallowed
-        #       error, agent reports failed status on behalf of the extension, which will cause CRP to poll for the full
-        #       timeout, instead of failing fast.
-        ExtensionRequestedState.Uninstall: ('uninstall', ExtensionErrorCodes.PluginDisableProcessingFailed),
-        # "Disable" is an internal operation, users are unaware of it. We surface the term "uninstall" instead.
-        ExtensionRequestedState.Disabled: ('uninstall', ExtensionErrorCodes.PluginDisableProcessingFailed),
-    }
 
 
 class ExtHandlerStatusValue(object):
@@ -532,7 +512,7 @@ class ExtHandlersHandler(object):
             handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)
 
             # Get user-friendly operation name and terminal error code to use in status messages if extension is disallowed
-            operation, error_code = _EXT_DISALLOWED_ERROR_MAP.get(ext_handler.state)
+            operation, error_code = EXT_DISALLOWED_ERROR_MAP.get(ext_handler.state)
 
             # In case of extensions disabled, we skip processing extensions. But CRP is still waiting for some status
             # back for the skipped extensions. In order to propagate the status back to CRP, we will report status back
@@ -805,8 +785,8 @@ class ExtHandlersHandler(object):
               an error is raised and the extension is not processed further.
             - If signature is enforced, enable will be blocked if signature validation fails during extension package download.
         """
-        # Check policy and raise error if extension is disallowed.
-        ext_handler_i.check_extension_policy(policy_engine)
+        # Check policy and raise error if extension handler is disallowed.
+        policy_engine.enforce_policy_for_ext_handler(ext_handler_i)
 
         uninstall_exit_code = None
         old_ext_handler_i = ext_handler_i.get_installed_ext_handler()
@@ -954,8 +934,8 @@ class ExtHandlersHandler(object):
         ext_handler_i.logger.info("[Uninstall] current handler state is: {0}", handler_state.lower())
         if handler_state != ExtHandlerState.NotInstalled:
             if handler_state == ExtHandlerState.Enabled:
-                # Check policy and raise error if extension is disallowed.
-                ext_handler_i.check_extension_policy(policy_engine)
+                # Check policy and raise error if extension handler is disallowed.
+                policy_engine.enforce_policy_for_ext_handler(ext_handler_i)
 
                 # Corner case - Single config Handler with no extensions at all
                 # If there are no extension settings for Handler, we should just disable the handler
@@ -2429,29 +2409,6 @@ class ExtHandlerInstance(object):
                 break
 
         return processed_substatus
-
-    def check_extension_policy(self, policy_engine):
-        # Get user-friendly operation name and terminal error code to use in status messages if extension is disallowed
-        operation, error_code = _EXT_DISALLOWED_ERROR_MAP.get(self.ext_handler.state)
-
-        extension_allowed = policy_engine.should_allow_extension(self.ext_handler.name)
-        if not extension_allowed:
-            msg = (
-                "Extension will not be processed: failed to {0} extension '{1}' because it is not specified as an allowed extension. "
-                "To {0}, add the extension to the list of allowed extensions in the policy file ('{2}')."
-            ).format(operation, self.ext_handler.name, conf.get_policy_file_path())
-            raise ExtensionDisallowedError(msg=msg, code=error_code)
-
-        enforce_signature = policy_engine.should_enforce_signature_validation(self.ext_handler.name)
-        ext_dir = self.get_base_dir()
-        # We treat the extension as signed if it has an encoded signature, or if the signature was previously validated (state file exists in the extension dir)
-        extension_signed = self.ext_handler.encoded_signature != "" or ((os.path.exists(ext_dir) and signature_has_been_validated(ext_dir)))
-        if enforce_signature and not extension_signed:
-            msg = (
-                "Extension will not be processed: failed to {0} extension '{1}' because policy specifies that extension must be signed, "
-                "but extension package is not signed. To {0}, set 'signatureRequired' to false in the policy file ('{2}')."
-            ).format(operation, self.ext_handler.name, conf.get_policy_file_path())
-            raise ExtensionSignaturePolicyError(msg=msg, code=error_code)
 
     @staticmethod
     def _truncate_message(field, truncate_size=_MAX_SUBSTATUS_FIELD_LENGTH):  # pylint: disable=R1710
