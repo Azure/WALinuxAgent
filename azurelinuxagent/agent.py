@@ -226,7 +226,7 @@ class Agent(object):
                 event.warn(WALAEventOperation.LogCollection, "Unable to determine which cgroup version to use: {0}", ustr(e))
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
-            def _get_log_collector_cgroup_in_expected_slice():
+            def _validate_log_collector_cgroup_slice():
                 """
                 Validates that the log collector process is running in the expected cgroup slice.
 
@@ -237,24 +237,22 @@ class Agent(object):
                 If multiple log collector runs fail with the same error, we disable the log collector until the service is restarted.
                 """
                 retry_count = 0
-                while retry_count < logcollector.LOG_COLLECTOR_CGROUP_PATH_VALIDATION_MAX_RETRIES:
+                while True:
                     try:
                         log_collector_cgroup = cgroup_api.get_process_cgroup(process_id="self", cgroup_name=AGENT_LOG_COLLECTOR)
                         if not log_collector_cgroup.check_in_expected_slice(cgroupconfigurator.LOGCOLLECTOR_SLICE):
-                            raise CGroupsException("The Log Collector process is not in the proper cgroups. Expected slice: {0}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE))
+                            raise CGroupsException("The Log Collector process is not in the proper cgroup. Expected slice: {0}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE))
                         return log_collector_cgroup
                     except CGroupsException as e:
                         retry_count += 1
-                        if retry_count < logcollector.LOG_COLLECTOR_CGROUP_PATH_VALIDATION_MAX_RETRIES:
-                            logger.info("Check cgroup in expected slice failed: retrying in {0} secs [Attempt {1}/{2}]".format(logcollector.LOG_COLLECTOR_CGROUP_PATH_VALIDATION_RETRY_DELAY, retry_count, logcollector.LOG_COLLECTOR_CGROUP_PATH_VALIDATION_MAX_RETRIES))
-                            time.sleep(logcollector.LOG_COLLECTOR_CGROUP_PATH_VALIDATION_RETRY_DELAY)
-                        else:
+                        if retry_count >= logcollector.LOG_COLLECTOR_CGROUP_PATH_VALIDATION_MAX_RETRIES:
                             event.warn(WALAEventOperation.LogCollection, ustr(e))
-                            break
+                            sys.exit(logcollector.UNEXPECTED_CGROUP_PATH_ERRCODE)
 
-                sys.exit(logcollector.UNEXPECTED_CGROUP_PATH_ERRCODE)
+                        logger.info("Check cgroup in expected slice failed: retrying in {0} secs [Attempt {1}/{2}]".format(logcollector.LOG_COLLECTOR_CGROUP_PATH_VALIDATION_RETRY_DELAY, retry_count, logcollector.LOG_COLLECTOR_CGROUP_PATH_VALIDATION_MAX_RETRIES))
+                        time.sleep(logcollector.LOG_COLLECTOR_CGROUP_PATH_VALIDATION_RETRY_DELAY)
 
-            log_collector_cgroup = _get_log_collector_cgroup_in_expected_slice()
+            log_collector_cgroup = _validate_log_collector_cgroup_slice()
 
             tracked_controllers = log_collector_cgroup.get_controllers()
             for controller in tracked_controllers:
