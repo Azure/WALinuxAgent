@@ -116,7 +116,7 @@ class ExtSignatureValidation(AgentVmTest):
             assert_that(re.search(pattern, str(error))) \
                 .described_as(
                 f"Error message is expected to contain '{pattern}', but actual error message was '{error}'").is_not_none()
-            log.info(f"{extension_case.extension} enable failed as expected due to policy")
+            log.info(f"{extension_case.extension} enable failed as expected due to signature policy")
 
     def _should_uninstall_extension(self, extension_case):
         log.info("")
@@ -129,52 +129,46 @@ class ExtSignatureValidation(AgentVmTest):
 
 
     def _should_fail_to_uninstall_extension(self, extension_case):
-        elif operation == "delete":
-            # For delete operations, CRP polls until the agent stops reporting status for the extension, or until timeout is
-            # reached, because delete is a best-effort operation and is not expected to fail. However, when delete is called
-            # on a disallowed extension, the agent reports failure status, so CRP will continue to poll until timeout.
-            # We wait for the full timeout period (set to 15 minutes), verify that CRP returns a timeout error, and
-            # check the agent log to confirm that delete was blocked by policy.
-            #
-            # Note: this scenario is currently executed only once. If it must be run multiple times in the future,
-            # avoid waiting for CRP timeout and asynchronously check agent log to confirm delete failure.
-            # This solution may run into issues (the following issues are known, but there are likely others):
-            #   - while CRP is waiting for the delete operation to timeout, enable requests on the extension will fail, only
-            #     delete can be retried.
-            #   - if a second delete operation is requested while the first is still running, CRP will merge the goal states
-            #     and not send a new goal state to the agent.
-            #   - if an enable request is sent while a delete operation is still in progress, the SDK may occasionally throw a
-            #     "ResourceNotFound" error
-            #
-            # Use the following steps as a workaround:
-            #   1. asynchronously check the agent log to confirm delete failure
-            #   2. force a new goal state by enabling a different extension
-            #   3. allow extension with policy and send another delete request (should succeed)
-            log.info(f"Attempting to delete {extension_case.extension}, should fail due to policy.")
-            delete_start_time = self._ssh_client.run_command("date --utc '+%Y-%m-%d %T'").rstrip()
-            try:
-                # Wait long enough for CRP timeout (15 min) and confirm that a timeout error was thrown.
-                timeout = (20 * 60)
-                extension_case.extension.delete(timeout=timeout)
-                fail(f"CRP should not have successfully completed the delete operation for {extension_case.extension} "
-                     f"because the extension is disallowed by policy and agent should have reported a policy failure.")
+        # For delete operations, CRP polls until the agent stops reporting status for the extension, or until timeout is
+        # reached, because delete is a best-effort operation and is not expected to fail. However, when delete is called
+        # on a disallowed extension, the agent reports failure status, so CRP will continue to poll until timeout.
+        # We wait for the full timeout period (set to 15 minutes), verify that CRP returns a timeout error, and
+        # check the agent log to confirm that delete was blocked by signature policy.
+        #
+        # Note: this scenario is currently executed only once in this test suite. If it must be run multiple times in the future,
+        # avoid waiting for CRP timeout and asynchronously check agent log to confirm delete failure.
+        # This solution may run into issues (the following issues are known, but there are likely others):
+        #   - while CRP is waiting for the delete operation to timeout, enable requests on the extension will fail, only
+        #     delete can be retried.
+        #   - if a second delete operation is requested while the first is still running, CRP will merge the goal states
+        #     and not send a new goal state to the agent.
+        #   - if an enable request is sent while a delete operation is still in progress, the SDK may occasionally throw a
+        #     "ResourceNotFound" error
+        #
+        # Use the following steps as a workaround:
+        #   1. asynchronously check the agent log to confirm delete failure
+        #   2. force a new goal state by enabling a different extension
+        #   3. allow unsigned extensions with policy and send another delete request (should succeed)
+        log.info(f"Attempting to delete {extension_case.extension}, should fail due to policy.")
+        delete_start_time = self._ssh_client.run_command("date --utc '+%Y-%m-%d %T'").rstrip()
+        try:
+            # Wait long enough for CRP timeout (15 min) and confirm that a timeout error was thrown.
+            timeout = (30 * 60)
+            extension_case.extension.delete(timeout=timeout)
+            fail(f"CRP should not have successfully completed the delete operation for {extension_case.extension} "
+                 f"because unsigned extensions are disallowed by policy. The agent should have reported a policy failure.")
 
-            except Exception as error:
-                assert_that("VMExtensionProvisioningTimeout" in str(error)) \
-                    .described_as(f"Expected a VMExtensionProvisioningTimeout error, but actual error was: {error}") \
-                    .is_true()
-                log.info("Delete operation timed out, as expected. Error:")
-                log.info(error)
-                log.info("")
-                log.info("Checking agent log to confirm that delete operation failed due to policy.")
+        except Exception as error:
+            assert_that("VMExtensionProvisioningTimeout" in str(error)) \
+                .described_as(f"Expected a VMExtensionProvisioningTimeout error, but actual error was: {error}") \
+                .is_true()
+            log.info("Delete operation timed out, as expected. Error:")
+            log.info(error)
+            log.info("")
+            log.info("Checking agent log to confirm that delete operation failed due to signature policy.")
 
-                # Confirm that agent log contains error message that uninstall was blocked due to policy
-                # The script will check for a log message such as "Extension will not be processed: failed to uninstall
-                # extension 'Microsoft.Azure.Extensions.CustomScript' because it is not specified as an allowed extension"
-                self._ssh_client.run_command(
-                    f"agent_ext_policy-verify_operation_disallowed.py --extension-name '{extension_case.extension._identifier}' "
-                    f"--after-timestamp '{delete_start_time}' --operation 'uninstall'", use_sudo = True)
-
+            # Confirm that agent log contains error message that uninstall was blocked due to signature policy
+            self._ssh_client.run_command(f"check_data_in_agent_log.py --data 'policy specifies that extension must be signed but extension package is not signed' --after-timestamp '{delete_start_time}'", use_sudo=True)
 
     def _should_enable_multiple_signed_extensions(self, ext_to_enable):
         def get_ext_template(ext):
@@ -285,60 +279,133 @@ class ExtSignatureValidation(AgentVmTest):
             if ext.extension._resource_name in extension_names_on_vm:
                 ext.extension.delete()
 
-        # This set of test cases will test behavior when signature is validated, but not enforced (telemetry only).
-        # Both signed and unsigned extensions should succeed.
-        log.info("")
-        log.info("*** Begin test cases for signature validation without enforcement. All operations should succeed.")
-        # Test unsigned, single-config extension (CustomScript). Extension should be enabled and uninstalled with no errors.
-        log.info("")
-        log.info("*** Test case 1: should enable and uninstall unsigned single-config extension (CustomScript 2.0) successfully")
-        self._should_enable_extension(custom_script_unsigned, should_validate_signature=False)
-        self._should_uninstall_extension(custom_script_unsigned)
+        # Azure Policy automatically installs the GuestConfig extension on test machines, which may occur while CRP
+        # is waiting for a disallowed delete request to time out (test case 5). In this case, the GuestConfig enable
+        # request would be merged with the delete request into a new goal state. CRP would report success for GuestConfig
+        # enable, but continue to poll for delete for another full timeout period (15 minutes), extending the total
+        # test runtime. As a workaround, we manually install GuestConfig if not already present. If GuestConfig
+        # does not support the distro, skip this workaround and the test case (5).
+        if VmExtensionIds.GuestConfig.supports_distro(distro):
+            guest_config_resource_name = "AzurePolicyforLinux"
+            if guest_config_resource_name not in extension_names_on_vm:
+                log.info("")
+                log.info("Installing GuestConfig extension.")
+                guest_config = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.GuestConfig,
+                                                             resource_name=guest_config_resource_name)
+                guest_config.enable(auto_upgrade_minor_version=True)
 
-        # Test signed, single-config extension (CustomScript). Extension signature should be validated, and extension should be enabled and uninstalled with no errors.
-        log.info("")
-        log.info("*** Test case 2: should validate signature, enable, and uninstall signed single-config extension (CustomScript 2.1) successfully")
-        self._should_enable_extension(custom_script_signed, should_validate_signature=True)
-        self._should_uninstall_extension(custom_script_signed)
-
-        # Test signed, multi-config extension (RunCommandHandler). Extension signature should be validated, and extension should be enabled and uninstalled with no errors.
+        # # This set of test cases will test behavior when signature is validated, but not enforced (telemetry only).
+        # # Both signed and unsigned extensions should succeed.
+        # log.info("")
+        # log.info("*** Begin test cases for signature validation without enforcement. All operations should succeed.")
+        # # Test unsigned, single-config extension (CustomScript). Extension should be enabled and uninstalled with no errors.
+        # log.info("")
+        # log.info("*** Test case 1: should enable and uninstall unsigned single-config extension (CustomScript 2.0) successfully")
+        # self._should_enable_extension(custom_script_unsigned, should_validate_signature=False)
+        # self._should_uninstall_extension(custom_script_unsigned)
         #
-        # Note: Currently, the VirtualMachineRunCommand client does not support restricting RunCommandHandler to a specific unsigned version.
-        # Therefore, we only test the signed version of RunCommandHandler for now.
-        # TODO: Add tests for the unsigned version once the "ForceRunCommandV2Version" flag is fixed for VirtualMachineRunCommandClient
-        log.info("")
-        log.info("*** Test case 3: should validate signature, enable, and uninstall signed multi-config extension (RunCommandHandler) successfully")
-        self._should_enable_extension(run_command_signed, should_validate_signature=True)
-        self._should_uninstall_extension(run_command_signed)
-
-        # Test unsigned, no-config extension (AzureMonitorLinuxAgent). Extension should be enabled and uninstalled with no errors.
-        log.info("")
-        log.info("*** Test case 4: should enable and uninstall unsigned no-config extension (AzureMonitorLinuxAgent 1.33) successfully")
-        if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(distro):
-            self._should_enable_extension(azure_monitor_unsigned, should_validate_signature=False)
-            self._should_uninstall_extension(azure_monitor_unsigned)
-        else:
-            log.info("Skipping test case because AzureMonitorLinuxAgent is not supported on distro '{0}'".format(distro))
-
-        # Test signed, no-config extension (VMApplicationManagerLinux). Extension signature should be validated, and extension should be enabled and uninstalled with no errors.
-        log.info("")
-        log.info("*** Test case 5: should validate signature, enable, and uninstall signed no-config extension (VMApplicationManagerLinux) successfully")
-        self._should_enable_extension(vm_app_signed, should_validate_signature=True)
-        self._should_uninstall_extension(vm_app_signed)
-
-        # TODO: Add test cases for package published with invalid signature and invalid manifest signingInfo, when
-        # PIR allows for publication of invalid packages.
-
-        log.info("")
-        log.info("*** Test case 6: should enable multiple signed extensions in single goal state")
-        ext_to_enable = [custom_script_signed, run_command_signed, vm_access_signed, application_health_signed]
-        self._should_enable_multiple_signed_extensions(ext_to_enable)
+        # # Test signed, single-config extension (CustomScript). Extension signature should be validated, and extension should be enabled and uninstalled with no errors.
+        # log.info("")
+        # log.info("*** Test case 2: should validate signature, enable, and uninstall signed single-config extension (CustomScript 2.1) successfully")
+        # self._should_enable_extension(custom_script_signed, should_validate_signature=True)
+        # self._should_uninstall_extension(custom_script_signed)
+        #
+        # # Test signed, multi-config extension (RunCommandHandler). Extension signature should be validated, and extension should be enabled and uninstalled with no errors.
+        # #
+        # # Note: Currently, the VirtualMachineRunCommand client does not support restricting RunCommandHandler to a specific unsigned version.
+        # # Therefore, we only test the signed version of RunCommandHandler for now.
+        # # TODO: Add tests for the unsigned version once the "ForceRunCommandV2Version" flag is fixed for VirtualMachineRunCommandClient
+        # log.info("")
+        # log.info("*** Test case 3: should validate signature, enable, and uninstall signed multi-config extension (RunCommandHandler) successfully")
+        # self._should_enable_extension(run_command_signed, should_validate_signature=True)
+        # self._should_uninstall_extension(run_command_signed)
+        #
+        # # Test unsigned, no-config extension (AzureMonitorLinuxAgent). Extension should be enabled and uninstalled with no errors.
+        # log.info("")
+        # log.info("*** Test case 4: should enable and uninstall unsigned no-config extension (AzureMonitorLinuxAgent 1.33) successfully")
+        # if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(distro):
+        #     self._should_enable_extension(azure_monitor_unsigned, should_validate_signature=False)
+        #     self._should_uninstall_extension(azure_monitor_unsigned)
+        # else:
+        #     log.info("Skipping test case because AzureMonitorLinuxAgent is not supported on distro '{0}'".format(distro))
+        #
+        # # Test signed, no-config extension (VMApplicationManagerLinux). Extension signature should be validated, and extension should be enabled and uninstalled with no errors.
+        # log.info("")
+        # log.info("*** Test case 5: should validate signature, enable, and uninstall signed no-config extension (VMApplicationManagerLinux) successfully")
+        # self._should_enable_extension(vm_app_signed, should_validate_signature=True)
+        # self._should_uninstall_extension(vm_app_signed)
+        #
+        # # TODO: Add test cases for package published with invalid signature and invalid manifest signingInfo, when
+        # # PIR allows for publication of invalid packages.
+        #
+        # log.info("")
+        # log.info("*** Test case 6: should enable multiple signed extensions in single goal state")
+        # ext_to_enable = [custom_script_signed, run_command_signed, vm_access_signed, application_health_signed]
+        # self._should_enable_multiple_signed_extensions(ext_to_enable)
 
         # This set of test cases will test behavior when signature is validated AND enforced. Unsigned extensions should fail.
         try:
             log.info("")
             log.info("*** Begin test cases for signature validation with enforcement.")
-            log.info(" - Create policy to disallow unsigned extensions")
+            # log.info(" - Create policy to disallow unsigned extensions")
+            # policy = \
+            #     {
+            #         "policyVersion": "0.1.0",
+            #         "extensionPolicies": {
+            #             "signatureRequired": True,
+            #             "extensions": {
+            #                 # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+            #                 "Microsoft.GuestConfiguration.ConfigurationforLinux": {
+            #                     "signatureRequired": False
+            #                 }
+            #             }
+            #         }
+            #     }
+            self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
+            # self._create_policy_file(policy)
+
+            # # Test unsigned, single-config extension (CustomScript). Extension should fail to be enabled.
+            # log.info("")
+            # log.info("*** Test case 7: should fail to enable unsigned single-config extension (CustomScript 2.0)")
+            # ExtSignatureValidation._should_fail_to_enable_extension(custom_script_unsigned)
+            #
+            # # Test unsigned, no-config extension (AzureMonitorLinuxAgent). Extension should fail to be enabled.
+            # log.info("*** Test case 8: should fail to enable unsigned no-config extension (AzureMonitorLinuxAgent 1.33)")
+            # if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(distro):
+            #     ExtSignatureValidation._should_fail_to_enable_extension(azure_monitor_unsigned)
+            # else:
+            #     log.info("Skipping test case because AzureMonitorLinuxAgent is not supported on distro '{0}'".format(distro))
+            #
+            # # Note: Currently, the VirtualMachineRunCommand client does not support restricting RunCommandHandler to a specific unsigned version.
+            # # Therefore, we cannot test unsigned multi-config extensions.
+            # # TODO: Add tests for unsigned multi-config extension once "ForceRunCommandV2Version" flag is fixed for VirtualMachineRunCommandClient
+            #
+            # log.info("*** Test case 9: should successfully uninstall unsigned extensions that were not installed (CustomScript, AzureMonitorLinuxAgent")
+            # self._should_uninstall_extension(custom_script_unsigned)
+            # self._should_uninstall_extension(azure_monitor_unsigned)
+            #
+            # log.info("*** Test case 10: should successfully install signed single-config (CustomScript 2.1), no-config (VMApplicationManagerLinux) and multi-config (RunCommandHandler) extensions ")
+            # self._should_enable_extension(custom_script_signed, should_validate_signature=True)
+            # self._should_enable_extension(vm_app_signed, should_validate_signature=True)
+            # self._should_enable_extension(run_command_signed, should_validate_signature=True)
+
+            log.info("*** Test case 11: should fail to uninstall unsigned single-config (CustomScript 2.1) extension")
+            #  We expect blocked "delete" operations to reach timeout, because delete is a best effort operation by-design
+            #  and should not fail. For efficiency, we reduce the timeout limit to the minimum allowed (15 minutes).
+            log.info(" - Update CRP timeout period to 15 minutes.")
+            self._context.vm.update({"extensionsTimeBudget": "PT15M"})
+            log.info(" - Update policy to allow unsigned extensions")
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "signatureRequired": False
+                    }
+                }
+            self._create_policy_file(policy)
+            log.info(" - Install unsigned extension, should succeed")
+            self._should_enable_extension(custom_script_unsigned, should_validate_signature=False)
+            log.info(" - Update policy to disallow unsigned extensions")
             policy = \
                 {
                     "policyVersion": "0.1.0",
@@ -352,47 +419,9 @@ class ExtSignatureValidation(AgentVmTest):
                         }
                     }
                 }
-            self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
             self._create_policy_file(policy)
-
-            # Test unsigned, single-config extension (CustomScript). Extension should fail to be enabled.
-            log.info("")
-            log.info("*** Test case 7: should fail to enable unsigned single-config extension (CustomScript 2.0)")
-            ExtSignatureValidation._should_fail_to_enable_extension(custom_script_unsigned)
-
-            # Test unsigned, no-config extension (AzureMonitorLinuxAgent). Extension should fail to be enabled.
-            log.info("*** Test case 8: should fail to enable unsigned no-config extension (AzureMonitorLinuxAgent 1.33)")
-            if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(distro):
-                ExtSignatureValidation._should_fail_to_enable_extension(azure_monitor_unsigned)
-            else:
-                log.info("Skipping test case because AzureMonitorLinuxAgent is not supported on distro '{0}'".format(distro))
-
-            # Note: Currently, the VirtualMachineRunCommand client does not support restricting RunCommandHandler to a specific unsigned version.
-            # Therefore, we cannot test unsigned multi-config extensions.
-            # TODO: Add tests for unsigned multi-config extension once "ForceRunCommandV2Version" flag is fixed for VirtualMachineRunCommandClient
-
-            log.info("*** Test case 9: should successfully uninstall unsigned extensions that were not installed (CustomScript, AzureMonitorLinuxAgent")
-            self._should_uninstall_extension(custom_script_unsigned)
-            self._should_uninstall_extension(azure_monitor_unsigned)
-
-            log.info("*** Test case 10: should successfully install signed single-config (CustomScript 2.1), no-config (VMApplicationManagerLinux) and multi-config (RunCommandHandler) extensions ")
-            self._should_enable_extension(custom_script_signed, should_validate_signature=True)
-            self._should_enable_extension(vm_app_signed, should_validate_signature=True)
-            self._should_enable_extension(run_command_signed, should_validate_signature=True)
-
-            log.info("*** Test case 11: should fail to uninstall unsigned single-config (CustomScript 2.1) extension")
-            log.info(" - Create policy to allow unsigned extensions")
-            policy = \
-                {
-                    "policyVersion": "0.1.0",
-                    "extensionPolicies": {
-                        "signatureRequired": False
-                    }
-                }
-            self._create_policy_file(policy)
-            log.info(" - Install unsigned extension, should succeeed")
-            self._should_enable_extension(custom_script_unsigned, should_validate_signature=False)
             log.info(" - Try to uninstall unsigned extension, should fail")
+            self._should_fail_to_uninstall_extension(custom_script_unsigned)
 
         finally:
             # Disable policy enforcement via conf and delete policy file
@@ -403,8 +432,6 @@ class ExtSignatureValidation(AgentVmTest):
             log.info(
                 "Successfully disabled policy via config (Debug.EnableExtensionPolicy=n) and removed policy file at /etc/waagent_policy.json")
             log.info("*** Test cleanup complete.")
-
-
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [
