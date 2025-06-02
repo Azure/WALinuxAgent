@@ -41,8 +41,7 @@ from azurelinuxagent.common.agent_supported_feature import get_agent_supported_f
     SupportedFeatureNames, get_supported_feature_by_name, get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.utils.textutil import redact_sas_token
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, ExtensionDisallowedError, \
-    ExtensionSignaturePolicyError, ExtensionPolicyError, EXT_DISALLOWED_ERROR_MAP
+from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, ExtensionPolicyError, EXT_DISALLOWED_ERROR_MAP
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEventOperation, \
@@ -59,8 +58,7 @@ from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.signature_validation_util import validate_handler_manifest_signing_info, SignatureValidationError, \
-    PackageValidationError, save_signature_validation_state, signature_validation_enabled, validate_signature, \
-    signature_has_been_validated
+    PackageValidationError, save_signature_validation_state, signature_validation_enabled, validate_signature
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
 _HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
@@ -511,8 +509,8 @@ class ExtHandlersHandler(object):
 
             handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)
 
-            # Get user-friendly operation name and terminal error code to use in status messages if extension is disallowed
-            operation, error_code = EXT_DISALLOWED_ERROR_MAP.get(ext_handler.state)
+            # Get terminal error code to use if extensions are disabled or a policy error occurred.
+            _, error_code = EXT_DISALLOWED_ERROR_MAP.get(ext_handler.state)
 
             # In case of extensions disabled, we skip processing extensions. But CRP is still waiting for some status
             # back for the skipped extensions. In order to propagate the status back to CRP, we will report status back
@@ -1425,8 +1423,8 @@ class ExtHandlerInstance(object):
             try:
                 if signature_validation_enabled() and self.ext_handler.encoded_signature == "":
                     # Extension signature status is already reported in telemetry during goal state processing, so here,
-                    # we log locally only for debugging purposes if extension is unsigned. Note that if signature is enforced, an error would have already
-                    # been raised for unsigned extensions earlier.
+                    # we log locally only for debugging purposes if extension is unsigned.
+                    # Note: If signature is enforced, an error would have been raised earlier for an unsigned extension.
                     self.logger.info("No signature for extension '{0}' in goal state, skipping signature validation.".format(self.get_full_name()))
 
                 # If signature should not be validated, pass an empty string as 'signature' to download_zip_package(),

@@ -627,8 +627,8 @@ class WireClient(object):
 
         The 'signature' parameter should be a base64-encoded signature string. If signature is not an empty string, package signature will be validated
         immediately after downloading the package but before expanding it.
-        If 'enforce_signature' is True, any validation error will block package extraction and be immediately re-raised.
-        If 'enforce_signature' is False, the package will still be extracted, and the validation error will be re-raised afterward.
+        If 'enforce_signature' is True, any validation error blocks package extraction and is raised immediately. If False, extraction proceeds
+        and the validation error is raised afterward.
         """
         host_ga_plugin = self.get_host_plugin()
 
@@ -640,16 +640,14 @@ class WireClient(object):
 
         def on_downloaded():
             # If the 'signature' parameter is not an empty string, validate the zip package signature immediately after download.
-            # If signature is enforced, any validation error will block package extraction and the error will be immediately re-raised.
-            # If signature is not enforced, the validation error is caught and stored, allowing extraction to proceed. After extraction,
-            # the error is re-raised so caller has knowledge of the failure and can handle appropriately.
+            # If signature is enforced, raise any validation errors before extraction, and clean up the zip file.
+            # If not, catch and store the validation error, and re-raise after extraction so the caller has knowledge of the failure and can handle appropriately.
             validation_error = None
             if signature != "":
                 try:
                     failure_log_level = logger.LogLevel.ERROR if enforce_signature else logger.LogLevel.WARNING
                     validate_signature(target_file, signature, package_full_name=package_name, failure_log_level=failure_log_level)
                 except SignatureValidationError as ex:
-                    # If signature is enforced, cleanup zip file and raise error.
                     if enforce_signature:
                         try:
                             os.remove(target_file)
