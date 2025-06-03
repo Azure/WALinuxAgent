@@ -148,7 +148,8 @@ __SWITCH_OPTIONS__ = {
     "Debug.EnableFastTrack": True,
     "Debug.EnableGAVersioning": True,
     "Debug.EnableCgroupV2ResourceLimiting": False,
-    "Debug.EnableExtensionPolicy": False
+    "Debug.EnableExtensionPolicy": False,
+    "Debug.EnableSignatureValidation": False
 }
 
 
@@ -708,6 +709,16 @@ def get_log_collector_initial_delay(conf=__conf__):
     """
     return conf.get_int("Debug.LogCollectorInitialDelay", 5 * 60)
 
+  
+def get_signature_validation_enabled(conf=__conf__):
+    """
+    Determine whether signature validation is enabled. If true, package signature will be validated before
+    installing any signed extensions.
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.EnableSignatureValidation", False)
+
+  
 def get_enable_rsm_downgrade(conf=__conf__):
     """
     If False, the agent will not downgrade to a lower version when a lower version is requested in the goal state.

@@ -57,6 +57,7 @@ variable:
       - recover_network_interface
       - cgroup_v2_enabled
       - log_collector
+      - ext_signature_validation
 
   #
   # Additional arguments pass to the test suites

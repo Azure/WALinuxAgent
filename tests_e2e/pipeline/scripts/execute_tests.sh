@@ -70,7 +70,11 @@ fi
 #
 # Get the external IP address of the VM.
 #
-IP_ADDRESS=$(curl -4 ifconfig.io/ip)
+IP_ADDRESS=$(curl -4 https://ifconfig.io/ip)
+if [[ ! "${IP_ADDRESS}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Failed to get the external IP address of the local machine. 'curl -4 https://ifconfig.io/ip' returned $IP_ADDRESS"
+  exit 1
+fi
 
 # certificate location in the container
 AZURE_CLIENT_CERTIFICATE_PATH="/home/waagent/app/cert.pem"
