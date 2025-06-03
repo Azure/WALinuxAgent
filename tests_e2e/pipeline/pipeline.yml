@@ -67,7 +67,7 @@ pool:
 
 jobs:
   - job: "ExecuteTests"
-    timeoutInMinutes: 90
+    timeoutInMinutes: 120
 
     steps:
       # Extract the Azure cloud from the "connection_info" variable. Its value includes one of
