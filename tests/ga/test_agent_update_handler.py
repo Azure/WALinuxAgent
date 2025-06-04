@@ -456,7 +456,7 @@ class TestAgentUpdate(UpdateTestCase):
             self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
             self.assertEqual(1, vm_agent_update_status.code)
             self.assertEqual("9.9.9.10", vm_agent_update_status.expected_version)
-            self.assertIn("Failed to download agent package from all URIs", vm_agent_update_status.message)
+            self.assertIn("Failed to download WALinuxAgent-9.9.9.10 from all URIs", vm_agent_update_status.message)
 
     def test_it_should_not_report_error_status_if_new_rsm_version_is_same_as_current_after_last_update_attempt_failed(self):
         data_file = DATA_FILE.copy()
@@ -468,7 +468,7 @@ class TestAgentUpdate(UpdateTestCase):
             self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
             self.assertEqual(1, vm_agent_update_status.code)
             self.assertEqual("9.9.9.10", vm_agent_update_status.expected_version)
-            self.assertIn("Failed to download agent package from all URIs", vm_agent_update_status.message)
+            self.assertIn("Failed to download WALinuxAgent-9.9.9.10 from all URIs", vm_agent_update_status.message)
 
             # Send same version GS after last update attempt failed
             agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(

@@ -326,7 +326,7 @@ class ExtSequencing(AgentVmssTest):
             # We expect extensions that are dependent on a failing extension to not report status
             #
             {
-                'message': r"\[PERIODIC\] This status is being reported by the Guest Agent since no status file was reported by extension .*: \[ExtensionStatusError\] Status file \/var\/lib\/waagent\/.*\/status\/\d.status does not exist"
+                'message': r"\[PERIODIC\] This status is being reported by the Guest Agent since no status file was reported by extension .*: \[ExtensionStatusError\] Status file \/var\/lib\/waagent\/.*\/status\/\d+.status does not exist"
             },
             #
             # 2023-10-31T17:48:11.306835Z WARNING ExtHandler ExtHandler A new goal state was received, but not all the extensions in the previous goal state have completed: [('Microsoft.Azure.Extensions.CustomScript', 'error'), ('Microsoft.Azure.Monitor.AzureMonitorLinuxAgent', 'transitioning'), ('Microsoft.CPlat.Core.RunCommandLinux', 'success')]

@@ -175,6 +175,14 @@ class ExtensionsGoalState(object):
             return AgentGlobals.GUID_ZERO
         return id_string
 
+    def supports_encoded_signature(self):
+        """
+        Returns boolean indicating if the goal state API supports the 'encoded_signature' property.
+        - ExtensionsConfig goal states should always return True.
+        - VmSettings goal states should check the HGAP version.
+        """
+        raise NotImplementedError()
+
 
 class EmptyExtensionsGoalState(ExtensionsGoalState):
     def __init__(self, incarnation):
@@ -243,3 +251,6 @@ class EmptyExtensionsGoalState(ExtensionsGoalState):
 
     def get_redacted_text(self):
         return ''
+
+    def supports_encoded_signature(self):
+        return False
