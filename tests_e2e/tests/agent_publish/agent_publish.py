@@ -78,7 +78,7 @@ class AgentPublishTest(AgentVmTest):
 
     def get_ignore_errors_before_timestamp(self) -> datetime:
         timestamp = self._ssh_client.run_command("agent_publish-get_agent_log_record_timestamp.py")
-        return datetime.strptime(timestamp.strip(), u'%Y-%m-%d %H:%M:%S.%f').replace(tzinfo=UTC)
+        return datetime.strptime(timestamp.strip(), u'%Y-%m-%d %H:%M:%S.%f%z').replace(tzinfo=UTC)
 
     def _enable_agent_auto_update(self):
         """
