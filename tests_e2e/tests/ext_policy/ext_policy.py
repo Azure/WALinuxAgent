@@ -427,6 +427,29 @@ class ExtPolicy(AgentVmTest):
             self._create_policy_file(policy)
             self._operation_should_succeed("delete", custom_script)
 
+            # Attempt to delete an extension that was previously blocked (failed to install) -> should succeed.
+            # Even if the extension is still disallowed by policy, uninstall should succeed because the extension
+            # was never actually installed and no extension code will be executed.
+            log.info("")
+            log.info("*** Begin test case 7")
+            log.info("This policy tests the following scenario: ")
+            log.info("- delete a disallowed single-config extension (CustomScript) that previously failed to install due to policy -> should succeed")
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "allowListedExtensionsOnly": True,
+                        "signatureRequired": False,
+                        "extensions": {
+                            # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                            "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
+                        }
+                    }
+                }
+            self._create_policy_file(policy)
+            self._operation_should_fail("enable", custom_script)        # CSE should not be installed
+            self._operation_should_succeed("delete", custom_script)     # Since CSE was not installed, delete should succeed
+
         finally:
             # Cleanup after test: disable policy enforcement via conf and delete policy file
             log.info("")
