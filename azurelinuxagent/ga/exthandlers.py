@@ -777,13 +777,10 @@ class ExtHandlersHandler(object):
              1- Ensure the handler is installed
              2- Check if extension is enabled or disabled and then process accordingly
 
-            'policy_engine' is expected to be an ExtensionPolicyEngine object. It is used to determine whether the extension
-            is allowed and whether signature should be enforced.
-            - If the extension is disallowed by policy (e.g., not in the allowlist, unsigned when a signature is required),
-              an error is raised and the extension is not processed further.
-            - If signature is enforced, enable will be blocked if signature validation fails during extension package download.
+        'policy_engine' should be an ExtensionPolicyEngine object, which is invoked to determine if the extension is
+        allowed by policy, and if signature should be enforced.
         """
-        # Check policy and raise error if extension handler is disallowed.
+        # Check policy and raise error if extension is disallowed (not in allowlist, unsigned when signature is required, etc.)
         policy_engine.enforce_policy_for_ext_handler(ext_handler_i)
 
         uninstall_exit_code = None
@@ -924,15 +921,14 @@ class ExtHandlersHandler(object):
                 CRP will only set the HandlerState to Uninstall if all its extensions are set to be disabled)
             2- Finally uninstall the handler
 
-        'policy_engine' is an ExtensionPolicyEngine object, which is invoked to determine if the extension is allowed by policy.
-        If the extension is disallowed by policy (not in allowlist, signature not previously validated, etc.), uninstall is blocked and an error is raised.
-        Note: if the extension was never installed, uninstall is allowed since no extension code will be executed.
+        'policy_engine' should be an ExtensionPolicyEngine object, which is invoked to determine if the extension is allowed by policy.
+        Note: if the extension was never installed, uninstall is allowed even for disallowed extensions because no extension code will be executed.
         """
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_i.logger.info("[Uninstall] current handler state is: {0}", handler_state.lower())
         if handler_state != ExtHandlerState.NotInstalled:
             if handler_state == ExtHandlerState.Enabled:
-                # Check policy and raise error if extension handler is disallowed.
+                # Check policy and raise an error if the extension is disallowed (e.g., not in allowlist, signature not previously validated when required).
                 policy_engine.enforce_policy_for_ext_handler(ext_handler_i)
 
                 # Corner case - Single config Handler with no extensions at all
@@ -1372,9 +1368,9 @@ class ExtHandlerInstance(object):
         manifest 'signingInfo' after package extraction. If both signature and handler manifest are successfully validated,
         save state file indicating this.
 
-        If validation fails and 'enforce_signature' is true, block download
-        If validation fails and 'enforce_signature' is false, the error is captured and reported via telemetry, but
-        download and extraction are not blocked.
+        If signature validation fails:
+         - if 'enforce_signature' is true, download is blocked.
+         - if 'enforce signature' is false, the error is captured and reported via telemetry, but download and extraction proceed.
         """
         begin_utc = datetime.datetime.now(UTC)
         self.set_operation(WALAEventOperation.Download)

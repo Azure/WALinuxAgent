@@ -77,7 +77,7 @@ class ExtSignatureValidation(AgentVmTest):
         # Currently, VirtualMachineRunCommandClient does not support restricting RunCommandHandler to a specific version,
         # and therefore, does not support the 'auto_upgrade_minor_version' parameter.
         if not isinstance(extension_case.extension, VirtualMachineRunCommandClient):
-            extension_case.extension.enable(settings=extension_case.settings, auto_upgrade_minor_version=False)
+            extension_case.extension.enable(settings=extension_case.settings, auto_upgrade_minor_version=False, force_update=True)
         else:
             extension_case.extension.enable(settings=extension_case.settings)
         extension_case.extension.assert_instance_view()
@@ -103,7 +103,7 @@ class ExtSignatureValidation(AgentVmTest):
             log.info(f"Attempting to enable {extension_case.extension} - should fail fast because policy requires signature, but extension is unsigned")
             timeout = (6 * 60)  # Fail fast.
             if not isinstance(extension_case.extension, VirtualMachineRunCommandClient):
-                extension_case.extension.enable(settings=extension_case.settings, timeout=timeout, auto_upgrade_minor_version=False)
+                extension_case.extension.enable(settings=extension_case.settings, timeout=timeout, auto_upgrade_minor_version=False, force_update=True)
             else:
                 extension_case.extension.enable(settings=extension_case.settings, timeout=timeout)
             fail(f"The agent should have reported an error trying to enable {extension_case.extension} because the extension is unsigned and policy requires signature.")
@@ -164,7 +164,7 @@ class ExtSignatureValidation(AgentVmTest):
             log.info("Delete operation timed out, as expected. Error:")
             log.info(error)
             log.info("")
-            # log.info("Checking agent log to confirm that delete operation failed due to signature policy.")
+            log.info("Checking agent log to confirm that delete operation failed due to signature policy.")
 
             # Confirm that agent log contains error message that uninstall was blocked due to signature policy
             self._ssh_client.run_command(f"check_data_in_agent_log.py --data 'policy specifies that extension must be signed, but extension package is not signed' --after-timestamp '{delete_start_time}'", use_sudo=True)
@@ -369,31 +369,36 @@ class ExtSignatureValidation(AgentVmTest):
             ExtSignatureValidation._should_fail_to_enable_extension(custom_script_unsigned)
 
             # Test unsigned, no-config extension (AzureMonitorLinuxAgent). Extension should fail to be enabled.
+            log.info("")
             log.info("*** Test case 8: should fail to enable unsigned no-config extension (AzureMonitorLinuxAgent 1.33)")
             if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(distro):
                 ExtSignatureValidation._should_fail_to_enable_extension(azure_monitor_unsigned)
             else:
                 log.info("Skipping test case because AzureMonitorLinuxAgent is not supported on distro '{0}'".format(distro))
 
-            # Note: Currently, the VirtualMachineRunCommand client does not support restricting RunCommandHandler to a specific unsigned version.
-            # Therefore, we cannot test unsigned multi-config extensions.
             # TODO: Add tests for unsigned multi-config extension once "ForceRunCommandV2Version" flag is fixed for VirtualMachineRunCommandClient
 
+            log.info("")
             log.info("*** Test case 9: should successfully uninstall unsigned extensions that were not installed (CustomScript, AzureMonitorLinuxAgent")
             self._should_uninstall_extension(custom_script_unsigned)
             self._should_uninstall_extension(azure_monitor_unsigned)
 
-            log.info("*** Test case 10: should successfully install signed single-config (CustomScript 2.1), no-config (VMApplicationManagerLinux) and multi-config (RunCommandHandler) extensions ")
+            log.info("")
+            log.info("*** Test case 10: should validate signature and successfully install signed single-config (CustomScript 2.1), no-config (VMApplicationManagerLinux) and multi-config (RunCommandHandler) extensions ")
             self._should_enable_extension(custom_script_signed, should_validate_signature=True)
             self._should_enable_extension(vm_app_signed, should_validate_signature=True)
             self._should_enable_extension(run_command_signed, should_validate_signature=True)
 
-            log.info("*** Test case 11: should fail to uninstall unsigned single-config (CustomScript 2.1) extension")
-            #  We expect blocked "delete" operations to reach timeout, because delete is a best effort operation by-design
-            #  and should not fail. For efficiency, we reduce the timeout limit to the minimum allowed (15 minutes).
-            log.info(" - Update CRP timeout period to 15 minutes.")
-            self._context.vm.update({"extensionsTimeBudget": "PT15M"})
-            log.info(" - Update policy to allow unsigned extensions")
+            log.info("")
+            log.info("*** Test case 11: should successfully uninstall signed extensions (single-config, no-config, and multi-config) with previously validated signatures")
+            self._should_uninstall_extension(custom_script_signed)
+            self._should_uninstall_extension(vm_app_signed)
+            self._should_uninstall_extension(run_command_signed)
+
+            # If signed extension was installed when "signatureRequired=False" and signature was successfully validated, it should be successfully re-enabled when "signatureRequired" is updated to True.
+            log.info("")
+            log.info("*** Test case 12: if 'signatureRequired' is updated from False to True, previously validated extension (signed RunCommandHandler) should be re-enabled, previously unvalidated extension (unsigned CustomScript) should fail.")
+            log.info(" - Set policy to allow unsigned extensions")
             policy = \
                 {
                     "policyVersion": "0.1.0",
@@ -402,7 +407,46 @@ class ExtSignatureValidation(AgentVmTest):
                     }
                 }
             self._create_policy_file(policy)
-            log.info(" - Install unsigned extension, should succeed")
+            log.info(" - Install unsigned extension (CustomScript)")
+            self._should_enable_extension(custom_script_unsigned, should_validate_signature=False)
+            log.info(" - Install signed extension (RunCommandHandler)")
+            self._should_enable_extension(run_command_signed, should_validate_signature=True)
+            log.info(" - Update policy to disallow unsigned extensions")
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "signatureRequired": True,
+                        "extensions": {
+                            # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                            "Microsoft.GuestConfiguration.ConfigurationforLinux": {
+                                "signatureRequired": False
+                            }
+                        }
+                    }
+                }
+            self._create_policy_file(policy)
+            # Update settings to force a change to the sequence number
+            run_command_signed.settings = {'source': f"echo '{str(uuid.uuid4())}'"}
+            self._should_fail_to_enable_extension(custom_script_unsigned)
+            self._should_enable_extension(run_command_signed, should_validate_signature=False)
+
+            log.info("")
+            log.info("*** Test case 13: should fail to uninstall previously enabled unsigned single-config (CustomScript 2.1) extension")
+            #  We expect blocked "delete" operations to reach timeout, because delete is a best effort operation by-design
+            #  and should not fail. For efficiency, we reduce the timeout limit to the minimum allowed (15 minutes).
+            log.info(" - Update CRP timeout period to 15 minutes.")
+            self._context.vm.update({"extensionsTimeBudget": "PT15M"})
+            log.info(" - Set policy to allow unsigned extensions")
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "signatureRequired": False
+                    }
+                }
+            self._create_policy_file(policy)
+            log.info(" - Enable unsigned extension, should succeed")
             self._should_enable_extension(custom_script_unsigned, should_validate_signature=False)
             log.info(" - Update policy to disallow unsigned extensions")
             policy = \

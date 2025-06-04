@@ -640,7 +640,7 @@ class WireClient(object):
 
         def on_downloaded():
             # If the 'signature' parameter is not an empty string, validate the zip package signature immediately after download.
-            # If signature is enforced, raise any validation errors before extraction, and clean up the zip file.
+            # If signature is enforced, raise any validation errors before package extraction, and clean up the zip file.
             # If not, catch and store the validation error, and re-raise after extraction so the caller has knowledge of the failure and can handle appropriately.
             validation_error = None
             if signature != "":
@@ -648,6 +648,7 @@ class WireClient(object):
                     failure_log_level = logger.LogLevel.ERROR if enforce_signature else logger.LogLevel.WARNING
                     validate_signature(target_file, signature, package_full_name=package_name, failure_log_level=failure_log_level)
                 except SignatureValidationError as ex:
+                    # validate_signature() only raises SignatureValidationError and already sends logs/telemetry for the error.
                     if enforce_signature:
                         try:
                             os.remove(target_file)

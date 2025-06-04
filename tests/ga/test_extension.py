@@ -3605,7 +3605,7 @@ class TestExtensionPolicy(TestExtensionBase):
                                       expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
                                       expected_handler_status='NotReady', expected_ext_count=1, expected_status_msg=expected_msg)
 
-    def test_should_fail_uninstall_if_extension_disallowed(self):
+    def test_should_fail_uninstall_if_previously_installed_extension_is_disallowed(self):
         policy = \
             {
                 "policyVersion": "0.1.0",
