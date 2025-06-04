@@ -111,6 +111,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
         self.should_run = True
         self.last_state = None
         self.period = conf.get_collect_logs_period()
+        self.log_collector_cgroup_path_validation_errors = 0
 
     def run(self):
         self.start()
@@ -204,6 +205,9 @@ class CollectLogsHandler(ThreadHandlerInterface):
                 logger.info(msg)
                 success = True
 
+                # reset the error count
+                self.log_collector_cgroup_path_validation_errors = 0
+
                 return True
             except Exception as e:
                 duration = elapsed_milliseconds(start_time)
@@ -214,6 +218,14 @@ class CollectLogsHandler(ThreadHandlerInterface):
                     # here because we know e must be a CommandError but pylint still considers the case where
                     # e is a different type of exception.
                     err_msg = ustr("Log Collector exited with code {0}").format(e.returncode)  # pylint: disable=no-member
+
+                    if e.returncode == logcollector.UNEXPECTED_CGROUP_PATH_ERRCODE:  # pylint: disable=no-member
+                        self.log_collector_cgroup_path_validation_errors += 1
+                        if self.log_collector_cgroup_path_validation_errors < logcollector.LOG_COLLECTOR_CGROUP_PATH_VALIDATION_MAX_FAILURES:
+                            logger.info("Log collector cgroup is not in the expected path, will attempt log collection in next iteration.")
+                        else:
+                            logger.info("Disabling periodic log collection until service restart due to cgroup not in expected path in multiple runs.")
+                            self.stop()
 
                     if e.returncode == logcollector.INVALID_CGROUPS_ERRCODE:  # pylint: disable=no-member
                         logger.info("Disabling periodic log collection until service restart due to process error.")
