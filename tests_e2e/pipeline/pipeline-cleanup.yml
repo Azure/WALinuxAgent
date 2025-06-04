@@ -28,6 +28,8 @@ pool:
 steps:
   - ${{ each service_connection in parameters.service_connections }}:
     - task: AzureCLI@2
+      displayName: Cleanup ${{ service_connection }}
+      continueOnError: true
       inputs:
         azureSubscription: ${{ service_connection }}
         scriptType: 'bash'
