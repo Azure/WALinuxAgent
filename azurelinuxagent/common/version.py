@@ -151,6 +151,9 @@ def get_distro():
     if os.path.exists("/etc/photon-release"):
         osinfo[0] = "photonos"
 
+    if os.path.exists('/etc/alpaquita-release'):
+        osinfo[0] = 'alpaquita'
+
     # Remove trailing whitespace and quote in distro name
     osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
     return osinfo

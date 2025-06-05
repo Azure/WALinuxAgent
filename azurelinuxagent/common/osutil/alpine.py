@@ -32,11 +32,12 @@ class AlpineOSUtil(DefaultOSUtil):
         return True
 
     def get_dhcp_pid(self):
-        return self._get_dhcp_pid(["pidof", "dhcpcd"])
+        return sorted(self._get_dhcp_pid(["pidof", "dhcpcd"]))
 
+    # TODO: We really should get the pid from `dhcpcd --printpidfile`
     def restart_if(self, ifname, retries=None, wait=None):
         logger.info('restarting {} (sort of, actually SIGHUPing dhcpcd)'.format(ifname))
-        pid = self.get_dhcp_pid()
+        pid = self.get_dhcp_pid()[0]
         if pid != None:
             ret = shellutil.run_get_output('kill -HUP {}'.format(pid))  # pylint: disable=W0612
 
