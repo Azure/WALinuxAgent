@@ -355,7 +355,8 @@ class ExtSignatureValidation(AgentVmTest):
             log.info("")
             log.info("*** Test case 9: should successfully uninstall unsigned extensions that were never enabled (CustomScript, AzureMonitorLinuxAgent")
             self._should_uninstall_extension(custom_script_unsigned)
-            self._should_uninstall_extension(azure_monitor_unsigned)
+            if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(distro):
+                self._should_uninstall_extension(azure_monitor_unsigned)
 
             # Positive case: signed extensions (no-config, single-config, and multi-config) should all be installed successfully
             log.info("")
@@ -414,10 +415,6 @@ class ExtSignatureValidation(AgentVmTest):
 
             log.info("")
             log.info("*** Test case 13: should fail to uninstall previously enabled unsigned single-config (CustomScript 2.1) extension")
-            #  We expect blocked "delete" operations to reach timeout, because delete is a best effort operation by-design
-            #  and should not fail. For efficiency, we reduce the timeout limit to the minimum allowed (15 minutes).
-            log.info(" - Update CRP timeout period to 15 minutes.")
-            self._context.vm.update({"extensionsTimeBudget": "PT15M"})
             log.info(" - Set policy to allow unsigned extensions")
             policy = \
                 {

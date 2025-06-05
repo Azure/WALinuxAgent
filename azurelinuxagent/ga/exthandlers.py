@@ -555,8 +555,9 @@ class ExtHandlersHandler(object):
                 continue
 
             # Process the extension and get if it was successfully executed or not.
-            # Pass 'policy_engine' as a parameter so disallowed extensions can be blocked on a per-operation level,
-            # with a detailed error message surfaced to the user.
+            # 'policy_engine' is passed so disallowed extensions can be blocked on a per-operation level. This allows
+            # certain operations to proceed when no extension code would be run (for example, uninstall
+            # should be permitted on a disallowed extension that failed to install).
             extension_success = self.handle_ext_handler(handler_i, extension, goal_state_id, policy_engine)
 
             dep_level = self.__get_dependency_level((extension, ext_handler))
@@ -1370,7 +1371,7 @@ class ExtHandlerInstance(object):
 
         If signature validation fails:
          - if 'enforce_signature' is true, download is blocked.
-         - if 'enforce signature' is false, the error is captured and reported via telemetry, but download and extraction proceed.
+         - if 'enforce_signature' is false, the error is captured and reported via telemetry, but download and extraction proceed.
         """
         begin_utc = datetime.datetime.now(UTC)
         self.set_operation(WALAEventOperation.Download)

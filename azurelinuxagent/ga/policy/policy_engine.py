@@ -71,10 +71,11 @@ class ExtensionPolicyError(ExtensionError):
     """
     Error raised when extension is blocked by policy.
     """
-    # Note: The parameter order differs from the parent class ExtensionError. In ExtensionError, 'code' has a default
-    # value and comes after 'inner', but in ExtensionPolicyError, 'code' is required and comes before 'inner'
+    report_op = WALAEventOperation.ExtensionPolicy      # Used in error handling code to report correct telemetry event
+
+    # Note: The parameter order differs from the parent class ExtensionError. For ExtensionError, 'code' has a default
+    # value and comes after 'inner', but for ExtensionPolicyError, 'code' is required and comes before 'inner'
     def __init__(self, msg, code, inner=None):
-        self.report_op = WALAEventOperation.ExtensionPolicy    # Used by error handling code to report correct telemetry event
         super(ExtensionPolicyError, self).__init__(msg=msg, inner=inner, code=code)
 
 
@@ -82,18 +83,14 @@ class ExtensionSignaturePolicyError(ExtensionPolicyError):
     """
     Error raised when policy requires signature, but extension is not signed and was not previously validated.
     """
-    def __init__(self, msg, code, inner=None):
-        self.report_op = WALAEventOperation.ExtensionSignaturePolicy    # Used by error handling code to report correct telemetry event
-        super(ExtensionSignaturePolicyError, self).__init__(msg=msg, code=code, inner=inner)
+    report_op = WALAEventOperation.ExtensionSignaturePolicy
 
 
 class ExtensionDisallowedError(ExtensionPolicyError):
     """
     Error raised when extension is not present in the policy allowlist.
     """
-    def __init__(self, msg, code, inner=None):
-        self.report_op = WALAEventOperation.ExtensionPolicy    # Used by error handling code to report correct event
-        super(ExtensionDisallowedError, self).__init__(msg=msg, code=code, inner=inner)
+    report_op = WALAEventOperation.ExtensionPolicy
 
 
 class _PolicyEngine(object):
