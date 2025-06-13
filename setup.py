@@ -61,6 +61,10 @@ def set_sysv_files(data_files, dest="/etc/rc.d/init.d", src=None):
         src = ["init/waagent"]
     data_files.append((dest, src))
 
+def set_openrc_files(data_files, dest="/etc/init.d", src=None):
+    if src is None:
+        src = ["init/openrc/waagent"]
+    data_files.append((dest, src))
 
 def set_systemd_files(data_files, dest, src=None):
     if src is None:
@@ -263,6 +267,13 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
                               "init/azure-vmextensions.slice"
                                    ])
         set_udev_files(data_files)
+    elif name in ('alpine', 'alpaquita'):
+        set_bin_files(data_files, dest=agent_bin_path,
+                      src=['bin/waagent'])
+        set_conf_files(data_files, src=["config/alpine/waagent.conf"])
+        set_logrotate_files(data_files)
+        set_udev_files(data_files)
+        set_openrc_files(data_files)
     else:
         # Use default setting
         set_bin_files(data_files, dest=agent_bin_path)
