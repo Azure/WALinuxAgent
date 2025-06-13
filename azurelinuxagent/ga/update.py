@@ -531,13 +531,12 @@ class UpdateHandler(object):
             for attempt in range(3):
                 protocol.client.update_goal_state(force_update=attempt > 0, silent=self._update_goal_state_error_count >= max_errors_to_log, save_to_history=True)
 
-                goal_state = protocol.get_goal_state()
-                new_goal_state = self._goal_state is None or self._goal_state.extensions_goal_state.id != goal_state.extensions_goal_state.id
+                self._goal_state = protocol.get_goal_state()
 
-                if not new_goal_state or goal_state.extensions_goal_state.source != GoalStateSource.FastTrack:
+                if not (self._processing_new_extensions_goal_state() and self._goal_state.extensions_goal_state.source == GoalStateSource.FastTrack):
                     break
 
-                if self._check_certificates(goal_state):
+                if self._check_certificates(self._goal_state):
                     if attempt > 0:
                         event.info(WALAEventOperation.FetchGoalState, "The extensions goal state is now in sync with the tenant cert.")
                     break
@@ -550,8 +549,6 @@ class UpdateHandler(object):
                 else:
                     event.warn(WALAEventOperation.FetchGoalState, "The extensions are still out of sync with the tenant cert. Will continue execution, but some extensions may fail.")
                     break
-
-            self._goal_state = protocol.get_goal_state()
 
             if self._update_goal_state_error_count > 0:
                 event.info(

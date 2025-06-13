@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SharedConfig version="1.0.0.0" goalStateIncarnation="1">
+  <Incarnation number="1" instance="_test-vm" guid="{87a8f1e2-7ec6-4851-b301-045f93f66805}" />
+  <Instances>
+    <Instance id="_test-vm" address="10.1.52.28">
+      <FaultDomains randomId="0" updateId="0" updateCount="0" />
+      <InputEndpoints />
+    </Instance>
+  </Instances>
+</SharedConfig>

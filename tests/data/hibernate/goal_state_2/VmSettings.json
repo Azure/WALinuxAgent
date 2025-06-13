@@ -1,0 +1,90 @@
+{
+    "hostGAPluginVersion": "1.0.8.175",
+    "activityId": "b62f1ce8-4608-45d2-9db9-369936c7b685",
+    "correlationId": "87b28d71-0ed4-4587-b40b-370581db7ad2",
+    "inSvdSeqNo": 10,
+    "certificatesRevision": 0,
+    "extensionsLastModifiedTickCount": 638852753414265542,
+    "extensionGoalStatesSource": "Fabric",
+    "statusUploadBlob": {
+        "statusBlobType": "PageBlob",
+        "value": "https://foo-bar.z6.blob.storage.azure.net/$system/test-vm.aef009a9-f00b-490d-baa5-f9c64baa8be6.status?sv=2018-03-28&sr=b&sk=system-1&sig=9Q5lquQk293b7ZbZ7o9g6HGK3oE6Vf%2f%2f5YUvA2xBPd8%3d&se=9999-01-01T00%3a00%3a00Z&sp=w"
+    },
+    "gaFamilies": [
+        {
+            "name": "Prod",
+            "version": "2.13.1.1",
+            "isVersionFromRSM": false,
+            "isVMEnabledForRSMUpgrades": false,
+            "uris": [
+                "https://umsagnbbh4hpglrpgc5t.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsabj35g0v1lrp2w3qh.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsar1tzn12qbbhwwgmw.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsas3lpnprqfsznclrr.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsaq0ksgznjhnhvqvmj.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml"
+            ]
+        }
+    ],
+    "extensionGoalStates": [
+        {
+            "name": "Microsoft.GuestConfiguration.ConfigurationforLinux",
+            "version": "1.26.89",
+            "location": "https://umsavph101h3qhc1pz3t.blob.core.windows.net/a56f582c-8808-3cf4-9fd0-c943fa076e03/a56f582c-8808-3cf4-9fd0-c943fa076e03_manifest.xml",
+            "failoverLocation": "https://umsargnfzcnssnpfskrr.blob.core.windows.net/a56f582c-8808-3cf4-9fd0-c943fa076e03/a56f582c-8808-3cf4-9fd0-c943fa076e03_manifest.xml",
+            "additionalLocations": [
+                "https://umsazq0spn4w5z3grwcv.blob.core.windows.net/a56f582c-8808-3cf4-9fd0-c943fa076e03/a56f582c-8808-3cf4-9fd0-c943fa076e03_manifest.xml"
+            ],
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "isMultiConfig": false,
+            "settings": [
+                {
+                    "protectedSettingsCertThumbprint": "33BDFEDC3C0E7F57A27C448BC4C4EB3D4D763489",
+                    "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEBdw95bU1gKHSmrpN2j+pkYwDQYJKoZIhvcNAQEBBQAEggEAVSJGNkhDfXF6Yq6HhisMn967spyCZA8EdoBfqEXQ+3YZ6mJEe376AAozXRNJqMa1UzhC3LpM1AGZvhr/GMp6Epnj3FQy5HEL13GwhzcnNluPh1ljbKUfRXTr1mX2AAHrdikKfMG9GXb0rk1vdBzM8sfd3MaVyXxnJGImVdqa2x83kU7mkv9pv1YF6kVjfLszcjDxHNVGUNZJ3LMS3qgMyTAuyVIpMNnf/5nRo1sGc+eYc8QUbSDhDO8+bFCFtrDEhexbqfE2Ie/TtM/AqT9I76Obok9Z3cP7Be5C22F7ucV8jKk0SUTvny9Xf0Up9C9VAZ2zaDGIVSztAuEV2RvAPTArBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECB+2FrZouHwVgAgGI58eR+Bjag==",
+                    "publicSettings": "{}"
+                }
+            ]
+        },
+        {
+            "name": "Microsoft.Azure.Extensions.CustomScript",
+            "version": "2.1.13",
+            "location": "https://umsalvlwk4lfvxs4w05v.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml",
+            "failoverLocation": "https://umsat3kgcjtz4rzmtdhx.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml",
+            "additionalLocations": [
+                "https://umsaff4lwzr0mqltcdsj.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml"
+            ],
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 5,
+            "isMultiConfig": false,
+            "settings": [
+                {
+                    "protectedSettingsCertThumbprint": "33BDFEDC3C0E7F57A27C448BC4C4EB3D4D763489",
+                    "protectedSettings": "MIIByAYJKoZIhvcNAQcDoIIBuTCCAbUCAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEBdw95bU1gKHSmrpN2j+pkYwDQYJKoZIhvcNAQEBBQAEggEAMyvTexiSexpeDviPJvSfN9V2zgNyppB1PaXCrzjykc7Fw3+xXWxgK5v645cqHJE9FTExvaaJvL83IlAe/ScNLdoT3R3cvYkE2Xu0xDTK07UWSihwuexYSTA7IeKrFLUb9uvMKygPQAvJKq3n7XwFLfvye9xUvjaLD+QEwKX7Y/RKKLfta+kpZhy3GfJPe5U1QgGhkoK8ZAFgFUD78kafBQ7FU8KxuyMTxWthkyRa6EJgdlXSfaPvM39vgPiznbDpiVPqYgwjppnvnRpwK1WrKhj1xUTyaOHQhVzUt9sl+zQjxgBTAff2xbe/igxT4ukudmWz033LTfInc3rR89jGMzBDBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECACrQi7fenqvgCC5CMyFMZqpPtGxqaR+O9pdaZ7wd53ms1EEkhSMnPy7sw=="
+                }
+            ]
+        },
+        {
+            "name": "Microsoft.CPlat.Core.LinuxHibernateExtension",
+            "version": "1.0.1",
+            "location": "https://umsarmtx2bjcqg0cj14s.blob.core.windows.net/ac7acc47-2188-9dae-3527-8acb855e707c/ac7acc47-2188-9dae-3527-8acb855e707c_manifest.xml",
+            "failoverLocation": "https://umsaqw3srxc4dmbcfz3q.blob.core.windows.net/ac7acc47-2188-9dae-3527-8acb855e707c/ac7acc47-2188-9dae-3527-8acb855e707c_manifest.xml",
+            "additionalLocations": [
+                "https://umsac5lzx3m5mmb1qsnk.blob.core.windows.net/ac7acc47-2188-9dae-3527-8acb855e707c/ac7acc47-2188-9dae-3527-8acb855e707c_manifest.xml"
+            ],
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "isMultiConfig": false
+        }
+    ]
+}

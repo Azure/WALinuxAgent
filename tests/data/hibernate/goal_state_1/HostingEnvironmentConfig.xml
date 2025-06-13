@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<HostingEnvironmentConfig version="1.0.0.0" goalStateIncarnation="1">
+  <StoredCertificates>
+    <StoredCertificate name="Cert0My" certificateId="sha1:DC45A99039D4F9CFB0CD84D566BA065A763F3762" storeName="My" configurationLevel="System" />
+    <StoredCertificate name="TenantEncryptionCert" certificateId="sha1:1AF52E2E892C3A0DBC589F301F80073CBA924E26" storeName="My" configurationLevel="System" />
+  </StoredCertificates>
+  <Incarnation number="1" instance="_test-vm" guid="{87a8f1e2-7ec6-4851-b301-045f93f66805}" />
+</HostingEnvironmentConfig>
