@@ -2167,7 +2167,7 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             self.assertEqual('1', gs.incarnation, "The incarnation of the latest Goal State should be 1")
             self.assertEqual(GoalStateSource.FastTrack, egs.source, "The latest Goal State should be Fast Track")
             self.assertEqual(goal_state_3["ETag"], egs.etag, "The etag of the latest Goal State should be {0}".format(goal_state_3["ETag"]))
-            self.assertEqual(goal_state_2_certificates, certificates, "The certificates in the latest Goal State should be {0}".format(goal_state_2_certificates))
+            self.assertEqual(sorted(goal_state_2_certificates), sorted(certificates), "The certificates in the latest Goal State should be {0}".format(goal_state_2_certificates))
             for e in egs.extensions:
                 for s in e.settings:
                     if s.protectedSettings is not None:
