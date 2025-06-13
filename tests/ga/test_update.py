@@ -2054,125 +2054,6 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             update_handler._try_update_goal_state(protocol)
             self.assertEqual(update_handler._goal_state.incarnation, '6789', "The goal state was not updated (received unexpected incarnation)")
 
-    def test_it_should_refresh_certificates_on_fast_track_goal_state_after_hibernate_resume_cycle(self):
-        #
-        # A hibernate/resume cycle is a special case in that it produces a new Fabric goal state with incarnation 1 on resume. Since the VM is re-allocated,
-        # the goal state will include a new tenant encryption certificate. If the incarnation was also 1 before hibernation, the Agent won't detect this new
-        # goal state and subsequent Fast Track goal states will fail because the Agent has not fetched the new certificate.
-        #
-        # To address this issue, before executing any Fast Track goal state, _try_update_goal_state() checks that the current goal state includes the
-        # certificate used by extensions to decrypt their protected settings and forces a refresh if it does not.
-        #
-        # The test data below uses files captured from an actual scenario (minus edits to remove irrelevant/sensitive data) and consists of 3 goal states:
-        #
-        # * goal_state_1: WireServer + HGAP (Fast Track) goal state before hibernation; incarnation 1.
-        # * goal_state_2: WireServer + HGAP (Fabric) goal state after resume; also incarnation 1, but new certificates.
-        # * goal_state_3: Fast Track goal state (requires new certificates)
-        #
-        update_handler = get_update_handler()
-
-        goal_state_1 = wire_protocol_data.DATA_FILE.copy()
-        goal_state_1.update({
-            "goal_state": "hibernate/goal_state_1/GoalState.xml",
-            "hosting_env": "hibernate/goal_state_1/HostingEnvironmentConfig.xml",
-            "shared_config": "hibernate/goal_state_1/SharedConfig.xml",
-            "certs": "hibernate/goal_state_1/Certificates.xml",
-            "ext_conf": "hibernate/goal_state_1/ExtensionsConfig.xml",
-            "trans_prv": "hibernate/TransportPrivate.pem",
-            "trans_cert": "hibernate/TransportCert.pem",
-            "vm_settings": "hibernate/goal_state_1/VmSettings.json",
-            "ETag": "519198402722078973"
-        })
-        goal_state_1_certificates = [c["thumbprint"] for c in json.loads(load_data("hibernate/goal_state_1/Certificates.json"))]
-
-        goal_state_2 = goal_state_1.copy()
-        goal_state_2.update({
-            "goal_state": "hibernate/goal_state_2/GoalState.xml",
-            "hosting_env": "hibernate/goal_state_2/HostingEnvironmentConfig.xml",
-            "shared_config": "hibernate/goal_state_2/SharedConfig.xml",
-            "certs": "hibernate/goal_state_2/Certificates.xml",
-            "ext_conf": "hibernate/goal_state_2/ExtensionsConfig.xml",
-            "vm_settings": "hibernate/goal_state_2/VmSettings.json",
-            "ETag": "12335680585613334365"
-        })
-        goal_state_2_certificates = [c["thumbprint"] for c in json.loads(load_data("hibernate/goal_state_2/Certificates.json"))]
-
-        goal_state_3 = goal_state_2.copy()
-        goal_state_3.update({
-            "vm_settings": "hibernate/goal_state_3/VmSettings.json",
-            "ETag": "6382954395241675842"
-        })
-
-        with mock_wire_protocol(goal_state_1, detect_protocol=False) as protocol:
-            #
-            # We initialize the mock protocol with goal_state_1 and do some checks to double-check the test is setup correctly
-            #
-            update_handler._try_update_goal_state(protocol)
-
-            gs = update_handler._goal_state
-            egs = gs.extensions_goal_state
-            egs_1_id = egs.id
-            certificates = [c["thumbprint"] for c in gs.certs.summary]
-
-            if gs.incarnation != '1':
-                raise Exception('Incorrect test initialization. Incarnation should be 1, was {0}'.format(gs.incarnation))
-            if egs.source != GoalStateSource.FastTrack:
-                raise Exception('Incorrect test initialization. Goal state should be FastTrack, was {0}'.format(egs.source))
-            if egs.etag != goal_state_1["ETag"]:
-                raise Exception('Incorrect test initialization. Expected etag {0}, got {1} '.format(goal_state_1["Etag"], egs.etag))
-            if sorted(certificates) != sorted(goal_state_1_certificates):
-                raise Exception('Incorrect test initialization. Expected certificates {0}, got {1} '.format(goal_state_1_certificates, certificates))
-
-            #
-            # On resume, the Agent will receive goal_state_2, but since the incarnation is also 1, it won't detect it as a new goal state and
-            # _try_update_goal_state won't fetch the new data.
-            #
-            # Note that the Agent does detect the new VmSettings, but since they represent a Fabric goal state, it ignores them.
-            #
-            protocol.mock_wire_data = wire_protocol_data.WireProtocolData(goal_state_2)
-
-            with patch('azurelinuxagent.common.protocol.goal_state.add_event') as patch_add_event:
-                update_handler._try_update_goal_state(protocol)
-
-            gs = update_handler._goal_state
-            egs = gs.extensions_goal_state
-            certificates = [c["thumbprint"] for c in gs.certs.summary]
-            telemetry_events = [kwargs["message"] for _, kwargs in patch_add_event.call_args_list if kwargs['op'] == 'GoalState']
-
-            if gs.incarnation != '1':
-                raise Exception('Unexpected Agent behavior. Incarnation should be 1, was {0}'.format(gs.incarnation))
-            if egs.id != egs_1_id:
-                raise Exception('Unexpected Agent behavior. The ID For the extensions goal state should be {0}; got {1}'.format(egs_1_id, egs.id))
-            if sorted(certificates) != sorted(goal_state_1_certificates):
-                raise Exception('Unexpected Agent behavior. Expected certificates {0}, got {1} '.format(goal_state_1_certificates, certificates))
-            regex = r'Fetched new vmSettings.+eTag: {0}'.format(goal_state_2["ETag"])
-            if not any(re.match(regex, e) is not None for e in telemetry_events):
-                raise Exception('Unexpected Agent behavior. Expected a telemetry event matching {0}; got: {1}'.format(regex, telemetry_events))
-            message = 'The vmSettings originated via Fabric; will ignore them.'
-            if not any(message == e for e in telemetry_events):
-                raise Exception('Unexpected Agent behavior. Expected a telemetry event matching "{0}"; got: {1}'.format(message, telemetry_events))
-
-            #
-            # This is the actual test: when a Fast Track goal state shows up, the Agent should pull the certificates that originated in the previous
-            # Fabric goal state, and the updated goal state should include all the certificates referenced by the extensions in the new goal state.
-            #
-            protocol.mock_wire_data = wire_protocol_data.WireProtocolData(goal_state_3)
-
-            update_handler._try_update_goal_state(protocol)
-
-            gs = update_handler._goal_state
-            egs = gs.extensions_goal_state
-            certificates = [c["thumbprint"] for c in gs.certs.summary]
-
-            self.assertEqual('1', gs.incarnation, "The incarnation of the latest Goal State should be 1")
-            self.assertEqual(GoalStateSource.FastTrack, egs.source, "The latest Goal State should be Fast Track")
-            self.assertEqual(goal_state_3["ETag"], egs.etag, "The etag of the latest Goal State should be {0}".format(goal_state_3["ETag"]))
-            self.assertEqual(sorted(goal_state_2_certificates), sorted(certificates), "The certificates in the latest Goal State should be {0}".format(goal_state_2_certificates))
-            for e in egs.extensions:
-                for s in e.settings:
-                    if s.protectedSettings is not None:
-                        self.assertIn(s.certificateThumbprint, certificates, "Certificate {0}, needed by {1} is missing from the certificates in the goal state: {2}.".format(s.certificateThumbprint, e.name, certificates))
-
     def test_it_should_limit_the_number_of_errors_output_to_the_local_log_and_telemetry(self):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             def http_get_handler(url, *_, **__):
@@ -2444,6 +2325,133 @@ class ProcessGoalStateTestCase(AgentTestCase):
             self.assertEqual(timestamp, timeutil.create_utc_timestamp(datetime_min_utc),
                 "Expected fast track time stamp to be set to {0}, got {1}".format(datetime_min_utc, timestamp))
 
+    def test_it_should_refresh_certificates_on_fast_track_goal_state_after_hibernate_resume_cycle(self):
+        #
+        # A hibernate/resume cycle is a special case in that on resume it produces a new Fabric goal state with incarnation 1. Since the VM is re-allocated,
+        # the goal state will include a new tenant encryption certificate. If the incarnation was also 1 before hibernation, the Agent won't detect this new
+        # goal state and subsequent Fast Track goal states will fail because the Agent has not fetched the new certificate.
+        #
+        # To address this issue, before executing any Fast Track goal state, _try_update_goal_state() checks that the current goal state includes the
+        # certificate used by extensions to decrypt their protected settings and forces a refresh if it does not.
+        #
+        # The test data below uses files captured from an actual scenario (minus edits to remove irrelevant/sensitive data) and consists of 3 goal states:
+        #
+        # * goal_state_1: WireServer + HGAP (Fast Track) goal state before hibernation; incarnation 1.
+        # * goal_state_2: WireServer + HGAP (Fabric) goal state after resume; also incarnation 1, but new certificates.
+        # * goal_state_3: Fast Track goal state (requires new certificates)
+        #
+        update_handler = get_update_handler()
+
+        goal_state_1 = wire_protocol_data.DATA_FILE.copy()
+        goal_state_1.update({
+            "goal_state": "hibernate/goal_state_1/GoalState.xml",
+            "hosting_env": "hibernate/goal_state_1/HostingEnvironmentConfig.xml",
+            "shared_config": "hibernate/goal_state_1/SharedConfig.xml",
+            "certs": "hibernate/goal_state_1/Certificates.xml",
+            "ext_conf": "hibernate/goal_state_1/ExtensionsConfig.xml",
+            "trans_prv": "hibernate/TransportPrivate.pem",
+            "trans_cert": "hibernate/TransportCert.pem",
+            "vm_settings": "hibernate/goal_state_1/VmSettings.json",
+            "ETag": "519198402722078973"
+        })
+        goal_state_1_certificates = [c["thumbprint"] for c in json.loads(load_data("hibernate/goal_state_1/Certificates.json"))]
+
+        goal_state_2 = goal_state_1.copy()
+        goal_state_2.update({
+            "goal_state": "hibernate/goal_state_2/GoalState.xml",
+            "hosting_env": "hibernate/goal_state_2/HostingEnvironmentConfig.xml",
+            "shared_config": "hibernate/goal_state_2/SharedConfig.xml",
+            "certs": "hibernate/goal_state_2/Certificates.xml",
+            "ext_conf": "hibernate/goal_state_2/ExtensionsConfig.xml",
+            "vm_settings": "hibernate/goal_state_2/VmSettings.json",
+            "ETag": "12335680585613334365"
+        })
+        goal_state_2_certificates = [c["thumbprint"] for c in json.loads(load_data("hibernate/goal_state_2/Certificates.json"))]
+
+        goal_state_3 = goal_state_2.copy()
+        goal_state_3.update({
+            "vm_settings": "hibernate/goal_state_3/VmSettings.json",
+            "ETag": "6382954395241675842"
+        })
+
+        #
+        # Mock these to make them no-ops (we do not want extensions, JIT requests, or Agent updates to run as part of this test)
+        #
+        exthandlers_handler, remote_access_handler, agent_update_handler = Mock(), Mock(), Mock()
+
+        with mock_wire_protocol(goal_state_1, detect_protocol=False) as protocol:
+            exthandlers_handler.protocol = protocol
+
+            #
+            # We initialize the mock protocol with goal_state_1 and do some checks to double-check the test is setup correctly
+            #
+            update_handler._process_goal_state(exthandlers_handler, remote_access_handler, agent_update_handler)
+
+            gs = update_handler._goal_state
+            egs = gs.extensions_goal_state
+            egs_1_id = egs.id
+            certificates = [c["thumbprint"] for c in gs.certs.summary]
+
+            if gs.incarnation != '1':
+                raise Exception('Incorrect test initialization. Incarnation should be 1, was {0}'.format(gs.incarnation))
+            if egs.source != GoalStateSource.FastTrack:
+                raise Exception('Incorrect test initialization. Goal state should be FastTrack, was {0}'.format(egs.source))
+            if egs.etag != goal_state_1["ETag"]:
+                raise Exception('Incorrect test initialization. Expected etag {0}, got {1} '.format(goal_state_1["Etag"], egs.etag))
+            if sorted(certificates) != sorted(goal_state_1_certificates):
+                raise Exception('Incorrect test initialization. Expected certificates {0}, got {1} '.format(goal_state_1_certificates, certificates))
+
+            #
+            # On resume, the Agent will receive goal_state_2, but since the incarnation is also 1, it won't detect it as a new goal state and
+            # _try_update_goal_state won't fetch the new data.
+            #
+            # Note that the Agent does detect the new VmSettings, but since they represent a Fabric goal state, it ignores them.
+            #
+            protocol.mock_wire_data = wire_protocol_data.WireProtocolData(goal_state_2)
+
+            with patch('azurelinuxagent.common.protocol.goal_state.add_event') as patch_add_event:
+                update_handler._process_goal_state(exthandlers_handler, remote_access_handler, agent_update_handler)
+
+            gs = update_handler._goal_state
+            egs = gs.extensions_goal_state
+            certificates = [c["thumbprint"] for c in gs.certs.summary]
+            telemetry_events = [kwargs["message"] for _, kwargs in patch_add_event.call_args_list if kwargs['op'] == 'GoalState']
+
+            if gs.incarnation != '1':
+                raise Exception('Unexpected Agent behavior. Incarnation should be 1, was {0}'.format(gs.incarnation))
+            if egs.id != egs_1_id:
+                raise Exception('Unexpected Agent behavior. The ID For the extensions goal state should be {0}; got {1}'.format(egs_1_id, egs.id))
+            if sorted(certificates) != sorted(goal_state_1_certificates):
+                raise Exception('Unexpected Agent behavior. Expected certificates {0}, got {1} '.format(goal_state_1_certificates, certificates))
+            regex = r'Fetched new vmSettings.+eTag: {0}'.format(goal_state_2["ETag"])
+            if not any(re.match(regex, e) is not None for e in telemetry_events):
+                raise Exception('Unexpected Agent behavior. Expected a telemetry event matching {0}; got: {1}'.format(regex, telemetry_events))
+            message = 'The vmSettings originated via Fabric; will ignore them.'
+            if not any(message == e for e in telemetry_events):
+                raise Exception('Unexpected Agent behavior. Expected a telemetry event matching "{0}"; got: {1}'.format(message, telemetry_events))
+
+            #
+            # This is the actual test: when a Fast Track goal state shows up, the Agent should pull the certificates that originated in the previous
+            # Fabric goal state, and the updated goal state should include all the certificates referenced by the extensions in the new goal state.
+            #
+            protocol.mock_wire_data = wire_protocol_data.WireProtocolData(goal_state_3)
+
+            update_handler._process_goal_state(exthandlers_handler, remote_access_handler, agent_update_handler)
+
+            gs = update_handler._goal_state
+            egs = gs.extensions_goal_state
+            certificates = [c["thumbprint"] for c in gs.certs.summary]
+
+            self.assertEqual('1', gs.incarnation, "The incarnation of the latest Goal State should be 1")
+            self.assertEqual(GoalStateSource.FastTrack, egs.source, "The latest Goal State should be Fast Track")
+            self.assertEqual(goal_state_3["ETag"], egs.etag, "The etag of the latest Goal State should be {0}".format(goal_state_3["ETag"]))
+            self.assertEqual(sorted(goal_state_2_certificates), sorted(certificates), "The certificates in the latest Goal State should be {0}".format(goal_state_2_certificates))
+            for e in egs.extensions:
+                for s in e.settings:
+                    if s.protectedSettings is not None:
+                        self.assertIn(s.certificateThumbprint, certificates, "Certificate {0}, needed by {1} is missing from the certificates in the goal state: {2}.".format(s.certificateThumbprint, e.name, certificates))
+
+
 class HeartbeatTestCase(AgentTestCase):
 
     @patch("azurelinuxagent.common.logger.info")
@@ -2549,7 +2557,7 @@ class GoalStateIntervalTestCase(AgentTestCase):
                     update_handler = _create_update_handler()
                     self.assertEqual(initial_goal_state_period, update_handler._goal_state_period, "Expected the initial goal state period")
 
-                    # the extension is transisioning, so we should still be using the initial goal state period
+                    # the extension is transitioning, so we should still be using the initial goal state period
                     update_handler._process_goal_state(exthandlers_handler, remote_access_handler, agent_update_handler)
                     self.assertEqual(initial_goal_state_period, update_handler._goal_state_period, "Expected the initial goal state period when the extension is transitioning")
 
