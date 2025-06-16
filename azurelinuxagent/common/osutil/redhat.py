@@ -100,8 +100,23 @@ class RedhatOSUtil(Redhat6xOSUtil):
         self.service_name = self.get_service_name()
 
     @staticmethod
+    def is_image_mode():
+        """
+        Returns True if the OS is running in image mode, False otherwise.
+        """
+        return os.path.exists('/run/ostree-booted')
+
+    @staticmethod
     def get_systemd_unit_file_install_path():
-        return "/etc/systemd/system"
+        """
+        In image mode, /usr is readonly, so the
+        systemd unit files are written in /etc/systemd/system.
+        In non-image mode, the default location is /usr/lib/systemd/system.
+        """
+        if RedhatOSUtil.is_image_mode():
+            return "/etc/systemd/system"
+        else:
+            return "/usr/lib/systemd/system"
 
     def set_hostname(self, hostname):
         """
