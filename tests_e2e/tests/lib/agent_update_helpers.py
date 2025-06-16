@@ -51,7 +51,7 @@ def enable_agent_update_flag(vm: VirtualMachineClient) -> None:
     vm.update(osprofile)
 
 
-def request_rsm_update(requested_version: str, vm: VirtualMachineClient, arch_type: str, is_downgrade: bool) -> None:
+def request_rsm_update(requested_version: str, vm: VirtualMachineClient, arch_type: str, is_downgrade: bool, downgrade_from: str = "9.9.9.9") -> None:
     """
     This method is to simulate the rsm request.
     First we ensure the PlatformUpdates enabled in the vm and then make a request using rest api
@@ -77,9 +77,7 @@ def request_rsm_update(requested_version: str, vm: VirtualMachineClient, arch_ty
 
     if is_downgrade:
         data.update({"isEmergencyRollbackRequest": True})
-        # CRP updated the downgrade API request and expecting BadVersion. Adding dummy BadVersion to pass the downgrade request.
-        # TODO: When CRP fully implements the downgrade fix, the agent needs to update accordingly.
-        data.update({"BadVersion": "0.0.0.0"})
+        data.update({"badVersion": downgrade_from})
 
     log.info("Attempting rsm upgrade post request with data: {0}".format(data))
     request = vm.create_resource_manager_request(requests.post, 'UpgradeVMAgent?api-version=2022-08-01')  # Later this api call will be replaced by azure-python-sdk wrapper

@@ -42,7 +42,8 @@ class Rollback(AgentVmTest):
         log.info("Current agent version running on the vm before update is \n%s", stdout)
         log.info("Attempting downgrade version %s", rollback_version)
         arch_type = self._ssh_client.get_architecture()
-        request_rsm_update(rollback_version, self._context.vm, arch_type, is_downgrade=True)
+        request_rsm_update(rollback_version, self._context.vm, arch_type, is_downgrade=True,
+                           downgrade_from=self._get_published_version())
         self._check_rsm_gs(rollback_version)
 
         output: str = self._ssh_client.run_command(
