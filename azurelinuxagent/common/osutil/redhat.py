@@ -245,6 +245,18 @@ class RedhatOSModernUtil(RedhatOSUtil):
     def __init__(self):  # pylint: disable=W0235
         super(RedhatOSModernUtil, self).__init__()
 
+    def restart_ssh_service(self):
+        return shellutil.run("systemctl condrestart sshd", chk_err=False)
+
+    def stop_agent_service(self):
+        return shellutil.run("systemctl stop {0}".format(self.service_name), chk_err=False)
+
+    def start_agent_service(self):
+        return shellutil.run("systemctl start {0}".format(self.service_name), chk_err=False)
+
+    def restart_network_manager(self):
+        shellutil.run("systemctl restart NetworkManager")
+
     def restart_if(self, ifname, retries=3, wait=5):
         """
         Restart an interface by bouncing the link. systemd-networkd observes
@@ -270,5 +282,5 @@ class RedhatOSModernUtil(RedhatOSUtil):
         # RedhatOSUtil was updated to conditionally run NetworkManager restart in response to a race condition between
         # NetworkManager restart and the agent restarting the network interface during publish_hostname. Keeping the
         # NetworkManager restart in RedhatOSModernUtil because the issue was not reproduced on these versions.
-        shellutil.run("service NetworkManager restart")
+        self.restart_network_manager()
         DefaultOSUtil.publish_hostname(self, hostname)
