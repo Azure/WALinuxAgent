@@ -701,7 +701,7 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(True, 'cwd' in running_agent_kwargs)
         self.assertEqual(latest_agent.get_agent_dir(), running_agent_kwargs['cwd'])
 
-    def test_run_latest_picks_installed_agent_when_update_to_latest_version_is_not_used(self):
+    def test_run_latest_picks_installed_agent_when_update_to_latest_version_is_not_used_and_autoupdates_disabled(self):
         self.prepare_agents(10)
 
         with patch("azurelinuxagent.common.conf.is_present", return_value=False):
