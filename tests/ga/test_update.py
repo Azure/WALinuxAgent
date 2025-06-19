@@ -682,6 +682,39 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(agent.get_agent_dir(), kwargs['cwd'])
         self.assertEqual(False, '\x00' in cmds[0])
 
+    def test_run_latest_picks_latest_agent_when_update_to_latest_version_is_used(self):
+        self.prepare_agents(10)
+
+        with patch("azurelinuxagent.common.conf.is_present", return_value=True):
+            with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):
+                running_agent_args, running_agent_kwargs = self._test_run_latest()
+                running_agent_args = running_agent_args[0]
+                latest_agent = self.update_handler.get_latest_agent_greater_than_daemon()
+                latest_agent_cmds = textutil.safe_shlex_split(latest_agent.get_agent_cmd())
+                if latest_agent_cmds[0].lower() == "python":
+                    latest_agent_cmds[0] = sys.executable
+
+        self.assertEqual(running_agent_args, latest_agent_cmds)
+        self.assertTrue(len(running_agent_args) > 1)
+        self.assertRegex(running_agent_args[0], r"^(/.*/python[\d.]*)$", "The command doesn't contain full python path")
+        self.assertEqual("-run-exthandlers", running_agent_args[len(running_agent_args) - 1])
+        self.assertEqual(True, 'cwd' in running_agent_kwargs)
+        self.assertEqual(latest_agent.get_agent_dir(), running_agent_kwargs['cwd'])
+
+    def test_run_latest_picks_installed_agent_when_update_to_latest_version_is_not_used(self):
+        self.prepare_agents(10)
+
+        with patch("azurelinuxagent.common.conf.is_present", return_value=False):
+            with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):
+                running_agent_args, _ = self._test_run_latest()
+                running_agent_args = running_agent_args[0]
+                latest_agent = self.update_handler.get_latest_agent_greater_than_daemon()
+                latest_agent_cmds = textutil.safe_shlex_split(latest_agent.get_agent_cmd())
+                if latest_agent_cmds[0].lower() == "python":
+                    latest_agent_cmds[0] = sys.executable
+
+        self.assertNotEqual(running_agent_args, latest_agent_cmds)
+
     def test_run_latest_passes_child_args(self):
         self.prepare_agents()
 

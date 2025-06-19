@@ -199,7 +199,10 @@ class UpdateHandler(object):
         if self.signal_handler is None:
             self.signal_handler = signal.signal(signal.SIGTERM, self.forward_signal)
 
-        latest_agent = None if not conf.get_autoupdate_enabled() else self.get_latest_agent_greater_than_daemon(
+        # If new flag explicitly set, agent will use latest agent downloaded and will not fall back to installed agent. See the new flag definition in conf.py
+        use_latest_agent = conf.is_present("AutoUpdate.UpdateToLatestVersion") or conf.get_autoupdate_enabled()
+
+        latest_agent = None if not use_latest_agent else self.get_latest_agent_greater_than_daemon(
             daemon_version=CURRENT_VERSION)
         if latest_agent is None:
             logger.info(u"Installed Agent {0} is the most current agent", CURRENT_AGENT)
