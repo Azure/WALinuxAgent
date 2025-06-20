@@ -50,6 +50,7 @@ variable:
       - ext_sequencing
       - ext_telemetry_pipeline
       - fips
+      - hibernation
       - keyvault_certificates
       - multi_config_ext
       - no_outbound_connections
