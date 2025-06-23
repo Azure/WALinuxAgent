@@ -3887,11 +3887,11 @@ class _TestSignatureValidationBase(TestExtensionBase):
         telemetry = []
         for _, kw in patched_add_event.call_args_list:
             if (
-                    kw['name'] == name and
-                    kw['version'] == version and
-                    kw['op'] == op and
-                    kw['is_success'] == is_success and
-                    (msg is None or msg in kw['message'])
+                    kw.get('name') == name and
+                    kw.get('version') == version and
+                    kw.get('op') == op and
+                    kw.get('is_success') == is_success and
+                    (msg is None or msg in kw.get('message'))
             ):
                 telemetry.append(kw)
         self.assertEqual(1, len(telemetry), "Signature validation event (operation '{0}') not sent as telemetry".format(op))
@@ -3900,10 +3900,10 @@ class _TestSignatureValidationBase(TestExtensionBase):
         errors = []
         for _, kw in patched_add_event.call_args_list:
             if (
-                    kw['op'] in (WALAEventOperation.PackageSignatureResult, WALAEventOperation.PackageSigningInfoResult) and
-                    kw['name'] == name and
-                    kw['version'] == version and
-                    not kw['is_success']
+                    kw.get('op') in (WALAEventOperation.PackageSignatureResult, WALAEventOperation.PackageSigningInfoResult) and
+                    kw.get('name') == name and
+                    kw.get('version') == version and
+                    not kw.get('is_success')
             ):
                 errors.append(kw)
         self.assertEqual(0, len(errors), "Signature validation should have completed with no errors. Errors: {0}".format(errors))
@@ -4006,7 +4006,7 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
                                             expected_handler_name=handler_name,
                                             expected_version=handler_version)
 
-                # Telemetry should report successful signature validation and failed maniest validation
+                # Telemetry should report successful signature validation and failed manifest validation
                 self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSignatureResult, is_success=True)
                 self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSigningInfoResult, is_success=False,
                                             msg="expected extension version '1.7.0' does not match downloaded package version '1.5.0'")
@@ -4353,7 +4353,7 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
             # Should report successful signature validation and failed manifest validation
             self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSignatureResult, is_success=True)
             self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSigningInfoResult, is_success=False,
-                                        msg="expected extension version '1.7.0' does not match downloaded package version '1.5.0'")
+                            msg="expected extension version '1.7.0' does not match downloaded package version '1.5.0'")
 
 
 class TestSignatureValidationEnforced(_TestSignatureValidationBase):

@@ -640,14 +640,14 @@ class WireClient(object):
         def on_downloaded():
             # If the 'signature' parameter is not an empty string, validate the zip package signature immediately after download.
             # If 'ignore_signature_validation_errors' is false, raise any validation errors before package extraction, and clean up the zip file.
-            # If true, catch and store the validation error, and re-raise after extraction so the caller has knowledge of the failure and can handle appropriately.
+            # If true, catch and store the validation error, and re-raise after extraction so the caller has knowledge of the failure and
+            # can handle and report it appropriately.
             validation_error = None
             if signature != "":
                 try:
-                    failure_log_level = logger.LogLevel.WARNING if ignore_signature_validation_errors else logger.LogLevel.ERROR
-                    validate_signature(target_file, signature, package_full_name=package_name, failure_log_level=failure_log_level)
+                    validate_signature(target_file, signature, package_full_name=package_name)
                 except SignatureValidationError as ex:
-                    # validate_signature() only raises SignatureValidationError and already sends logs/telemetry for the error.
+                    # validate_signature() only raises SignatureValidationError.
                     if not ignore_signature_validation_errors:
                         cleanup_package_with_invalid_signature(target_file)
                         raise
@@ -655,7 +655,7 @@ class WireClient(object):
 
             WireClient._try_expand_zip_package(package_name, target_file, target_directory)
 
-            # If signature validation errors are being ignored, surface any errors after extraction so the caller can decide how to handle them.
+            # If signature validation errors are being ignored, surface any errors after extraction so the caller can decide how to handle/report them.
             if validation_error is not None:
                 raise validation_error
 
