@@ -39,6 +39,7 @@ from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchem
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
+from azurelinuxagent.ga.signature_validation_util import SignatureValidationError
 from tests.ga.test_monitor import random_generator
 from tests.lib import wire_protocol_data
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
@@ -559,6 +560,42 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             self.assertTrue(os.path.exists(target_directory), "The extension package was not downloaded")
             self.assertFalse(os.path.exists(target_file), "The extension package was not deleted")
+
+    def test_download_zip_package_should_raise_error_and_cleanup_if_ignore_signature_validation_errors_false(self):
+        # If "ignore_signature_validation_errors" is False and signature is invalid, signature validation error should be raised.
+        extension_url = 'https://fake_host/fake_extension.zip'
+        target_file = os.path.join(self.tmp_dir, 'fake_extension.zip')
+        target_directory = os.path.join(self.tmp_dir, "fake_extension")
+
+        def http_get_handler(url, *_, **__):
+            if url == extension_url or self.is_host_plugin_extension_artifact_request(url):
+                return MockHttpResponse(200, body=load_bin_data("ga/fake_extension.zip"))
+            return None
+
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_get_handler=http_get_handler) as protocol:
+            with self.assertRaises(SignatureValidationError):
+                protocol.client.download_zip_package("Microsoft.FakeExtension-1.0.0.0", [extension_url], target_file, target_directory, use_verify_header=False,
+                                                     signature="badencodedsignature1", ignore_signature_validation_errors=False)
+
+            self.assertFalse(os.path.exists(target_file), "The extension package was not cleaned up")
+
+    def test_download_zip_package_should_raise_error_after_expanding_if_ignore_signature_validation_errors_true(self):
+        # If "ignore_signature_validation_errors" is False and signature is invalid, should expand zip package and then raise error.
+        extension_url = 'https://fake_host/fake_extension.zip'
+        target_file = os.path.join(self.tmp_dir, 'fake_extension.zip')
+        target_directory = os.path.join(self.tmp_dir, "fake_extension")
+
+        def http_get_handler(url, *_, **__):
+            if url == extension_url or self.is_host_plugin_extension_artifact_request(url):
+                return MockHttpResponse(200, body=load_bin_data("ga/fake_extension.zip"))
+            return None
+
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_get_handler=http_get_handler) as protocol:
+            with self.assertRaises(SignatureValidationError):
+                protocol.client.download_zip_package("Microsoft.FakeExtension-1.0.0.0", [extension_url], target_file, target_directory, use_verify_header=False,
+                                                     signature="badencodedsignature1", ignore_signature_validation_errors=True)
+
+        self.assertTrue(os.path.exists(target_directory), "The extension package was not downloaded")
 
     def test_download_zip_package_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
         extension_url = 'https://fake_host/fake_extension.zip'
