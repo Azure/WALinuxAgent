@@ -322,3 +322,11 @@ def signature_validation_enabled():
     Returns True if signature validation is enabled in conf file and OpenSSL version supports all validation parameters.
     """
     return conf.get_signature_validation_enabled() and openssl_version_supported_for_signature_validation()
+
+
+def cleanup_package_with_invalid_signature(package_file):
+    try:
+        logger.info("Removing package {0} due to failed signature validation.", package_file)
+        os.remove(package_file)
+    except Exception as cleanup_ex:
+        logger.warn("Failed to delete package {0}: {1}", package_file, ustr(cleanup_ex))

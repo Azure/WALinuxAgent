@@ -149,7 +149,8 @@ __SWITCH_OPTIONS__ = {
     "Debug.EnableGAVersioning": True,
     "Debug.EnableCgroupV2ResourceLimiting": False,
     "Debug.EnableExtensionPolicy": False,
-    "Debug.EnableSignatureValidation": False
+    "Debug.EnableSignatureValidation": False,
+    "Debug.IgnoreSignatureValidationErrors": True
 }
 
 
@@ -717,6 +718,15 @@ def get_signature_validation_enabled(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_switch("Debug.EnableSignatureValidation", False)
+
+
+def get_ignore_signature_validation_errors(conf=__conf__):
+    """
+    If True, signature validation errors will be ignored. This is intended for use during telemetry release.
+    If False, any signature validation error will block the extension.
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.IgnoreSignatureValidationErrors", True)
 
   
 def get_enable_rsm_downgrade(conf=__conf__):

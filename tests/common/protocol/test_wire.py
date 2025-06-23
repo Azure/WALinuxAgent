@@ -555,7 +555,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             protocol.client.download_zip_package("Microsoft.FakeExtension-1.0.0.0", [extension_url], target_file, target_directory, use_verify_header=False,
-                                                 signature="", enforce_signature=False)
+                                                 signature="", ignore_signature_validation_errors=True)
 
             self.assertTrue(os.path.exists(target_directory), "The extension package was not downloaded")
             self.assertFalse(os.path.exists(target_file), "The extension package was not deleted")
@@ -576,7 +576,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             HostPluginProtocol.is_default_channel = False
 
             protocol.client.download_zip_package("Microsoft.FakeExtension-1.0.0.0", [extension_url], target_file, target_directory, use_verify_header=False,
-                                                 signature="", enforce_signature=False)
+                                                 signature="", ignore_signature_validation_errors=True)
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 1, "Unexpected number of HTTP requests: [{0}]".format(urls))
@@ -600,7 +600,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             HostPluginProtocol.is_default_channel = False
 
             protocol.client.download_zip_package("Microsoft.FakeExtension-1.0.0.0", [extension_url], target_file, target_directory, use_verify_header=False,
-                                                 signature="", enforce_signature=False)
+                                                 signature="", ignore_signature_validation_errors=True)
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
@@ -638,7 +638,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 protocol.set_http_handlers(http_get_handler=http_get_handler)
 
                 protocol.client.download_zip_package("Microsoft.FakeExtension-1.0.0.0", [extension_url], target_file, target_directory, use_verify_header=False,
-                                                     signature="", enforce_signature=False)
+                                                     signature="", ignore_signature_validation_errors=True)
 
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls))
@@ -673,7 +673,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             with self.assertRaises(ExtensionDownloadError):
                 protocol.client.download_zip_package("Microsoft.FakeExtension-1.0.0.0", [extension_url], target_file, target_directory, use_verify_header=False,
-                                                     signature="", enforce_signature=False)
+                                                     signature="", ignore_signature_validation_errors=True)
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
@@ -697,7 +697,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             with self.assertRaises(ExtensionDownloadError):
                 protocol.client.download_zip_package("Microsoft.FakeExtension-1.0.0.0", [extension_url], target_file, target_directory, use_verify_header=False,
-                                                     signature="", enforce_signature=False)
+                                                     signature="", ignore_signature_validation_errors=True)
 
             self.assertFalse(os.path.exists(target_file), "The extension package should have been deleted")
             self.assertFalse(os.path.exists(target_directory), "The extension directory should not have been created")

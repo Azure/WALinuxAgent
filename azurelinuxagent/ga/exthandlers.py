@@ -41,7 +41,8 @@ from azurelinuxagent.common.agent_supported_feature import get_agent_supported_f
     SupportedFeatureNames, get_supported_feature_by_name, get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.utils.textutil import redact_sas_token
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, ExtensionPolicyError, EXT_DISALLOWED_ERROR_MAP
+from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, ExtensionDisallowedError, \
+    ExtensionSignaturePolicyError, PolicyError
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEventOperation, \
@@ -58,7 +59,8 @@ from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.signature_validation_util import validate_handler_manifest_signing_info, SignatureValidationError, \
-    PackageValidationError, save_signature_validation_state, signature_validation_enabled, validate_signature
+    PackageValidationError, save_signature_validation_state, signature_validation_enabled, validate_signature, \
+    signature_has_been_validated, cleanup_package_with_invalid_signature
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
 _HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
@@ -90,6 +92,26 @@ _STATUS_FILE_RETRY_DELAY = 2  # seconds
 
 # This is the default sequence number we use when there are no settings available for Handlers
 _DEFAULT_SEQ_NO = "0"
+
+# For extension disallowed errors (e.g. blocked by policy, extensions disabled), this mapping is used to generate
+# user-friendly error messages and determine the appropriate terminal error code based on the blocked operation.
+# Format: {<ExtensionRequestedState>: (<str>, <ExtensionErrorCodes>)}
+# - The first element of the tuple is a user-friendly operation name included in error messages.
+# - The second element of the tuple is the CRP terminal error code for the operation.
+_EXT_DISALLOWED_ERROR_MAP = \
+    {
+        ExtensionRequestedState.Enabled: ('run', ExtensionErrorCodes.PluginEnableProcessingFailed),
+        # TODO: CRP does not currently have a terminal error code for uninstall. Once this code is added, use
+        #       it instead of PluginDisableProcessingFailed below.
+        #
+        # Note: currently, when uninstall is requested for an extension, CRP polls until the agent does not
+        #       report status for that extension, or until timeout is reached. In the case of an extension disallowed
+        #       error, agent reports failed status on behalf of the extension, which will cause CRP to poll for the full
+        #       timeout, instead of failing fast.
+        ExtensionRequestedState.Uninstall: ('uninstall', ExtensionErrorCodes.PluginDisableProcessingFailed),
+        # "Disable" is an internal operation, users are unaware of it. We surface the term "uninstall" instead.
+        ExtensionRequestedState.Disabled: ('uninstall', ExtensionErrorCodes.PluginDisableProcessingFailed),
+    }
 
 
 class ExtHandlerStatusValue(object):
@@ -284,6 +306,9 @@ class ExtHandlersHandler(object):
         # Maintain a list of extension handler objects that are disallowed (e.g. blocked by policy, extensions disabled, etc.).
         # Extension status, if it exists, is always reported for the extensions in this list. List is reset for each goal state.
         self.__disallowed_ext_handlers = []
+
+        self._policy_engine = None
+
         # The GoalState Aggregate status needs to report the last status of the GoalState. Since we only process
         # extensions on goal state change, we need to maintain its state.
         # Setting the status to None here. This would be overridden as soon as the first GoalState is processed
@@ -495,13 +520,17 @@ class ExtHandlersHandler(object):
         # Save policy to history folder.
         policy_error = None
         try:
-            gs_history = self.protocol.get_goal_state().history
-            policy_engine = ExtensionPolicyEngine()
-            if policy_engine is not None and policy_engine.policy_file_contents is not None and gs_history is not None:
-                gs_history.save(policy_engine.policy_file_contents, "waagent_policy.json")
-
+            self._policy_engine = ExtensionPolicyEngine()
         except Exception as ex:
             policy_error = ex
+
+        # Save policy contents to history folder. If there is an error saving to history, log a warning but continue processing extensions.
+        try:
+            gs_history = self.protocol.get_goal_state().history
+            if self._policy_engine is not None and self._policy_engine.policy_file_contents is not None and gs_history is not None:
+                gs_history.save(self._policy_engine.policy_file_contents, "waagent_policy.json")
+        except Exception as ex:
+            logger.warn("Failed to save policy to history, continuing with extension processing. Error: {0}", ustr(ex))
 
         self.__disallowed_ext_handlers = []
 
@@ -510,7 +539,7 @@ class ExtHandlersHandler(object):
             handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)
 
             # Get terminal error code to use if extensions are disabled or a policy error occurred.
-            _, error_code = EXT_DISALLOWED_ERROR_MAP.get(ext_handler.state)
+            _, error_code = _EXT_DISALLOWED_ERROR_MAP.get(ext_handler.state)
 
             # In case of extensions disabled, we skip processing extensions. But CRP is still waiting for some status
             # back for the skipped extensions. In order to propagate the status back to CRP, we will report status back
@@ -555,10 +584,7 @@ class ExtHandlersHandler(object):
                 continue
 
             # Process the extension and get if it was successfully executed or not.
-            # 'policy_engine' is passed so disallowed extensions can be blocked on a per-operation level. This allows
-            # certain operations to proceed when no extension code would be run (for example, uninstall
-            # should be permitted on a disallowed extension that failed to install).
-            extension_success = self.handle_ext_handler(handler_i, extension, goal_state_id, policy_engine)
+            extension_success = self.handle_ext_handler(handler_i, extension, goal_state_id)
 
             dep_level = self.__get_dependency_level((extension, ext_handler))
             if 0 <= dep_level < max_dep_level:
@@ -625,13 +651,12 @@ class ExtHandlersHandler(object):
             msg = "Dependent Extension {0} did not succeed. Status was {1}".format(extension_name, status)
             raise Exception(msg)
 
-    def handle_ext_handler(self, ext_handler_i, extension, goal_state_id, policy_engine):
+    def handle_ext_handler(self, ext_handler_i, extension, goal_state_id):
         """
         Execute the requested command for the handler and return if success
         :param ext_handler_i: The ExtHandlerInstance object to execute the command on
         :param extension: The extension settings on which to run the command on
         :param goal_state_id: ID of the current GoalState
-        :param policy_engine: PolicyEngine object to evaluate if extension is allowed
         :return: True if the operation was successful, False if not
         """
 
@@ -656,13 +681,13 @@ class ExtHandlersHandler(object):
             # Handle everything on an extension level rather than Handler level
             ext_handler_i.logger.info("Target handler state: {0} [{1}]", handler_state, goal_state_id)
             if handler_state == ExtensionRequestedState.Enabled:
-                self.handle_enable(ext_handler_i, extension, policy_engine)
+                self.handle_enable(ext_handler_i, extension)
             elif handler_state == ExtensionRequestedState.Disabled:
                 # The "disabled" state is now deprecated. Send telemetry if it is still being used on any VMs
                 event.info(WALAEventOperation.RequestedStateDisabled, 'Goal State is requesting "disabled" state on {0} [Activity ID: {1}]',  ext_handler_i.ext_handler.name, self._gs_activity_id)
                 self.handle_disable(ext_handler_i, extension)
             elif handler_state == ExtensionRequestedState.Uninstall:
-                self.handle_uninstall(ext_handler_i, extension=extension, policy_engine=policy_engine)
+                self.handle_uninstall(ext_handler_i, extension=extension)
             else:
                 message = u"Unknown ext handler state:{0}".format(handler_state)
                 raise ExtensionError(message)
@@ -693,12 +718,26 @@ class ExtHandlersHandler(object):
             msg = "Failed to download artifacts: {0}".format(ustr(error))
             self.__handle_and_report_ext_handler_errors(ext_handler_i, error, report_op=WALAEventOperation.Download,
                                                         message=msg, extension=extension)
-        except ExtensionPolicyError as error:
-            self.__handle_ext_disallowed_error(ext_handler_i, error.code, report_op=error.report_op, message=ustr(error),
+        except ExtensionDisallowedError:
+            operation, error_code = _EXT_DISALLOWED_ERROR_MAP.get(ext_handler_i.ext_handler.state)
+            msg = (
+                "Extension will not be processed: failed to {0} extension '{1}' because it is not specified as an allowed extension. "
+                "To {0}, add the extension to the list of allowed extensions in the policy file ('{2}')."
+            ).format(operation, ext_handler_i.ext_handler.name, conf.get_policy_file_path())
+            self.__handle_ext_disallowed_error(ext_handler_i, error_code, report_op=WALAEventOperation.ExtensionPolicy, message=msg,
+                                               extension=extension, report=True)
+        except ExtensionSignaturePolicyError:
+            operation, error_code = _EXT_DISALLOWED_ERROR_MAP.get(ext_handler_i.ext_handler.state)
+            msg = (
+                "Extension will not be processed: failed to {0} extension '{1}' because policy specifies that extension must be signed, "
+                "but extension package is not signed. To {0}, set 'signatureRequired' to false in the policy file ('{2}')."
+            ).format(operation, ext_handler_i.ext_handler.name, conf.get_policy_file_path())
+            self.__handle_ext_disallowed_error(ext_handler_i, error_code, report_op=WALAEventOperation.ExtensionSignaturePolicy, message=msg,
                                                extension=extension, report=True)
         except PackageValidationError as error:
             # Do not report the error here; it has already been sent as telemetry earlier
-            self.__handle_ext_disallowed_error(ext_handler_i, error.code, report_op=WALAEventOperation.SignatureValidation,
+            code = ExtensionErrorCodes.PluginInstallProcessingFailed   # Validation errors are currently only raised during install
+            self.__handle_ext_disallowed_error(ext_handler_i, code, report_op=WALAEventOperation.SignatureValidation,
                                                message=ustr(error), extension=extension, report=False)
         except ExtensionError as error:
             self.__handle_and_report_ext_handler_errors(ext_handler_i, error, ext_handler_i.operation, ustr(error),
@@ -773,16 +812,16 @@ class ExtHandlersHandler(object):
             add_event(name=name, version=handler_version, op=report_op, is_success=False, log_event=True,
                       message=message)
 
-    def handle_enable(self, ext_handler_i, extension, policy_engine):
+    def handle_enable(self, ext_handler_i, extension):
         """
              1- Ensure the handler is installed
              2- Check if extension is enabled or disabled and then process accordingly
 
-        'policy_engine' should be an ExtensionPolicyEngine object, which is invoked to determine if the extension is
-        allowed by policy, and if signature should be enforced.
+        Before running any extension code, check extension policy. If extension is disallowed by policy,
+        a PolicyError will be raised and enable will be blocked.
         """
-        # Check policy and raise error if extension is disallowed (not in allowlist, unsigned when signature is required, etc.)
-        policy_engine.enforce_policy_for_ext_handler(ext_handler_i)
+        if self._policy_engine is None:
+            raise PolicyError("Extension will not be processed: policy engine failed to initialize")
 
         uninstall_exit_code = None
         old_ext_handler_i = ext_handler_i.get_installed_ext_handler()
@@ -792,8 +831,18 @@ class ExtHandlersHandler(object):
         # We go through the entire process of downloading and initializing the extension if it's either a fresh
         # extension or if it's a retry of a previously failed upgrade.
         if current_handler_state == ExtHandlerState.NotInstalled or current_handler_state == ExtHandlerState.FailedUpgrade:
-            enforce_signature = policy_engine.should_enforce_signature_validation(ext_handler_i.ext_handler.name)
-            self.__setup_new_handler(ext_handler_i, extension, enforce_signature)
+
+            # Check extension policy and raise error if disallowed (e.g., not in allowlist, unsigned when policy requires signature).
+            extension_is_signed = ext_handler_i.ext_handler.encoded_signature != ""
+            self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
+
+            # Determine whether to ignore signature validation errors based on policy and conf flag. Errors should be ignored
+            # only if "Debug.IgnoreSignatureValidationErrors" is true and policy does not require signature.
+            ignore_signature_validation_errors = (
+                    not self._policy_engine.should_enforce_signature_validation(ext_handler_i.ext_handler.name)
+                    and conf.get_ignore_signature_validation_errors()
+            )
+            self.__setup_new_handler(ext_handler_i, extension, ignore_signature_validation_errors)
 
             if old_ext_handler_i is None:
                 ext_handler_i.install(extension=extension)
@@ -803,15 +852,20 @@ class ExtHandlersHandler(object):
                 uninstall_exit_code = ExtHandlersHandler._update_extension_handler_and_return_if_failed(
                     old_ext_handler_i, ext_handler_i, extension)
         else:
+            # Check extension policy and raise error if disallowed. Since the extension is not being re-downloaded, treat it
+            # as signed if its signature was previously validated on download.
+            extension_is_signed = os.path.exists(ext_handler_i.get_base_dir()) and signature_has_been_validated(ext_handler_i.get_base_dir())
+            self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
+
             ext_handler_i.ensure_consistent_data_for_mc()
             ext_handler_i.update_settings(extension)
 
         self.__handle_extension(ext_handler_i, extension, uninstall_exit_code)
 
     @staticmethod
-    def __setup_new_handler(ext_handler_i, extension, enforce_signature):
+    def __setup_new_handler(ext_handler_i, extension, ignore_signature_validation_errors):
         ext_handler_i.set_handler_state(ExtHandlerState.NotInstalled)
-        ext_handler_i.download(enforce_signature)
+        ext_handler_i.download(ignore_signature_validation_errors)
         ext_handler_i.initialize()
         ext_handler_i.update_settings(extension)
 
@@ -913,7 +967,7 @@ class ExtHandlersHandler(object):
         if handler_state == ExtHandlerState.Enabled:
             ext_handler_i.disable(extension)
 
-    def handle_uninstall(self, ext_handler_i, extension, policy_engine):
+    def handle_uninstall(self, ext_handler_i, extension):
         """
         To Uninstall the handler, first ensure all extensions are disabled
             1- Disable all enabled extensions first if Handler is Enabled and then Disable the handler
@@ -922,15 +976,21 @@ class ExtHandlersHandler(object):
                 CRP will only set the HandlerState to Uninstall if all its extensions are set to be disabled)
             2- Finally uninstall the handler
 
-        'policy_engine' should be an ExtensionPolicyEngine object, which is invoked to determine if the extension is allowed by policy.
+        Before running any extension code, check extension policy. If extension is disallowed by policy, a PolicyError will be raised and uninstall will be blocked.
         Note: if the extension was never installed, uninstall is allowed even for disallowed extensions because no extension code will be executed.
         """
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_i.logger.info("[Uninstall] current handler state is: {0}", handler_state.lower())
         if handler_state != ExtHandlerState.NotInstalled:
+            # If extension is installed, check policy and raise an error if the extension is disallowed (e.g., not in allowlist, signature not previously validated when required).
+            # Uninstall extension goal states do not include encoded signature, so if the extension signature was previously validated, we treat it as signed.
+            ext_dir = ext_handler_i.get_base_dir()
+            extension_is_signed = os.path.exists(ext_dir) and signature_has_been_validated(ext_dir)
+            if self._policy_engine is None:
+                raise PolicyError("Extension will not be processed: policy engine failed to initialize")
+            self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
+
             if handler_state == ExtHandlerState.Enabled:
-                # Check policy and raise an error if the extension is disallowed (e.g., not in allowlist, signature not previously validated when required).
-                policy_engine.enforce_policy_for_ext_handler(ext_handler_i)
 
                 # Corner case - Single config Handler with no extensions at all
                 # If there are no extension settings for Handler, we should just disable the handler
@@ -1363,15 +1423,15 @@ class ExtHandlerInstance(object):
             return False
         return True
 
-    def download(self, enforce_signature):
+    def download(self, ignore_signature_validation_errors):
         """
         If extension is signed, validate extension package signature immediately after download, and validate handler
         manifest 'signingInfo' after package extraction. If both signature and handler manifest are successfully validated,
         save state file indicating this.
 
         If signature validation fails:
-         - if 'enforce_signature' is true, download is blocked.
-         - if 'enforce_signature' is false, the error is captured and reported via telemetry, but download and extraction proceed.
+         - if 'ignore_signature_validation_errors' is false, download is blocked.
+         - if 'ignore_signature_validation_errors' is true, the error is captured and reported via telemetry, but download and extraction proceed.
         """
         begin_utc = datetime.datetime.now(UTC)
         self.set_operation(WALAEventOperation.Download)
@@ -1383,7 +1443,7 @@ class ExtHandlerInstance(object):
 
         should_validate_ext_signature = signature_validation_enabled() and self.ext_handler.encoded_signature != ""
         signature_validated = False
-        validation_failure_log_level = logger.LogLevel.ERROR if enforce_signature else logger.LogLevel.WARNING
+        validation_failure_log_level = logger.LogLevel.WARNING if ignore_signature_validation_errors else logger.LogLevel.ERROR
 
         # Handle case where extension zip package already exists, but has not been extracted. If signature is present,
         # validate the package signature, extract the package, and then validate handler manifest.
@@ -1398,10 +1458,10 @@ class ExtHandlerInstance(object):
                 try:
                     validate_signature(package_file, self.ext_handler.encoded_signature, package_full_name=self.get_full_name(), failure_log_level=validation_failure_log_level)
                     signature_validated = True
-                except SignatureValidationError as ex:
+                except SignatureValidationError:
                     # validate_signature() only raises SignatureValidationError and sends logs/telemetry for the error, so no need to log here.
-                    if enforce_signature:
-                        ex.code = ExtensionErrorCodes.PluginInstallProcessingFailed
+                    if not ignore_signature_validation_errors:
+                        cleanup_package_with_invalid_signature(package_file)
                         raise
 
             if self._unzip_extension_package(package_file, self.get_base_dir()):
@@ -1430,18 +1490,17 @@ class ExtHandlerInstance(object):
                 self.protocol.client.download_zip_package(package_name=self.get_full_name(), uris=self.pkg.uris,
                                                           target_file=package_file, target_directory=self.get_base_dir(),
                                                           use_verify_header=is_fast_track_goal_state,
-                                                          signature=signature, enforce_signature=enforce_signature)
+                                                          signature=signature, ignore_signature_validation_errors=ignore_signature_validation_errors)
 
                 if should_validate_ext_signature:
                     # download_zip_package() performs signature validation internally. If no exception is raised, the signature was successfully validated.
                     # Mark this here so that we can save validation state later, if handler manifest validation also succeeds.
                     signature_validated = True
 
-            except SignatureValidationError as ex:
+            except SignatureValidationError:
                 # download_zip_package() will propagate a SignatureValidationError if validation fails. This is the only
                 # exception expected from validation, and the error has already been reported, so no need to log here.
-                if enforce_signature:
-                    ex.code = ExtensionErrorCodes.PluginInstallProcessingFailed
+                if not ignore_signature_validation_errors:
                     raise
 
             self.report_event(message="Download succeeded", duration=elapsed_milliseconds(begin_utc))
@@ -1454,11 +1513,10 @@ class ExtHandlerInstance(object):
                 if signature_validated:
                     save_signature_validation_state(self.get_base_dir())
 
-            except PackageValidationError as ex:
+            except PackageValidationError:
                 # validate_handler_manifest_signing_info() raises only ManifestValidationError, save_signature_validation_state()
                 # raises only PackageValidationError. Both send logs/telemetry for any error, so no need to report here.
-                if enforce_signature:
-                    ex.code = ExtensionErrorCodes.PluginInstallProcessingFailed
+                if not ignore_signature_validation_errors:
                     raise
 
         self.pkg_file = package_file

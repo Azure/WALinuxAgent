@@ -3936,7 +3936,11 @@ class _TestSignatureValidationBase(TestExtensionBase):
 
 class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
     """
-    This tests expected behavior when extension package signature validation is enabled, but not enforced.
+    This tests expected behavior when extension package signature validation is enabled, but not enforced (default
+    value for 'Debug.IgnoreSignatureValidationErrors' is True and no policy set).
+
+    TODO: Remove after telemetry release, when signature validation errors are enforced by default (when default value for
+    'Debug.IgnoreSignatureValidationErrors' is changed from True to False).
     """
     def test_enable_should_succeed_and_send_telemetry_if_signature_validation_fails(self):
         # Signature validation fails, handler manifest validation succeeds -> enable, send telemetry, state should not be set
@@ -4352,10 +4356,9 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
                                         msg="expected extension version '1.7.0' does not match downloaded package version '1.5.0'")
 
 
-
 class TestSignatureValidationEnforced(_TestSignatureValidationBase):
     """
-    This tests expected behavior when extension package signature validation is enabled and enforced.
+    This tests expected behavior when extension package signature validation is enabled and enforced via policy.
     """
 
     def setUp(self):
@@ -4471,7 +4474,8 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
                                     expected_handler_status='NotReady', expected_ext_count=1)
 
     def test_enable_should_succeed_for_extension_with_invalid_signature_if_conf_flag_disabled(self):
-        # If conf flag is set to false, enable should succeed for an extension with invalid signature, even with enforcement enabled.
+        # If 'Debug.EnableSignatureValidation' flag is set to false, enable should succeed for an extension with
+        # invalid signature, even with enforcement enabled.
         self.patch_conf_flag.stop()
         data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
@@ -4604,6 +4608,60 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
                                         expected_code=ExtensionErrorCodes.PluginDisableProcessingFailed,
                                         version="1.0.0")
 
+    def test_uninstall_fails_for_unsigned_extension_installed_but_not_enabled(self):
+        # If extension install succeeds but enable fails, and signature was not previously validated, uninstall should fail.
+        data_file = DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf-no_encoded_signature.xml"
+
+        with mock_wire_protocol(data_file) as protocol:
+            protocol.aggregate_status = None
+            protocol.report_vm_status = MagicMock()
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            # Create policy to allow unsigned extensions
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "signatureRequired": False
+                    }
+                }
+            self._create_policy_file(policy)
+
+            # Mock enable failure - extension should be installed but not enabled
+            with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.enable', side_effect=Exception):
+                exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
+                report_vm_status = protocol.report_vm_status
+                self.assertTrue(report_vm_status.called)
+                self._assert_handler_status(report_vm_status, "NotReady", expected_ext_count=1, version="1.0.0")
+                self.assertFalse(signature_has_been_validated(self.base_dir))
+
+            # Update policy to block unsigned extensions
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "signatureRequired": True
+                    }
+                }
+            self._create_policy_file(policy)
+
+            # Generate a new mock goal state to uninstall the extension - increment the incarnation
+            protocol.mock_wire_data.set_incarnation(2)
+            protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
+            protocol.client.update_goal_state()
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+
+            # Uninstall should fail.
+            expected_err_msg = "policy specifies that extension must be signed, but extension package is not signed"
+            report_vm_status = protocol.report_vm_status
+            self._assert_handler_status(report_vm_status, expected_status="NotReady", expected_ext_count=1,
+                                        expected_msg=expected_err_msg,
+                                        expected_code=ExtensionErrorCodes.PluginDisableProcessingFailed,
+                                        version="1.0.0")
+
     def test_uninstall_should_succeed_for_extension_with_signature_validated(self):
         data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
@@ -4679,6 +4737,40 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
             args, _ = report_vm_status.call_args
             vm_status = args[0]
             self.assertEqual(0, len(vm_status.vmAgent.extensionHandlers))
+
+    def test_should_fail_on_validation_error_if_ignore_errors_flag_false(self):
+        # If 'Debug.IgnoreSignaturevalidationErrors' conf flag is set to false, signature validation error should block
+        # extension install, even if policy does not require signature.
+
+        # Update policy to not require signature
+        policy = \
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "signatureRequired": False
+                }
+            }
+        self._create_policy_file(policy)
+
+        with patch('azurelinuxagent.ga.exthandlers.conf.get_ignore_signature_validation_errors', return_value=False):
+
+            # Should fail enable if signature invalid
+            data_file = wire_protocol_data.DATA_FILE.copy()
+            data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
+            data_file["ext_conf"] = "wire/ext_conf-vm_access_with_invalid_signature.xml"
+            data_file["manifest"] = "wire/manifest_vm_access.xml"
+
+            handler_name = "Microsoft.OSTCExtensions.Edp.VMAccessForLinux"
+            handler_version = "1.7.0"
+
+            expected_err_msg = "Signature validation failed for package"
+            self._test_enable_extension(data_file=data_file,
+                                        signature_validation_should_succeed=False,
+                                        expected_status_code=ExtensionErrorCodes.PluginInstallProcessingFailed,
+                                        expected_handler_status='NotReady',
+                                        expected_ext_count=1, expected_status_msg=expected_err_msg,
+                                        expected_handler_name=handler_name,
+                                        expected_version=handler_version)
 
 
 if __name__ == '__main__':
