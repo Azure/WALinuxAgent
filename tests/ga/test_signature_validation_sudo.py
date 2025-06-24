@@ -22,8 +22,6 @@ from tests.lib.tools import AgentTestCase, data_dir, patch, i_am_root
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 from azurelinuxagent.ga.signature_validation_util import validate_signature
 from azurelinuxagent.common.utils import shellutil
-from azurelinuxagent.common.logger import LogLevel
-
 
 
 class TestSignatureValidationSudo(AgentTestCase):

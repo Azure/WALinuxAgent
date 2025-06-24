@@ -27,7 +27,6 @@ from azurelinuxagent.ga.exthandlers import HandlerManifest
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.protocol.restapi import Extension
 from azurelinuxagent.common.utils.shellutil import CommandError
-from azurelinuxagent.common.logger import LogLevel
 
 
 class TestSignatureValidation(AgentTestCase):

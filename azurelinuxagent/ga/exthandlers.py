@@ -519,9 +519,8 @@ class ExtHandlersHandler(object):
         depends_on_err_msg = None
         extensions_enabled = conf.get_extensions_enabled()
 
-        # Instantiate policy engine, and use same engine to handle all extension handlers. If an error is thrown during
-        # policy engine initialization, we block all extensions and report the error via handler status for each extension.
-        # Save policy to history folder.
+        # Instantiate policy engine. If an error is thrown during policy engine initialization, we block all extensions
+        # and report the error via handler status for each extension.
         policy_error = None
         try:
             self._policy_engine = ExtensionPolicyEngine()
@@ -1484,7 +1483,7 @@ class ExtHandlerInstance(object):
                 if signature_validation_enabled() and self.ext_handler.encoded_signature == "":
                     # Extension signature status is already reported in telemetry during goal state processing, so here,
                     # we log locally only for debugging purposes if extension is unsigned.
-                    # Note: If signature is enforced, an error would have been raised earlier for an unsigned extension.
+                    # Note: If policy requires signature, an error would have been raised earlier for an unsigned extension.
                     self.logger.info("No signature for extension '{0}' in goal state, skipping signature validation.".format(self.get_full_name()))
 
                 # If signature should not be validated, pass an empty string as 'signature' to download_zip_package(),
