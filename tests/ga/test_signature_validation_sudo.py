@@ -52,7 +52,7 @@ class TestSignatureValidationSudo(AgentTestCase):
             delta = target_year - int(original_system_year)
             if delta > 0:
                 shellutil.run_command(["sudo", "date", "-s", "{0} years".format(delta)])
-            validate_signature(package_path, signature, package_name_and_version, failure_log_level=LogLevel.WARNING)
+            validate_signature(package_path, signature, package_name_and_version)
         except shellutil.CommandError as ex:
             raise Exception("Failed to retrieve or update system time.\nExit code: {0}\nError details: {1}".format(ex.returncode, ex.stderr))
         finally:
