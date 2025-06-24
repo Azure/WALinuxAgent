@@ -199,6 +199,18 @@ class UpdateHandler(object):
         if self.signal_handler is None:
             self.signal_handler = signal.signal(signal.SIGTERM, self.forward_signal)
 
+        both_auto_updates_used = conf.is_present("AutoUpdate.Enabled") and conf.is_present("AutoUpdate.UpdateToLatestVersion")
+        if both_auto_updates_used:
+            msg = u"The legacy AutoUpdate.Enabled configuration is also used, but it is ignored in favor of the new configuration (AutoUpdate.UpdateToLatestVersion)."
+            logger.warn(msg)
+            add_event(
+                AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.Enable,
+                is_success=False,
+                message=msg,
+                log_event=False)
+
         # If new flag explicitly set, agent will use latest agent downloaded and will not fall back to installed agent. See the new flag definition in conf.py
         use_latest_agent = conf.is_present("AutoUpdate.UpdateToLatestVersion") or conf.get_autoupdate_enabled()
 
