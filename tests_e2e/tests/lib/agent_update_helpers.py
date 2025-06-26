@@ -90,6 +90,9 @@ def request_rsm_update(requested_version: str, vm: VirtualMachineClient, arch_ty
 
     if is_downgrade:
         data.update({"isEmergencyRollbackRequest": True})
+        # CRP updated the downgrade API request and expecting BadVersion. Adding dummy BadVersion to pass the downgrade request.
+        # TODO: When CRP fully implements the downgrade fix, the agent needs to update accordingly.
+        data.update({"BadVersion": "0.0.0.0"})
 
     log.info("Attempting rsm upgrade post request to endpoint: {0} with data: {1}".format(url, data))
     response = requests.post(url, data=json.dumps(data), headers=headers, timeout=300)
