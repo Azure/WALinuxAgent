@@ -76,6 +76,12 @@ class AgentVmTestContext(AgentTestContext):
             identity_file=self.identity_file,
             port=self.ssh_port)
 
+    def refresh_ip_address(self) -> None:
+        """
+        Updates self.ip_address to reflect the current IP address of the VM.
+        """
+        self.ip_address = self.vm.get_ip_address()
+
     @staticmethod
     def from_args():
         """

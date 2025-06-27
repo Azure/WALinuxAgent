@@ -20,6 +20,7 @@ import json
 import uuid
 
 from assertpy import fail
+from typing import List, Dict, Any
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
@@ -45,6 +46,8 @@ class Hibernation(AgentVmTest):
         self._ssh_client: SshClient = self._context.create_ssh_client()
 
     def run(self):
+        log.info("Executing test on %s - IP address: %s", self._context.vm, self._context.ip_address)
+
         #
         # Ensure hibernation is enabled
         #
@@ -136,6 +139,7 @@ class Hibernation(AgentVmTest):
             )
             log.info("Reallocating %s after enabling hibernation", self._context.vm)
             self._context.vm.start()
+            self._refresh_ip_address()
 
         #
         # The test may be running on an existing machine where the Hibernate extension has already been installed, so we check that before installing it.
@@ -152,6 +156,31 @@ class Hibernation(AgentVmTest):
         self._context.vm.deallocate(hibernate=True)
         log.info("Resuming %s...", self._context.vm)
         self._context.vm.start()
+        self._refresh_ip_address()
+
+    def _refresh_ip_address(self) -> None:
+        """
+        Updates the test contect and the SSH client to reflect the current IP address of the test VM.
+        The IP address of a VM can change as the result of a deallocate/allocate cycle.
+        """
+        log.info("Refreshing IP address of %s...", self._context.vm)
+        self._context.refresh_ip_address()
+        self._ssh_client = self._context.create_ssh_client()
+        log.info("IP address: %s", self._context.ip_address)
+
+    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
+        ignore_rules = [
+            #
+            # This warning is produced by the test, so it is expected
+            #
+            #     2025-06-25T22:25:46.077469Z WARNING ExtHandler ExtHandler The extensions goal state is out of sync with the tenant cert. Certificate 60D73AC8321A3B6898C9E4269CEE3AE2A8A49102, needed by Microsoft.GuestConfiguration.ConfigurationforLinux, is missing.
+            #
+            {
+                'message': 'The extensions goal state is out of sync with the tenant cert.',
+                'if': lambda r: r.level == "WARNING"
+            }
+        ]
+        return ignore_rules
 
 
 if __name__ == "__main__":

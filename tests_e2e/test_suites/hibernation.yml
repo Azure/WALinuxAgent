@@ -3,7 +3,7 @@ tests:
   - source: "hibernation/hibernation.py"
 
 #
-# Hibernation is supported only in a few distros, using Ubuntu 22 for now.
+# Hibernation is supported only in a few distros. For now we use Ubuntu 22 only, since the Hibernation extension fails in current RHEL versions.
 #
 images:
   - "ubuntu_2204"
