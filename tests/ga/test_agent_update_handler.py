@@ -460,7 +460,7 @@ class TestAgentUpdate(UpdateTestCase):
         vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
         self.assertIsNone(vm_agent_update_status, "VM Agent Update Status should not be set when self-update is used")
 
-    def test_it_should_report_update_with_error_if_auto_update_is_disabled(self):
+    def test_it_should_report_update_with_error_if_auto_update_is_disabled_and_rsm_update_used(self):
         data_file = DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
 
