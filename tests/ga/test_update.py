@@ -22,7 +22,8 @@ from datetime import datetime, timedelta
 from threading import current_thread
 
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
-from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, AGENT_ERROR_FILE, INITIAL_UPDATE_STATE_FILE
+from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, AGENT_ERROR_FILE, INITIAL_UPDATE_STATE_FILE, \
+    RSM_UPDATE_STATE_FILE
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.logger import LogLevel
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
@@ -1164,6 +1165,9 @@ class TestUpdate(UpdateTestCase):
 
                         # mocking first agent update attempted
                         open(os.path.join(conf.get_lib_dir(), INITIAL_UPDATE_STATE_FILE), "a").close()
+
+                        # mocking rsm update attempted
+                        open(os.path.join(conf.get_lib_dir(), RSM_UPDATE_STATE_FILE), "a").close()
 
                         # Case 1: rsm version missing in GS when vm opt-in for rsm upgrades; report missing rsm version error
                         protocol.mock_wire_data.set_extension_config("wire/ext_conf_version_missing_in_agent_family.xml")
