@@ -110,7 +110,7 @@ class LogCollector(object):
 
     @staticmethod
     def initialize_telemetry():
-        protocol = get_protocol_util().get_protocol(init_goal_state=False)
+        protocol = get_protocol_util().get_protocol(init_goal_state=False, create_transport_certificate=False, save_to_history=False)
         protocol.client.reset_goal_state(goal_state_properties=GoalStateProperties.RoleConfig | GoalStateProperties.HostingEnv)
         # Initialize the common parameters for telemetry events
         initialize_event_logger_vminfo_common_parameters_and_protocol(protocol)
