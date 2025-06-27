@@ -8,6 +8,7 @@
 name: "InitialAgentUpdate"
 tests:
   - "initial_agent_update/initial_agent_update.py"
+  - "initial_agent_update/latest_agent_version.py"
 install_test_agent: false
 images: "gallery/initial-agent-update/1.0.0"
 locations: "AzureCloud:eastus2euap"
