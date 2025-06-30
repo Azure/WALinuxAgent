@@ -135,6 +135,7 @@ class AgentUpdateHandler(object):
         try:
             # If auto update is disabled, we don't proceed with update
             if not conf.get_auto_update_to_latest_version():
+                self._last_attempted_update_error_msg = "Auto update is disabled, skipping agent update"
                 return
 
             # Update the state only on new goal state
@@ -225,11 +226,10 @@ class AgentUpdateHandler(object):
         """
         This function gets the VMAgent update status as per the last attempted update.
         Returns: None if fail to report or update never attempted with rsm version specified in GS
-        Note: We send the status regardless of updater type. Since we call this main loop, want to avoid fetching agent family to decide and send only if
-        vm enabled for rsm updates.
+        Note: We report the status only when vm enrolled into RSM
         """
         try:
-            if conf.get_enable_ga_versioning():
+            if self.get_current_update_mode() == UpdateMode.RSM:
                 if not self._last_attempted_update_error_msg:
                     status = VMAgentUpdateStatuses.Success
                     code = 0
