@@ -39,7 +39,8 @@ from lisa import (  # pylint: disable=E0401
 )
 from lisa.environment import EnvironmentStatus  # pylint: disable=E0401
 from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
-from lisa.node import LocalNode, Nodes  # pylint: disable=E0401
+from lisa.node import LocalNode  # pylint: disable=E0401
+# from lisa.node import Nodes  # pylint: disable=E0401
 from lisa.util.constants import RUN_ID  # pylint: disable=E0401
 from lisa.sut_orchestrator.azure.common import get_node_context  # pylint: disable=E0401
 from lisa.sut_orchestrator.azure.platform_ import AzurePlatform  # pylint: disable=E0401
@@ -133,7 +134,7 @@ class AgentTestSuite(LisaTestSuite):
         self._runbook_name: str  # name of the runbook execution, used as prefix on ARM resources created by the AgentTestSuite
 
         self._lisa_log: Logger  # Main log for the LISA run
-        self._lisa_nodes: Nodes  # List of test nodes maintained by LISA
+        # self._lisa_nodes: Nodes  # List of test nodes maintained by LISA
 
         self._lisa_environment_name: str  # Name assigned by LISA to the test environment, useful for correlation with LISA logs
         self._environment_name: str  # Name assigned by the AgentTestSuiteCombinator to the test environment
@@ -195,7 +196,7 @@ class AgentTestSuite(LisaTestSuite):
         self._runbook_name = variables["name"]
 
         self._lisa_log = lisa_log
-        self._lisa_nodes = environment.nodes
+        # self._lisa_nodes = environment.nodes
 
         self._lisa_environment_name = environment.name
         self._environment_name = variables["c_env_name"]
@@ -390,9 +391,9 @@ class AgentTestSuite(LisaTestSuite):
         """
         Cleans up any items created by the test suite run.
         """
-        for n in self._lisa_nodes:
-            n.close()
-
+        # for n in self._lisa_nodes:
+        #     n.close()
+        #
         if self._delete_scale_set:
             if self._keep_environment == KeepEnvironment.Always:
                 log.info("Won't delete the scale set %s, per the test suite configuration.", self._vmss_name)
