@@ -152,7 +152,7 @@ def check_cgroup_disabled_due_to_systemd_error():
     Warning! D-Bus connection terminated.
     Failed to start transient scope unit: Connection reset by peer
     """
-    return check_log_message("Failed to start.+using systemd-run, will try invoking the extension directly.+[SystemdRunError].+Connection reset by peer")
+    return check_log_message("Failed to start.+using systemd-run, will try invoking the extension directly.+[SystemdRunError].+(Message recipient disconnected from message bus without replying|Connection reset by peer|Remote peer disconnected|Transport endpoint is not connected)")
 
 def check_log_message(message, after_timestamp=datetime_min_utc):
     """

@@ -127,14 +127,14 @@ class TestProtocolUtil(AgentTestCase):
         endpoint_file = protocol_util._get_wireserver_endpoint_file_path()  # pylint: disable=unused-variable
 
         # Test wire protocol when no endpoint file has been written
-        protocol_util._detect_protocol(save_to_history=False)
+        protocol_util._detect_protocol(init_goal_state=True, create_transport_certificate=True, save_to_history=False)
         self.assertEqual(KNOWN_WIRESERVER_IP, protocol_util.get_wireserver_endpoint())
 
         # Test wire protocol on dhcp failure
         protocol_util.osutil.is_dhcp_available.return_value = True
         protocol_util.dhcp_handler.run.side_effect = DhcpError()
 
-        self.assertRaises(ProtocolError, lambda: protocol_util._detect_protocol(save_to_history=False))
+        self.assertRaises(ProtocolError, lambda: protocol_util._detect_protocol(init_goal_state=True, create_transport_certificate=True, save_to_history=False))
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
@@ -151,7 +151,7 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util.dhcp_handler.run = Mock()
 
         # Test wire protocol when no endpoint file has been written, dhcp handler should not be called
-        protocol_util._detect_protocol(save_to_history=False)
+        protocol_util._detect_protocol(init_goal_state=True, create_transport_certificate=True, save_to_history=False)
         self.assertEqual(KNOWN_WIRESERVER_IP, protocol_util.get_wireserver_endpoint())
         self.assertTrue(protocol_util.dhcp_handler.run.call_count == 0)
 
