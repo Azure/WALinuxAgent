@@ -160,11 +160,11 @@ class Hibernation(AgentVmTest):
 
     def _refresh_ip_address(self) -> None:
         """
-        Updates the test contect and the SSH client to reflect the current IP address of the test VM.
+        Updates the test context and the SSH client to reflect the current IP address of the test VM.
         The IP address of a VM can change as the result of a deallocate/allocate cycle.
         """
         log.info("Refreshing IP address of %s...", self._context.vm)
-        self._context.refresh_ip_address()
+        self._context.refresh_ip_addresses()
         self._ssh_client = self._context.create_ssh_client()
         log.info("IP address: %s", self._context.ip_address)
 
