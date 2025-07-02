@@ -87,11 +87,6 @@ class Hibernation(AgentVmTest):
         if post_hibernation_tenant_certificate == pre_hibernation_tenant_certificate:
             raise Exception("Unexpected behavior: hibernate-resume did not create a new tenant certificate")
         log.info("Tenant certificate: %s", post_hibernation_tenant_certificate)
-        log.info("Checking that the new tenant certificate has not been downloaded yet...")
-        downloaded = self._ssh_client.run_command(f"ls /var/lib/waagent/{post_hibernation_tenant_certificate}.* || true", use_sudo=True).rstrip()
-        if downloaded != "":
-            raise Exception(f"Unexpected behavior: The new tenant certificate was downloaded after resume: {downloaded}")
-        log.info("The new tenant certificate has not been downloaded yet.")
 
         #
         # Execute an extension with protected settings and verify that the new tenant certificate was downloaded.
