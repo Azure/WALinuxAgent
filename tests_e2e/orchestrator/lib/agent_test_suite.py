@@ -388,8 +388,8 @@ class AgentTestSuite(LisaTestSuite):
 
     def _refresh_lisa_nodes(self, test_context: AgentVmTestContext) -> None:
         """
-        Tests can change the IP address of the test VM, and LISA does SSH connections during test cleanup, so we refresh the IP address of the LISA node
-        with the current value from the test context.
+        Tests can change the IP address of the test VM. We refresh the IP address of the LISA node before we return control from our test, since LISA performs SSH operations on the test
+        nodes before completing the test run.
         """
         for n in self._lisa_nodes.list():
             if (n.is_remote):
