@@ -398,6 +398,7 @@ class UpdateHandler(object):
             self._ensure_cgroups_initialized()
             self._ensure_extension_telemetry_state_configured_properly(protocol)
             self._cleanup_legacy_goal_state_history()
+            self._cleanup_legacy_extn_logrotate()
             write_signing_certificates()
 
             # Get all thread handlers
@@ -680,6 +681,19 @@ class UpdateHandler(object):
             StateArchiver.purge_legacy_goal_state_history()
         except Exception as exception:
             logger.warn("Error removing legacy history files: {0}", ustr(exception))
+
+    @staticmethod
+    def _cleanup_legacy_extn_logrotate():
+        # /etc/logrotate.d/waagent-extn.logrotate was created during setup.py in legacy agent versions.
+        # The file can interfere with logrotate rules created by individual extensions, so it should be cleaned
+        # up if it exists.
+        legacy_extn_logrotate_path = '/etc/logrotate.d/waagent-extn.logrotate'
+        if os.path.exists(legacy_extn_logrotate_path):
+            try:
+                os.remove(legacy_extn_logrotate_path)
+                logger.info("Removed legacy waagent-extn.logrotate file ({0})".format(legacy_extn_logrotate_path))
+            except Exception as exception:
+                logger.warn("Failed to remove legacy waagent-ext.logrotate file ({0}): {1}".format(legacy_extn_logrotate_path, ustr(exception)))
 
     def _report_status(self, exthandlers_handler, agent_update_handler):
         # report_ext_handlers_status does its own error handling and returns None if an error occurred
