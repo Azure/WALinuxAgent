@@ -559,7 +559,7 @@ class ExtHandlersHandler(object):
             # If an error was thrown during policy engine initialization, skip further processing of the extension.
             # CRP is still waiting for status, so we report error status here.
             if policy_error is not None:
-                msg = "Extension will not be processed: {0}".format(ustr(policy_error))
+                msg = "Extension will not be processed due to an error verifying extension policy: {0}".format(ustr(policy_error))
                 self.__handle_ext_disallowed_error(ext_handler_i=handler_i, error_code=error_code,
                                                    report_op=WALAEventOperation.ExtensionPolicy, message=msg,
                                                    extension=extension)

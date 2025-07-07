@@ -628,7 +628,7 @@ class WireClient(object):
 
         The 'signature' parameter should be a base64-encoded signature string. If signature is not an empty string, package signature will be validated
         immediately after downloading the package but before expanding it.
-        If 'ignore_signature_validation_errors' is False, any signature validateion error blocks package extraction and is raised immediately.
+        If 'ignore_signature_validation_errors' is False, any signature validation error blocks package extraction and is raised immediately.
         If true, package is extracted even if validation fails.
         """
         host_ga_plugin = self.get_host_plugin()

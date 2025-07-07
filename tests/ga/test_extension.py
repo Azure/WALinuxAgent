@@ -3600,7 +3600,7 @@ class TestExtensionPolicy(TestExtensionBase):
             }
         with patch('azurelinuxagent.ga.policy.policy_engine.ExtensionPolicyEngine.__init__',
                    side_effect=Exception("mock exception")):
-            expected_msg = "Extension will not be processed: mock exception"
+            expected_msg = "Extension will not be processed due to an error verifying extension policy: mock exception"
             self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled,
                                       expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
                                       expected_handler_status='NotReady', expected_ext_count=1, expected_status_msg=expected_msg)

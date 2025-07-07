@@ -132,7 +132,7 @@ class WALAEventOperation:
     RequestedVersionMismatch = "RequestedVersionMismatch"
     ResetFirewall = "ResetFirewall"
     Restart = "Restart"
-    SignatureValidation = "SignatureValidation"                         # Event for informational/debug logs related to package signature or manifest validation.
+    SignatureValidation = "SignatureValidation"                         # Event for general logs related to package signature or manifest validation that don't fall under a specific operation.
     ExtensionSigned = "ExtensionSigned"                                 # Event indicating whether an extension is signed.
     PackageSignatureResult = "PackageSignatureResult"                   # Event with the result of package signature validation.
     PackageSigningInfoResult = "PackageSigningInfoResult"               # Event with the result of package manifest 'signingInfo' validation.
