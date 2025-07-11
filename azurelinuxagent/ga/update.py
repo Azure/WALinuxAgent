@@ -398,7 +398,7 @@ class UpdateHandler(object):
             self._ensure_cgroups_initialized()
             self._ensure_extension_telemetry_state_configured_properly(protocol)
             self._cleanup_legacy_goal_state_history()
-            self._cleanup_legacy_extn_logrotate()
+            self._rename_legacy_extn_logrotate()
             write_signing_certificates()
 
             # Get all thread handlers
@@ -683,17 +683,29 @@ class UpdateHandler(object):
             logger.warn("Error removing legacy history files: {0}", ustr(exception))
 
     @staticmethod
-    def _cleanup_legacy_extn_logrotate():
-        # /etc/logrotate.d/waagent-extn.logrotate was created during setup.py in legacy agent versions.
-        # The file can interfere with logrotate rules created by individual extensions, so it should be cleaned
-        # up if it exists.
+    def _rename_legacy_extn_logrotate():
+        # /etc/logrotate.d/waagent-extn.logrotate was created during setup.py in legacy agent versions. That config
+        #   exists on distros with those legacy agent versions (2.2.46 < version < 2.2.54) baked-in.
+        # The config creates a logrotate rule for any file which matches this wildcard pattern: '/var/log/azure/*/*.log'
+        #
+        # If an extension creates their own logrotate rules for any files that match that pattern (and the extension
+        #   config with those rules are processed before the waagent-extn.logrotate config), then the wildcard
+        #   pattern will be skipped, and only those files defined in the extension config would be rotated. As a result,
+        #   some extension logs which were previously being rotated may no longer being rotated.
+        #
+        # To continue support for log rotation of extension logs on those distros where it is already happening, the
+        #   agent will rename '/etc/logrotate.d/waagent-extn.logrotate' to '/etc/logrotate.d/01-waagent-extn.logrotate'
+        #   if it exists. This will result in '01-waagent-extn.logrotate' being processed first, so all files that match
+        #   '/var/log/azure/*/*.log' will be rotated. Any other rules for files which match that pattern will be
+        #   skipped (which is acceptable because those files will have already been rotated).
         legacy_extn_logrotate_path = '/etc/logrotate.d/waagent-extn.logrotate'
+        updated_extn_logrotate_path = '/etc/logrotate.d/01-waagent-extn.logrotate'
         if os.path.exists(legacy_extn_logrotate_path):
             try:
-                os.remove(legacy_extn_logrotate_path)
-                logger.info("Removed legacy waagent-extn.logrotate file ({0})".format(legacy_extn_logrotate_path))
+                os.rename(legacy_extn_logrotate_path, updated_extn_logrotate_path)
+                logger.info("Renamed legacy waagent-extn.logrotate file ({0}) to {1}".format(legacy_extn_logrotate_path, updated_extn_logrotate_path))
             except Exception as exception:
-                logger.warn("Failed to remove legacy waagent-ext.logrotate file ({0}): {1}".format(legacy_extn_logrotate_path, ustr(exception)))
+                logger.warn("Failed to rename legacy waagent-ext.logrotate file ({0}): {1}".format(legacy_extn_logrotate_path, ustr(exception)))
 
     def _report_status(self, exthandlers_handler, agent_update_handler):
         # report_ext_handlers_status does its own error handling and returns None if an error occurred
