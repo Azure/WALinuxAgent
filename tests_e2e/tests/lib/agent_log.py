@@ -427,8 +427,15 @@ class AgentLog(object):
             #
             # [stderr]
             # Failed to start transient scope unit: Transport endpoint is not connected
+            #
+            # 2025-07-06T08:37:30.642513Z INFO ExtHandler ExtHandler [CGW] Disabling resource usage monitoring. Reason: Failed to start Microsoft.CPlat.Core.RunCommandLinux-1.0.5 using systemd-run, will try invoking the extension directly. Error: [SystemdRunError] Systemd process exited with code 1 and output [stdout]
+            #
+            #
+            # [stderr]
+            # Warning! D-Bus connection terminated.
+            # Failed to wait for response: Connection reset by peer
             {
-                'message': r"(?s)Disabling resource usage monitoring. Reason: Failed to start.*using systemd-run, will try invoking the extension directly. Error: \[SystemdRunError\].*Failed to start transient scope unit: (Message recipient disconnected from message bus without replying|Connection reset by peer|Remote peer disconnected|Transport endpoint is not connected)",
+                'message': r"(?s)Disabling resource usage monitoring. Reason: Failed to start.*using systemd-run, will try invoking the extension directly. Error: \[SystemdRunError\].* (Message recipient disconnected from message bus without replying|Connection reset by peer|Remote peer disconnected|Transport endpoint is not connected)",
             },
             #
             # If agent is not mounted at the expected path, we log this message in v2 machines. This is not an error.
