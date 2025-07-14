@@ -40,6 +40,8 @@ class PolicyError(AgentError):
     """
     Base class for policy-related errors.
     """
+    def __init__(self, msg=None, inner=None):
+        super(PolicyError, self).__init__(msg, inner)
 
 
 class InvalidPolicyError(PolicyError):
@@ -54,13 +56,19 @@ class InvalidPolicyError(PolicyError):
 class ExtensionSignaturePolicyError(PolicyError):
     """
     Error raised when policy requires signature, but extension is not signed and was not previously validated.
+    This error does not accept a message.
     """
+    def __init__(self):
+        super(ExtensionSignaturePolicyError, self).__init__()
 
 
 class ExtensionDisallowedError(PolicyError):
     """
     Error raised when extension is not present in the policy allowlist.
+    This error does not accept a message.
     """
+    def __init__(self):
+        super(ExtensionDisallowedError, self).__init__()
 
 
 class _PolicyEngine(object):
@@ -344,8 +352,8 @@ class ExtensionPolicyEngine(_PolicyEngine):
         """
         extension_allowed = self._should_allow_extension(extension_name)
         if not extension_allowed:
-            raise ExtensionDisallowedError("")      # Caller sets message and error code, based on requested extension operation
+            raise ExtensionDisallowedError()      # Caller sets message and error code, based on requested extension operation
 
         enforce_signature = self.should_enforce_signature_validation(extension_name)
         if enforce_signature and not extension_is_signed:
-            raise ExtensionSignaturePolicyError("") # Caller sets message and error code, based on requested extension operation
+            raise ExtensionSignaturePolicyError() # Caller sets message and error code, based on requested extension operation

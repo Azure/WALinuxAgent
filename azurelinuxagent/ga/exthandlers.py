@@ -60,7 +60,7 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.signature_validation_util import validate_handler_manifest_signing_info, SignatureValidationError, \
     PackageValidationError, save_signature_validation_state, signature_validation_enabled, validate_signature, \
-    signature_has_been_validated, cleanup_package_with_invalid_signature, report_validation_event
+    signature_has_been_validated, cleanup_package_with_invalid_signature, report_validation_event, PACKAGE_VALIDATION_STATE_FILE
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
 _HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
@@ -855,7 +855,7 @@ class ExtHandlersHandler(object):
         else:
             # Check extension policy and raise error if disallowed. Since the extension is not being re-downloaded, treat it
             # as signed if its signature was previously validated on download.
-            extension_is_signed = os.path.exists(ext_handler_i.get_base_dir()) and signature_has_been_validated(ext_handler_i.get_base_dir())
+            extension_is_signed = signature_has_been_validated(ext_handler_i.get_signature_validation_state_file())
             self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
 
             ext_handler_i.ensure_consistent_data_for_mc()
@@ -985,8 +985,7 @@ class ExtHandlersHandler(object):
         if handler_state != ExtHandlerState.NotInstalled:
             # If extension is installed, check policy and raise an error if the extension is disallowed (e.g., not in allowlist, signature not previously validated when required).
             # Uninstall extension goal states do not include encoded signature, so if the extension signature was previously validated, we treat it as signed.
-            ext_dir = ext_handler_i.get_base_dir()
-            extension_is_signed = os.path.exists(ext_dir) and signature_has_been_validated(ext_dir)
+            extension_is_signed = signature_has_been_validated(ext_handler_i.get_signature_validation_state_file())
             if self._policy_engine is None:
                 raise PolicyError("Extension will not be processed: policy engine failed to initialize")
             self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
@@ -1515,7 +1514,7 @@ class ExtHandlerInstance(object):
                 validate_handler_manifest_signing_info(self.load_manifest(), self.ext_handler)
                 # If both manifest and signature were validated successfully, save state.
                 if signature_validated:
-                    save_signature_validation_state(self.get_base_dir())
+                    save_signature_validation_state(self.get_signature_validation_state_file())
 
             except PackageValidationError as ex:
                 # validate_handler_manifest_signing_info() raises only ManifestValidationError, save_signature_validation_state()
@@ -2419,6 +2418,9 @@ class ExtHandlerInstance(object):
 
     def get_log_dir(self):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
+
+    def get_signature_validation_state_file(self):
+        return os.path.join(self.get_base_dir(), PACKAGE_VALIDATION_STATE_FILE)
 
     @staticmethod
     def _read_status_file(ext_status_file):
