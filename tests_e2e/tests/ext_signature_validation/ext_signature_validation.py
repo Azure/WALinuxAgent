@@ -185,6 +185,7 @@ class ExtSignatureValidation(AgentVmTest):
                                         self._context.vm.resource_group, self._context.vm.location)
         try:
             enable_start_time = self._ssh_client.run_command("date -u +'%Y-%m-%dT%H:%M:%SZ'").rstrip()
+            log.info(f"Deploying template: \n{json.dumps(base_template, indent=4)}")
             rg_client.deploy_template(template=base_template)
             for case in ext_to_enable:
                 log.info(f"Checking that signature was successfully validated for extension '{case.extension._identifier.type}'.")
