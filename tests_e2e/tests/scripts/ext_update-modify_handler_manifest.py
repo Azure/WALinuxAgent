@@ -29,14 +29,16 @@ from tests_e2e.tests.lib.logging import log
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--extension-name', dest='extension_name', required=True)
-    parser.add_argument('--cmd-name', dest='cmd_name', choices=['enableCommand', 'disableCommand', 'updateCommand', 'installCommand', 'uninstallCommand'])
-    parser.add_argument('--cmd-value', dest='cmd_value', required=True)
+    parser.add_argument('--extension-name', dest='extension_name', required=True, help='Name of the extension to update the handlerManifest for')
+    parser.add_argument('--properties', dest='properties', nargs='+', required=True, help='List of property=value to update in the handlerManifest file')
 
     args, _ = parser.parse_known_args()
     extension_name = args.extension_name
-    cmd_name = args.cmd_name
-    cmd_value = args.cmd_value
+    properties = args.properties
+
+    if len(properties) == 0:
+        log.info("No properties provided to update in the handlerManifest file for extension '{0}'".format(extension_name))
+        sys.exit(1)
 
     # Check for the handlerManifest   file
     log.info("Checking that handlerManifest file exists.")
@@ -50,8 +52,6 @@ def main():
     manifest_file = matched_files[0]
     log.info("HandlerManifest file found for extension '{0}': {1}".format(extension_name, manifest_file))
 
-    # Update the handlerManifest file
-    log.info("Updating handlerManifest file for extension '{0}' for cmd '{1}' and value '{2}'".format(extension_name, cmd_name, cmd_value))
     # Sample handlerManifest.json structure:
     # [
     #   {
@@ -78,11 +78,19 @@ def main():
         data = json.load(file)
 
     commands = data[0]['handlerManifest']
-    if cmd_name in commands:
+
+    for property in properties:
+        # Split the property into cmd_name and cmd_value
+        if '=' not in property:
+            log.info("Property '{0}' is not in the format 'cmd_name=cmd_value'".format(property))
+            sys.exit(1)
+
+        cmd_name, cmd_value = property.split('=', 1)
+        log.info("Updating command '{0}' with value '{1}'".format(cmd_name, cmd_value))
+
+        # Update the handlerManifest file
+        log.info("Updating handlerManifest file for extension '{0}' for cmd '{1}' and value '{2}'".format(extension_name, cmd_name, cmd_value))
         commands[cmd_name] = cmd_value
-    else:
-        log.info("Command '{0}' not found in handlerManifest for extension '{1}'".format(cmd_name, extension_name))
-        sys.exit(1)
 
     with open(manifest_file, 'w') as file:
         json.dump(data, file, indent=4)

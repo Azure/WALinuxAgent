@@ -36,30 +36,24 @@ class ExtensionUpdateFailureTest(AgentVmTest):
 
     def run(self):
         ssh_client: SshClient = self._context.create_ssh_client()
-        is_arm64: bool = ssh_client.get_architecture() == "aarch64"
-
         custom_script_2_0 = VirtualMachineExtensionClient(
             self._context.vm,
             VmExtensionIds.CustomScript,
             resource_name="CustomScript")
 
-        if is_arm64:
-            log.info("Will skip the update scenario, since currently there is only 1 version of CSE on ARM64")
-            return
-        else:
-            log.info("Installing %s", custom_script_2_0)
-            message = f"Hello {uuid.uuid4()}!"
-            custom_script_2_0.enable(
-                protected_settings={
-                    'commandToExecute': f"echo \'{message}\'"
-                },
-                auto_upgrade_minor_version=False
-            )
-            custom_script_2_0.assert_instance_view(expected_version="2.0", expected_message=message)
+        log.info("Installing %s", custom_script_2_0)
+        message = f"Hello {uuid.uuid4()}!"
+        custom_script_2_0.enable(
+            protected_settings={
+                'commandToExecute': f"echo \'{message}\'"
+            },
+            auto_upgrade_minor_version=False
+        )
+        custom_script_2_0.assert_instance_view(expected_version="2.0", expected_message=message)
 
         log.info("Modifying existing handler commands (disable operation) in HandlerManifest.json to fail the disable operation during update")
 
-        output = ssh_client.run_command(f"ext_update-modify_handler_manifest.py --extension-name '{custom_script_2_0._identifier}' --cmd-name disableCommand --cmd-value 'disablefailed'", use_sudo=True)
+        output = ssh_client.run_command(f"ext_update-modify_handler_manifest.py --extension-name '{custom_script_2_0._identifier}' --properties disableCommand=disablefailed continueOnUpdateFailure=false", use_sudo=True)
         log.info("Modified handlerManifest.json:\n%s", output)
 
         custom_script_2_1 = VirtualMachineExtensionClient(
