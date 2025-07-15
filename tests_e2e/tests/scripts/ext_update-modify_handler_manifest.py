@@ -79,13 +79,13 @@ def main():
 
     commands = data[0]['handlerManifest']
 
-    for property in properties:
+    for prop in properties:
         # Split the property into cmd_name and cmd_value
-        if '=' not in property:
-            log.info("Property '{0}' is not in the format 'cmd_name=cmd_value'".format(property))
+        if '=' not in prop:
+            log.info("Property '{0}' is not in the format 'cmd_name=cmd_value'".format(prop))
             sys.exit(1)
 
-        cmd_name, cmd_value = property.split('=', 1)
+        cmd_name, cmd_value = prop.split('=', 1)
         log.info("Updating command '{0}' with value '{1}'".format(cmd_name, cmd_value))
 
         # Update the handlerManifest file
