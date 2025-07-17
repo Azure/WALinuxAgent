@@ -77,11 +77,20 @@ class _PolicyEngine(object):
     """
     def __init__(self):
         """
-        Initialize policy engine: if policy enforcement is enabled, read and parse policy file.
+        Initialize policy engine with a default policy. This should not raise any errors.
         """
-        # Should check whether policy is enabled before doing any other operations and return if not enabled
         self._policy_enforcement_enabled = self.__get_policy_enforcement_enabled()
         self._policy_file_contents = None   # Raw policy file contents will be saved in __read_policy()
+
+        default_policy = {
+            "policyVersion": _MAX_SUPPORTED_POLICY_VERSION
+        }
+        self._policy = self._parse_policy(default_policy)
+
+    def update_policy(self):
+        """
+        If policy enforcement is enabled, read and parse policy file, and update the policy being enforced.
+        """
         if not self.policy_enforcement_enabled:
             return
 
@@ -107,9 +116,17 @@ class _PolicyEngine(object):
     @staticmethod
     def __get_policy_enforcement_enabled():
         """
-        Policy will be enabled if (1) policy file exists at the expected location and (2) the conf flag "Debug.EnableExtensionPolicy" is true.
+        Return True if policy enforcement is enabled. Policy is enabled if:
+            1. policy file exists at the expected location
+            2. the conf flag "Debug.EnableExtensionPolicy" is set to True.
+
+        This method runs during policy engine initialization and should not raise errors. If an error occurs, return False.
         """
-        return conf.get_extension_policy_enabled() and os.path.exists(conf.get_policy_file_path())
+        try:
+            return conf.get_extension_policy_enabled() and os.path.exists(conf.get_policy_file_path())
+        except Exception as ex:
+            logger.warn("Error checking if policy is enabled: {0}".format(ex))
+            return False
 
     @property
     def policy_enforcement_enabled(self):

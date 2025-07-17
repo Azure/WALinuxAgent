@@ -111,7 +111,7 @@ class ExtSignatureValidation(AgentVmTest):
         except Exception as error:
             # We exclude the extension name from regex because CRP sometimes installs test extensions with different
             # names (ex: Microsoft.Azure.Extensions.Edp.RunCommandHandlerLinuxTest instead of Microsoft.CPlat.Core.RunCommandHandlerLinux)
-            pattern = r".*Extension will not be processed: failed to run extension .* because policy specifies that extension must be signed, but extension package is not signed.*"
+            pattern = r".*Extension will not be processed: failed to run extension .* because policy specifies that extension must be signed, but extension package signature could not be found.*"
             assert_that(re.search(pattern, str(error))) \
                 .described_as(
                 f"Error message is expected to contain '{pattern}', but actual error message was '{error}'").is_not_none()
@@ -153,7 +153,7 @@ class ExtSignatureValidation(AgentVmTest):
 
             # Confirm that agent log contains error message that uninstall was blocked due to policy.
             # The script will check for a log message such as "Extension will not be processed: failed to uninstall
-            # extension 'Microsoft.Azure.Extensions.CustomScript' because policy specifies that extension must be signed, but extension package is not signed"
+            # extension 'Microsoft.Azure.Extensions.CustomScript' because policy specifies that extension must be signed, but extension package signature could not be found."
             log.info("Checking agent log to confirm that delete operation failed due to signature policy.")
             self._ssh_client.run_command(f"ext_signature_validation-check_uninstall_blocked.py --extension-name '{extension_case.extension._identifier}' --after-timestamp '{delete_start_time}'", use_sudo=True)
 
@@ -457,7 +457,7 @@ class ExtSignatureValidation(AgentVmTest):
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [
-            # 2025-05-11T20:00:12.310328Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Extensions.CustomScript, op=ExtensionPolicy, message=Extension will not be processed: failed to run extension 'Microsoft.Azure.Extensions.CustomScript' because policy specifies that extension must be signed, but extension package is not signed. To run, set 'signatureRequired' to false in the policy file ('/etc/waagent_policy.json')., duration=0
+            # 2025-05-11T20:00:12.310328Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Extensions.CustomScript, op=ExtensionPolicy, message=Extension will not be processed: failed to run extension 'Microsoft.Azure.Extensions.CustomScript' because policy specifies that extension must be signed, but extension package signature could not be found. To run, set 'signatureRequired' to false in the policy file ('/etc/waagent_policy.json')., duration=0
             # We intentionally block unsigned extensions with policy and expect this failure message
             {
                 'message': r"Extension will not be processed: failed to .* extension .* because policy specifies that extension must be signed"

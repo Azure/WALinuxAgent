@@ -305,7 +305,7 @@ class ExtHandlersHandler(object):
         self.ext_handlers = None
         # Maintain a list of extension handler objects that are disallowed (e.g. blocked by policy, extensions disabled, etc.).
         # Extension status, if it exists, is always reported for the extensions in this list. List is reset for each goal state.
-        self.__disallowed_ext_handlers = []
+        self.__disallowed_ext_handlers = None
 
         # Policy is read on a per-goal state basis, so the policy engine is set to None on agent start and re-initialized
         # on each goal state change. Policy engine is a member of this class so it can be accessed for each operation.
@@ -339,6 +339,11 @@ class ExtHandlersHandler(object):
             # self.ext_handlers needs to be initialized before returning, since status reporting depends on it; also
             # we make a deep copy of the extensions, since changes are made to self.ext_handlers while processing the extensions
             self.ext_handlers = copy.deepcopy(egs.extensions)
+
+            # Initialize the policy engine for the current goal state. This sets a default "allow all" policy, which
+            # ensures no errors are raised during initialization. The actual policy file is loaded when processing extensions.
+            self._policy_engine = ExtensionPolicyEngine()
+            self.__disallowed_ext_handlers = []
 
             if self._extensions_on_hold():
                 return
@@ -519,23 +524,21 @@ class ExtHandlersHandler(object):
         depends_on_err_msg = None
         extensions_enabled = conf.get_extensions_enabled()
 
-        # Instantiate policy engine. If an error is thrown during policy engine initialization, we block all extensions
+        # Read policy file and update policy in engine. If an error is thrown during policy update, we block all extensions
         # and report the error via handler status for each extension.
         policy_error = None
         try:
-            self._policy_engine = ExtensionPolicyEngine()
+            self._policy_engine.update_policy()
         except Exception as ex:
             policy_error = ex
 
         # Save policy contents to history folder. If there is an error saving to history, log a warning but continue processing extensions.
         try:
             gs_history = self.protocol.get_goal_state().history
-            if self._policy_engine is not None and self._policy_engine.policy_file_contents is not None and gs_history is not None:
+            if self._policy_engine.policy_file_contents is not None and gs_history is not None:
                 gs_history.save(self._policy_engine.policy_file_contents, "waagent_policy.json")
         except Exception as ex:
             logger.warn("Failed to save policy to history, continuing with extension processing. Error: {0}", ustr(ex))
-
-        self.__disallowed_ext_handlers = []
 
         for extension, ext_handler in all_extensions:
 
@@ -733,7 +736,7 @@ class ExtHandlersHandler(object):
             operation, error_code = _EXT_DISALLOWED_ERROR_MAP.get(ext_handler_i.ext_handler.state)
             msg = (
                 "Extension will not be processed: failed to {0} extension '{1}' because policy specifies that extension must be signed, "
-                "but extension package is not signed. To {0}, set 'signatureRequired' to false in the policy file ('{2}')."
+                "but extension package signature could not be found. To {0}, set 'signatureRequired' to false in the policy file ('{2}')."
             ).format(operation, ext_handler_i.ext_handler.name, conf.get_policy_file_path())
             self.__handle_ext_disallowed_error(ext_handler_i, error_code, report_op=WALAEventOperation.ExtensionSignaturePolicy, message=msg,
                                                extension=extension)
@@ -821,9 +824,6 @@ class ExtHandlersHandler(object):
         Before running any extension code, check extension policy. If extension is disallowed by policy,
         a PolicyError will be raised and enable will be blocked.
         """
-        if self._policy_engine is None:
-            raise PolicyError("Extension will not be processed: policy engine failed to initialize")
-
         uninstall_exit_code = None
         old_ext_handler_i = ext_handler_i.get_installed_ext_handler()
 
@@ -986,8 +986,6 @@ class ExtHandlersHandler(object):
             # If extension is installed, check policy and raise an error if the extension is disallowed (e.g., not in allowlist, signature not previously validated when required).
             # Uninstall extension goal states do not include encoded signature, so if the extension signature was previously validated, we treat it as signed.
             extension_is_signed = signature_has_been_validated(ext_handler_i.get_signature_validation_state_file())
-            if self._policy_engine is None:
-                raise PolicyError("Extension will not be processed: policy engine failed to initialize")
             self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
 
             if handler_state == ExtHandlerState.Enabled:

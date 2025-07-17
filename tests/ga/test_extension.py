@@ -3593,12 +3593,12 @@ class TestExtensionPolicy(TestExtensionBase):
         self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
                           expected_handler_status='NotReady', expected_ext_count=1, expected_status_msg=expected_msg)
 
-    def test_should_fail_extension_if_error_thrown_during_policy_engine_init(self):
+    def test_should_fail_extension_if_error_thrown_during_policy_update(self):
         policy = \
             {
                 "policyVersion": "0.1.0"
             }
-        with patch('azurelinuxagent.ga.policy.policy_engine.ExtensionPolicyEngine.__init__',
+        with patch('azurelinuxagent.ga.policy.policy_engine.ExtensionPolicyEngine.update_policy',
                    side_effect=Exception("mock exception")):
             expected_msg = "Extension will not be processed due to an error verifying extension policy: mock exception"
             self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled,
@@ -4606,7 +4606,7 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
             exthandlers_handler.report_ext_handlers_status()
 
             # Uninstall should fail.
-            expected_err_msg = "policy specifies that extension must be signed, but extension package is not signed"
+            expected_err_msg = "policy specifies that extension must be signed, but extension package signature could not be found."
             report_vm_status = protocol.report_vm_status
             self._assert_handler_status(report_vm_status, expected_status="NotReady", expected_ext_count=1,
                                         expected_msg=expected_err_msg,
@@ -4660,7 +4660,7 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
             exthandlers_handler.report_ext_handlers_status()
 
             # Uninstall should fail.
-            expected_err_msg = "policy specifies that extension must be signed, but extension package is not signed"
+            expected_err_msg = "policy specifies that extension must be signed, but extension package signature could not be found."
             report_vm_status = protocol.report_vm_status
             self._assert_handler_status(report_vm_status, expected_status="NotReady", expected_ext_count=1,
                                         expected_msg=expected_err_msg,

@@ -35,7 +35,7 @@ def main():
 
     args, _ = parser.parse_known_args()
 
-    pattern = (r".*Extension will not be processed: failed to uninstall extension '{0}' because policy specifies that extension must be signed, but extension package is not signed.*").format(re.escape(args.extension_name))
+    pattern = (r".*Extension will not be processed: failed to uninstall extension '{0}' because policy specifies that extension must be signed, but extension package signature could not be found.*").format(re.escape(args.extension_name))
     agent_log = AgentLog(Path('/var/log/waagent.log'))
 
     if args.after_timestamp is None:
