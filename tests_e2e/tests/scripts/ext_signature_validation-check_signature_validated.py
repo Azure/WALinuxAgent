@@ -73,7 +73,7 @@ def main():
 
         # Check for the signature validation state file
         log.info("Checking that signature validation state file exists.")
-        state_file_pattern = "/var/lib/waagent/*{0}*/package_validated".format(args.extension_name)
+        state_file_pattern = "/var/lib/waagent/*{0}*/WALINUXAGENT_STATE_PACKAGE_VALIDATED".format(args.extension_name)
         matched_files = glob.glob(state_file_pattern)
         if matched_files is None or len(matched_files) == 0:
             log.info("No signature validation state file found for extension '{0}'".format(args.extension_name))
