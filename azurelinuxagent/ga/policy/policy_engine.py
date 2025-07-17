@@ -83,7 +83,7 @@ class _PolicyEngine(object):
         self._policy_file_contents = None   # Raw policy file contents will be saved in __read_policy()
 
         default_policy = {
-            "policyVersion": _MAX_SUPPORTED_POLICY_VERSION
+            "policyVersion": ustr(_MAX_SUPPORTED_POLICY_VERSION)
         }
         self._policy = self._parse_policy(default_policy)
 

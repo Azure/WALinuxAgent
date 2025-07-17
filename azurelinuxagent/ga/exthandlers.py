@@ -42,7 +42,7 @@ from azurelinuxagent.common.agent_supported_feature import get_agent_supported_f
 from azurelinuxagent.common.utils.textutil import redact_sas_token
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, ExtensionDisallowedError, \
-    ExtensionSignaturePolicyError, PolicyError
+    ExtensionSignaturePolicyError
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEventOperation, \

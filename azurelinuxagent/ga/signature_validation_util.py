@@ -33,7 +33,7 @@ from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
 
 # This file tracks the state of signature and manifest validation for the package. If the file exists, signature and
 # manifest have both been successfully validated.
-PACKAGE_VALIDATION_STATE_FILE = "package_validated"
+PACKAGE_VALIDATION_STATE_FILE = "WALINUXAGENT_STATE_PACKAGE_VALIDATED"
 
 # Signature validation requires OpenSSL version 1.1.0 or later. The 'no_check_time' flag used for the 'openssl cms -verify'
 # command is not supported on older versions.
