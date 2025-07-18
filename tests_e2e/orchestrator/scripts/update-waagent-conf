@@ -21,7 +21,6 @@
 # Updates waagent.conf with the specified setting and value(allows multiple) and restarts the Agent unless no-restart specified.
 #
 
-#!/bin/bash
 set -euo pipefail
 
 # Default: restart agent-service unless -no-restart is passed
