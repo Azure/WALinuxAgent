@@ -16,12 +16,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-import json
+import os
 import uuid
 
 from assertpy import fail
 from typing import List, Dict, Any
 
+from azurelinuxagent.common import conf
+from azurelinuxagent.common.utils.timeutil import create_utc_timestamp
+
+from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.logging import log
@@ -57,10 +61,10 @@ class Hibernation(AgentVmTest):
         # Check that the current incarnation is 1; if that is not the case, do a hibernate-resume cycle to reset the incarnation to 1
         #
         log.info("Retrieving current incarnation...")
-        incarnation = self._ssh_client.run_command("get_goal_state.py --properties incarnation", use_sudo=True).rstrip()
+        incarnation = self._ssh_client.run_command("get_goal_state.py --tag Incarnation", use_sudo=True).rstrip()
         if incarnation != "1":
             self._do_hibernate_resume_cycle()
-            incarnation = self._ssh_client.run_command("get_goal_state.py --properties incarnation", use_sudo=True).rstrip()
+            incarnation = self._ssh_client.run_command("get_goal_state.py --tag Incarnation", use_sudo=True).rstrip()
             if incarnation != "1":
                 raise Exception(f"The incarnation was not reset to 1 after a hibernate-resume cycle. Incarnation is {incarnation}")
         log.info("The current incarnation is 1")
@@ -74,10 +78,11 @@ class Hibernation(AgentVmTest):
         log.info("Tenant certificate: %s", pre_hibernation_tenant_certificate)
 
         log.info("Triggering a hibernate-resume cycle to test the tenant certificate...")
+        hibernate_time = self._ssh_client.get_time()
         self._do_hibernate_resume_cycle()
 
         log.info("Retrieving current incarnation...")
-        incarnation = self._ssh_client.run_command("get_goal_state.py --properties incarnation", use_sudo=True).rstrip()
+        incarnation = self._ssh_client.run_command("get_goal_state.py --tag Incarnation", use_sudo=True).rstrip()
         if incarnation != "1":
             raise Exception(f"Unexpected behavior: The incarnation is not 1 after a hibernate-resume cycle. Incarnation is {incarnation}")
         log.info("The current incarnation is 1")
@@ -87,6 +92,12 @@ class Hibernation(AgentVmTest):
         if post_hibernation_tenant_certificate == pre_hibernation_tenant_certificate:
             raise Exception("Unexpected behavior: hibernate-resume did not create a new tenant certificate")
         log.info("Tenant certificate: %s", post_hibernation_tenant_certificate)
+        post_hibernation_tenant_certificate_path = f"{os.path.join(conf.get_lib_dir(), post_hibernation_tenant_certificate)}.crt"
+        log.info(f"Checking that the new tenant certificate has not been downloaded yet ({post_hibernation_tenant_certificate_path})...")
+        downloaded = self._ssh_client.run_command(f"ls {post_hibernation_tenant_certificate_path} || true", use_sudo=True).rstrip()
+        if downloaded != "":
+            raise Exception(f"Unexpected behavior: The new tenant certificate was downloaded after resume: {downloaded}")
+        log.info("The new tenant certificate has not been downloaded yet.")
 
         #
         # Execute an extension with protected settings and verify that the new tenant certificate was downloaded.
@@ -98,17 +109,36 @@ class Hibernation(AgentVmTest):
         custom_script.assert_instance_view(expected_message=message)
 
         log.info("Checking that the new tenant certificate was downloaded...")
-        downloaded = self._ssh_client.run_command("find /var/lib/waagent -name '*.crt'", use_sudo=True)
-        if f"/var/lib/waagent/{post_hibernation_tenant_certificate}.crt" not in downloaded:
+        downloaded = self._ssh_client.run_command(f"find {conf.get_lib_dir()} -name '*.crt'", use_sudo=True)
+        if post_hibernation_tenant_certificate not in downloaded:
             fail(f"The new tenant certificate ({post_hibernation_tenant_certificate}) was not downloaded:\n{downloaded}")
         log.info("The new tenant certificate was downloaded.")
 
+        #
+        # Currently the Agent ignores the Fabric goal state created during Resume. If that behavior changes, or another Fabric goal state is created
+        # by an entity external to the test (policies in the test subscription, for example?), then the test is invalid.
+        #
+        # As a last check, we look at the Agent log and invalidate the test if we find that it processed a Fabric goal state after hibernation was triggered.
+        #
+        log.info("Checking goal states processed by the agent after hibernation...")
+        agent_log_contents = self._ssh_client.run_command('grep -E "ProcessExtensionsGoalState.*source: \\S+ " /var/log/waagent.log')
+        if agent_log_contents == "":
+            raise Exception("Could not search the agent log for goal states. Did the format of the log change?")
+        agent_log_contents_formatted = agent_log_contents.rstrip().replace('\n', '\n\t')
+        log.info(f"Goal states since {create_utc_timestamp(hibernate_time)}:\n\t{agent_log_contents_formatted}")
+
+        agent_log = AgentLog(contents=agent_log_contents)
+        for record in agent_log.read():
+            if record.timestamp >= hibernate_time and "source: Fabric" in record.message:
+                raise Exception("A Fabric goal state occurred after hibernation. This invalidates the test results.")
+        log.info("The agent processed only FastTrack goal states after hibernation...")
+
     def _get_tenant_certificate(self) -> str:
-        certificates = json.loads(self._ssh_client.run_command("get_goal_state.py --certificates --json", use_sudo=True))
-        candidates = [c["thumbprint"] for c in certificates if c["hasPrivateKey"]]
+        stdout = self._ssh_client.run_command("get_goal_state.py --certificates --expand", use_sudo=True)
+        candidates = [line for line in stdout.splitlines() if line.endswith(".prv")]  # Only the tenant certificate should include a private key
         if len(candidates) != 1:
-            raise Exception(f"Could not find the tenant certificate. Current certificates: {certificates}")
-        return candidates[0]
+            raise Exception(f"Could not find the tenant certificate. Current certificates: {stdout}")
+        return os.path.basename(candidates[0]).replace('.prv', '')
 
     def _enable_hibernation(self) -> None:
         #

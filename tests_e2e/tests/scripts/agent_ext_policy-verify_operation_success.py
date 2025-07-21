@@ -20,7 +20,6 @@
 import argparse
 
 from assertpy import fail
-from pathlib import Path
 from datetime import datetime
 import time
 import re
@@ -41,7 +40,7 @@ from tests_e2e.tests.lib.agent_log import AgentLog
 def __get_last_reported_status(after_timestamp):
     # Get last reported status from the agent log file. If after_timestamp is specified, return only the status reported
     # after that timestamp, and raise error if not found after 2 tries.
-    agent_log = AgentLog(Path('/var/log/waagent.log'))
+    agent_log = AgentLog()
 
     retries = 10
     for attempt in range(retries):
