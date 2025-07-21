@@ -114,7 +114,7 @@ class ExtensionUpdateFailureTest(AgentVmTest):
                 'message': r"name=Microsoft.Azure.Extensions.CustomScript, op=Disable, message=\[ExtensionOperationError\] .*disablefailed"
             },
 
-            # In some distros, the scope not being found is not an error, so we consider as systemd error
+            # In some distros, scope not included in the error, so we consider as systemd error
             # 2025-07-21T22:07:23.541880Z INFO ExtHandler ExtHandler [CGW] Disabling resource usage monitoring. Reason: Failed to start Microsoft.Azure.Extensions.CustomScript-2.0.7 using systemd-run, will try invoking the extension directly. Error: [SystemdRunError] Systemd process exited with code 1 and output [stdout]
             # [stderr]
             # Failed to find executable /var/lib/waagent/Microsoft.Azure.Extensions.CustomScript-2.0.7/disablefailed: No such file or directory
