@@ -95,6 +95,7 @@ class ExtensionUpdateFailureTest(AgentVmTest):
             if ext_name in extension_names_on_vm:
                 self._ssh_client.run_command(f"ext_update-modify_handler_manifest.py --extension-name '{ext_name}' --reset", use_sudo=True)
                 ext.delete()
+                log.info("Removed extension %s", ext_name)
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [
