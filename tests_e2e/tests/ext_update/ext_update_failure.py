@@ -33,47 +33,69 @@ class ExtensionUpdateFailureTest(AgentVmTest):
     """
     This test verifies that the agent reports correct status and code when extension operation fails during the ext update.
     """
+    def __init__(self, context):
+        super().__init__(context)
+        self._ssh_client = self._context.create_ssh_client()
 
     def run(self):
-        ssh_client: SshClient = self._context.create_ssh_client()
+        custom_script = VmExtensionIds.CustomScript
         custom_script_2_0 = VirtualMachineExtensionClient(
             self._context.vm,
-            VmExtensionIds.CustomScript,
+            custom_script,
             resource_name="CustomScript")
-
-        log.info("Installing %s", custom_script_2_0)
-        message = f"Hello {uuid.uuid4()}!"
-        custom_script_2_0.enable(
-            protected_settings={
-                'commandToExecute': f"echo \'{message}\'"
-            },
-            auto_upgrade_minor_version=False
-        )
-        custom_script_2_0.assert_instance_view(expected_version="2.0", expected_message=message)
-
-        log.info("Modifying existing handler commands (disable operation) in HandlerManifest.json to fail the disable operation during update")
-
-        output = ssh_client.run_command(f"ext_update-modify_handler_manifest.py --extension-name '{custom_script_2_0._identifier}' --properties disableCommand=disablefailed continueOnUpdateFailure=false", use_sudo=True)
-        log.info("Modified handlerManifest.json:\n%s", output)
-
-        custom_script_2_1 = VirtualMachineExtensionClient(
-            self._context.vm,
-            VmExtensionIdentifier(VmExtensionIds.CustomScript.publisher, VmExtensionIds.CustomScript.type, "2.1"),
-            resource_name="CustomScript")
-
-        log.info("Updating %s", custom_script_2_0)
-
-        message = f"Hello {uuid.uuid4()}!"
+        extensions_to_cleanup = {
+            custom_script: custom_script_2_0
+        }
         try:
-            custom_script_2_1.enable(
+            log.info("Removing existing extensions: %s", extensions_to_cleanup.keys())
+            self._remove_extensions(extensions_to_cleanup)
+
+            log.info("Installing %s", custom_script_2_0)
+            message = f"Hello {uuid.uuid4()}!"
+            custom_script_2_0.enable(
                 protected_settings={
                     'commandToExecute': f"echo \'{message}\'"
-                }
+                },
+                auto_upgrade_minor_version=False
             )
-            fail("The agent should have reported an error processing the extension update")
-        except Exception as error:
-            assert_that(str(error)).described_as(f"Expected VMExtensionHandlerNonTransientError/ExtensionUpdateError for {custom_script_2_1._identifier}, but actual error was: {error}").contains("VMExtensionHandlerNonTransientError").contains(f"{custom_script_2_1._identifier}").contains("ExtensionUpdateError")
-            log.info("Goal state processing for %s failed as expected", custom_script_2_1._identifier)
+            custom_script_2_0.assert_instance_view(expected_version="2.0", expected_message=message)
+
+            log.info("Modifying existing handler commands (disable operation) in HandlerManifest.json to fail the disable operation during update")
+
+            output = self._ssh_client.run_command(f"ext_update-modify_handler_manifest.py --extension-name '{custom_script}' --properties disableCommand=disablefailed continueOnUpdateFailure=false", use_sudo=True)
+            log.info("Modified handlerManifest.json:\n%s", output)
+
+            custom_script_2_1 = VirtualMachineExtensionClient(
+                self._context.vm,
+                VmExtensionIdentifier(VmExtensionIds.CustomScript.publisher, VmExtensionIds.CustomScript.type, "2.1"),
+                resource_name="CustomScript")
+
+            log.info("Updating %s", custom_script_2_0)
+
+            message = f"Hello {uuid.uuid4()}!"
+            try:
+                custom_script_2_1.enable(
+                    protected_settings={
+                        'commandToExecute': f"echo \'{message}\'"
+                    }
+                )
+                fail("The agent should have reported an error processing the extension update")
+            except Exception as error:
+                assert_that(str(error)).described_as(f"Expected VMExtensionHandlerNonTransientError/ExtensionUpdateError for {custom_script}, but actual error was: {error}").contains("VMExtensionHandlerNonTransientError").contains(f"{custom_script}").contains("ExtensionUpdateError")
+                log.info("Goal state processing for %s failed as expected", custom_script)
+
+        finally:
+            log.info("Cleaning up extensions")
+            self._remove_extensions(extensions_to_cleanup)
+
+    def _remove_extensions(self, extensions_to_cleanup):
+        extensions_on_vm = self._context.vm.get_extensions().value
+        extension_names_on_vm = {ext.name for ext in extensions_on_vm}
+
+        for ext_name, ext in extensions_to_cleanup.items():
+            if ext_name in extension_names_on_vm:
+                self._ssh_client.run_command(f"ext_update-modify_handler_manifest.py --extension-name '{ext_name}' --reset", use_sudo=True)
+                ext.delete()
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [
@@ -90,6 +112,14 @@ class ExtensionUpdateFailureTest(AgentVmTest):
             # 		; ContinueOnUpdate: False, duration=0
             {
                 'message': r"name=Microsoft.Azure.Extensions.CustomScript, op=Disable, message=\[ExtensionOperationError\] .*disablefailed"
+            },
+
+            # In some distros, the scope not being found is not an error, so we consider as systemd error
+            # 2025-07-21T22:07:23.541880Z INFO ExtHandler ExtHandler [CGW] Disabling resource usage monitoring. Reason: Failed to start Microsoft.Azure.Extensions.CustomScript-2.0.7 using systemd-run, will try invoking the extension directly. Error: [SystemdRunError] Systemd process exited with code 1 and output [stdout]
+            # [stderr]
+            # Failed to find executable /var/lib/waagent/Microsoft.Azure.Extensions.CustomScript-2.0.7/disablefailed: No such file or directory
+            {
+                'message': r"Failed to start Microsoft.Azure.Extensions.CustomScript.* using systemd-run, will try invoking the extension directly"
             }
         ]
         return ignore_rules

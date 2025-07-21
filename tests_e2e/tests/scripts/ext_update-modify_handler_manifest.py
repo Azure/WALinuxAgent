@@ -23,6 +23,8 @@
 import argparse
 import glob
 import json
+import os.path
+import shutil
 import sys
 
 from tests_e2e.tests.lib.logging import log
@@ -30,15 +32,15 @@ from tests_e2e.tests.lib.logging import log
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--extension-name', dest='extension_name', required=True, help='Name of the extension to update the handlerManifest for')
-    parser.add_argument('--properties', dest='properties', nargs='+', required=True, help='List of property=value to update in the handlerManifest file')
+    operation = parser.add_argument_group('Main operation')
+    operation_parser = operation.add_mutually_exclusive_group(required=True)
+    operation_parser.add_argument('--properties', dest='properties', nargs='+', help='List of property=value to update in the handlerManifest file')
+    operation_parser.add_argument("--reset", dest='reset', help='Reset the handlerManifest file to the default values')
 
     args, _ = parser.parse_known_args()
     extension_name = args.extension_name
     properties = args.properties
-
-    if len(properties) == 0:
-        log.info("No properties provided to update in the handlerManifest file for extension '{0}'".format(extension_name))
-        sys.exit(1)
+    reset = args.reset
 
     # Check for the handlerManifest   file
     log.info("Checking that handlerManifest file exists.")
@@ -48,9 +50,25 @@ def main():
         log.info("No handlerManifest.json file found for extension '{0}'".format(extension_name))
         sys.exit(1)
 
-
     manifest_file = matched_files[0]
     log.info("HandlerManifest file found for extension '{0}': {1}".format(extension_name, manifest_file))
+
+    if reset is not None:
+        log.info("Resetting handlerManifest file for extension '{0}' to default values".format(extension_name))
+        # Reset the handlerManifest file to the default values
+        backup_file = manifest_file + ".bak"
+        if os.path.exists(backup_file):
+            shutil.copy(backup_file, manifest_file)
+            log.info("Reset handlerManifest file for extension '{0}' to default values".format(extension_name))
+        else:
+            log.info("No backup file found to reset the handlerManifest file for extension '{0}'".format(extension_name))
+        sys.exit(0)
+
+    if len(properties) == 0:
+        log.info("No properties provided to update in the handlerManifest file for extension '{0}'".format(extension_name))
+        sys.exit(1)
+
+    shutil.copy(manifest_file, manifest_file + ".bak")
 
     # Sample handlerManifest.json structure:
     # [

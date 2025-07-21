@@ -5,4 +5,3 @@ name: "ExtensionUpdate"
 tests:
   - "ext_update/ext_update_failure.py"
 images: "random(endorsed)"
-owns_vm: true
