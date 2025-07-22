@@ -118,11 +118,9 @@ class RedhatOSUtil(Redhat6xOSUtil):
         In non-image mode, the default location is /usr/lib/systemd/system.
         """
         if RedhatOSUtil.is_image_mode():
-            logger.debug("VM is running in image mode")
             return "/etc/systemd/system"
         else:
-            logger.debug("VM is running in package mode")
-            return "/usr/lib/systemd/system"
+            return RedhatOSUtil.get_systemd_unit_file_install_path()
 
     def set_hostname(self, hostname):
         """
