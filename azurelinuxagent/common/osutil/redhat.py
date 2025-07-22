@@ -108,14 +108,20 @@ class RedhatOSUtil(Redhat6xOSUtil):
 
     @staticmethod
     def get_systemd_unit_file_install_path():
+        return "/usr/lib/systemd/system"
+
+    @staticmethod
+    def get_network_setup_service_install_path():
         """
         In image mode, /usr is readonly, so the
-        systemd unit files are written in /etc/systemd/system.
+        waagent-network-setup.service is written in /etc/systemd/system.
         In non-image mode, the default location is /usr/lib/systemd/system.
         """
         if RedhatOSUtil.is_image_mode():
+            logger.debug("VM is running in image mode")
             return "/etc/systemd/system"
         else:
+            logger.debug("VM is running in package mode")
             return "/usr/lib/systemd/system"
 
     def set_hostname(self, hostname):

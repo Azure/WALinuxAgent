@@ -75,19 +75,19 @@ if __name__ == '__main__':
     def get_service_file_path():
         osutil = get_osutil()
         service_name = PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_NAME_FORMAT.format(osutil.get_service_name())
-        return os.path.join(osutil.get_systemd_unit_file_install_path(), service_name)
+        return os.path.join(osutil.get_network_setup_service_install_path(), service_name)
 
     def __init__(self, dst_ip):
         """
         This class deals with ensuring that Firewall rules are persisted over system reboots.
         It tries to employ using Firewalld.service if present first as it already has provisions for persistent rules.
-        If not, it then creates a new agent-network-setup.service file and copy it over to the osutil.get_systemd_unit_file_install_path() dynamically
+        If not, it then creates a new agent-network-setup.service file and copy it over to the osutil.get_network_setup_service_install_path() dynamically
         On top of it, on every service restart it ensures that the WireIP is overwritten and the new IP is blocked as well.
         """
         osutil = get_osutil()
         self._network_setup_service_name = self._AGENT_NETWORK_SETUP_NAME_FORMAT.format(osutil.get_service_name())
         self._is_systemd = systemd.is_systemd()
-        self._systemd_file_path = osutil.get_systemd_unit_file_install_path()
+        self._systemd_file_path = osutil.get_network_setup_service_install_path()
         self._dst_ip = dst_ip
         # The custom service will try to call the current agent executable to setup the firewall rules
         self._current_agent_executable_path = os.path.join(os.getcwd(), sys.argv[0])
