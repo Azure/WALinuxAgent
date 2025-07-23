@@ -78,10 +78,7 @@ if __name__ == '__main__':
     def get_service_file_path(mode=''):
         osutil = get_osutil()
         service_name = PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_NAME_FORMAT.format(osutil.get_service_name())
-        if PersistFirewallRulesHandler._DISTRO == 'rhel' and mode != 'package_mode':
-            return os.path.join(osutil.get_network_setup_service_install_path(), service_name)
-        else:
-            return os.path.join(osutil.get_systemd_unit_file_install_path(), service_name)
+        return os.path.join(osutil.get_network_setup_service_install_path(mode=mode), service_name)
 
     def __init__(self, dst_ip):
         """
