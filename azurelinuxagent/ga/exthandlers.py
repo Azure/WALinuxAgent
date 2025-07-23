@@ -303,15 +303,18 @@ class ExtHandlersHandler(object):
     def __init__(self, protocol):
         self.protocol = protocol
         self.ext_handlers = None
+
+        # Policy engine is initialized to a default "allow all" policy at agent start. This initialization should not raise errors.
+        # The policy is updated on a per-goal state basis; the actual policy file is read later during extension processing.
+        #
+        # Note: the policy engine is a member of this class so it can be accessed for each operation. Disallowed extensions
+        # should be blocked on a per-operation level, so certain operations can proceed when no extension code would be run.
+        # For example, uninstall should be permitted on an extension that was never properly installed.
+        self._policy_engine = ExtensionPolicyEngine()
+
         # Maintain a list of extension handler objects that are disallowed (e.g. blocked by policy, extensions disabled, etc.).
         # Extension status, if it exists, is always reported for the extensions in this list. List is reset for each goal state.
-        self.__disallowed_ext_handlers = None
-
-        # Policy is read on a per-goal state basis, so the policy engine is set to None on agent start and re-initialized
-        # on each goal state change. Policy engine is a member of this class so it can be accessed for each operation.
-        # Disallowed extensions should be blocked on a per-operation level, so certain operations can proceed when no
-        # extension code would be run (for example, uninstall should be permitted that was never properly installed).
-        self._policy_engine = None
+        self.__disallowed_ext_handlers = []
 
         # The GoalState Aggregate status needs to report the last status of the GoalState. Since we only process
         # extensions on goal state change, we need to maintain its state.
@@ -339,11 +342,6 @@ class ExtHandlersHandler(object):
             # self.ext_handlers needs to be initialized before returning, since status reporting depends on it; also
             # we make a deep copy of the extensions, since changes are made to self.ext_handlers while processing the extensions
             self.ext_handlers = copy.deepcopy(egs.extensions)
-
-            # Initialize the policy engine for the current goal state. This sets a default "allow all" policy, which
-            # ensures no errors are raised during initialization. The actual policy file is loaded when processing extensions.
-            self._policy_engine = ExtensionPolicyEngine()
-            self.__disallowed_ext_handlers = []
 
             if self._extensions_on_hold():
                 return
@@ -528,17 +526,9 @@ class ExtHandlersHandler(object):
         # and report the error via handler status for each extension.
         policy_error = None
         try:
-            self._policy_engine.update_policy()
+            self._policy_engine.update_policy(self.protocol.get_goal_state().history)
         except Exception as ex:
             policy_error = ex
-
-        # Save policy contents to history folder. If there is an error saving to history, log a warning but continue processing extensions.
-        try:
-            gs_history = self.protocol.get_goal_state().history
-            if self._policy_engine.policy_file_contents is not None and gs_history is not None:
-                gs_history.save(self._policy_engine.policy_file_contents, "waagent_policy.json")
-        except Exception as ex:
-            logger.warn("Failed to save policy to history, continuing with extension processing. Error: {0}", ustr(ex))
 
         for extension, ext_handler in all_extensions:
 
@@ -559,9 +549,9 @@ class ExtHandlersHandler(object):
                                                    message=msg, extension=extension)
                 continue
 
-            # If an error was thrown during policy engine initialization, skip further processing of the extension.
+            # If an error was thrown during policy update, skip further processing of the extension if user has enabled policy enforcement.
             # CRP is still waiting for status, so we report error status here.
-            if policy_error is not None:
+            if policy_error is not None and self._policy_engine.policy_enforcement_enabled:
                 msg = "Extension will not be processed due to an error verifying extension policy: {0}".format(ustr(policy_error))
                 self.__handle_ext_disallowed_error(ext_handler_i=handler_i, error_code=error_code,
                                                    report_op=WALAEventOperation.ExtensionPolicy, message=msg,
@@ -837,13 +827,7 @@ class ExtHandlersHandler(object):
             extension_is_signed = ext_handler_i.ext_handler.encoded_signature != ""
             self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
 
-            # Determine whether to ignore signature validation errors based on policy and conf flag. Errors should be ignored
-            # only if "Debug.IgnoreSignatureValidationErrors" is true and policy does not require signature.
-            ignore_signature_validation_errors = (
-                    not self._policy_engine.should_enforce_signature_validation(ext_handler_i.ext_handler.name)
-                    and conf.get_ignore_signature_validation_errors()
-            )
-            self.__setup_new_handler(ext_handler_i, extension, ignore_signature_validation_errors)
+            self.__setup_new_handler(ext_handler_i, extension, self.__should_ignore_signature_validation_errors(ext_handler_i))
 
             if old_ext_handler_i is None:
                 ext_handler_i.install(extension=extension)
@@ -1181,6 +1165,18 @@ class ExtHandlersHandler(object):
             ext_handler_statuses.append(handler_status)
 
         vm_status.vmAgent.extensionHandlers.extend(ext_handler_statuses)
+
+    def __should_ignore_signature_validation_errors(self, ext_handler_i):
+        """
+        Determine whether to ignore signature validation errors.
+        Signature validation errors are ignored only if:
+            1. The configuration flag "Debug.IgnoreSignatureValidationError" is set to True.
+            2. The policy does NOT require signature validation for this extension, AND
+\
+        Note: After telemetry release, condition #2 will be removed, and signature validation errors will block the
+        extension regardless of policy.
+        """
+        return conf.get_ignore_signature_validation_errors() and not self._policy_engine.should_enforce_signature_validation(ext_handler_i.ext_handler.name)
 
 
 class ExtHandlerInstance(object):

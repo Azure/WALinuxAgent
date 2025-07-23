@@ -118,10 +118,8 @@ def _write_signature_to_file(sig_string, output_file):
 def report_validation_event(op, level, message, name, version, duration):
     """
     Log signature validation event and emit telemetry with appropriate message based on log level.
-    'level' is expected to be one of logger.LogLevel.INFO, WARNING, or ERROR.
-        - if level is ERROR: prefix message with "[ERROR]" in telemetry
-        - if level is WARNING: prefix with "[WARNING]" in telemetry, and append a message that failure can be ignored
-        - if level is INFO: log message as-is
+    'level' is expected to be one of logger.LogLevel.INFO, WARNING, or ERROR. If level is WARNING, prefix with "[WARNING]"
+    in telemetry, and append a message that failure can be ignored.
 
     TODO: for extension signature validation, add '[Name-Version]' prefix to log messages
     """

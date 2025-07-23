@@ -50,6 +50,7 @@ from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, migrate_handler_s
     get_exthandlers_handler, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
     ExtensionStatusValue, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, GoalStateStatus, ExtHandlerState
 from azurelinuxagent.ga.signature_validation_util import signature_has_been_validated, PACKAGE_VALIDATION_STATE_FILE
+from azurelinuxagent.ga.policy.policy_engine import _PolicyEngine
 
 from tests.lib import wire_protocol_data
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
@@ -3598,8 +3599,7 @@ class TestExtensionPolicy(TestExtensionBase):
             {
                 "policyVersion": "0.1.0"
             }
-        with patch('azurelinuxagent.ga.policy.policy_engine.ExtensionPolicyEngine.update_policy',
-                   side_effect=Exception("mock exception")):
+        with patch.object(_PolicyEngine, "_PolicyEngine__read_policy", side_effect=Exception("mock exception")):
             expected_msg = "Extension will not be processed due to an error verifying extension policy: mock exception"
             self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled,
                                       expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
