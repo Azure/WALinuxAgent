@@ -51,23 +51,27 @@ class Hibernation(AgentVmTest):
 
     def run(self):
         log.info("Executing test on %s - IP address: %s", self._context.vm, self._context.ip_address)
+        log.info("")
 
         #
         # Ensure hibernation is enabled
         #
         self._enable_hibernation()
+        log.info("")
 
         #
         # Check that the current incarnation is 1; if that is not the case, do a hibernate-resume cycle to reset the incarnation to 1
         #
-        log.info("Retrieving current incarnation...")
+        log.info("Verifying that the current incarnation is 1...")
         incarnation = self._ssh_client.run_command("get_goal_state.py --tag Incarnation", use_sudo=True).rstrip()
         if incarnation != "1":
+            log.info("The current incarnation is %s, doing a hibernate-resume cycle to reset it to 1...", incarnation)
             self._do_hibernate_resume_cycle()
             incarnation = self._ssh_client.run_command("get_goal_state.py --tag Incarnation", use_sudo=True).rstrip()
             if incarnation != "1":
                 raise Exception(f"The incarnation was not reset to 1 after a hibernate-resume cycle. Incarnation is {incarnation}")
         log.info("The current incarnation is 1")
+        log.info("")
 
         #
         # Do a hibernate-resume cycle; this will generate a new tenant certificate but, since the incarnation has not changed,
@@ -76,16 +80,19 @@ class Hibernation(AgentVmTest):
         log.info("Retrieving tenant certificate before hibernation...")
         pre_hibernation_tenant_certificate = self._get_tenant_certificate()
         log.info("Tenant certificate: %s", pre_hibernation_tenant_certificate)
+        log.info("")
 
         log.info("Triggering a hibernate-resume cycle to test the tenant certificate...")
         hibernate_time = self._ssh_client.get_time()
         self._do_hibernate_resume_cycle()
+        log.info("")
 
-        log.info("Retrieving current incarnation...")
+        log.info("Verifying that the current incarnation is 1 after resume...")
         incarnation = self._ssh_client.run_command("get_goal_state.py --tag Incarnation", use_sudo=True).rstrip()
         if incarnation != "1":
             raise Exception(f"Unexpected behavior: The incarnation is not 1 after a hibernate-resume cycle. Incarnation is {incarnation}")
         log.info("The current incarnation is 1")
+        log.info("")
 
         log.info("Checking tenant certificate after resume...")
         post_hibernation_tenant_certificate = self._get_tenant_certificate()
@@ -98,6 +105,7 @@ class Hibernation(AgentVmTest):
         if downloaded != "":
             raise Exception(f"Unexpected behavior: The new tenant certificate was downloaded after resume: {downloaded}")
         log.info("The new tenant certificate has not been downloaded yet.")
+        log.info("")
 
         #
         # Execute an extension with protected settings and verify that the new tenant certificate was downloaded.
@@ -107,12 +115,14 @@ class Hibernation(AgentVmTest):
         message = str(uuid.uuid4())
         custom_script.enable(protected_settings={'commandToExecute': f"echo \'{message}\'"}, force_update=True)
         custom_script.assert_instance_view(expected_message=message)
+        log.info("")
 
         log.info("Checking that the new tenant certificate was downloaded...")
         downloaded = self._ssh_client.run_command(f"find {conf.get_lib_dir()} -name '*.crt'", use_sudo=True)
         if post_hibernation_tenant_certificate not in downloaded:
             fail(f"The new tenant certificate ({post_hibernation_tenant_certificate}) was not downloaded:\n{downloaded}")
         log.info("The new tenant certificate was downloaded.")
+        log.info("")
 
         #
         # Currently the Agent ignores the Fabric goal state created during Resume. If that behavior changes, or another Fabric goal state is created

@@ -188,7 +188,7 @@ class VirtualMachineClient(AzureSdkClient):
 
         self._wait_for_status("PowerState/running", boot_timeout)
 
-        # self._wait_for_power_state() works by checking the instance view, and we may capture a view from before the reboot actually happened, so we verify
+        # self._wait_for_status() works by checking the instance view, and we may capture a view from before the reboot actually happened, so we verify
         # that the reboot actually happened by checking the system's uptime.
         while datetime.datetime.now(UTC) < start + boot_timeout:
             log.info("Verifying VM's uptime to ensure the reboot has completed...")
