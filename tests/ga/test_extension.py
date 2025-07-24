@@ -1880,7 +1880,7 @@ class TestExtension_Deprecated(TestExtensionBase):
             # for the new version is not called and the new version handler's status is reported as not ready.
             self.assertEqual(1, patch_get_disable_command.call_count)
             self.assertEqual(0, patch_get_enable_command.call_count)
-            self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.1")
+            self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.1", expected_code=ExtensionErrorCodes.PluginUpdateProcessingFailed)
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_extension_upgrade_failure_when_prev_version_disable_fails_and_recovers_on_next_incarnation(self, patch_get_disable_command,
@@ -1987,7 +1987,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         exthandlers_handler.report_ext_handlers_status()
 
         self.assertEqual(1, patch_get_update_command.call_count)
-        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.1")
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.1", expected_code=ExtensionErrorCodes.PluginUpdateProcessingFailed)
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_extension_upgrade_should_pass_when_continue_on_update_failure_is_true_and_prev_version_disable_fails(
@@ -2046,7 +2046,7 @@ class TestExtension_Deprecated(TestExtensionBase):
                              "The first call would raise an exception")
 
         # Assert test scenario
-        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.1")
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.1", expected_code=ExtensionErrorCodes.PluginUpdateProcessingFailed)
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_uninstall_command')
     def test_extension_upgrade_should_fail_when_continue_on_update_failure_is_false_and_prev_version_uninstall_fails(
@@ -2065,7 +2065,7 @@ class TestExtension_Deprecated(TestExtensionBase):
                              "The second call would raise an exception")
 
         # Assert test scenario
-        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.1")
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.1", expected_code=ExtensionErrorCodes.PluginUpdateProcessingFailed)
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_extension_upgrade_should_fail_when_continue_on_update_failure_is_true_and_old_disable_and_new_enable_fails(
@@ -2086,7 +2086,7 @@ class TestExtension_Deprecated(TestExtensionBase):
                 self.assertEqual(1, patch_get_enable.call_count)
 
         # Assert test scenario
-        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.1")
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.1", expected_code=ExtensionErrorCodes.PluginEnableProcessingFailed)
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.is_continue_on_update_failure', return_value=True)
     def test_uninstall_rc_env_var_should_report_not_run_for_non_update_calls_to_exthandler_run(
