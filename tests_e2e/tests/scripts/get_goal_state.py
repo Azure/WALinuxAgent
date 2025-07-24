@@ -91,6 +91,20 @@ def _get_wireserver_request_headers(request_encryption: bool, key_location) -> D
     return headers
 
 
+def _get_vm_settings(endpoint: str, goal_state_xml: str, tries: int, timeout: int, delay: int) -> str:
+    """
+    Issues an HTTP GET request to retrieve the VmSettings.
+    """
+    headers = {
+        "x-ms-version": "2015-09-01",
+        "x-ms-containerid": _get_elements_by_tag_name(goal_state_xml, "ContainerId")[0],
+        "x-ms-host-config-name": _get_elements_by_tag_name(goal_state_xml, "ConfigName")[0],
+        "x-ms-client-correlationid": "12345678-9012-3456-7890-123456789012"
+    }
+
+    return _get(url=f"http://{endpoint}:32526/vmSettings", headers=headers, tries=tries, timeout=timeout, delay=delay)
+
+
 def _get_elements_by_tag_name(xml: str, tag: str) -> List[str]:
     """
     Retrieves a list of all the elements matching the given tag in the given XML.
@@ -181,10 +195,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description='Display the current goal state.',
         epilog="""
-Displays the main goal state object.
-
+Displays the goal state object.
 Use the --certificates, --extensions, '--hosting-environment, --remote-access, and --shared option to display the corresponding sub-object. 
 Use the --tag option to display only the XML elements matching that tag.
+Use the --vmsettings to display the VmSettings. Note that this is a JSON document, not an XML document
 
 Examples:
 
@@ -192,6 +206,7 @@ Examples:
     * get_goal_state.py --tag Incarnation
     * get_goal_state.py --extensions
     * get_goal_state.py --certificates --expand /tmp    
+    * get_goal_state.py --vmsettings    
 """)
     parser.add_argument('--delay', required=False, default=6, type=int, help="Delay in seconds between retries of WireServer requests.")
     parser.add_argument('--endpoint', required=False, default="168.63.129.16", help="IP address for the WireServer endpoint.")
@@ -206,13 +221,18 @@ Examples:
     group.add_argument('--hosting-environment', action='store_true', help='Fetch the HostingEnvironmentConfig for the goal state')
     group.add_argument('--remote-access', action='store_true', help='Fetch the RemoteAccessInfo for the goal state')
     group.add_argument('--shared', action='store_true', help='Fetch the SharedConfig for the goal state')
+    group.add_argument('--vmsettings', action='store_true', help='Fetch the VmSettings')
 
     args = parser.parse_args()
+
+    if args.vmsettings:
+        if args.tag is not None:
+            raise Exception("--vmsettings and --tag are mutually exclusive")
 
     if args.expand is not None:
         if not args.certificates:
             raise Exception("The --expand option can only be used with --certificates")
-        if args.tag:
+        if args.tag is not None:
             raise Exception("--expand and --tag are mutually exclusive")
 
     goal_state = _get_goal_state(endpoint=args.endpoint, tries=args.tries, timeout=args.timeout, delay=args.delay)
@@ -230,6 +250,10 @@ Examples:
         headers = _get_wireserver_request_headers(request_encryption=True, key_location=args.waagent)
     elif args.shared:
         url = _get_elements_by_tag_name(goal_state, 'SharedConfig')[0]
+    elif args.vmsettings:
+        vm_settings = _get_vm_settings(endpoint=args.endpoint, goal_state_xml=goal_state, tries=args.tries, timeout=args.timeout, delay=args.delay)
+        print(vm_settings)
+        return
 
     if url is None:
         xml_document = goal_state

@@ -124,13 +124,14 @@ class Hibernation(AgentVmTest):
         agent_log_contents = self._ssh_client.run_command('grep -E "ProcessExtensionsGoalState.*source: \\S+ " /var/log/waagent.log')
         if agent_log_contents == "":
             raise Exception("Could not search the agent log for goal states. Did the format of the log change?")
-        agent_log_contents_formatted = agent_log_contents.rstrip().replace('\n', '\n\t')
-        log.info(f"Goal states since {create_utc_timestamp(hibernate_time)}:\n\t{agent_log_contents_formatted}")
 
         agent_log = AgentLog(contents=agent_log_contents)
-        for record in agent_log.read():
-            if record.timestamp >= hibernate_time and "source: Fabric" in record.message:
-                raise Exception("A Fabric goal state occurred after hibernation. This invalidates the test results.")
+        goal_states = [record for record in agent_log.read() if record.timestamp >= hibernate_time]
+        goal_states_formatted = '\n\t'.join([record.text for record in goal_states])
+        log.info(f"Goal states since {create_utc_timestamp(hibernate_time)}:\n\t{goal_states_formatted}")
+        for record in goal_states:
+            if "source: Fabric" in record.message:
+                raise Exception(f"A Fabric goal state occurred after hibernation. This invalidates the test results. Goal state: {record.text}")
         log.info("The agent processed only FastTrack goal states after hibernation...")
 
     def _get_tenant_certificate(self) -> str:
