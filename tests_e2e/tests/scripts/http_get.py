@@ -55,7 +55,7 @@ def main():
                 response = connection.getresponse()
                 content = response.read().decode("utf-8")
                 if response.status != 200:
-                    raise Exception(f"{response.reason}", content)
+                    raise Exception(f"{response.reason} - {content}")
                 print(content)
                 break
             finally:

@@ -31,7 +31,7 @@ try:
     parser.set_defaults(json=False)
     args = parser.parse_args()
 
-    error_list = AgentLog(Path(args.path)).get_errors()
+    error_list = AgentLog(path=Path(args.path)).get_errors()
 
     if args.json:
         print(json.dumps(error_list, default=lambda o: o.__dict__))

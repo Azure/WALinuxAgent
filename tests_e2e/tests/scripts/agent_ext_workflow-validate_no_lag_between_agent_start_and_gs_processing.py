@@ -23,7 +23,6 @@ import re
 import sys
 import time
 
-from pathlib import Path
 from tests_e2e.tests.lib.agent_log import AgentLog
 
 
@@ -49,7 +48,7 @@ def main():
         verified_atleast_one_agent_started_log_line = False
         verified_atleast_one_gs_complete_log_line = False
 
-        agent_log = AgentLog(Path('/var/log/waagent.log'))
+        agent_log = AgentLog()
 
         try:
             for agent_record in agent_log.read():
