@@ -106,10 +106,11 @@ python=$(get-agent-python)
 # Ensure that AutoUpdate is enabled. some distros, e.g. Flatcar have a waagent.conf in different path
 waagent_conf_path=$($python -c 'from azurelinuxagent.common.osutil import get_osutil; osutil=get_osutil(); print(osutil.agent_conf_file_path)')
 echo "Agent's conf path: $waagent_conf_path"
-sed -i 's/AutoUpdate.Enabled=n/AutoUpdate.Enabled=y/g' "$waagent_conf_path"
+update-waagent-conf AutoUpdate.Enabled=y -no-restart
 # By default UpdateToLatestVersion flag set to True, so that agent go through update logic to look for new agents.
 # But in e2e tests this flag needs to be off in test version 9.9.9.9 to stop the agent updates, so that our scenarios run on 9.9.9.9.
-sed -i '$a AutoUpdate.UpdateToLatestVersion=n' "$waagent_conf_path"
+update-waagent-conf AutoUpdate.UpdateToLatestVersion=n -no-restart
+
 # Logging and exiting tests if Extensions.Enabled flag is disabled for other distros than debian
 if grep -q "Extensions.Enabled=n" $waagent_conf_path; then
   pypy_get_distro=$(pypy3 -c 'from azurelinuxagent.common.version import get_distro; print(get_distro())')
@@ -118,7 +119,7 @@ if grep -q "Extensions.Enabled=n" $waagent_conf_path; then
   # If rest of the distros disable extensions, then we exit the test setup to fail the test.
   if [[ $pypy_get_distro == *"debian"* ]] || [[ $python_get_distro == *"debian"* ]]; then
       echo "Extensions.Enabled flag is disabled and this is expected in debian distro, so enabling it"
-      update-waagent-conf Extensions.Enabled=y
+      update-waagent-conf Extensions.Enabled=y -no-restart
   else
       echo "Extensions.Enabled flag is disabled which is unexpected in this distro, so exiting test setup to fail the test"
       exit 1

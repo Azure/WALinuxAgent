@@ -451,12 +451,12 @@ class AgentTestSuite(LisaTestSuite):
                 pypy_path = self._pypy_x64_path
             target_path = Path("~")/"tmp"
             ssh_client.run_command(f"mkdir {target_path}")
-            log.info("Copying %s to %s:%s", pypy_path, node.name, target_path)
-            ssh_client.copy_to_node(pypy_path, target_path)
             log.info("Copying %s to %s:%s", self._test_agent_package_path, node.name, target_path)
             ssh_client.copy_to_node(self._test_agent_package_path, target_path)
             log.info("Copying %s to %s:%s", self._test_tools_tarball_path, node.name, target_path)
             ssh_client.copy_to_node(self._test_tools_tarball_path, target_path)
+            log.info("Copying %s to %s:%s", pypy_path, node.name, target_path)
+            ssh_client.copy_to_node(pypy_path, target_path)
 
             #
             # Extract the tarball with the test tools. The tarball includes two directories:

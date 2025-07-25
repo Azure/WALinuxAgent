@@ -875,7 +875,9 @@ class ExtHandlersHandler(object):
                 msg = "%s; ContinueOnUpdate: %s" % (ustr(e), continue_on_update_failure)
                 old_ext_handler_i.report_event(message=msg, is_success=False)
                 if not continue_on_update_failure:
-                    raise ExtensionUpdateError(msg)
+                    # We need to populate correct error code here
+                    # Without this, the superclass defaults to code -1, which may not accurately represent the error.
+                    raise ExtensionUpdateError(msg, code=ExtensionErrorCodes.PluginUpdateProcessingFailed)
 
                 exit_code = e.code
                 if isinstance(e, ExtensionOperationError):
