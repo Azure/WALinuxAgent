@@ -7,3 +7,7 @@ tests:
 #
 images:
   - "ubuntu_2204"
+
+skip_on_clouds:
+  - "AzureChinaCloud"
+  - "AzureUSGovernment"
