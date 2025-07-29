@@ -75,10 +75,10 @@ if __name__ == '__main__':
     _DISTRO = get_distro()[0]
 
     @staticmethod
-    def get_service_file_path(mode=''):
+    def get_service_file_path():
         osutil = get_osutil()
         service_name = PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_NAME_FORMAT.format(osutil.get_service_name())
-        return os.path.join(osutil.get_network_setup_service_install_path(mode=mode), service_name)
+        return os.path.join(osutil.get_network_setup_service_install_path(), service_name)
 
     def __init__(self, dst_ip):
         """
@@ -179,14 +179,16 @@ if __name__ == '__main__':
         # This is to handle the case where WireIP can change midway on service restarts.
         # Additionally, incase of auto-update this would also update the location of the new EGG file ensuring that
         # the service is always run from the most latest agent.
-        osutil = get_osutil()
+
         # If RHEL and in image mode, we need to clean up the service file in old path
-        if self._DISTRO == 'rhel' and osutil.is_image_mode() and os.path.exists(self.get_service_file_path(mode="package_mode")):
-            logger.info("Cleaning up old service file in image mode: {0}".format(self.get_service_file_path(mode="package_mode")))
-            try:
-                fileutil.rm_files(self.get_service_file_path(mode="package_mode"))
-            except Exception as error:
-                logger.info("Unable to delete old service in image mode {0}: {1}".format(self._network_setup_service_name, ustr(error)))
+        if self._DISTRO == 'rhel' and os.path.exists('/run/ostree-booted'):
+            old_service_file_path = os.path.join('/usr/lib/systemd/system/', self._network_setup_service_name)
+            if os.path.exists(old_service_file_path):
+                logger.info("Cleaning up old service file in image mode: {0}".format(old_service_file_path))
+                try:
+                    fileutil.rm_files(old_service_file_path)
+                except Exception as error:
+                    logger.warn("Unable to delete old service in image mode {0}: {1}".format(self._network_setup_service_name, ustr(error)))
 
         self.__setup_binary_file()
 

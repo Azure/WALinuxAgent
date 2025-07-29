@@ -120,10 +120,6 @@ class DefaultOSUtil(object):
         return "waagent"
 
     @staticmethod
-    def is_image_mode():
-        return False
-
-    @staticmethod
     def get_systemd_unit_file_install_path():
         return "/lib/systemd/system"
 

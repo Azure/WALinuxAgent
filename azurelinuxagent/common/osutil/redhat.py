@@ -100,24 +100,17 @@ class RedhatOSUtil(Redhat6xOSUtil):
         self.service_name = self.get_service_name()
 
     @staticmethod
-    def is_image_mode():
-        """
-        Returns True if the OS is running in image mode, False otherwise.
-        """
-        return os.path.exists('/run/ostree-booted')
-
-    @staticmethod
     def get_systemd_unit_file_install_path():
         return "/usr/lib/systemd/system"
 
     @classmethod
-    def get_network_setup_service_install_path(cls, mode=''):
+    def get_network_setup_service_install_path(cls):
         """
         In image mode, /usr is readonly, so the
         waagent-network-setup.service is written in /etc/systemd/system.
         In non-image mode, the default location is /usr/lib/systemd/system.
         """
-        if RedhatOSUtil.is_image_mode() and mode != 'package_mode':
+        if os.path.exists('/run/ostree-booted'):
             return "/etc/systemd/system"
         else:
             return cls.get_systemd_unit_file_install_path()
