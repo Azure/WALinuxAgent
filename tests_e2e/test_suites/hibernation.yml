@@ -1,0 +1,13 @@
+name: "Hibernation"
+tests:
+  - source: "hibernation/hibernation.py"
+
+#
+# Hibernation is supported only in a few distros. For now we use Ubuntu 22, since the Hibernation extension fails in current RHEL versions and resume is unstable on Debian 11.
+#
+images:
+  - "ubuntu_2204"
+
+skip_on_clouds:
+  - "AzureChinaCloud"
+  - "AzureUSGovernment"

@@ -24,7 +24,6 @@ import re
 
 from datetime import datetime
 from azurelinuxagent.common.future import UTC, datetime_min_utc
-from pathlib import Path
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.agent_log import AgentLog
 
@@ -42,7 +41,7 @@ def main():
     log.info("Verifying that {0} package signature was validated.".format(args.extension_name))
     sig_pattern = (r".*Successfully validated signature for package '.*{0}.*'".format(re.escape(args.extension_name)))
     man_pattern = (r".*Successfully validated handler manifest 'signingInfo' for extension '.*{0}.*'".format(re.escape(args.extension_name)))
-    agent_log = AgentLog(Path('/var/log/waagent.log'))
+    agent_log = AgentLog()
 
     if args.after_timestamp is None:
         after_datetime = datetime_min_utc
