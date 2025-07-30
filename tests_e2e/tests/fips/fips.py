@@ -46,7 +46,8 @@ class Fips(AgentVmTest):
         log.info("")
 
         #
-        # Delete any certificates and keys that have been downloaded so far, then deallocate and re-allocate the test VM to force a new tenant certificate.
+        # Delete any certificates and keys that have been downloaded so far, since we do not want extensions to pick up any leftover files that may have been created
+        # before enabling FIPS. Then, deallocate and re-allocate the test VM to force a new tenant certificate and new decryption keys.
         #
         # Since the VM is now opted-in to FIPS 140-3, CRP will encrypt protected settings and Fabric will produce a PFX using algorithms compliant with 140-3.
         # Note that these operations can change the public IP address of the VM, so we need to refresh it.
@@ -174,17 +175,6 @@ class Fips(AgentVmTest):
 
         stdout = self._ssh_client.run_command('fips-mode-setup --enable', use_sudo=True).rstrip()
         log.info("Enabled FIPS.\n\t%s", stdout.replace('\n', '\n\t'))
-
-        #
-        # TODO: Remove this patch
-        #
-        # The daemon that is pre-installed in current RHEL 9 images has a dependency on the goal state as part of initializing telemetry. Once FIPS 140-3 is enabled, the Daemon will
-        # go into an infinite loop because it cannot process the goal state certificates. For testing purposes, we patch the Daemon to comment out the call to _initialize_telemetry();
-        # this allows us to add RHEL to the daily test runs in order to get more test coverage and expose other potential issues. Once the Daemon is updated in the RHEL images with an
-        # agent version of 2.14.0.1 or later, this patch should be removed.
-        #
-        log.info("Patching the pre-installed Daemon...")
-        self._ssh_client.run_command(r"sed -i -E '/(.+)(self._initialize_telemetry\(\))/s//\1# \2/' /usr/lib/python3.9/site-packages/azurelinuxagent/daemon/main.py", use_sudo=True)
 
         log.info("Restarting VM to activate FIPS...")
         self._context.vm.restart(wait_for_boot=True, ssh_client=self._ssh_client)
