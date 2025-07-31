@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-import json
-
+#
 # Microsoft Azure Linux Agent
 #
 # Copyright 2018 Microsoft Corporation
@@ -17,6 +16,8 @@ import json
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import json
+import random
 import requests
 import uuid
 
@@ -34,35 +35,35 @@ class Fips(AgentVmTest):
     def __init__(self, context: AgentTestContext) -> None:
         super().__init__(context)
         self._ssh_client: SshClient = self._context.create_ssh_client()
+        self._distro = None  # initialized on run()
 
     def run(self):
-        log.info("Executing test on %s - IP address: %s", self._context.vm, self._context.ip_address)
+        self._distro = self._ssh_client.run_command("get_distro.py").rstrip()
+
+        log.info("Executing test on %s [%s] - IP address: %s", self._context.vm, self._distro, self._context.ip_address)
         log.info("")
 
         self._opt_in_to_fips()
         log.info("")
 
-        self._enable_fips()
+        if self._distro.startswith("ubuntu_22"):
+            self._enable_fips_on_ubuntu_22()
+        elif self._distro.startswith("rhel_9"):
+            self._enable_fips_on_rhel_9()
+        else:
+            raise Exception(f'Unsupported distro: {self._distro}')
         log.info("")
 
         #
-        # Delete any certificates and keys that have been downloaded so far, since we do not want extensions to pick up any leftover files that may have been created
-        # before enabling FIPS. Then, deallocate and re-allocate the test VM to force a new tenant certificate and new decryption keys.
+        # Delete any certificates and keys that have been downloaded so far, since we do not want extensions to pick up any leftover files that may have been
+        # created before enabling FIPS. Then, force the creation of a new PFX package.
         #
         # Since the VM is now opted-in to FIPS 140-3, CRP will encrypt protected settings and Fabric will produce a PFX using algorithms compliant with 140-3.
         # Note that these operations can change the public IP address of the VM, so we need to refresh it.
         #
         log.info("Deleting all certificates and keys in /var/lib/waagent...")
         self._ssh_client.run_command("find /var/lib/waagent -name '*.crt' -o -name '*.prv' -delete", use_sudo=True).rstrip()
-        log.info("Deallocating and re-allocating %s to force a new tenant-certificate...", self._context.vm)
-        log.info("Deallocating %s...", self._context.vm)
-        self._context.vm.deallocate()
-        log.info("Re-allocating %s...", self._context.vm)
-        self._context.vm.start()
-        log.info("Refreshing the IP address of %s...", self._context.vm)
-        self._context.refresh_ip_addresses()
-        self._ssh_client = self._context.create_ssh_client()
-        log.info("IP address after re-allocation: %s", self._context.ip_address)
+        self._force_new_pfx()
         log.info("")
 
         #
@@ -120,15 +121,6 @@ class Fips(AgentVmTest):
             raise Exception(f"PUT additional capabilities  failed (status: {response.status_code}): {response.text}")
         log.info("Opt-in completed...")
 
-    def _enable_fips(self) -> None:
-        distro = self._ssh_client.run_command("get_distro.py").rstrip()
-        if distro.startswith("ubuntu_22"):
-            self._enable_fips_on_ubuntu_22()
-        elif distro.startswith("rhel_9"):
-            self._enable_fips_on_rhel_9()
-        else:
-            raise Exception(f'Unsupported distro: {distro}')
-
     def _enable_fips_on_ubuntu_22(self) -> None:
         #
         # See https://ubuntu.com/tutorials/using-the-ubuntu-pro-client-to-enable-fips#4-enabling-fips-crypto-modules
@@ -184,6 +176,51 @@ class Fips(AgentVmTest):
             raise Exception("Failed to enable FIPS on Ubuntu; aborting test!!!!")
         log.info("FIPS was enabled successfully.")
 
+    def _force_new_pfx(self):
+        #
+        # Our documentation recommends 2 alternatives to force a new PFX; use any of them randomly.
+        #
+        random.seed()
+
+        if random.choice([1, 2]) == 1:
+            log.info("Adding a keyvault certificate to the osProfile to force a new PFX...")
+            self._context.vm.update({
+                "properties": {
+                    "osProfile": {
+                        "secrets": [
+                            {
+                                "sourceVault": {
+                                    "id": f"/subscriptions/{self._context.vm.subscription}/resourceGroups/waagent-tests/providers/Microsoft.KeyVault/vaults/waagenttests-canary"
+                                },
+                                "vaultCertificates": [{"certificateUrl": "https://waagenttests-canary.vault.azure.net/secrets/rsa/85d92c80443e44058cb034b2008e1e75"}]
+                            }
+                        ],
+                    }
+                }
+            })
+        else:
+            if self._distro == 'rhel_95':
+                #
+                # TODO: Remove this workaround once the pre-installed Agent RHEL 9.5 is updated to support FIPS 140-3.
+                #
+                # The current Daemon on RHEL 95 (2.7.0.6) has not been updated to support FIPS 140-3 and goes into an infinite loop while trying to fetch the certificates in the goal
+                # state. The reason is that, even if it cannot decrypt the response from the WireServer, 2.7.0.6 assumes that Certificates.pem always exists; if it does not, it goes
+                # into an infinite retry loop. To prevent this, before deallocating and reallocating, ensure that there is a Certificates.pem file, even if it is empty.
+                #
+                pem_file = '/var/lib/waagent/Certificates.pem'
+                log.info("Ensuring that %s exists...", pem_file)
+                self._ssh_client.run_command(f"touch {pem_file}", use_sudo=True)
+
+            log.info("Deallocating and re-allocating %s to force a new tenant certificate in order to create a new PFX...", self._context.vm)
+            log.info("Deallocating %s...", self._context.vm)
+            self._context.vm.deallocate()
+            log.info("Re-allocating %s...", self._context.vm)
+            self._context.vm.start()
+            log.info("Refreshing the IP address of %s...", self._context.vm)
+            self._context.refresh_ip_addresses()
+            self._ssh_client = self._context.create_ssh_client()
+            log.info("IP address after re-allocation: %s", self._context.ip_address)
+
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [
             #
@@ -207,6 +244,27 @@ class Fips(AgentVmTest):
                 'if': lambda r: r.level == "ERROR"
             }
         ]
+        #
+        # The current Daemon on RHEL_95 tries to fetch the certificates during initialization and has not been updated to support FIPS 140-3
+        #
+        #		2025-07-31T19:06:59.878313Z ERROR Daemon Daemon Failed to decrypt /var/lib/waagent/Certificates.p7m (return code: 1)
+        #
+        # 		[stdout]
+        #
+        # 		[stderr]
+        # 		Error decrypting CMS structure
+        # 		00DED7E6A77F0000:error:0308010C:digital envelope routines:inner_evp_generic_fetch:unsupported:crypto/evp/evp_fetch.c:355:Global default library context, Algorithm (DES-EDE3-CBC : 65), Properties ()
+        # 		00DED7E6A77F0000:error:17000065:CMS routines:ossl_cms_EncryptedContent_init_bio:cipher initialisation error:crypto/cms/cms_enc.c:79:
+        # 		2025-07-31T19:07:06.309758Z ERROR Daemon Daemon Failed to decrypt /var/lib/waagent/Certificates.p7m (return code: 1)
+        # 		[stdout]
+        #
+        if self._distro == 'rhel_95':
+            ignore_rules.append({
+                'message': 'Failed to decrypt /var/lib/waagent/Certificates.p7m',
+                'if': lambda r: r.prefix == "Daemon"
+
+            })
+
         return ignore_rules
 
 

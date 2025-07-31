@@ -18,6 +18,10 @@ images:
 # Support for FIPS 140-3 is currently deployed only to the Canary regions
 locations: "AzureCloud:eastus2euap"
 
+skip_on_clouds:
+  - "AzureChinaCloud"
+  - "AzureUSGovernment"
+
 # The test VM could be shared with other test suites, but we want to ensure there is a mix of FIPS and non-FIPS environments in the test run,
 # so we take ownership of the VM for this test suite.
 owns_vm: true
