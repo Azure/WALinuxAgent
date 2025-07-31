@@ -1,0 +1,12 @@
+#
+# The test suite verifies that disallowed extensions and any extensions dependent on disallowed extensions are not processed,
+# but the agent should still report status.
+name: "ExtPolicyWithDependencies"
+tests:
+  - "ext_policy/ext_policy_with_dependencies.py"
+images: "endorsed"
+executes_on_scale_set: true
+owns_vm: false
+skip_on_images:
+  - "alma_8"
+  - "alma_9"  # TODO: Currently AlmaLinux is not available for scale sets; enable this image when it is available.

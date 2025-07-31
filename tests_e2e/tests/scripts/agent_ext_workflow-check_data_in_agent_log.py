@@ -21,20 +21,27 @@
 import argparse
 import sys
 
+from datetime import datetime
 from pathlib import Path
+from azurelinuxagent.common.future import UTC
 from tests_e2e.tests.lib.agent_log import AgentLog
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", dest='data', required=True)
+    parser.add_argument("--after-timestamp", dest='after_timestamp', required=False)
     args, _ = parser.parse_known_args()
 
     print("Verifying data: {0} in waagent.log".format(args.data))
     found = False
 
     try:
-        found = AgentLog(Path('/var/log/waagent.log')).agent_log_contains(args.data)
+        if args.after_timestamp is not None:
+            after_datetime = datetime.strptime(args.after_timestamp, '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
+            found = AgentLog(Path('/var/log/waagent.log')).agent_log_contains(args.data, after_datetime)
+        else:
+            found = AgentLog(Path('/var/log/waagent.log')).agent_log_contains(args.data)
         if found:
             print("Found data: {0} in agent log".format(args.data))
         else:

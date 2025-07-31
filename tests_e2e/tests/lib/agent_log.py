@@ -21,6 +21,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, AnyStr, Dict, Iterable, List, Match
 
+from azurelinuxagent.common.future import UTC, datetime_min_utc
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
 
 
@@ -71,11 +72,11 @@ class AgentLogRecord:
         ext_timestamp_regex_2 = r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}"
 
         if re.match(ext_timestamp_regex_1, self.when):
-            return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S.%f')
+            return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S.%f').replace(tzinfo=UTC)
         elif re.match(ext_timestamp_regex_2, self.when):
-            return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S')
+            return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S').replace(tzinfo=UTC)
         # Logs from agent follow this format: 2023-07-10T20:50:13.038599Z
-        return datetime.strptime(self.when, u'%Y-%m-%dT%H:%M:%S.%fZ')
+        return datetime.strptime(self.when, u'%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=UTC)
 
     def __str__(self):
         return self.text
@@ -153,17 +154,14 @@ class AgentLog(object):
                 'if': lambda r: re.match(r"(((centos|redhat)7\.[48])|(redhat7\.6)|(redhat8\.2))\D*", DISTRO_NAME, flags=re.IGNORECASE)
             },
             #
-            # Ubuntu 22 uses cgroups v2, so we need to ignore these:
+            # We log these when the controllers not mounted at root in v2 machines, expected warn.
             #
-            #     2023-03-15T20:47:56.684849Z INFO ExtHandler ExtHandler [CGW] The CPU cgroup controller is not mounted
-            #     2023-03-15T20:47:56.685392Z INFO ExtHandler ExtHandler [CGW] The memory cgroup controller is not mounted
-            #     2023-03-15T20:47:56.688576Z INFO ExtHandler ExtHandler [CGW] The agent's process is not within a CPU cgroup
-            #     2023-03-15T20:47:56.688981Z INFO ExtHandler ExtHandler [CGW] The agent's process is not within a memory cgroup
-            #
+            # 2025-03-07T09:14:37.792300Z INFO ExtHandler ExtHandler [CGW] cpu controller is not enabled; will not track
             {
-                'message': r"\[CGW\]\s*(The (CPU|memory) cgroup controller is not mounted)|(The agent's process is not within a (CPU|memory) cgroup)",
-                'if': lambda r: DISTRO_NAME == 'ubuntu' and DISTRO_VERSION >= '22.00'
+                'message': r"\[CGW\]\s*(cpu|memory) controller is not enabled",
+                'if': lambda r: (DISTRO_NAME == 'ubuntu' and DISTRO_VERSION >= '22.00') or (DISTRO_NAME == 'azurelinux' and DISTRO_VERSION >= '3.0') or (DISTRO_NAME == 'rhel' and DISTRO_VERSION >= '9.0')
             },
+            #
             #
             # Old daemons can produce this message
             #
@@ -360,9 +358,10 @@ class AgentLog(object):
 
             # Ubuntu 16 has an issue representing no quota as infinity, instead it outputs weird values. https://github.com/systemd/systemd/issues/5965, so ignoring in ubuntu 16
             # 2024-11-26T00:07:38.716162Z INFO ExtHandler ExtHandler [CGW] Error parsing current CPUQuotaPerSecUSec: could not convert string to float: '584542y 2w 2d 20h 1min 49.549568'
-            {'message': r"Error parsing current CPUQuotaPerSecUSec: could not convert string to float",
-             'if': lambda r: DISTRO_NAME == 'ubuntu' and DISTRO_VERSION == '16.04'
-             },
+            # 2025-04-08T09:02:47.491505Z INFO ExtHandler ExtHandler [CGW] Error parsing current CPUQuotaPerSecUSec: invalid literal for float(): 584542y 2w 2d 20h 1min 49.549568
+            {'message': r"Error parsing current CPUQuotaPerSecUSec: (could not convert string to float|invalid literal for float)",
+             'if': lambda r: re.match(r"((ubuntu16\.04)|(centos7\.9))\D*", "{0}{1}".format(DISTRO_NAME, DISTRO_VERSION), flags=re.IGNORECASE)
+            },
             #
             # GuestConfiguration produces a lot of errors in test runs due to issues in the extension. Some samples:
             #
@@ -398,7 +397,7 @@ class AgentLog(object):
                 'message': r"(?s)name=Microsoft.GuestConfiguration.ConfigurationforLinux.*op=Install.*Non-zero exit code: (1.*Text file busy|51.*Unexpected Linux distribution|126.*Exec format error)",
             },
             {
-                'message': r"A new goal state was received, but not all the extensions in the previous goal state have completed.*'Microsoft.GuestConfiguration.ConfigurationforLinux',\s+'transitioning'",
+                'message': r"A new goal state was received, but not all the extensions in the previous goal state have completed.*'Microsoft.GuestConfiguration.ConfigurationforLinux',\s+u?'transitioning'",
             },
             #
             # Below systemd errors are transient and will not block extension execution
@@ -409,8 +408,12 @@ class AgentLog(object):
             # 2025-01-06T09:32:42.594033Z INFO ExtHandler ExtHandler [CGW] Failed to set the extension azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice slice and quotas:
             # 'systemctl show azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice --property CPUAccounting' failed: 1 (Failed to get properties: Connection reset by peer)
             #
+            # 2025-03-12T08:48:02.186772Z INFO ExtHandler ExtHandler [CGW] Error parsing current CPUQuotaPerSecUSec: 'systemctl show azure-vmextensions-Microsoft.Azure.Extensions.Edp.GATestExtGo.slice --property CPUQuotaPerSecUSec' failed: 1 (Failed to get properties: Connection reset by peer)
+            # 2025-03-31T08:46:39.253900Z INFO ExtHandler ExtHandler [CGW] Failed to set the extension azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice slice and quotas: Can't set properties ['CPUQuota='] of azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice: 'systemctl set-property azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice CPUQuota= --runtime' failed: 1 (Failed to set unit properties on azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice: Message recipient disconnected from message bus without replying)
+            # 2025-04-28T12:27:25.311806Z INFO ExtHandler ExtHandler [CGW] Failed to set the extension azure-vmextensions-Microsoft.CPlat.Core.RunCommandHandlerLinux.slice slice and quotas: 'systemctl show azure-vmextensions-Microsoft.CPlat.Core.RunCommandHandlerLinux.slice --property CPUAccounting' failed: 1 (Failed to get properties: Remote peer disconnected)
+            # 2025-04-27T12:28:14.585253Z INFO ExtHandler ExtHandler [CGW] Error parsing current CPUQuotaPerSecUSec: 'systemctl show azure-vmextensions-Microsoft.CPlat.Core.RunCommandHandlerLinux.RunCommandHandler.slice --property CPUQuotaPerSecUSec' failed: 1 (Failed to get properties: Transport endpoint is not connected)
             {
-                'message': r"Failed to set the extension.*systemctl show.*--property.*failed: 1.*(Message recipient disconnected from message bus without replying|Connection reset by peer)",
+                'message': r"(Failed to set the extension|Error parsing).*systemctl (show|set-property).*failed: 1.*(Message recipient disconnected from message bus without replying|Connection reset by peer|Remote peer disconnected|Transport endpoint is not connected)",
             },
             #
             # 2025-01-06T09:32:44.641948Z INFO ExtHandler ExtHandler [CGW] Disabling resource usage monitoring. Reason: Failed to start Microsoft.Azure.Extensions.CustomScript-2.1.10 using systemd-run, will try invoking the extension directly. Error: [SystemdRunError] Systemd process exited with code 1 and output [stdout]
@@ -419,8 +422,21 @@ class AgentLog(object):
             # [stderr]
             # Failed to start transient scope unit: Message recipient disconnected from message bus without replying
             #
+            # Microsoft.CPlat.Core.RunCommandHandlerLinux.RunCommandHandler-1.3.15 using systemd-run, will try invoking the extension directly. Error: [SystemdRunError] Systemd process exited with code 1 and output [stdout]
+            #
+            #
+            # [stderr]
+            # Failed to start transient scope unit: Transport endpoint is not connected
             {
-                'message': r"(?s)Disabling resource usage monitoring. Reason: Failed to start.*using systemd-run, will try invoking the extension directly. Error: \[SystemdRunError\].*Failed to start transient scope unit: (Message recipient disconnected from message bus without replying|Connection reset by peer)",
+                'message': r"(?s)Disabling resource usage monitoring. Reason: Failed to start.*using systemd-run, will try invoking the extension directly. Error: \[SystemdRunError\].*Failed to start transient scope unit: (Message recipient disconnected from message bus without replying|Connection reset by peer|Remote peer disconnected|Transport endpoint is not connected)",
+            },
+            #
+            # If agent is not mounted at the expected path, we log this message in v2 machines. This is not an error.
+            # 2025-03-03T09:19:03.145557Z INFO ExtHandler ExtHandler [CGW] The walinuxagent.service cgroup is not mounted at the expected path; will not track. Actual cgroup path:[/sys/fs/cgroup/system.slice/walinuxagent.service] Expected:[/sys/fs/cgroup/azure.slice/walinuxagent.service]
+            # 2025-03-12T22:03:04.095141Z INFO ExtHandler ExtHandler [CGW] The cpu,cpuacct controller is not mounted at the expected path for the walinuxagent.service cgroup; will not track. Actual cgroup path:[/sys/fs/cgroup/cpu,cpuacct/system.slice/walinuxagent.service] Expected:[/sys/fs/cgroup/cpu,cpuacct/azure.slice/walinuxagent.service]
+            #
+            {
+                'message': r"(The walinuxagent.service cgroup is not mounted at the expected path|controller is not mounted at the expected path for the walinuxagent.service cgroup); will not track. Actual cgroup path:\[.*\] Expected:\[.*\]",
             },
         ]
 
@@ -451,7 +467,7 @@ class AgentLog(object):
 
         return errors
 
-    def agent_log_contains(self, data: str, after_timestamp: str = datetime.min):
+    def agent_log_contains(self, data: str, after_timestamp: datetime = datetime_min_utc):
         """
         This function looks for the specified test data string in the WALinuxAgent logs and returns if found or not.
         :param data: The string to look for in the agent logs

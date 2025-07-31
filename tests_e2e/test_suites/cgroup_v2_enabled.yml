@@ -1,0 +1,19 @@
+#
+# The test suite verifies that the agent enable resource monitoring on machines which are
+# using cgroup v2. This suite will be removed once cgroup v2 is supported enforcement and merged with agent_cgroups test suite.
+#
+name: "Cgroupv2Enabled"
+tests:
+  - "agent_cgroups/agent_cgroups.py"
+  - "ext_cgroups/ext_cgroups.py"
+  - "cgroup_v2_enabled/check_enforcement.py"
+images:
+  - "ubuntu_2204"
+  - "ubuntu_2404"
+  - "rhel_95"
+  - "azure-linux_3"
+# The DCR test extension installs sample service, so this test suite uses it to test services cgroups but this is only published in southcentralus region in public cloud.
+locations: "AzureCloud:southcentralus"
+skip_on_clouds:
+  - "AzureChinaCloud"
+  - "AzureUSGovernment"

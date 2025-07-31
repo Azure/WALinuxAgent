@@ -140,9 +140,8 @@ class CGroupConfigurator(object):
                     # If a distro is not supported, attempt to clean up any existing drop in files in case it was
                     # previously supported. It is necessary to cleanup in this scenario in case the OS hits any bugs on
                     # the kernel related to cgroups.
-                    if not self.using_cgroup_v2():
-                        log_cgroup_info("Agent will reset the quotas in case cgroup usage went from enabled to disabled")
-                        self._reset_agent_cgroup_setup()
+                    log_cgroup_info("Agent will reset the quotas in case cgroup usage went from enabled to disabled")
+                    self._reset_agent_cgroup_setup()
                     return
 
                 # We check the agent unit 'Slice' property before setting up azure.slice. This check is done first
@@ -156,6 +155,7 @@ class CGroupConfigurator(object):
                     return
 
                 # Before agent setup, cleanup the old agent setup (drop-in files) since new agent uses different approach(systemctl) to setup cgroups.
+                log_cgroup_info("Cleaning up old agent setup (drop-in files), if any")
                 self._cleanup_old_agent_setup()
 
                 # Notes about slice setup:
@@ -185,8 +185,9 @@ class CGroupConfigurator(object):
                 for controller in agent_controllers:
                     for prop in controller.get_unit_properties():
                         log_cgroup_info('Agent {0} unit property value: {1}'.format(prop, systemd.get_unit_property(systemd.get_agent_unit_name(), prop)))
-                    if isinstance(controller, _CpuController):
+                    if isinstance(controller, _CpuController) and self._cgroups_api.can_enforce_cpu():
                         self._set_cpu_quota(agent_unit_name, conf.get_agent_cpu_quota())
+                        controller.track_throttle_time(True)  # CPU controller track the throttle time only when CPU quota is set
                     elif isinstance(controller, _MemoryController):
                         self._agent_memory_metrics = controller
                     CGroupsTelemetry.track_cgroup_controller(controller)
@@ -196,6 +197,11 @@ class CGroupConfigurator(object):
             finally:
                 log_cgroup_info('Agent cgroups enabled: {0}'.format(self._agent_cgroups_enabled))
                 self._initialized = True
+
+                if self._cgroups_api is not None and not self._cgroups_api.can_enforce_cpu():
+                    # If agent cgroups are not enabled or quotas not enabled, reset the quota for the agent unit
+                    log_cgroup_info("Reset CPU quota if agent cgroups were not enabled for enforcement")
+                    self._reset_cpu_quota(systemd.get_agent_unit_name())
 
         def _check_cgroups_supported(self):
             distro_supported = CGroupUtil.distro_supported()
@@ -230,8 +236,7 @@ class CGroupConfigurator(object):
                 return False
 
             if self.using_cgroup_v2():
-                log_cgroup_info("Agent and extensions resource enforcement and monitoring is not currently supported on cgroup v2", send_event=True)
-                return False
+                log_cgroup_info("Only resource monitoring is currently supported on cgroup v2", send_event=True)
 
             return True
 
@@ -330,18 +335,22 @@ class CGroupConfigurator(object):
         def _reset_agent_cgroup_setup(self):
             try:
                 agent_drop_in_path = systemd.get_agent_drop_in_path()
-                if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path):
+                if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path) and len(os.listdir(agent_drop_in_path)) > 0:
                     files_to_cleanup = []
                     agent_drop_in_file_slice = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_SLICE)
-                    files_to_cleanup.append(agent_drop_in_file_slice)
+                    if os.path.exists(agent_drop_in_file_slice):
+                        files_to_cleanup.append(agent_drop_in_file_slice)
                     agent_drop_in_file_cpu_accounting = os.path.join(agent_drop_in_path,
                                                                      _DROP_IN_FILE_CPU_ACCOUNTING)
-                    files_to_cleanup.append(agent_drop_in_file_cpu_accounting)
+                    if os.path.exists(agent_drop_in_file_cpu_accounting):
+                        files_to_cleanup.append(agent_drop_in_file_cpu_accounting)
                     agent_drop_in_file_memory_accounting = os.path.join(agent_drop_in_path,
                                                                         _DROP_IN_FILE_MEMORY_ACCOUNTING)
-                    files_to_cleanup.append(agent_drop_in_file_memory_accounting)
+                    if os.path.exists(agent_drop_in_file_memory_accounting):
+                        files_to_cleanup.append(agent_drop_in_file_memory_accounting)
                     agent_drop_in_file_cpu_quota = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
-                    files_to_cleanup.append(agent_drop_in_file_cpu_quota)
+                    if os.path.exists(agent_drop_in_file_cpu_quota):
+                        files_to_cleanup.append(agent_drop_in_file_cpu_quota)
 
                     if len(files_to_cleanup) > 0:
                         log_cgroup_info("Found drop-in files; attempting agent cgroup setup cleanup", send_event=False)
@@ -407,41 +416,6 @@ class CGroupConfigurator(object):
                     CGroupConfigurator._Impl._cleanup_unit_file(unit_file)
                 return
 
-        @staticmethod
-        def _get_current_cpu_quota(unit_name):
-            """
-            Calculate the CPU percentage from CPUQuotaPerSecUSec for given unit.
-            Params:
-                cpu_quota_per_sec_usec (str): The value of CPUQuotaPerSecUSec (e.g., "1s", "500ms", "500us", or "infinity").
-
-            Returns:
-                str: CPU percentage, or 'infinity' or 'unknown' if we can't determine the value.
-            """
-            try:
-                cpu_quota_per_sec_usec = systemd.get_unit_property(unit_name, "CPUQuotaPerSecUSec").strip().lower()
-                if cpu_quota_per_sec_usec == "infinity":
-                    return cpu_quota_per_sec_usec  # No limit on CPU usage
-
-                # Parse the value based on the suffix
-                elif cpu_quota_per_sec_usec.endswith("us"):
-                    # Directly use the microseconds value
-                    cpu_quota_us = float(cpu_quota_per_sec_usec[:-2])
-                elif cpu_quota_per_sec_usec.endswith("ms"):
-                    # Convert milliseconds to microseconds
-                    cpu_quota_us = float(cpu_quota_per_sec_usec[:-2]) * 1000
-                elif cpu_quota_per_sec_usec.endswith("s"):
-                    # Convert seconds to microseconds
-                    cpu_quota_us = float(cpu_quota_per_sec_usec[:-1]) * 1000000
-                else:
-                    raise ValueError("Invalid format. Expected 's', 'ms', 'us', or 'infinity'.")
-
-                # Calculate CPU percentage
-                cpu_percentage = (cpu_quota_us / 1000000) * 100
-                return "{0:g}%".format(cpu_percentage)  # :g Removes trailing zeros after decimal point
-            except Exception as e:
-                log_cgroup_warning("Error parsing current CPUQuotaPerSecUSec: {0}".format(ustr(e)))
-                return "unknown"
-
         def supported(self):
             return self._cgroups_supported
 
@@ -496,20 +470,19 @@ class CGroupConfigurator(object):
             except Exception as exception:
                 log_cgroup_warning("Error disabling cgroups: {0}".format(ustr(exception)))
 
-        @staticmethod
-        def _set_cpu_quota(unit_name, quota):
+        def _set_cpu_quota(self, unit_name, quota):
             """
             Sets CPU quota to the given percentage (100% == 1 CPU)
 
             NOTE: This is done using a systemtcl set-property --runtime; any local overrides in /etc folder on the VM will take precedence
             over this setting.
             """
-            quota_percentage = "{0}%".format(quota)
-            log_cgroup_info("Setting {0}'s CPUQuota to {1}".format(unit_name, quota_percentage))
-            CGroupConfigurator._Impl._try_set_cpu_quota(unit_name, quota_percentage)
+            if self._cgroups_api.can_enforce_cpu():
+                quota_percentage = "{0}%".format(quota)
+                log_cgroup_info("Setting {0}'s CPUQuota to {1}".format(unit_name, quota_percentage))
+                CGroupConfigurator._Impl._try_set_cpu_quota(unit_name, quota_percentage)
 
-        @staticmethod
-        def _reset_cpu_quota(unit_name):
+        def _reset_cpu_quota(self, unit_name):
             """
             Removes any CPUQuota on the agent
 
@@ -527,7 +500,7 @@ class CGroupConfigurator(object):
         @staticmethod
         def _try_set_cpu_quota(unit_name, quota):  # pylint: disable=unused-private-member
             try:
-                current_cpu_quota = CGroupConfigurator._Impl._get_current_cpu_quota(unit_name)
+                current_cpu_quota = CGroupUtil.get_current_cpu_quota(unit_name)
                 if current_cpu_quota == quota:
                     return True
                 quota = quota if quota != "infinity" else ""  # no-quota expressed as empty string while setting property
@@ -800,7 +773,10 @@ class CGroupConfigurator(object):
                     cgroup = self._cgroups_api.get_unit_cgroup(unit_name, unit_name)
                     controllers = cgroup.get_controllers()
 
+                    has_cpu_quota = CGroupUtil.has_cpu_quota(unit_name)
                     for controller in controllers:
+                        if isinstance(controller, _CpuController) and has_cpu_quota:
+                            controller.track_throttle_time(True) # CPU controller track the throttle time only when CPU quota is set
                         CGroupsTelemetry.track_cgroup_controller(controller)
 
                 except Exception as exception:
@@ -878,7 +854,7 @@ class CGroupConfigurator(object):
             if memory_accounting != "yes":
                 properties_to_update += ("MemoryAccounting",)
                 properties_values += ("yes",)
-            current_cpu_quota = CGroupConfigurator._Impl._get_current_cpu_quota(unit_name)
+            current_cpu_quota = CGroupUtil.get_current_cpu_quota(unit_name)
             if current_cpu_quota != cpu_quota:
                 properties_to_update += ("CPUQuota",)
                 # no-quota expressed as empty string while setting property
@@ -910,7 +886,7 @@ class CGroupConfigurator(object):
                         CGroupConfigurator._Impl._cleanup_unit_file(old_extension_slice_path)
 
                     cpu_quota = "{0}%".format(
-                        cpu_quota) if cpu_quota is not None else "infinity"  # following systemd convention for no-quota (infinity)
+                        cpu_quota) if cpu_quota is not None and self._cgroups_api.can_enforce_cpu() else "infinity"  # following systemd convention for no-quota (infinity)
                     properties_to_update, properties_values = self._get_unit_properties_requiring_update(extension_slice, cpu_quota)
 
                     if len(properties_to_update) > 0:
@@ -966,7 +942,7 @@ class CGroupConfigurator(object):
                         self._cleanup_all_files(files_to_remove)
 
                         cpu_quota = service.get('cpuQuotaPercentage')
-                        cpu_quota = "{0}%".format(cpu_quota) if cpu_quota is not None else "infinity"  # following systemd convention for no-quota (infinity)
+                        cpu_quota = "{0}%".format(cpu_quota) if cpu_quota is not None and self._cgroups_api.can_enforce_cpu() else "infinity"  # following systemd convention for no-quota (infinity)
                         try:
                             properties_to_update, properties_values = self._get_unit_properties_requiring_update(service_name, cpu_quota)
                         except Exception as exception:

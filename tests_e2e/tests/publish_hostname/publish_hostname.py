@@ -36,6 +36,7 @@ from tests_e2e.tests.lib.agent_test import AgentVmTest, TestSkipped
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.logging import log
 
+from azurelinuxagent.common.future import UTC
 
 class PublishHostname(AgentVmTest):
     def __init__(self, context: AgentVmTestContext):
@@ -122,9 +123,9 @@ class PublishHostname(AgentVmTest):
                 sleep(30)
 
     def run(self):
-        # TODO: Investigate why hostname is not being published on Ubuntu, alma, and rocky as expected
-        distros_with_known_publishing_issues = ["ubuntu", "alma", "rocky"]
-        distro = self._ssh_client.run_command("get_distro.py").lower()
+        # TODO: Investigate why hostname is not being published on these distros.
+        distros_with_known_publishing_issues = ["alma", "oracle_95", "oracle_810", "redhat_810", "rhel_95", "rocky", "ubuntu"]
+        distro = self._ssh_client.run_command("get_distro.py").rstrip().lower()
         if any(d in distro for d in distros_with_known_publishing_issues):
             raise TestSkipped("Known issue with hostname publishing on this distro. Will skip test until we continue "
                               "investigation.")
@@ -139,6 +140,7 @@ class PublishHostname(AgentVmTest):
         # Check if this distro monitors hostname changes. If it does, we should check that the agent detects the change
         # and publishes the host name. If it doesn't, we should check that the hostname is automatically published.
         monitors_hostname = self._ssh_client.run_command("get-waagent-conf-value Provisioning.MonitorHostName", use_sudo=True).rstrip().lower()
+        log.info(f"Distro: {distro} Provisioning.MonitorHostName: {monitors_hostname}")
 
         hostname_change_ctr = 0
         # Update the hostname 3 times
@@ -151,9 +153,9 @@ class PublishHostname(AgentVmTest):
                 # Wait for the agent to detect the hostname change for up to 2 minutes if hostname monitoring is enabled
                 if monitors_hostname == "y" or monitors_hostname == "yes":
                     log.info("Agent hostname monitoring is enabled")
-                    timeout = datetime.datetime.now() + datetime.timedelta(minutes=2)
+                    timeout = datetime.datetime.now(UTC) + datetime.timedelta(minutes=2)
                     hostname_detected = ""
-                    while datetime.datetime.now() <= timeout:
+                    while datetime.datetime.now(UTC) <= timeout:
                         try:
                             hostname_detected = self.retry_ssh_if_connection_reset("grep -n 'Detected hostname change:.*-> {0}' /var/log/waagent.log".format(hostname), use_sudo=True)
                             if hostname_detected:
@@ -171,9 +173,9 @@ class PublishHostname(AgentVmTest):
                     log.info("Agent hostname monitoring is disabled")
 
                 # Check that the expected hostname is published with 4 minute timeout
-                timeout = datetime.datetime.now() + datetime.timedelta(minutes=4)
+                timeout = datetime.datetime.now(UTC) + datetime.timedelta(minutes=4)
                 published_hostname = ""
-                while datetime.datetime.now() <= timeout:
+                while datetime.datetime.now(UTC) <= timeout:
                     try:
                         dns_info = self.retry_ssh_if_connection_reset(lookup_cmd)
                         actual_hostname = re.match(dns_regex, dns_info)

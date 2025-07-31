@@ -15,22 +15,20 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
-import datetime
 import json
 import sys
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.event import WALAEventOperation, add_event
-from azurelinuxagent.common.future import ustr, urlparse
+from azurelinuxagent.common.future import ustr, urlparse, datetime_min_utc
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel, VmSettingsParseError
 from azurelinuxagent.common.protocol.restapi import VMAgentFamily, Extension, ExtensionRequestedState, ExtensionSettings
+from azurelinuxagent.common.utils import timeutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 
 class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
-    _MINIMUM_TIMESTAMP = datetime.datetime(1900, 1, 1, 0, 0)  # min value accepted by datetime.strftime()
-
     def __init__(self, etag, json_text, correlation_id):
         super(ExtensionsGoalStateFromVmSettings, self).__init__()
         self._id = "etag_{0}".format(etag)
@@ -42,7 +40,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         self._schema_version = FlexibleVersion('0.0.0.0')
         self._activity_id = AgentGlobals.GUID_ZERO
         self._correlation_id = AgentGlobals.GUID_ZERO
-        self._created_on_timestamp = self._MINIMUM_TIMESTAMP
+        self._created_on_timestamp = timeutil.create_utc_timestamp(datetime_min_utc)
         self._source = None
         self._status_upload_blob = None
         self._status_upload_blob_type = None

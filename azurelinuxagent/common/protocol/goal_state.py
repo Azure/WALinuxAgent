@@ -24,15 +24,14 @@ import json
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
-from azurelinuxagent.common.datacontract import set_properties
-from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.event import add_event, WALAEventOperation, LogEvent
 from azurelinuxagent.common.exception import ProtocolError, ResourceGoneError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, UTC
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.protocol.extensions_goal_state import VmSettingsParseError, GoalStateSource
 from azurelinuxagent.common.protocol.hostplugin import VmSettingsNotSupported, VmSettingsSupportStopped
-from azurelinuxagent.common.protocol.restapi import Cert, CertList, RemoteAccessUser, RemoteAccessUsersList, ExtHandlerPackage, ExtHandlerPackageList
-from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.protocol.restapi import RemoteAccessUser, RemoteAccessUsersList, ExtHandlerPackage, ExtHandlerPackageList
+from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.utils.archive import GoalStateHistory, SHARED_CONF_FILE_NAME
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
@@ -41,6 +40,7 @@ from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, find
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
 CERTS_FILE_NAME = "Certificates.xml"
 P7M_FILE_NAME = "Certificates.p7m"
+PFX_FILE_NAME = "Certificates.pfx"
 PEM_FILE_NAME = "Certificates.pem"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
@@ -161,6 +161,10 @@ class GoalState(object):
         else:
             return self._remote_access
 
+    @property
+    def history(self):
+        return self._history
+
     def fetch_agent_manifest(self, family_name, uris):
         """
         This is a convenience method that wraps WireClient.fetch_manifest(), but adds the required 'use_verify_header' parameter and saves
@@ -202,7 +206,7 @@ class GoalState(object):
         #
         # Fetch the goal state from both the HGAP and the WireServer
         #
-        timestamp = datetime.datetime.utcnow()
+        timestamp = datetime.datetime.now(UTC)
 
         if force_update:
             message = "Refreshing goal state and vmSettings"
@@ -282,16 +286,8 @@ class GoalState(object):
             self._check_and_download_missing_certs_on_disk()
 
     def _download_certificates(self, certs_uri):
-        xml_text = self._wire_client.fetch_config(certs_uri, self._wire_client.get_header_for_cert())
-        certs = Certificates(xml_text, self.logger)
-        # Log and save the certificates summary (i.e. the thumbprint but not the certificate itself) to the goal state history
-        for c in certs.summary:
-            message = "Downloaded certificate {0}".format(c)
-            self.logger.info(message)
-            add_event(op=WALAEventOperation.GoalState, message=message)
-        if len(certs.warnings) > 0:
-            self.logger.warn(certs.warnings)
-            add_event(op=WALAEventOperation.GoalState, message=certs.warnings)
+        certs = Certificates(self._wire_client, certs_uri, self.logger)
+        # Save the certificates summary (i.e. the thumbprints but not the certificates themselves) to the goal state history
         if self._save_to_history:
             self._history.save_certificates(json.dumps(certs.summary))
         return certs
@@ -327,7 +323,7 @@ class GoalState(object):
         self.logger.info(msg)
         add_event(op=WALAEventOperation.VmSettings, message=msg)
         if self._save_to_history:
-            self._history = GoalStateHistory(datetime.datetime.utcnow(), incarnation)
+            self._history = GoalStateHistory(datetime.datetime.now(UTC), incarnation)
             self._history.save_goal_state(xml_text)
         self._extensions_goal_state = self._fetch_full_wire_server_goal_state(incarnation, xml_doc)
         if self._extensions_goal_state.created_on_timestamp < vm_settings_support_stopped_error.timestamp:
@@ -399,7 +395,7 @@ class GoalState(object):
             except VmSettingsParseError as exception:
                 # ensure we save the vmSettings if there were parsing errors, but save them only once per ETag
                 if not GoalStateHistory.tag_exists(exception.etag):
-                    GoalStateHistory(datetime.datetime.utcnow(), exception.etag).save_vm_settings(exception.vm_settings_text)
+                    GoalStateHistory(datetime.datetime.now(UTC), exception.etag).save_vm_settings(exception.vm_settings_text)
                 raise
 
         return vm_settings, vm_settings_updated
@@ -511,31 +507,83 @@ class SharedConfig(object):
         self.xml_text = xml_text
 
 
-class Certificates(object):
-    def __init__(self, xml_text, my_logger):
-        self.cert_list = CertList()
-        self.summary = []  # debugging info
-        self.warnings = []
+class Certificates(LogEvent):
+    def __init__(self, wire_client, uri, logger_):
+        super(Certificates, self).__init__(logger_)
+        self.summary = []
+        self._crypt_util = CryptUtil(conf.get_openssl_cmd())
 
-        # Save the certificates
-        local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
-        fileutil.write_file(local_file, xml_text)
+        try:
+            pfx_file = self._download_certificates_pfx(wire_client, uri)
+            if pfx_file is None:  # The response from the WireServer may not have any certificates
+                return
 
-        # Separate the certificates into individual files.
-        xml_doc = parse_doc(xml_text)
-        data = findtext(xml_doc, "Data")
-        if data is None:
-            return
+            try:
+                pem_file = self._convert_certificates_pfx_to_pem(pfx_file)
+            finally:
+                self._remove_file(pfx_file)
 
-        # if the certificates format is not Pkcs7BlobWithPfxContents do not parse it
-        certificate_format = findtext(xml_doc, "Format")
-        if certificate_format and certificate_format != "Pkcs7BlobWithPfxContents":
-            message = "The Format is not Pkcs7BlobWithPfxContents. Format is {0}".format(certificate_format)
-            my_logger.warn(message)
-            add_event(op=WALAEventOperation.GoalState, message=message)
-            return
+            self.summary = self._extract_certificate(pem_file)
 
-        cryptutil = CryptUtil(conf.get_openssl_cmd())
+            for c in self.summary:
+                self.info(WALAEventOperation.GoalStateCertificates, "Downloaded certificate {0}", c)
+
+        except Exception as e:
+            self.error(WALAEventOperation.GoalStateCertificates, "Error fetching the goal state certificates: {0}", ustr(e))
+
+    def _remove_file(self, file):
+        if os.path.exists(file):
+            try:
+                os.remove(file)
+            except Exception as e:
+                self.warn(WALAEventOperation.GoalStateCertificates, "Failed to remove {0}: {1}", file, ustr(e))
+
+    def _download_certificates_pfx(self, wire_client, uri):
+        """
+        Downloads the certificates from the WireServer and saves them to a pfx file.
+        Returns the full path of the pfx file, or None, if the WireServer response does not have a "Data" element
+        """
+        trans_prv_file = os.path.join(conf.get_lib_dir(), TRANSPORT_PRV_FILE_NAME)
+        trans_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
+        xml_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
+        pfx_file = os.path.join(conf.get_lib_dir(), PFX_FILE_NAME)
+
+        for cypher in ["AES128_CBC", "DES_EDE3_CBC"]:
+            headers = wire_client.get_headers_for_encrypted_request(cypher)
+
+            try:
+                xml_text = wire_client.fetch_config(uri, headers)
+            except Exception as e:
+                self.warn(WALAEventOperation.GoalStateCertificates, "Error in Certificates request [cypher: {0}]: {1}", cypher, ustr(e))
+                continue
+
+            fileutil.write_file(xml_file, xml_text)
+
+            xml_doc = parse_doc(xml_text)
+            data = findtext(xml_doc, "Data")
+            if data is None:
+                self.info(WALAEventOperation.GoalStateCertificates, "The Data element of the Certificates response is empty")
+                return None
+            certificate_format = findtext(xml_doc, "Format")
+            if certificate_format and certificate_format != "Pkcs7BlobWithPfxContents":
+                self.warn(WALAEventOperation.GoalStateCertificates, "The Certificates format is not Pkcs7BlobWithPfxContents; skipping. Format is {0}", certificate_format)
+                return None
+
+            p7m_file = Certificates._create_p7m_file(data)
+
+            try:
+                self._crypt_util.decrypt_certificates_p7m(p7m_file, trans_prv_file, trans_cert_file, pfx_file)
+            except shellutil.CommandError as e:
+                self.warn(WALAEventOperation.GoalState, "Error in transport decryption [cypher: {0}]: {1}", cypher, ustr(e))
+                self._remove_file(pfx_file)
+                continue
+
+            return pfx_file
+
+        raise Exception("Cannot download certificates using any of the supported cyphers")
+
+    @staticmethod
+    def _create_p7m_file(data):
         p7m_file = os.path.join(conf.get_lib_dir(), P7M_FILE_NAME)
         p7m = ("MIME-Version:1.0\n"  # pylint: disable=W1308
                "Content-Disposition: attachment; filename=\"{0}\"\n"
@@ -543,68 +591,72 @@ class Certificates(object):
                "Content-Transfer-Encoding: base64\n"
                "\n"
                "{2}").format(p7m_file, p7m_file, data)
-
         fileutil.write_file(p7m_file, p7m)
+        return p7m_file
 
-        trans_prv_file = os.path.join(conf.get_lib_dir(), TRANSPORT_PRV_FILE_NAME)
-        trans_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
+    def _convert_certificates_pfx_to_pem(self, pfx_file):
+        """
+        Convert the pfx file to pem file.
+        """
         pem_file = os.path.join(conf.get_lib_dir(), PEM_FILE_NAME)
-        # decrypt certificates
-        cryptutil.decrypt_p7m(p7m_file, trans_prv_file, trans_cert_file, pem_file)
 
+        for nomacver in [True, False]:
+            try:
+                self._crypt_util.convert_pfx_to_pem(pfx_file, nomacver, pem_file)
+                return pem_file
+            except shellutil.CommandError as e:
+                self._remove_file(pem_file)  # An error may leave an empty pem file, which can produce a failure on some versions of open SSL (e.g. 3.2.2) on the next invocation
+                self.warn(WALAEventOperation.GoalState, "Error converting PFX to PEM [-nomacver: {0}]: {1}", nomacver, ustr(e))
+                continue
+
+        raise Exception("Cannot convert PFX to PEM")
+
+    def _extract_certificate(self, pem_file):
+        """
+        Parse the certificates and private keys from the pem file and store them in the certificates directory.
+        """
         # The parsing process use public key to match prv and crt.
-        buf = []
-        prvs = {}
-        thumbprints = {}
+        private_keys = {}  # map of private keys indexed by public key
+        thumbprints = {}  # map of thumbprints indexed by public key
+        buffer = []  # buffer for reading lines belonging to a certificate or private key
         index = 0
-        v1_cert_list = []
 
-        # Ensure pem_file exists before read the certs data since decrypt_p7m may clear the pem_file wen decryption fails
-        if os.path.exists(pem_file):
-            with open(pem_file) as pem:
-                for line in pem.readlines():
-                    buf.append(line)
-                    if re.match(r'[-]+END.*KEY[-]+', line):
-                        tmp_file = Certificates._write_to_tmp_file(index, 'prv', buf)
-                        pub = cryptutil.get_pubkey_from_prv(tmp_file)
-                        prvs[pub] = tmp_file
-                        buf = []
-                        index += 1
-                    elif re.match(r'[-]+END.*CERTIFICATE[-]+', line):
-                        tmp_file = Certificates._write_to_tmp_file(index, 'crt', buf)
-                        pub = cryptutil.get_pubkey_from_crt(tmp_file)
-                        thumbprint = cryptutil.get_thumbprint_from_crt(tmp_file)
-                        thumbprints[pub] = thumbprint
-                        # Rename crt with thumbprint as the file name
-                        crt = "{0}.crt".format(thumbprint)
-                        v1_cert_list.append({
-                            "name": None,
-                            "thumbprint": thumbprint
-                        })
-                        os.rename(tmp_file, os.path.join(conf.get_lib_dir(), crt))
-                        buf = []
-                        index += 1
+        with open(pem_file) as pem:
+            for line in pem.readlines():
+                buffer.append(line)
+                if re.match(r'[-]+END.*KEY[-]+', line):
+                    tmp_file = Certificates._write_to_tmp_file(index, 'prv', buffer)
+                    pub = self._crypt_util.get_pubkey_from_prv(tmp_file)
+                    private_keys[pub] = tmp_file
+                    buffer = []
+                    index += 1
+                elif re.match(r'[-]+END.*CERTIFICATE[-]+', line):
+                    tmp_file = Certificates._write_to_tmp_file(index, 'crt', buffer)
+                    pub = self._crypt_util.get_pubkey_from_crt(tmp_file)
+                    thumbprint = self._crypt_util.get_thumbprint_from_crt(tmp_file)
+                    thumbprints[pub] = thumbprint
+                    # Rename crt with thumbprint as the file name
+                    crt = "{0}.crt".format(thumbprint)
+                    os.rename(tmp_file, os.path.join(conf.get_lib_dir(), crt))
+                    buffer = []
+                    index += 1
 
         # Rename prv key with thumbprint as the file name
-        for pubkey in prvs:
+        for pubkey in private_keys:
             thumbprint = thumbprints[pubkey]
             if thumbprint:
-                tmp_file = prvs[pubkey]
+                tmp_file = private_keys[pubkey]
                 prv = "{0}.prv".format(thumbprint)
                 os.rename(tmp_file, os.path.join(conf.get_lib_dir(), prv))
             else:
-                # Since private key has *no* matching certificate,
-                # it will not be named correctly
-                self.warnings.append("Found NO matching cert/thumbprint for private key!")
+                # Since private key has *no* matching certificate, it will not be named correctly
+                self.warn(WALAEventOperation.GoalState, "Found a private key with no matching cert/thumbprint!")
 
+        certificates = []
         for pubkey, thumbprint in thumbprints.items():
-            has_private_key = pubkey in prvs
-            self.summary.append({"thumbprint": thumbprint, "hasPrivateKey": has_private_key})
-
-        for v1_cert in v1_cert_list:
-            cert = Cert()
-            set_properties("certs", cert, v1_cert)
-            self.cert_list.certificates.append(cert)
+            has_private_key = pubkey in private_keys
+            certificates.append({"thumbprint": thumbprint, "hasPrivateKey": has_private_key})
+        return certificates
 
     @staticmethod
     def _write_to_tmp_file(index, suffix, buf):
@@ -614,9 +666,7 @@ class Certificates(object):
 
 class EmptyCertificates:
     def __init__(self):
-        self.cert_list = CertList()
-        self.summary = []  # debugging info
-        self.warnings = []
+        self.summary = []
 
 class RemoteAccess(object):
     """

@@ -35,12 +35,13 @@ from azurelinuxagent.common import event
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames, \
     get_agent_supported_features_list_for_crp
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters_and_protocol, \
     WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExitException, AgentUpgradeExitException, AgentMemoryExceededException
 from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.ga.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.goal_state import GoalStateSource
@@ -62,6 +63,7 @@ from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, list_agent_lib_di
 from azurelinuxagent.ga.guestagent import GuestAgent
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
+from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates, get_microsoft_signing_certificate_path
 
 CHILD_HEALTH_INTERVAL = 15 * 60
 CHILD_LAUNCH_INTERVAL = 5 * 60
@@ -85,6 +87,7 @@ READONLY_FILE_GLOBS = [
     "*.p7m",
     "*.pem",
     "*.prv",
+    "Certificates.xml",
     "ovf-env.xml"
 ]
 
@@ -145,7 +148,7 @@ class UpdateHandler(object):
 
         self._initial_attempt_check_memory_usage = True
         self._last_check_memory_usage_time = time.time()
-        self._check_memory_usage_last_error_report = datetime.min
+        self._check_memory_usage_last_error_report = datetime_min_utc
 
         self._cloud_init_completed = False  # Only used when Extensions.WaitForCloudInit is enabled; note that this variable is always reset on service start.
 
@@ -155,7 +158,7 @@ class UpdateHandler(object):
         # these members are used to avoid reporting errors too frequently
         self._heartbeat_update_goal_state_error_count = 0
         self._update_goal_state_error_count = 0
-        self._update_goal_state_next_error_report = datetime.min
+        self._update_goal_state_next_error_report = datetime_min_utc
         self._report_status_last_failed_goal_state = None
 
         # incarnation of the last goal state that has been fully processed
@@ -348,6 +351,13 @@ class UpdateHandler(object):
             # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters_and_protocol(protocol)
 
+            # Send telemetry if protocol endpoint is not the known WireServer endpoint.
+            endpoint = protocol.get_endpoint()
+            if endpoint is not None and endpoint != KNOWN_WIRESERVER_IP:
+                message = 'Protocol endpoint ({0}) is not known wireserver ip: {1}'.format(endpoint, KNOWN_WIRESERVER_IP)
+                logger.info(message)
+                add_event(op=WALAEventOperation.ProtocolEndpoint, message=message)
+
             # Send telemetry for the OS-specific info.
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
             self._log_openssl_info()
@@ -373,6 +383,7 @@ class UpdateHandler(object):
             self._ensure_cgroups_initialized()
             self._ensure_extension_telemetry_state_configured_properly(protocol)
             self._cleanup_legacy_goal_state_history()
+            write_signing_certificates()
 
             # Get all thread handlers
             telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)
@@ -561,12 +572,12 @@ class UpdateHandler(object):
             self._heartbeat_update_goal_state_error_count += 1
             if self._update_goal_state_error_count <= max_errors_to_log:
                 # Report up to 'max_errors_to_log' immediately
-                self._update_goal_state_next_error_report = datetime.now()
+                self._update_goal_state_next_error_report = datetime.now(UTC)
                 event.error(WALAEventOperation.FetchGoalState, "Error fetching the goal state: {0}", textutil.format_exception(e))
             else:
                 # Report one single periodic error every 6 hours
-                if datetime.now() >= self._update_goal_state_next_error_report:
-                    self._update_goal_state_next_error_report = datetime.now() + timedelta(hours=6)
+                if datetime.now(UTC) >= self._update_goal_state_next_error_report:
+                    self._update_goal_state_next_error_report = datetime.now(UTC) + timedelta(hours=6)
                     event.error(WALAEventOperation.FetchGoalState, "Fetching the goal state is still failing: {0}", textutil.format_exception(e))
             return False
 
@@ -861,6 +872,9 @@ class UpdateHandler(object):
     def _ensure_readonly_files(self):
         for g in READONLY_FILE_GLOBS:
             for path in glob.iglob(os.path.join(conf.get_lib_dir(), g)):
+                # Owner should retain write permissions for signing certificate
+                if path == get_microsoft_signing_certificate_path():
+                    continue
                 os.chmod(path, stat.S_IRUSR)
 
     def _ensure_cgroups_initialized(self):
@@ -1048,9 +1062,9 @@ class UpdateHandler(object):
 
     def _send_heartbeat_telemetry(self, agent_update_handler):
         if self._last_telemetry_heartbeat is None:
-            self._last_telemetry_heartbeat = datetime.utcnow() - UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD
+            self._last_telemetry_heartbeat = datetime.now(UTC) - UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD
 
-        if datetime.utcnow() >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
+        if datetime.now(UTC) >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
             auto_update_enabled = 1 if conf.get_auto_update_to_latest_version() else 0
             update_mode = agent_update_handler.get_current_update_mode()
 
@@ -1067,7 +1081,7 @@ class UpdateHandler(object):
             # Update/Reset the counters
             self._heartbeat_counter += 1
             self._heartbeat_update_goal_state_error_count = 0
-            self._last_telemetry_heartbeat = datetime.utcnow()
+            self._last_telemetry_heartbeat = datetime.now(UTC)
 
     def _check_agent_memory_usage(self):
         """
@@ -1087,8 +1101,8 @@ class UpdateHandler(object):
             add_event(AGENT_NAME, op=WALAEventOperation.AgentMemory, is_success=True, message=msg)
             raise ExitException("Agent {0} is reached memory limit -- exiting".format(CURRENT_AGENT))
         except Exception as exception:
-            if self._check_memory_usage_last_error_report == datetime.min or (self._check_memory_usage_last_error_report + timedelta(hours=6)) > datetime.now():
-                self._check_memory_usage_last_error_report = datetime.now()
+            if self._check_memory_usage_last_error_report == datetime_min_utc or (self._check_memory_usage_last_error_report + timedelta(hours=6)) > datetime.now(UTC):
+                self._check_memory_usage_last_error_report = datetime.now(UTC)
                 msg = "Error checking the agent's memory usage: {0} --- [NOTE: Will not log the same error for the 6 hours]".format(ustr(exception))
                 logger.warn(msg)
                 add_event(AGENT_NAME, op=WALAEventOperation.AgentMemory, is_success=False, message=msg)

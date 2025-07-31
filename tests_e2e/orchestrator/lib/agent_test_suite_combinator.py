@@ -1,12 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
-import datetime
 import logging
 import random
 import re
-import traceback
 import urllib.parse
-import uuid
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Type
@@ -17,9 +14,8 @@ from dataclasses_json import dataclass_json  # pylint: disable=E0401
 # Disable those warnings, since 'lisa' is an external, non-standard, dependency
 #     E0401: Unable to import 'lisa' (import-error)
 #     etc
-from lisa import notifier, schema  # pylint: disable=E0401
+from lisa import schema  # pylint: disable=E0401
 from lisa.combinator import Combinator  # pylint: disable=E0401
-from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
 from lisa.util import field_metadata  # pylint: disable=E0401
 
 from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, VmImageInfo, TestSuiteInfo, CustomImage
@@ -42,7 +38,7 @@ class AgentTestSuitesCombinatorSchema(schema.Combinator):
     identity_file: str = field(default_factory=str, metadata=field_metadata(required=True))
     image: str = field(default_factory=str, metadata=field_metadata(required=True))
     keep_environment: str = field(default_factory=str, metadata=field_metadata(required=True))
-    location: str = field(default_factory=str, metadata=field_metadata(required=True))
+    locations: str = field(default_factory=str, metadata=field_metadata(required=True))
     resource_group_name: str = field(default_factory=str, metadata=field_metadata(required=True))
     subscription_id: str = field(default_factory=str, metadata=field_metadata(required=True))
     test_suites: str = field(default_factory=str, metadata=field_metadata(required=True))
@@ -70,17 +66,23 @@ class AgentTestSuitesCombinator(Combinator):
         if self.runbook.vm_name != '' and self.runbook.vmss_name != '':
             raise Exception("Invalid runbook parameters: 'vm_name' and 'vmss_name' are mutually exclusive.")
 
+        locations = self.runbook.locations.split(',')
+
         if self.runbook.vm_name != '':
             if self.runbook.image != '' or self.runbook.vm_size != '':
                 raise Exception("Invalid runbook parameters: The 'vm_name' parameter indicates an existing VM, 'image' and 'vm_size' should not be specified.")
             if self.runbook.resource_group_name == '':
                 raise Exception("Invalid runbook parameters: The 'vm_name' parameter indicates an existing VM, a 'resource_group_name' must be specified.")
+            if len(locations) != 1:
+                raise Exception("Invalid runbook parameters: The 'vm_name' parameter indicates an existing VM, exactly one location should be specified in the 'locations' parameter.")
 
         if self.runbook.vmss_name != '':
             if self.runbook.image != '' or self.runbook.vm_size != '':
                 raise Exception("Invalid runbook parameters: The 'vmss_name' parameter indicates an existing VMSS, 'image' and 'vm_size' should not be specified.")
             if self.runbook.resource_group_name == '':
                 raise Exception("Invalid runbook parameters: The 'vmss_name' parameter indicates an existing VMSS, a 'resource_group_name' must be specified.")
+            if len(locations) != 1:
+                raise Exception("Invalid runbook parameters: The 'vmss_name' parameter indicates an existing VMSS, exactly one location should be specified in the 'locations' parameter.")
 
         if self.runbook.test_suites != "":
             test_suites = [t.strip() for t in self.runbook.test_suites.split(',')]
@@ -136,7 +138,7 @@ class AgentTestSuitesCombinator(Combinator):
         Examines the test_suites specified in the runbook and returns a list of the environments (i.e. test VMs or scale sets) that need to be
         created in order to execute these suites.
 
-        Note that if the runbook provides an 'image', 'location', or 'vm_size', those values override any values provided in the
+        Note that if the runbook provides an 'image', 'locations', or 'vm_size', those values override any values provided in the
         configuration of the test suites.
         """
         environments: List[Dict[str, Any]] = []
@@ -185,67 +187,68 @@ class AgentTestSuitesCombinator(Combinator):
                 if test_suite_info.executes_on_scale_set and (vhd != "" or shared_gallery != ""):
                     raise Exception("VHDS and images from galleries are currently not supported on scale sets.")
 
-                location: str = self._get_location(test_suite_info, image)
-                if location is None:
-                    continue
-
                 vm_size = self._get_vm_size(image)
 
-                if test_suite_info.owns_vm or not test_suite_info.install_test_agent:
-                    #
-                    # Create an environment for exclusive use by this suite
-                    #
-                    # TODO: Allow test suites that set 'install_test_agent' to False to share environments (we need to ensure that
-                    #       all the suites in the shared environment have the same value for 'install_test_agent')
-                    #
-                    if test_suite_info.executes_on_scale_set:
-                        env = self.create_vmss_environment(
-                            env_name=f"{image_name}-vmss-{test_suite_info.name}",
-                            marketplace_image=marketplace_image,
-                            location=location,
-                            vm_size=vm_size,
-                            test_suite_info=test_suite_info)
-                    else:
-                        env = self.create_vm_environment(
-                            env_name=f"{image_name}-{test_suite_info.name}",
-                            marketplace_image=marketplace_image,
-                            vhd=vhd,
-                            shared_gallery=shared_gallery,
-                            location=location,
-                            vm_size=vm_size,
-                            test_suite_info=test_suite_info)
-                    environments.append(env)
-                else:
-                    # add this suite to the shared environments
-                    env_name: str = f"{image_name}-vmss-{location}" if test_suite_info.executes_on_scale_set else f"{image_name}-{location}"
-                    env = shared_environments.get(env_name)
-                    if env is not None:
-                        env["c_test_suites"].append(test_suite_info)
-                    else:
+                locations: List[str] = self._get_locations(test_suite_info, image)
+                if len(locations) == 0:
+                    continue
+
+                for location in locations:
+                    if test_suite_info.owns_vm or not test_suite_info.install_test_agent:
+                        #
+                        # Create an environment for exclusive use by this suite
+                        #
+                        # TODO: Allow test suites that set 'install_test_agent' to False to share environments (we need to ensure that
+                        #       all the suites in the shared environment have the same value for 'install_test_agent')
+                        #
                         if test_suite_info.executes_on_scale_set:
                             env = self.create_vmss_environment(
-                                env_name=env_name,
+                                env_name=f"{image_name}-vmss-{test_suite_info.name}",
                                 marketplace_image=marketplace_image,
                                 location=location,
                                 vm_size=vm_size,
                                 test_suite_info=test_suite_info)
                         else:
                             env = self.create_vm_environment(
-                                env_name=env_name,
+                                env_name=f"{image_name}-{test_suite_info.name}",
                                 marketplace_image=marketplace_image,
                                 vhd=vhd,
                                 shared_gallery=shared_gallery,
                                 location=location,
                                 vm_size=vm_size,
                                 test_suite_info=test_suite_info)
-                        shared_environments[env_name] = env
-
-                if test_suite_info.template != '':
-                    vm_tags = env["vm_tags"]
-                    if "templates" not in vm_tags:
-                        vm_tags["templates"] = test_suite_info.template
+                        environments.append(env)
                     else:
-                        vm_tags["templates"] += "," + test_suite_info.template
+                        # add this suite to the shared environments
+                        env_name: str = f"{image_name}-vmss-{location}" if test_suite_info.executes_on_scale_set else f"{image_name}-{location}"
+                        env = shared_environments.get(env_name)
+                        if env is not None:
+                            env["c_test_suites"].append(test_suite_info)
+                        else:
+                            if test_suite_info.executes_on_scale_set:
+                                env = self.create_vmss_environment(
+                                    env_name=env_name,
+                                    marketplace_image=marketplace_image,
+                                    location=location,
+                                    vm_size=vm_size,
+                                    test_suite_info=test_suite_info)
+                            else:
+                                env = self.create_vm_environment(
+                                    env_name=env_name,
+                                    marketplace_image=marketplace_image,
+                                    vhd=vhd,
+                                    shared_gallery=shared_gallery,
+                                    location=location,
+                                    vm_size=vm_size,
+                                    test_suite_info=test_suite_info)
+                            shared_environments[env_name] = env
+
+                    if test_suite_info.template != '':
+                        vm_tags = env["vm_tags"]
+                        if "templates" not in vm_tags:
+                            vm_tags["templates"] = test_suite_info.template
+                        else:
+                            vm_tags["templates"] += "," + test_suite_info.template
 
         environments.extend(shared_environments.values())
 
@@ -271,7 +274,7 @@ class AgentTestSuitesCombinator(Combinator):
 
         vm: VirtualMachineClient = VirtualMachineClient(
             cloud=self.runbook.cloud,
-            location=self.runbook.location,
+            location=self.runbook.locations,
             subscription=self.runbook.subscription_id,
             resource_group=self.runbook.resource_group_name,
             name=self.runbook.vm_name)
@@ -302,7 +305,7 @@ class AgentTestSuitesCombinator(Combinator):
                     }
                 ]
             },
-            "c_location": self.runbook.location,
+            "c_location": self.runbook.locations,
             "c_test_suites": loader.test_suites,
         }
 
@@ -311,7 +314,7 @@ class AgentTestSuitesCombinator(Combinator):
 
         vmss = VirtualMachineScaleSetClient(
             cloud=self.runbook.cloud,
-            location=self.runbook.location,
+            location=self.runbook.locations,
             subscription=self.runbook.subscription_id,
             resource_group=self.runbook.resource_group_name,
             name=self.runbook.vmss_name)
@@ -342,7 +345,7 @@ class AgentTestSuitesCombinator(Combinator):
                     "capture_vm_information": False
                 }
             ],
-            "c_location": self.runbook.location,
+            "c_location": self.runbook.locations,
             "c_test_suites": loader.test_suites,
         }
 
@@ -506,32 +509,32 @@ class AgentTestSuitesCombinator(Combinator):
                 skip_unique[i.urn] = i
         return [v for k, v in skip_unique.items()]
 
-    def _get_location(self, suite_info: TestSuiteInfo, image: VmImageInfo) -> str:
+    def _get_locations(self, suite_info: TestSuiteInfo, image: VmImageInfo) -> List[str]:
         """
-        Returns the location on which the test VM for the given test suite and image should be created.
+        Returns a list of locations on which the test VMs for the given test suite and image should be created.
 
-        If the image is not available on any location, returns None, to indicate that the test suite should be skipped.
+        If the image is not available on any location, returns empty list, to indicate that the test suite should be skipped.
         """
         # If the runbook specified a location, use it.
-        if self.runbook.location != "":
-            return self.runbook.location
+        if self.runbook.locations != "":
+            return self.runbook.locations.split(',')
 
-        #  Then try the suite location, if any.
-        for location in suite_info.locations:
-            if location.startswith(self.runbook.cloud + ":"):
-                return location.split(":")[1]
+        # Then try the suite locations, if any.
+        locations = [location.split(":")[1] for location in suite_info.locations if location.startswith(self.runbook.cloud + ":")]
+        if len(locations) > 0:
+            return locations
 
         # If the image has a location restriction, use any location where it is available.
-        # However, if it is not available on any location, skip the image (return None)
+        # However, if it is not available on any location, skip the image (return empty list)
         if image.locations:
             image_locations = image.locations.get(self.runbook.cloud)
             if image_locations is not None:
                 if len(image_locations) == 0:
-                    return None
-                return image_locations[0]
+                    return []
+                return [image_locations[0]]
 
         # Else use the default.
-        return AgentTestSuitesCombinator._DEFAULT_LOCATIONS[self.runbook.cloud]
+        return [AgentTestSuitesCombinator._DEFAULT_LOCATIONS[self.runbook.cloud]]
 
     def _get_vm_size(self, image: VmImageInfo) -> str:
         """
@@ -573,38 +576,3 @@ class AgentTestSuitesCombinator(Combinator):
         # VHDs are given as URIs to storage; do some basic validation, not intending to be exhaustive.
         parsed = urllib.parse.urlparse(vhd)
         return parsed.scheme == 'https' and parsed.netloc != "" and parsed.path != ""
-
-    @staticmethod
-    def _report_test_result(
-            suite_name: str,
-            test_name: str,
-            status: TestStatus,
-            start_time: datetime.datetime,
-            message: str = "",
-            add_exception_stack_trace: bool = False
-    ) -> None:
-        """
-        Reports a test result to the junit notifier
-        """
-        # The junit notifier requires an initial RUNNING message in order to register the test in its internal cache.
-        msg: TestResultMessage = TestResultMessage()
-        msg.type = "AgentTestResultMessage"
-        msg.id_ = str(uuid.uuid4())
-        msg.status = TestStatus.RUNNING
-        msg.suite_full_name = suite_name
-        msg.suite_name = msg.suite_full_name
-        msg.full_name = test_name
-        msg.name = msg.full_name
-        msg.elapsed = 0
-
-        notifier.notify(msg)
-
-        # Now send the actual result. The notifier pipeline makes a deep copy of the message so it is OK to re-use the
-        # same object and just update a few fields. If using a different object, be sure that the "id_" is the same.
-        msg.status = status
-        msg.message = message
-        if add_exception_stack_trace:
-            msg.stacktrace = traceback.format_exc()
-        msg.elapsed = (datetime.datetime.now() - start_time).total_seconds()
-
-        notifier.notify(msg)

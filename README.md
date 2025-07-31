@@ -3,8 +3,8 @@
 
 ## Linux distributions support
 
-Our daily automation tests most of the [Linux distributions supported by Azure](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/endorsed-distros); the Agent can be
-used on other distributions as well, but development, testing and support for those are done by the open source community.
+The list of distros we officially support is maintained at: [Linux distributions supported by Azure](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/endorsed-distros). Our daily automation tests most of these distributions. The Agent can be
+used on other distributions as well, but development, testing and support for those are done by the open source community. This repo contains community-driven support for some distributions which are not officially supported by Azure.
 
 Testing is done using the develop branch, which can be unstable. For a stable build please use the master branch instead.
 
@@ -652,6 +652,15 @@ _Type: String_
 _Default: customscript,runcommand_
 
 The list of extensions which will be excluded from cgroups limits. This should be comma separated. 
+
+#### __Protocol.EndpointDiscovery__
+
+_Type: String_  
+_Default: dhcp_
+
+Determines how the agent will discover the [WireServer endpoint](https://learn.microsoft.com/en-us/azure/virtual-network/what-is-ip-address-168-63-129-16). 
+Agent will use DHCP by default to discover the WireServer endpoint, but if this setting is 'static' the agent will use the known WireServer address (168.63.129.16).
+Possible options are "dhcp" (default) or "static".
 
 ### Telemetry
 

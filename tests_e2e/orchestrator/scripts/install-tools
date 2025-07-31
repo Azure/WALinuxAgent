@@ -27,6 +27,9 @@ set -euo pipefail
 
 PATH="$HOME/bin:$PATH"
 
+printf "\n========== Installing test tools ==========\n\n"
+
+echo "========== Python info"
 python=$(get-agent-python)
 echo "Python executable: $python"
 echo "Python version: $($python --version)"
@@ -37,12 +40,12 @@ echo "Python version: $($python --version)"
 # Note that bzip2/lbzip2 (used by tar to uncompress *.bz2 files) are not available by default in some distros;
 # use Python to uncompress the Pypy tarball.
 #
-echo "Installing Pypy 3.7"
+echo "========== Installing Pypy 3.7"
 $python ~/bin/uncompress.py ~/tmp/pypy3.7-*.tar.bz2 ~/tmp/pypy3.7.tar
 tar xf ~/tmp/pypy3.7.tar -C ~/bin
 echo "Pypy was installed in $(ls -d ~/bin/pypy*)"
-ln -s ~/bin/pypy*/bin/pypy3.7 ~/bin/pypy3
-echo "Creating symbolic link to Pypy: ~/bin/pypy3"
+echo "Creating symbolic link to Pypy at ~/bin/pypy3"
+ln -vs ~/bin/pypy*/bin/pypy3.7 ~/bin/pypy3
 
 #
 # The 'distro' and 'platform' modules in Pypy have small differences with the ones in the system's Python.
@@ -51,8 +54,8 @@ echo "Creating symbolic link to Pypy: ~/bin/pypy3"
 #
 # In the case of 'platform', the 'linux_distribution' method was removed on Python 3.7 so we check the
 # system's module and, if the method does not exist, we also remove it from Pypy. Ubuntu 16 and 18 are
-# special cases in that the 'platform' module in Pypy identifies the distro as 'debian'; in this case we
-# copy the system's 'platform' module to Pypy.
+# special cases in that the 'platform' module in Pypy identifies the distro as 'debian';
+# Alma 8 identifies the distro as 'centos'; in this case we copy the system's 'platform' module to Pypy.
 #
 distro_path=$($python -c '
 try:
@@ -66,7 +69,7 @@ if [[ "$distro_path" != "" ]]; then
   echo "Copying the system's distro module to Pypy"
   cp -v "$distro_path" ~/bin/pypy*/site-packages
 else
-  echo "The distro module is not is not installing on the system; skipping."
+  echo "The distro module is not is not installed on the system; skipping."
 fi
 
 has_linux_distribution=$($python -c 'import platform; print(hasattr(platform, "linux_distribution"))')
@@ -76,7 +79,11 @@ if [[ "$has_linux_distribution" == "False" ]]; then
 else
   echo "Python has platform.linux_distribution"
   uname=$(uname -v)
-  if [[ "$uname" == *~18*-Ubuntu* || "$uname" == *~16*-Ubuntu* ]]; then
+  test -f /etc/almalinux-release && grep -qiE "AlmaLinux .*release 8\." /etc/almalinux-release # Only Alma 8 requires the patch (file contents are similar to "AlmaLinux release 8.10 (Cerulean Leopard)")
+  alma_linux=$?
+  test -f /etc/oracle-release && grep -qiE "Oracle .*release 8\." /etc/oracle-release && true # Only Oracle 8 requires the patch (file contents are similar to "Oracle Linux Server release 8.10")
+  oracle_linux=$?
+  if [[ "$uname" == *~18*-Ubuntu* || "$uname" == *~16*-Ubuntu* || "$alma_linux" == "0"  || "$oracle_linux" == "0" ]]; then
     echo "Copying the system's platform module to Pypy"
     pypy_platform=$(pypy3 -c 'import platform; print(platform.__file__)')
     python_platform=$($python -c 'import platform; print(platform.__file__)')
@@ -87,18 +94,25 @@ fi
 #
 # Now install the test Agent as a module package in Pypy.
 #
-echo "Installing Agent modules to Pypy"
+echo "========== Installing Agent modules to Pypy"
 unzip.py ~/tmp/WALinuxAgent-*.zip ~/tmp/WALinuxAgent
 unzip.py ~/tmp/WALinuxAgent/bin/WALinuxAgent-*.egg ~/tmp/WALinuxAgent/bin/WALinuxAgent.egg
-mv ~/tmp/WALinuxAgent/bin/WALinuxAgent.egg/azurelinuxagent ~/bin/pypy*/site-packages
+mv -v ~/tmp/WALinuxAgent/bin/WALinuxAgent.egg/azurelinuxagent ~/bin/pypy*/site-packages
 
 #
-# Log the results of get_distro() in Pypy and Python.
+# Validate that get_distro() returns the same value when called from Pypy (used by the tests) and the system Python (used by the Agent).
+# Any difference could cause different of behavior between the tests and the Agent.
 #
+echo "========== Validating Pypy using get_distro()"
 pypy_get_distro=$(pypy3 -c 'from azurelinuxagent.common.version import get_distro; print(get_distro())')
 python_get_distro=$($python -c 'from azurelinuxagent.common.version import get_distro; print(get_distro())')
 echo "Pypy   get_distro(): $pypy_get_distro"
 echo "Python get_distro(): $python_get_distro"
+if [[ "$pypy_get_distro" != "$python_get_distro" ]]; then
+  echo "*** WARNING: azurelinuxagent.common.version.get_distro() returns different values in Pypy and Python. This can lead to subtle test bugs."
+else
+  echo "get_distro() is consistent across Pypy and the system Python"
+fi
 
 #
 # Create ~/bin/set-agent-env to set PATH and PYTHONPATH.
@@ -106,6 +120,7 @@ echo "Python get_distro(): $python_get_distro"
 # We append $HOME/bin to PATH and set PYTHONPATH to $HOME/lib (bin contains the scripts used by tests, while
 # lib contains the Python libraries used by tests).
 #
+echo "========== Setting up environment"
 echo "Creating ~/bin/set-agent-env to set PATH and PYTHONPATH"
 
 echo "

@@ -9,7 +9,7 @@ parameters:
     # See the test wiki for a description of the parameters
     #
     # NOTES:
-    #         * 'image', 'location' and 'vm_size' override any values in the test suites/images definition
+    #         * 'image', 'locations' and 'vm_size' override any values in the test suites/images definition
     #            files. Those parameters are useful for 1-off tests, like testing a VHD or checking if
     #            an image is supported in a particular location.
     #         * Azure Pipelines do not allow empty string for the parameter value, using "-" instead.
@@ -29,8 +29,8 @@ parameters:
     type: string
     default: "-"
 
-  - name: location
-    displayName: Location (region)
+  - name: locations
+    displayName: Locations (comma-separated list of regions to run on)
     type: string
     default: "-"
 
@@ -56,7 +56,7 @@ parameters:
   - name: keep_environment
     displayName: Keep the test VMs (do not delete them)
     type: string
-    default: failed
+    default: no
     values:
     - always
     - failed
@@ -70,13 +70,6 @@ jobs:
     timeoutInMinutes: 90
 
     steps:
-      - task: UsePythonVersion@0
-        displayName: "Set Python Version"
-        inputs:
-          versionSpec: '3.10'
-          addToPath: true
-          architecture: 'x64'
-
       # Extract the Azure cloud from the "connection_info" variable. Its value includes one of
       # 'public', 'china', or 'gov' as a suffix (the suffix comes after the '.').
       - bash: |
@@ -135,7 +128,7 @@ jobs:
           COLLECT_LOGS: ${{ parameters.collect_logs }}
           IMAGE: ${{ parameters.image }}
           KEEP_ENVIRONMENT: ${{ parameters.keep_environment }}
-          LOCATION: ${{ parameters.location }}
+          LOCATIONS: ${{ parameters.locations }}
           TEST_SUITES: ${{ parameters.test_suites }}
           TEST_ARGS: ${{ parameters.test_args }}
           VM_SIZE: ${{ parameters.vm_size }}

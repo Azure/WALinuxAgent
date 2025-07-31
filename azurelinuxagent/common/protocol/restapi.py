@@ -43,30 +43,6 @@ class VMInfo(DataContract):
         self.tenantName = tenantName
 
 
-class CertificateData(DataContract):
-    def __init__(self, certificateData=None):
-        self.certificateData = certificateData
-
-
-class Cert(DataContract):
-    def __init__(self,
-                 name=None,
-                 thumbprint=None,
-                 certificateDataUri=None,
-                 storeName=None,
-                 storeLocation=None):
-        self.name = name
-        self.thumbprint = thumbprint
-        self.certificateDataUri = certificateDataUri
-        self.storeLocation = storeLocation
-        self.storeName = storeName
-
-
-class CertList(DataContract):
-    def __init__(self):
-        self.certificates = DataContractList(Cert)
-
-
 class VMAgentFamily(object):
     def __init__(self, name):
         self.name = name

@@ -31,7 +31,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.fileutil as fileutil
 
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, UTC
 from azurelinuxagent.common.event import add_event, WALAEventOperation, \
     elapsed_milliseconds
 from azurelinuxagent.common.exception import ProvisionError, ProtocolError, \
@@ -62,7 +62,7 @@ class ProvisionHandler(object):
             return
 
         try:
-            utc_start = datetime.utcnow()
+            utc_start = datetime.now(UTC)
             thumbprint = None  # pylint: disable=W0612
 
             if self.check_provisioned_file():

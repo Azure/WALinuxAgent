@@ -26,7 +26,7 @@ import datetime
 import os
 import time
 
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, UTC
 
 
 def format_processes(pid_list):
@@ -54,8 +54,8 @@ def wait_for(predicate, timeout=10, frequency=0.01):
     def to_seconds(time_delta):
         return (time_delta.microseconds + (time_delta.seconds + time_delta.days * 24 * 3600) * 10 ** 6) / 10 ** 6
 
-    start_time = datetime.datetime.now()
-    while to_seconds(datetime.datetime.now() - start_time) < timeout:
+    start_time = datetime.datetime.now(UTC)
+    while to_seconds(datetime.datetime.now(UTC) - start_time) < timeout:
         if predicate():
             return True
         time.sleep(frequency)

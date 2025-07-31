@@ -36,12 +36,6 @@ _DEFAULT_EXTENSIONS = {}
 _MAX_SUPPORTED_POLICY_VERSION = "0.1.0"
 
 
-class PolicyError(AgentError):
-    """
-    Error raised during agent policy enforcement.
-    """
-
-
 class InvalidPolicyError(AgentError):
     """
     Error raised if user-provided policy is invalid.
@@ -56,12 +50,20 @@ class _PolicyEngine(object):
     Implements base policy engine API.
     """
     def __init__(self):
-        # Set defaults for policy
+        """
+        Initialize policy engine: if policy enforcement is enabled, read and parse policy file.
+        """
         self._policy_enforcement_enabled = self.__get_policy_enforcement_enabled()
+        self._policy_file_contents = None   # Raw policy file contents will be saved in __read_policy()
         if not self.policy_enforcement_enabled:
             return
 
+        _PolicyEngine._log_policy_event("Policy enforcement is enabled.")
         self._policy = self._parse_policy(self.__read_policy())
+
+    @property
+    def policy_file_contents(self):
+        return self._policy_file_contents
 
     @staticmethod
     def _log_policy_event(msg, is_success=True, op=WALAEventOperation.Policy, send_event=True):
@@ -86,10 +88,10 @@ class _PolicyEngine(object):
     def policy_enforcement_enabled(self):
         return self._policy_enforcement_enabled
 
-    @staticmethod
-    def __read_policy():
+    def __read_policy(self):
         """
         Read customer-provided policy JSON file, load and return as a dict.
+
         Policy file is expected to be at conf.get_policy_file_path(). Note that this method should only be called
         after verifying that the file exists (currently done in __init__).
 
@@ -97,17 +99,22 @@ class _PolicyEngine(object):
         """
         with open(conf.get_policy_file_path(), 'r') as f:
             try:
-                contents = f.read()
+                self._policy_file_contents = f.read()
                 _PolicyEngine._log_policy_event(
-                    "Policy enforcement is enabled. Enforcing policy using policy file found at '{0}'. File contents:\n{1}"
-                    .format(conf.get_policy_file_path(), contents))
+                    "Enforcing policy using policy file found at '{0}'.".format(conf.get_policy_file_path()))
+
                 # json.loads will raise error if file contents are not a valid json (including empty file).
-                custom_policy = json.loads(contents)
+                custom_policy = json.loads(self._policy_file_contents)
+
             except ValueError as ex:
-                msg = "policy file does not conform to valid json syntax"
+                msg = "policy file does not conform to valid json syntax."
+                if self._policy_file_contents is not None:
+                    msg += " File contents: {0}".format(self._policy_file_contents)
                 raise InvalidPolicyError(msg=msg, inner=ex)
             except Exception as ex:
-                msg = "unable to read policy file"
+                msg = "unable to read or load policy file."
+                if self._policy_file_contents is not None:
+                    msg += " File contents: {0}".format(self._policy_file_contents)
                 raise InvalidPolicyError(msg=msg, inner=ex)
 
             return custom_policy

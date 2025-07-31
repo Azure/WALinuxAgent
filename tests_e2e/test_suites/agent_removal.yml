@@ -1,0 +1,54 @@
+#
+# This test can be used after agent deletion from PIR to validate that the expected versions were removed from the
+# manifest in each region.
+# There have been several instances of unexpected behavior after PIR removal, so this test should be executed to confirm
+# the expected versions were successfully removed.
+#
+# Exactly one of the following arguments is required for the test:
+#   a. expected_versions -
+#         A semicolon separated list of the versions expected to be in the agent manifest.
+#         If this argument is provided, the test will verify that the versions in the agent manifest match this list.
+#         Example: expected_versions=2.9.1.1;2.10.0.8
+#   b. removed_version -
+#         The version of the agent which was removed and should not be in the agent manifest.
+#         If this argument is provided, the test will verify that the agent manifest does not contian this version.
+#         Example: removed_version=2.9.1.1
+#
+# The test also takes the following optional argument:
+#   a. GAFamily -
+#         The GAFamily (either Prod or Test) which determines what manifest will be validated.
+#         Example: GAFamily=Test
+#
+# This test runs on one amd64 image and one arm64 image, since the manifests for amd64 and arm64 are different.
+# Using ubuntu 24 since it does not have location restrictions.
+#
+name: "AgentRemoval"
+tests:
+  - "agent_removal/agent_removal.py"
+images:
+  - "ubuntu_2404"
+locations:
+  - "AzureCloud:centraluseuap"
+  - "AzureCloud:eastus2euap"
+  - "AzureCloud:westcentralus"
+  - "AzureCloud:uksouth"
+  - "AzureCloud:eastus"
+  - "AzureCloud:australiaeast"
+  - "AzureCloud:francecentral"
+  - "AzureCloud:swedencentral"
+  - "AzureCloud:northeurope"
+  - "AzureCloud:westus2"
+  - "AzureCloud:eastus2"
+  - "AzureCloud:southcentralus"
+  - "AzureCloud:southeastasia"
+  - "AzureCloud:westus3"
+  - "AzureCloud:westeurope"
+  - "AzureUSGovernment:usdodcentral"
+  - "AzureUSGovernment:usdodeast"
+  - "AzureUSGovernment:usgovtexas"
+  - "AzureUSGovernment:usgovvirginia"
+  - "AzureUSGovernment:usgovarizona"
+  - "AzureChinaCloud:chinanorth"
+  - "AzureChinaCloud:chinanorth2"
+  - "AzureChinaCloud:chinaeast"
+  - "AzureChinaCloud:chinaeast2"

@@ -30,13 +30,14 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import EventError, OSUtilError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, UTC
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent, CommonTelemetryEventSchema, \
     GuestAgentGenericLogsSchema, GuestAgentExtensionEventsSchema, GuestAgentPerfCounterEventsSchema
-from azurelinuxagent.common.utils import fileutil, textutil
-from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, str_to_encoded_ustr
+from azurelinuxagent.common.utils import fileutil, textutil, timeutil
+from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, str_to_encoded_ustr, \
+    redact_sas_token
 from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, AGENT_NAME, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
 from azurelinuxagent.common.protocol.imds import get_imds_client
 
@@ -67,7 +68,7 @@ def send_logs_to_telemetry():
 
 class WALAEventOperation:
     ActivateResourceDisk = "ActivateResourceDisk"
-    AgentBlacklisted = "AgentBlacklisted"
+    AgentDisabled = "AgentDisabled"
     AgentEnabled = "AgentEnabled"
     AgentMemory = "AgentMemory"
     AgentUpgrade = "AgentUpgrade"
@@ -89,10 +90,12 @@ class WALAEventOperation:
     ExtensionHandlerManifest = "ExtensionHandlerManifest"
     ExtensionPolicy = "ExtensionPolicy"
     ExtensionProcessing = "ExtensionProcessing"
+    ExtensionResourceGovernance = "ExtensionResourceGovernance"
     ExtensionTelemetryEventProcessing = "ExtensionTelemetryEventProcessing"
     FetchGoalState = "FetchGoalState"
     Firewall = "Firewall"
     GoalState = "GoalState"
+    GoalStateCertificates = "GoalStateCertificates"
     GoalStateUnsupportedFeatures = "GoalStateUnsupportedFeatures"
     HealthCheck = "HealthCheck"
     HealthObservation = "HealthObservation"
@@ -116,6 +119,7 @@ class WALAEventOperation:
     ProvisionAfterExtensions = "ProvisionAfterExtensions"
     PluginSettingsVersionMismatch = "PluginSettingsVersionMismatch"
     InvalidExtensionConfig = "InvalidExtensionConfig"
+    ProtocolEndpoint = "ProtocolEndpoint"
     Provision = "Provision"
     ProvisionGuestAgent = "ProvisionGuestAgent"
     RemoteAccessHandling = "RemoteAccessHandling"
@@ -127,6 +131,7 @@ class WALAEventOperation:
     RequestedVersionMismatch = "RequestedVersionMismatch"
     ResetFirewall = "ResetFirewall"
     Restart = "Restart"
+    SignatureValidation = "SignatureValidation"
     SetCGroupsLimits = "SetCGroupsLimits"
     SkipUpdate = "SkipUpdate"
     StatusProcessing = "StatusProcessing"
@@ -244,6 +249,15 @@ def parse_xml_event(data_str):
         return event
     except Exception as e:
         raise ValueError(ustr(e))
+
+
+def redact_event_msg(event):
+    """
+    Redact the message in the event if it contains SAS tokens.
+    """
+    for param in event.parameters:
+        if param.name == GuestAgentExtensionEventsSchema.Message:
+            param.value = redact_sas_token(param.value)
 
 
 def _encode_message(op, message):
@@ -482,7 +496,7 @@ class EventLogger(object):
 
     def is_period_elapsed(self, delta, h):
         return h not in self.periodic_events or \
-            (self.periodic_events[h] + delta) <= datetime.now()
+            (self.periodic_events[h] + delta) <= datetime.now(UTC)
 
     def add_periodic(self, delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
                      version=str(CURRENT_VERSION), message="", log_event=True, force=False):
@@ -491,7 +505,7 @@ class EventLogger(object):
         if force or self.is_period_elapsed(delta, h):
             self.add_event(name, op=op, is_success=is_success, duration=duration,
                            version=version, message=message, log_event=log_event)
-            self.periodic_events[h] = datetime.now()
+            self.periodic_events[h] = datetime.now(UTC)
 
     def add_event(self, name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
                   message="", log_event=True, flush=False):
@@ -509,7 +523,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.OperationSuccess, bool(is_success)))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Message, str_to_encoded_ustr(message)))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, int(duration)))
-        self.add_common_event_parameters(event, datetime.utcnow())
+        self.add_common_event_parameters(event, datetime.now(UTC))
 
         self.report_or_save_event(event, flush)
 
@@ -518,9 +532,9 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.EventName, WALAEventOperation.Log))
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.CapabilityUsed, logger.LogLevel.STRINGS[level]))
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context1, str_to_encoded_ustr(self._clean_up_message(message))))
-        event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context2, datetime.utcnow().strftime(logger.Logger.LogTimeFormatInUTC)))
+        event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context2, timeutil.create_utc_timestamp(datetime.now(UTC))))
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context3, ''))
-        self.add_common_event_parameters(event, datetime.utcnow())
+        self.add_common_event_parameters(event, datetime.now(UTC))
 
         self.report_or_save_event(event)
 
@@ -543,7 +557,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Counter, str_to_encoded_ustr(counter)))
         event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Instance, str_to_encoded_ustr(instance)))
         event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Value, float(value)))
-        self.add_common_event_parameters(event, datetime.utcnow())
+        self.add_common_event_parameters(event, datetime.now(UTC))
 
         self.report_or_save_event(event)
 
@@ -553,6 +567,9 @@ class EventLogger(object):
         save it disk if we fail to send or not required to flush immediately.
         TODO: pickup as many events as possible and send them in one go.
         """
+        # redact message before save it to disk
+        redact_event_msg(event)
+
         report_success = False
         if flush and self.protocol is not None:
             report_success = self.protocol.report_event([event], flush)
@@ -613,7 +630,7 @@ class EventLogger(object):
         """
         common_params = [TelemetryEventParam(CommonTelemetryEventSchema.GAVersion, CURRENT_AGENT),
                          TelemetryEventParam(CommonTelemetryEventSchema.ContainerId, AgentGlobals.get_container_id()),
-                         TelemetryEventParam(CommonTelemetryEventSchema.OpcodeName, event_timestamp.strftime(logger.Logger.LogTimeFormatInUTC)),
+                         TelemetryEventParam(CommonTelemetryEventSchema.OpcodeName, timeutil.create_utc_timestamp(event_timestamp)),
                          TelemetryEventParam(CommonTelemetryEventSchema.EventTid, threading.current_thread().ident),
                          TelemetryEventParam(CommonTelemetryEventSchema.EventPid, os.getpid()),
                          TelemetryEventParam(CommonTelemetryEventSchema.TaskName, threading.current_thread().name)]
@@ -635,7 +652,7 @@ def get_event_logger():
 
 
 def elapsed_milliseconds(utc_start):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     if now < utc_start:
         return 0
 
@@ -732,6 +749,25 @@ def error(op, fmt, *args):
     logger.error(fmt, *args)
     add_event(op=op, message=fmt.format(*args), is_success=False, log_event=False)
 
+
+class LogEvent(object):
+    """
+    Helper class that allows the use of info()/warn()/error() using a specific instance of a logger.
+    """
+    def __init__(self, logger_):
+        self._logger = logger_
+
+    def info(self, op, fmt, *args):
+        self._logger.info(fmt, *args)
+        add_event(op=op, message=fmt.format(*args), is_success=True)
+
+    def warn(self, op, fmt, *args):
+        self._logger.warn(fmt, *args)
+        add_event(op=op, message="[WARNING] " + fmt.format(*args), is_success=False, log_event=False)
+
+    def error(self, op, fmt, *args):
+        self._logger.error(fmt, *args)
+        add_event(op=op, message=fmt.format(*args), is_success=False, log_event=False)
 
 def add_log_event(level, message, forced=False, reporter=__event_logger__):
     """

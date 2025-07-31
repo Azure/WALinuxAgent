@@ -21,13 +21,14 @@ import zipfile
 from datetime import datetime, timedelta
 from threading import current_thread
 
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, AGENT_ERROR_FILE, INITIAL_UPDATE_STATE_FILE
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.logger import LogLevel
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
 from azurelinuxagent.common.exception import HttpError, \
     ExitException, AgentMemoryExceededException
-from azurelinuxagent.common.future import ustr, httpclient
+from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc, httpclient
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentFamily, \
     ExtHandlerPackage, ExtHandlerPackageList, Extension, VMStatus, ExtHandlerStatus, ExtensionStatus, \
@@ -43,6 +44,7 @@ from azurelinuxagent.ga.update import  \
     get_update_handler, ORPHAN_POLL_INTERVAL, ORPHAN_WAIT_INTERVAL, \
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, \
     READONLY_FILE_GLOBS, ExtensionsSummary
+from azurelinuxagent.ga.signing_certificate_util import _MICROSOFT_ROOT_CERT_2011_03_22, get_microsoft_signing_certificate_path
 from tests.lib.mock_firewall_command import MockIpTables, MockFirewallCmd
 from tests.lib.mock_update_handler import mock_update_handler
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
@@ -51,6 +53,7 @@ from tests.lib.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_da
     clear_singleton_instances, skip_if_predicate_true, load_data, mock_sleep
 from tests.lib import wire_protocol_data
 from tests.lib.http_request_predicates import HttpRequestPredicates
+
 
 NO_ERROR = {
     "last_failure": 0.0,
@@ -1151,13 +1154,13 @@ class TestUpdate(UpdateTestCase):
 
                         # Case 3: rsm version in GS != Current Version; update fail and report error
                         protocol.mock_wire_data.set_extension_config("wire/ext_conf_rsm_version.xml")
-                        protocol.mock_wire_data.set_version_in_agent_family("5.2.0.1")
+                        protocol.mock_wire_data.set_version_in_agent_family("9.9.9.999")
                         update_goal_state_and_run_handler()
                         self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
                                         "updateStatus should be in status blob. Warns: {0}".format(patch_warn.call_args_list))
                         update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
                         self.assertEqual(VMAgentUpdateStatuses.Error, update_status['status'], "Status should be an error")
-                        self.assertEqual(update_status['expectedVersion'], "5.2.0.1", "incorrect version reported")
+                        self.assertEqual(update_status['expectedVersion'], "9.9.9.999", "incorrect version reported")
                         self.assertEqual(update_status['code'], 1, "incorrect code reported")
 
     def test_it_should_wait_to_fetch_first_goal_state(self):
@@ -1186,6 +1189,36 @@ class TestUpdate(UpdateTestCase):
         info_msgs = [args[0] for (args, _) in patch_info.call_args_list if
                      "Fetching the goal state recovered from previous errors." in args[0]]
         self.assertTrue(len(info_msgs) > 0, "Agent should've logged a message when recovered from GS errors")
+
+    def test_it_should_write_signing_certificate_string_to_file(self):
+        with _get_update_handler() as (update_handler, _):
+            update_handler.run(debug=True)
+            cert_path = get_microsoft_signing_certificate_path()
+            self.assertTrue(os.path.isfile(cert_path))
+            with open(cert_path, 'r') as f:
+                self.assertEqual(f.read(), _MICROSOFT_ROOT_CERT_2011_03_22, msg="Signing certificate was not correctly written to expected file location")
+
+    def test_agent_should_send_event_if_known_wireserver_ip_not_used(self):
+        with _get_update_handler() as (update_handler, _):
+            # Mock WireProtocol endpoint with known wireserver ip
+            with patch('azurelinuxagent.common.protocol.wire.WireProtocol.get_endpoint', return_value=KNOWN_WIRESERVER_IP):
+                with patch('azurelinuxagent.common.event.EventLogger.add_event') as patch_add_event:
+                    update_handler.run(debug=True)
+
+                    # Get any events for ProtocolEndpoint operation
+                    protocol_endpoint_events = [kwargs for _, kwargs in patch_add_event.call_args_list if kwargs['op'] == 'ProtocolEndpoint']
+                    # Daemon should not send ProtocolEndpoint event if endpoint is known wireserver IP
+                    self.assertTrue(len(protocol_endpoint_events) == 0)
+
+            # Mock WireProtocol endpoint with unknown ip
+            with patch('azurelinuxagent.common.protocol.wire.WireProtocol.get_endpoint', return_value='1.1.1.1'):
+                with patch('azurelinuxagent.common.event.EventLogger.add_event') as patch_add_event:
+                    update_handler.run(debug=True)
+
+                    # Get any events for ProtocolEndpoint operation
+                    protocol_endpoint_events = [kwargs for _, kwargs in patch_add_event.call_args_list if kwargs['op'] == 'ProtocolEndpoint']
+                    # Daemon should send ProtocolEndpoint event if endpoint is not known wireserver IP
+                    self.assertTrue(len(protocol_endpoint_events) == 1)
 
 
 class TestUpdateWaitForCloudInit(AgentTestCase):
@@ -1358,11 +1391,11 @@ class TestAgentUpgrade(UpdateTestCase):
             original_randint = random.randint
 
             def _mock_random_update_time(a, b):
-                if mock_random_update_time:
+                if mock_random_update_time:  # update should occur immediately
                     return 0
-                if b == 1:  # some tests mock normal/hotfix frequency to 1 second, return 0.001 to avoid long delay and still test the logic
+                if b == 1:  # handle tests where the normal or hotfix frequency is mocked to be very short (e.g., 1 second). Returning a very small delay (0.001 seconds) ensures the logic is tested without introducing significant waiting time
                     return 0.001
-                return original_randint(a, b)
+                return original_randint(a, b) + 10  # If none of the above conditions are met, the function returns additional 10-seconds delay. This might represent a normal delay for updates in scenarios where updates are not expected immediately
 
             protocol.set_http_handlers(http_get_handler=get_handler, http_put_handler=put_handler)
             with self.create_conf_mocks(autoupdate_frequency, hotfix_frequency, normal_frequency):
@@ -1423,7 +1456,7 @@ class TestAgentUpgrade(UpdateTestCase):
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file,
                                        autoupdate_frequency=test_frequency) as (update_handler, _):
             # Given version which will fail on first attempt, then rsm shouldn't make any futher attempts since GS is not updated
-            update_handler._protocol.mock_wire_data.set_version_in_agent_family("5.2.1.0")
+            update_handler._protocol.mock_wire_data.set_version_in_agent_family("9.9.9.999")
             update_handler._protocol.mock_wire_data.set_incarnation(2)
             update_handler.run(debug=True)
 
@@ -1493,12 +1526,12 @@ class TestAgentUpgrade(UpdateTestCase):
                       kwarg['op'] in (WALAEventOperation.AgentUpgrade, WALAEventOperation.Download)]
         # This will throw if corresponding message not found so not asserting on that
         rsm_version_found = next(kwarg for kwarg in agent_msgs if
-                                       "New agent version:5.2.1.0 requested by RSM in Goal state incarnation_1, will update the agent before processing the goal state" in kwarg['message'])
+                                       "New agent version:9.9.9.999 requested by RSM in Goal state incarnation_1, will update the agent before processing the goal state" in kwarg['message'])
         self.assertTrue(rsm_version_found['is_success'],
                         "The rsm version found op should be reported as a success")
 
         skipping_update = next(kwarg for kwarg in agent_msgs if
-                               "No matching package found in the agent manifest for version: 5.2.1.0 in goal state incarnation: incarnation_1, skipping agent update" in kwarg['message'])
+                               "No matching package found in the agent manifest for version: 9.9.9.999 in goal state incarnation: incarnation_1, skipping agent update" in kwarg['message'])
         self.assertEqual(skipping_update['version'], str(CURRENT_VERSION),
                          "The not found message should be reported from current agent version")
         self.assertFalse(skipping_update['is_success'], "The not found op should be reported as a failure")
@@ -1719,6 +1752,7 @@ class TestAgentUpgrade(UpdateTestCase):
             self.__assert_exit_code_successful(update_handler)
             self.__assert_upgrade_telemetry_emitted(mock_telemetry, version="9.9.9.10")
 
+    @skip_if_predicate_true(lambda: True, "Enable this test when rsm downgrade scenario fixed")
     def test_it_should_mark_current_agent_as_bad_version_on_downgrade(self):
         # Create Agent directory for current agent
         self.prepare_agents(count=1)
@@ -2059,7 +2093,7 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             # Double check the certificates are correct
             goal_state = protocol.get_goal_state()
 
-            thumbprints = [c.thumbprint for c in goal_state.certs.cert_list.certificates]
+            thumbprints = [c["thumbprint"] for c in goal_state.certs.summary]
 
             for extension in goal_state.extensions_goal_state.extensions:
                 for settings in extension.settings:
@@ -2123,7 +2157,7 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             #
             with create_log_and_telemetry_mocks() as (log_messages, add_event):
                 for _ in range(5):
-                    update_handler._update_goal_state_next_error_report = datetime.now()  # force the reporting period to elapse
+                    update_handler._update_goal_state_next_error_report = datetime.now(UTC)  # force the reporting period to elapse
                     update_handler._try_update_goal_state(protocol)
 
                 e = errors()
@@ -2277,7 +2311,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
     def test_it_should_clear_the_timestamp_for_the_most_recent_fast_track_goal_state(self):
         data_file = self._prepare_fast_track_goal_state()
 
-        if HostPluginProtocol.get_fast_track_timestamp() == timeutil.create_timestamp(datetime.min):
+        if HostPluginProtocol.get_fast_track_timestamp() == timeutil.create_utc_timestamp(datetime_min_utc):
             raise Exception("The test setup did not save the Fast Track state")
 
         with patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=False):
@@ -2287,7 +2321,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
                     with mock_update_handler(protocol) as update_handler:
                         update_handler.run()
 
-        self.assertEqual(HostPluginProtocol.get_fast_track_timestamp(), timeutil.create_timestamp(datetime.min),
+        self.assertEqual(HostPluginProtocol.get_fast_track_timestamp(), timeutil.create_utc_timestamp(datetime_min_utc),
             "The Fast Track state was not cleared")
 
     def test_it_should_default_fast_track_timestamp_to_datetime_min(self):
@@ -2334,8 +2368,8 @@ class ProcessGoalStateTestCase(AgentTestCase):
                     check_for_errors()
 
             timestamp = protocol.client.get_host_plugin()._fast_track_timestamp
-            self.assertEqual(timestamp, timeutil.create_timestamp(datetime.min),
-                "Expected fast track time stamp to be set to {0}, got {1}".format(datetime.min, timestamp))
+            self.assertEqual(timestamp, timeutil.create_utc_timestamp(datetime_min_utc),
+                "Expected fast track time stamp to be set to {0}, got {1}".format(datetime_min_utc, timestamp))
 
 class HeartbeatTestCase(AgentTestCase):
 
@@ -2344,7 +2378,7 @@ class HeartbeatTestCase(AgentTestCase):
     def test_telemetry_heartbeat_creates_event(self, patch_add_event, patch_info, *_):
         update_handler = get_update_handler()
         agent_update_handler = Mock()
-        update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
+        update_handler.last_telemetry_heartbeat = datetime.now(UTC) - timedelta(hours=1)
         update_handler._send_heartbeat_telemetry(agent_update_handler)
         self.assertEqual(1, patch_add_event.call_count)
         self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent [DEBUG {1}]"

@@ -31,7 +31,7 @@ RUN <<..
     # Install the Python venv
     #
     apt-get update
-    apt-get -y install curl bzip2 sudo
+    apt-get -y install curl bzip2 sudo iproute2
     groupadd waagent
     useradd --shell /bin/bash --create-home -g waagent waagent
     curl -sSf --retry 5 -o /tmp/python-${PYTHON_VERSION}.tar.bz2 https://dcrdata.blob.core.windows.net/python/python-${PYTHON_VERSION}.tar.bz2
@@ -58,14 +58,14 @@ function run-sudo-tests {
     #
     # TODO: Some unit tests create helper scripts that use 'python3' as shebang; we should probably port them to Bash, but installing Python 3 as a workaround for now.
     #
-    if [[ "${PYTHON_VERSION}" == "2.6" ]]; then
+    if [[ "${PYTHON_VERSION}" =~ ^2\.6|2\.7$ ]]; then
         apt-get -y install python3
     fi
 
     #
-    # The virtual environments for 2.6 and 3.4 have dependencies on OpenSSL 1.0, which is not available beyond Ubuntu 16. We use this script to patch the environments.
+    # The virtual environments for 2.6, 2.7 and 3.4 have dependencies on OpenSSL 1.0, which is not available beyond Ubuntu 16. We use this script to patch the environments.
     #
-    if [[ "${PYTHON_VERSION}" =~ ^2\.6|3\.4$ ]]; then
+    if [[ "${PYTHON_VERSION}" =~ ^2\.6|2\.7|3\.4$ ]]; then
       /tmp/patch_python_venv.sh "${PYTHON_VERSION}"
     fi
 ..

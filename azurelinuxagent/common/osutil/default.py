@@ -35,18 +35,37 @@ import string
 import struct
 import sys
 import time
+import warnings
 from pwd import getpwall
 
 from azurelinuxagent.common.exception import OSUtilError
-# 'crypt' was removed in Python 3.13; use legacycrypt instead
-if sys.version_info[0] == 3 and sys.version_info[1] >= 13 or sys.version_info[0] > 3:
-    try:
-        from legacycrypt import crypt
-    except ImportError:
+
+#
+# The 'crypt' package was removed in Python 3.13.
+#
+# To work around this, WALinuxAgent 2.12 and 2.13 added a dependency on legacycrypt and imported crypt from there. From 2.14,
+# we instead get crypt from the crypt-r package. The code below needs to handle the case where the self-update WALinuxAgent
+# is running on a machine where the pre-installed WALinuxAgent is 2.12/2.13 (and crypt may be coming from legacycrypt).
+#
+# We first try importing from crypt, which may have been installed from the crypt or crypt-r packages, then try
+# importing from legacy crypt, then fallback to a dummy function that raises an exception when invoked. The Provisioning Agent
+# and JIT requests use the crypt function, so those features would fail if none of the required dependencies are installed.
+#
+try:
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+        from crypt import crypt  # pylint: disable=deprecated-module
+except ImportError:
+    __CRYPT_IMPORTED__ = False
+    if sys.version_info[0] == 3 and sys.version_info[1] >= 13 or sys.version_info[0] > 3:
+        try:
+            from legacycrypt import crypt
+            __CRYPT_IMPORTED__ = True
+        except ImportError:
+            pass
+    if not __CRYPT_IMPORTED__:
         def crypt(password, salt):
-            raise OSUtilError("Please install the legacycrypt Python module to use this feature.")
-else:
-    from crypt import crypt  # pylint: disable=deprecated-module
+            raise OSUtilError("This feature requires one of the 'crypt', 'legacycrypt' or 'crypt-r' Python packages to be installed.")
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
@@ -54,7 +73,7 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils import textutil
 
-from azurelinuxagent.common.future import ustr, array_to_bytes
+from azurelinuxagent.common.future import ustr, array_to_bytes, UTC
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard
 from azurelinuxagent.common.utils.shellutil import CommandError
@@ -82,7 +101,7 @@ IOCTL_SIOCGIFFLAGS = 0x8913
 IOCTL_SIOCGIFHWADDR = 0x8927
 IFNAMSIZ = 16
 
-IP_COMMAND_OUTPUT = re.compile(r'^\d+:\s+(\w+):\s+(.*)$')
+IP_COMMAND_OUTPUT = re.compile(r'^\d+:\s+([\w@]+):\s+(.*)$')
 
 STORAGE_DEVICE_PATH = '/sys/bus/vmbus/devices/'
 GEN2_DEVICE_ID = 'f8b3781a-1e82-4818-a1c3-63d806ec15bb'
@@ -346,7 +365,7 @@ class DefaultOSUtil(object):
                 raise OSUtilError("Bad public key: {0}".format(value))
             if not value.endswith("\n"):
                 value += "\n"
-            fileutil.write_file(path, value)
+            fileutil.write_file(path, value, append=True)
         elif thumbprint is not None:
             lib_dir = conf.get_lib_dir()
             crt_path = os.path.join(lib_dir, thumbprint + '.crt')
@@ -847,8 +866,8 @@ class DefaultOSUtil(object):
                         else:
                             try:
                                 expire_string = line.split(" ", 4)[-1].strip(";")
-                                expire_date = datetime.datetime.strptime(expire_string, FORMAT_DATETIME)
-                                if expire_date > datetime.datetime.utcnow():
+                                expire_date = datetime.datetime.strptime(expire_string, FORMAT_DATETIME).replace(tzinfo=UTC)
+                                if expire_date > datetime.datetime.now(UTC):
                                     expired = False
                             except:  # pylint: disable=W0702
                                 logger.error("could not parse expiry token '{0}'".format(line))

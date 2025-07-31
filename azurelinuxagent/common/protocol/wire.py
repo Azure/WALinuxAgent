@@ -36,7 +36,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, report_e
     CollectOrReportEventDebugInfo, add_periodic
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError, ExtensionErrorCodes
-from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
+from azurelinuxagent.common.future import httpclient, bytebuffer, ustr, UTC
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME, GoalStateProperties
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import DataContract, ProvisionStatus, VMInfo, VMStatus
@@ -46,7 +46,7 @@ from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.restutil import TELEMETRY_THROTTLE_DELAY_IN_SECONDS, \
     TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS, TELEMETRY_DATA
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
-    findtext, gettext, remove_bom, get_bytes_from_pem, parse_json
+    findtext, gettext, remove_bom, get_bytes_from_pem, parse_json, redact_sas_token
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
@@ -115,8 +115,7 @@ class WireProtocol(DataContract):
         return vminfo
 
     def get_certs(self):
-        certificates = self.client.get_certs()
-        return certificates.cert_list
+        return self.client.get_certs()
 
     def get_goal_state(self):
         return self.client.get_goal_state()
@@ -236,7 +235,7 @@ def ga_status_to_guest_info(ga_status):
 def __get_formatted_msg_for_status_reporting(msg, lang="en-US"):
     return {
         'lang': lang,
-        'message': msg
+        'message': redact_sas_token(msg)
     }
 
 
@@ -655,14 +654,14 @@ class WireClient(object):
         This method enforces a timeout (_DOWNLOAD_TIMEOUT) on the download and raises an exception if the limit is exceeded.
         """
         logger.info("Downloading {0}", download_type)
-        start_time = datetime.now()
+        start_time = datetime.now(UTC)
 
         uris_shuffled = uris
         random.shuffle(uris_shuffled)
         most_recent_error = "None"
 
         for index, uri in enumerate(uris_shuffled):
-            elapsed = datetime.now() - start_time
+            elapsed = datetime.now(UTC) - start_time
             if elapsed > _DOWNLOAD_TIMEOUT:
                 message = "Timeout downloading {0}. Elapsed: {1} URIs tried: {2}/{3}. Last error: {4}".format(download_type, elapsed, index, len(uris), ustr(most_recent_error))
                 raise ExtensionDownloadError(message, code=ExtensionErrorCodes.PluginManifestDownloadError)
@@ -1140,13 +1139,11 @@ class WireClient(object):
             "Content-Type": "text/xml;charset=utf-8"
         }
 
-    def get_header_for_cert(self):
-        return self._get_header_for_encrypted_request("DES_EDE3_CBC")
-
     def get_header_for_remote_access(self):
-        return self._get_header_for_encrypted_request("AES128_CBC")
+        return self.get_headers_for_encrypted_request("AES128_CBC")
 
-    def _get_header_for_encrypted_request(self, cypher):
+    @staticmethod
+    def get_headers_for_encrypted_request(cypher):
         trans_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
         try:
             content = fileutil.read_file(trans_cert_file)
@@ -1154,12 +1151,15 @@ class WireClient(object):
             raise ProtocolError("Failed to read {0}: {1}".format(trans_cert_file, e))
 
         cert = get_bytes_from_pem(content)
-        return {
+        headers = {
             "x-ms-agent-name": "WALinuxAgent",
             "x-ms-version": PROTOCOL_VERSION,
-            "x-ms-cipher-name": cypher,
             "x-ms-guest-agent-public-x509-cert": cert
         }
+        if cypher is not None:  # the cypher header is optional, currently defaults to AES128_CBC
+            headers["x-ms-cipher-name"] = cypher
+
+        return headers
 
     def get_host_plugin(self):
         if self._host_plugin is None:

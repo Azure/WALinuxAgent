@@ -351,9 +351,11 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
         with mock_wire_protocol(DATA_FILE) as protocol:
 
             def mock_http_put(url, *args, **__):
-                if not HttpRequestPredicates.is_host_plugin_status_request(url):
+                if HttpRequestPredicates.is_host_plugin_status_request(url):
                     # Skip reading the HostGA request data as its encoded
-                    protocol.aggregate_status = json.loads(args[0])
+                    return MockHttpResponse(status=500)
+                protocol.aggregate_status = json.loads(args[0])
+                return MockHttpResponse(status=201)
 
             protocol.aggregate_status = {}
             protocol.set_http_handlers(http_put_handler=mock_http_put)
@@ -496,12 +498,6 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
         with patch("azurelinuxagent.common.utils.restutil.TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS", 0.001):
             client.report_event(self._get_telemetry_events_generator(event_list), flush=True)
             self.assertEqual(mock_http_request.call_count, 3)
-
-    def test_get_header_for_cert_should_use_triple_des(self, *_):
-        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
-            headers = protocol.client.get_header_for_cert()
-            self.assertIn("x-ms-cipher-name", headers)
-            self.assertEqual(headers["x-ms-cipher-name"], "DES_EDE3_CBC", "Unexpected x-ms-cipher-name")
 
     def test_get_header_for_remote_access_should_use_aes128(self, *_):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
@@ -1096,7 +1092,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 self.assertEqual(protocol.client.get_hosting_env().deployment_name, new_hosting_env_deployment_name)
                 self.assertEqual(protocol.client.get_shared_conf().xml_text, new_shared_conf)
                 self.assertEqual(sequence_number, new_sequence_number)
-                self.assertEqual(len(protocol.client.get_certs().cert_list.certificates), 0)
+                self.assertEqual(len(protocol.client.get_certs().summary), 0)
 
                 self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
                 self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
