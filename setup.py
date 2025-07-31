@@ -17,7 +17,9 @@
 # limitations under the License.
 #
 
+import gzip
 import os
+import shutil
 import subprocess
 import sys
 
@@ -90,6 +92,16 @@ def set_udev_files(data_files, dest="/etc/udev/rules.d/", src=None):
                "config/99-azure-product-uuid.rules"]
     data_files.append((dest, src))
 
+def set_man_files(data_files, dest="/usr/share/man/man1", src=None):
+    if src is None:
+        src = ["doc/man/waagent.1"]
+    src_gz = []
+    for file in src:
+        with open(file, 'rb') as f_in, gzip.open(file+".gz", 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
+        src_gz.append(file+".gz")
+    data_files.append((dest, src_gz))
+
 
 def get_data_files(name, version, fullname):  # pylint: disable=R0912
     """
@@ -110,6 +122,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_conf_files(data_files)
         set_logrotate_files(data_files)
         set_udev_files(data_files)
+        set_man_files(data_files)
         if version.startswith("8") or version.startswith("9"):
             # redhat 8+ uses systemd and python3
             set_systemd_files(data_files, dest=systemd_dir_path,
@@ -258,6 +271,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_logrotate_files(data_files)
         set_udev_files(data_files)
         set_systemd_files(data_files, dest=systemd_dir_path)
+        set_man_files(data_files)
     elif name == 'chainguard':
         set_bin_files(data_files, dest=agent_bin_path, src=["bin/py3/waagent"])
         set_conf_files(data_files, src=["config/chainguard/waagent.conf"])

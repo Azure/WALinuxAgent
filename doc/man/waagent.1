@@ -1,0 +1,117 @@
+.TH WAAGENT 1 "June 2025" "Azure Linux Agent" "System Administration"
+.SH NAME
+waagent \- Azure Linux VM Agent
+.SH SYNOPSIS
+.B waagent
+[-verbose] [-force] [-help] [\fISUBCOMMAND\fR]...
+
+.SH DESCRIPTION
+The Azure Linux Agent (waagent) manages virtual machine interaction with the Azure fabric controller.
+
+Most subcommands are not meant to be run directly by the user. However, some subcommands may be useful for debugging (such as collect-logs, version, and show-configuration) and deprovisioning.
+
+.SH SUBCOMMANDS
+.TP
+\fB-collect-logs\fR
+Runs the log collector utility that collects relevant agent logs for debugging and stores them in the agent folder on disk. Exact location will be shown when run. Use flag \fB-full\fR for more exhaustive log collection.
+
+.TP
+\fB-configuration-path FILE\fR
+Used together with \fB-start\fR or \fB-daemon\fR to specify configuration file. Default to /etc/waagent.conf.
+
+.TP
+\fB-daemon -start\fR
+Run waagent as a daemon in background.
+
+.TP
+\fB-deprovision\fR
+Attempt to clean the system and make it suitable for re-provisioning. WARNING: Deprovision does not guarantee that the image is cleared of all sensitive information and suitable for redistribution.
+
+.TP
+\fB-deprovision+user\fR
+Same as \fB-deprovision\fR, but also removes the last provisioned user account.
+
+.TP
+\fB-register-service\fR
+Register waagent as a service and enable it.
+
+.TP
+\fB-run-exthandlers\fR
+Run check for updates to waagent and extension handler. Note that outputs to /dev/console will be temporarily suspended.
+
+.TP
+\fB-setup-firewall=IP\fR
+Set up firewall rules for endpoint \fBIP\fR.
+
+.TP
+\fB-show-configuration\fR
+Print the current configuration, including values read from waagent.conf.
+
+.TP
+\fB-help\fR
+Display usage information.
+
+.TP
+\fB-version\fR
+Show the current version of the agent.
+
+.SH CONFIGURATION
+The agent is configured via this file by default:
+
+.B /etc/waagent.conf
+
+This file contains key=value settings that control agent behavior, including provisioning, disk formatting, resource limits, and certificate handling.
+
+Example entries:
+.RS
+Provisioning.Enabled=y
+ResourceDisk.Format=y
+ResourceDisk.MountPoint=/mnt/resource
+RSA.KeyLength=2048
+Logs.Verbose=y
+.RE
+
+.SH FILES AND DIRECTORIES
+.TP
+\fB/etc/waagent.conf\fR
+Main configuration file.
+
+.TP
+\fB/var/lib/waagent\fR
+State files and provisioning artifacts.
+
+.TP
+\fB/var/log/waagent.log\fR
+Agent log file.
+
+.SH SERVICES
+On systemd systems, the agent runs as:
+.RS
+.B systemctl start <waagent.service|walinuxagent.service>
+.B systemctl enable <waagent.service|walinuxagent.service>
+.RE
+
+.SH EXIT STATUS
+Zero on success, non-zero on error.
+
+.SH EXAMPLES
+.TP
+Deprovision before capturing an image:
+.RS
+waagent -deprovision+user && rm -rf /var/lib/waagent && shutdown -h now
+.RE
+
+.SH SEE ALSO
+.BR systemctl (1),
+.BR cloud-init (1)
+
+.SH HOMEPAGE
+.B https://github.com/Azure/WALinuxAgent
+
+.B https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/agent-linux
+
+.SH COPYRIGHT
+Copyright 2018 Microsoft Corporation
+
+.SH AUTHORS
+Microsoft Azure Linux Team
