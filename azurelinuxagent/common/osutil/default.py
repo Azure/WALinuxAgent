@@ -124,7 +124,7 @@ class DefaultOSUtil(object):
         return "/lib/systemd/system"
 
     @classmethod
-    def get_network_setup_service_install_path(cls, mode=''):
+    def get_network_setup_service_install_path(cls):
         return cls.get_systemd_unit_file_install_path()
 
     @staticmethod
