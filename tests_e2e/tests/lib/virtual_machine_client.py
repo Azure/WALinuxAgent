@@ -20,8 +20,12 @@
 #
 
 import datetime
+import functools
 import time
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
+
+from azure.identity import DefaultAzureCredential
+from msrestazure.azure_cloud import Cloud
 
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import VirtualMachineExtension, VirtualMachineInstanceView, VirtualMachine
@@ -31,6 +35,7 @@ from azure.mgmt.resource import ResourceManagementClient
 
 from azurelinuxagent.common.future import UTC
 
+from tests_e2e.tests.lib.azure_clouds import AZURE_CLOUDS
 from tests_e2e.tests.lib.azure_sdk_client import AzureSdkClient
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import execute_with_retry
@@ -52,6 +57,24 @@ class VirtualMachineClient(AzureSdkClient):
         self._compute_client = AzureSdkClient.create_client(ComputeManagementClient, cloud, subscription)
         self._resource_client = AzureSdkClient.create_client(ResourceManagementClient, cloud, subscription)
         self._network_client = AzureSdkClient.create_client(NetworkManagementClient, cloud, subscription)
+
+    def create_resource_manager_request(self, request: Callable, operation: str):
+        """
+        Creates a partial function to invoke the given 'request' providing the 'url' and 'headers' arguments.
+        The URL corresponds to a Resource Manager HTTPS request on the current virtual machine; the 'operation' is appended
+        to the URL and can be used to, for example, specify a query string, or a particular API (e.g. "UpgradeVMAgent").
+        The 'request' callable must accept a 'url' and a 'headers' parameter (e.g. it can be one of the APIs in the requests
+        module, such as get or post.
+        """
+        cloud: Cloud = AZURE_CLOUDS[self.cloud]
+        credential: DefaultAzureCredential = DefaultAzureCredential(authority=cloud.endpoints.active_directory)
+        token = credential.get_token(f"{cloud.endpoints.resource_manager}/.default")
+        url = f'{cloud.endpoints.resource_manager}/subscriptions/{self.subscription}/resourceGroups/{self.resource_group}/providers/Microsoft.Compute/virtualMachines/{self.name}/{operation}'
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {token.token}'
+        }
+        return functools.partial(request, url=url, headers=headers)
 
     def get_ip_address(self) -> str:
         """
