@@ -123,6 +123,10 @@ class DefaultOSUtil(object):
     def get_systemd_unit_file_install_path():
         return "/lib/systemd/system"
 
+    @classmethod
+    def get_network_setup_service_install_path(cls):
+        return cls.get_systemd_unit_file_install_path()
+
     @staticmethod
     def get_agent_bin_path():
         return "/usr/sbin"

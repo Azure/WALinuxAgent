@@ -27,6 +27,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.utils import shellutil, fileutil, textutil
 from azurelinuxagent.common.utils.shellutil import CommandError
+from azurelinuxagent.common.version import get_distro
 
 
 class PersistFirewallRulesHandler(object):
@@ -71,23 +72,25 @@ if __name__ == '__main__':
     # modify the unit file on VM too
     _UNIT_VERSION = "1.4"
 
+    _DISTRO = get_distro()[0]
+
     @staticmethod
     def get_service_file_path():
         osutil = get_osutil()
         service_name = PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_NAME_FORMAT.format(osutil.get_service_name())
-        return os.path.join(osutil.get_systemd_unit_file_install_path(), service_name)
+        return os.path.join(osutil.get_network_setup_service_install_path(), service_name)
 
     def __init__(self, dst_ip):
         """
         This class deals with ensuring that Firewall rules are persisted over system reboots.
         It tries to employ using Firewalld.service if present first as it already has provisions for persistent rules.
-        If not, it then creates a new agent-network-setup.service file and copy it over to the osutil.get_systemd_unit_file_install_path() dynamically
+        If not, it then creates a new agent-network-setup.service file and copy it over to the osutil.get_network_setup_service_install_path() dynamically
         On top of it, on every service restart it ensures that the WireIP is overwritten and the new IP is blocked as well.
         """
         osutil = get_osutil()
         self._network_setup_service_name = self._AGENT_NETWORK_SETUP_NAME_FORMAT.format(osutil.get_service_name())
         self._is_systemd = systemd.is_systemd()
-        self._systemd_file_path = osutil.get_systemd_unit_file_install_path()
+        self._systemd_file_path = osutil.get_network_setup_service_install_path()
         self._dst_ip = dst_ip
         # The custom service will try to call the current agent executable to setup the firewall rules
         self._current_agent_executable_path = os.path.join(os.getcwd(), sys.argv[0])
@@ -118,7 +121,7 @@ if __name__ == '__main__':
     def setup(self):
 
         if not self._is_firewall_service_running():
-            logger.info("Firewalld service not running/unavailable, trying to set up {0}".format(self._network_setup_service_name))
+            logger.info("Firewalld service not running/unavailable, trying to set up {0}".format(self.get_service_file_path()))
             if systemd.is_systemd():
                 self._setup_network_setup_service()
             else:
@@ -176,6 +179,17 @@ if __name__ == '__main__':
         # This is to handle the case where WireIP can change midway on service restarts.
         # Additionally, incase of auto-update this would also update the location of the new EGG file ensuring that
         # the service is always run from the most latest agent.
+
+        # If RHEL and in image mode, we need to clean up the service file in old path
+        if self._DISTRO == 'rhel' and os.path.exists('/run/ostree-booted'):
+            old_service_file_path = os.path.join('/usr/lib/systemd/system/', self._network_setup_service_name)
+            if os.path.exists(old_service_file_path):
+                logger.info("Cleaning up old service file in image mode: {0}".format(old_service_file_path))
+                try:
+                    fileutil.rm_files(old_service_file_path)
+                except Exception as error:
+                    logger.warn("Unable to delete old service in image mode {0}: {1}".format(self._network_setup_service_name, ustr(error)))
+
         self.__setup_binary_file()
 
         network_service_enabled = self.__verify_network_setup_service_enabled()
