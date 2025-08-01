@@ -7,7 +7,7 @@ tests:
 images: "signature-validation-endorsed"
 # This test needs to run in a canary region until all extensions being tested are published with signature in all prod regions.
 # Extension signatures are currently only available in the public cloud, so we skip this test on other clouds.
-locations: "AzureCloud:centraluseuap"
+locations: "AzureCloud:eastus2euap"
 skip_on_clouds:
   - "AzureChinaCloud"
   - "AzureUSGovernment"
