@@ -286,16 +286,6 @@ class AgentLog(object):
                 'if': lambda r: r.thread == 'SendTelemetryHandler' and self._increment_counter("SendTelemetryHandler-telemetrydata-Status Code 410") < 2  # ignore unless there are 2 or more instances
             },
             #
-            # 2025-07-28T09:30:47.141626Z ERROR SendTelemetryHandler ExtHandler Event: name=WALinuxAgent, op=ReportEventErrors, message=DroppedEventsCount: 1
-            # Reasons (first 5 errors): [ProtocolError] [Wireserver Exception] [HttpError] [HTTP Failed] POST http://168.63.129.16/machine -- IOError timed out -- 3 attempts made: Traceback (most recent call last):
-            #
-            {
-                'message': r"(?s)\[ProtocolError\].*POST http://168.63.129.16/machine.*IOError timed out",
-                'if': lambda r: r.thread == 'SendTelemetryHandler' and self._increment_counter(
-                    "SendTelemetryHandler-telemetrydata-IOError timed out") < 2
-                # ignore unless there are 2 or more instances
-            },
-            #
             # Ignore these errors in flatcar:
             #
             #    1)  2023-03-16T14:30:33.091427Z ERROR Daemon Daemon Failed to mount resource disk [ResourceDiskError] unable to detect disk topology
