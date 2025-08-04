@@ -64,12 +64,15 @@ class ExtPolicy(AgentVmTest):
     @staticmethod
     def __enable_extension(extension_case, timeout=None):
         """Helper to call 'enable' with appropriate parameters."""
-        args = {"settings": extension_case.settings, "protected_settings": {}}
+        args = {"settings": extension_case.settings}
 
         # VirtualMachineRunCommandClient (and VirtualMachineRunCommand) does not take force_update_tag as a parameter.
         # For all other extensions, always set force_update to true.
         if not isinstance(extension_case.extension, VirtualMachineRunCommandClient):
             args["force_update"] = True
+        # Always send empty protected settings to CSE
+        if extension_case.extension.extension_id == VmExtensionIds.CustomScript:
+            args["protected_settings"] = {}
 
         # Add timeout only if specified, else use default
         if timeout is not None:
