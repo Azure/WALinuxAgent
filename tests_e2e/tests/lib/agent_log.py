@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+import io
 import os
 import re
 
@@ -85,9 +85,17 @@ class AgentLogRecord:
 class AgentLog(object):
     """
     Provides facilities to parse and/or extract errors from the agent's log.
+
+    The contents of the log can be specified by a file ('path' parameter) or a string ('contents' parameter). If no arguments are
+    specified, the contents are read from /var/log/waagent.log.
     """
-    def __init__(self, path: Path = Path('/var/log/waagent.log')):
-        self._path: Path = path
+    def __init__(self, path: Path = None, contents: str = None):
+        if path is not None and contents is not None:
+            raise ValueError("path and contents are mutually exclusive")
+        if path is None and contents is None:
+            path = Path('/var/log/waagent.log')
+
+        self._open_log = path.open if path is not None else lambda: io.StringIO(contents)
         self._counter_table: Dict[str, int] = {}
 
     def get_errors(self) -> List[AgentLogRecord]:
@@ -544,9 +552,6 @@ class AgentLog(object):
                  ... do something...
 
         """
-        if not self._path.exists():
-            raise IOError('{0} does not exist'.format(self._path))
-
         def match_record():
             for regex in [self._NEWER_AGENT_RECORD, self._2_2_46_AGENT_RECORD, self._OLDER_AGENT_RECORD, self._OLDEST_AGENT_RECORD]:
                 m = regex.match(line)
@@ -562,11 +567,12 @@ class AgentLog(object):
                 record.message = record.message + "\n" + extra_lines.rstrip()
             return record
 
-        with self._path.open() as file_:
+        log = self._open_log()
+        try:
             record = None
             extra_lines = ""
 
-            line = file_.readline()
+            line = log.readline()
             while line != "":  # while not EOF
                 match = match_record()
                 if match is not None:
@@ -576,7 +582,9 @@ class AgentLog(object):
                     extra_lines = ""
                 else:
                     extra_lines = extra_lines + line
-                line = file_.readline()
+                line = log.readline()
 
             if record is not None:
                 yield complete_record()
+        finally:
+            log.close()
