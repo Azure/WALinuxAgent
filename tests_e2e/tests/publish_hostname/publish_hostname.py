@@ -165,6 +165,7 @@ class PublishHostname(AgentVmTest):
                             # Exit code 1 indicates grep did not find a match. Sleep if exit code is 1, otherwise raise.
                             if e.exit_code != 1:
                                 raise
+                        log.info("Agent hasn't detected hostname change yet. Retrying after 30 seconds...")
                         retries -= 1
                         sleep(30)
 
