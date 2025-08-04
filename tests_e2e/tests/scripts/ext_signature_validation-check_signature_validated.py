@@ -19,9 +19,10 @@
 #
 import argparse
 import glob
-import sys
 import re
+import json
 
+from assertpy import fail
 from datetime import datetime
 from azurelinuxagent.common.future import UTC, datetime_min_utc
 from tests_e2e.tests.lib.logging import log
@@ -29,6 +30,26 @@ from tests_e2e.tests.lib.agent_log import AgentLog
 
 # This script verifies that signature was validated for the specified extension.
 # Usage: ext_signature_validation-check_signature_validated.py --extension-name "CustomScript"
+
+
+def check_signature_validation_state(extension_name):
+    # Check that the HandlerStatus file contains "signature_validated": true
+
+    handler_status_file = "/var/lib/waagent/*{0}*/config/HandlerStatus".format(extension_name)
+    matched_files = glob.glob(handler_status_file)
+    if matched_files is None or len(matched_files) == 0:
+        fail("No HandlerStatus file found for extension '{0}'".format(extension_name))
+
+    if len(matched_files) > 1:
+        fail("Expected exactly one one HandlerStatus file, but found {0}.".format(len(matched_files)))
+
+    with open(matched_files[0], 'r') as f:
+        data = json.load(f)
+        signature_validated = data.get("signature_validated")
+        if signature_validated:
+            log.info("Signature validation state successfully saved to HandlerStatus, 'signature_validated' is True as expected")
+        else:
+            fail(f"Expected 'signature_validated' to be True in HandlerStatus, but got: {signature_validated}")
 
 
 def main():
@@ -63,30 +84,19 @@ def main():
                     man_validated = True
 
         if not sig_validated:
-            log.info("Did not find expected signature validation message in agent log. Expected pattern: {0}".format(sig_pattern))
-            sys.exit(1)
+            fail("Did not find expected signature validation message in agent log. Expected pattern: {0}".format(sig_pattern))
 
         if not man_validated:
-            log.info("Did not find expected manifest validation message in agent log. Expected pattern: {0}".format(man_pattern))
-            sys.exit(1)
+            fail("Did not find expected manifest validation message in agent log. Expected pattern: {0}".format(man_pattern))
 
-        # Check for the signature validation state file
-        log.info("Checking that signature validation state file exists.")
-        state_file_pattern = "/var/lib/waagent/*{0}*/WALINUXAGENT_STATE_PACKAGE_VALIDATED".format(args.extension_name)
-        matched_files = glob.glob(state_file_pattern)
-        if matched_files is None or len(matched_files) == 0:
-            log.info("No signature validation state file found for extension '{0}'".format(args.extension_name))
-            sys.exit(1)
-
-        if len(matched_files) > 1:
-            log.info("Expected exactly one signature validation state file, but found {0}.".format(len(matched_files)))
+        # Check that the handler status file indicates that signature was validated.
+        log.info("Checking that signature validation state in HandlerStatus file.")
+        check_signature_validation_state(args.extension_name)
 
         log.info("Signature validation state file found for extension '{0}'".format(args.extension_name))
-        sys.exit(0)
 
     except Exception as e:
-        log.info("Error thrown when checking that signature was validated: {0}".format(str(e)))
-        sys.exit(1)
+        fail("Error thrown when checking that signature was validated: {0}".format(str(e)))
 
 
 if __name__ == "__main__":

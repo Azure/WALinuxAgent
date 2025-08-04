@@ -59,8 +59,8 @@ from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.signature_validation_util import validate_handler_manifest_signing_info, SignatureValidationError, \
-    PackageValidationError, save_signature_validation_state, signature_validation_enabled, validate_signature, \
-    signature_has_been_validated, cleanup_package_with_invalid_signature, report_validation_event, PACKAGE_VALIDATION_STATE_FILE
+    PackageValidationError, ManifestValidationError, signature_validation_enabled, validate_signature, \
+    cleanup_package_with_invalid_signature, report_validation_event
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
 _HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
@@ -839,7 +839,7 @@ class ExtHandlersHandler(object):
         else:
             # Check extension policy and raise error if disallowed. Since the extension is not being re-downloaded, treat it
             # as signed if its signature was previously validated on download.
-            extension_is_signed = signature_has_been_validated(ext_handler_i.get_signature_validation_state_file())
+            extension_is_signed = ext_handler_i.signature_validated
             self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
 
             ext_handler_i.ensure_consistent_data_for_mc()
@@ -971,7 +971,7 @@ class ExtHandlersHandler(object):
         if handler_state != ExtHandlerState.NotInstalled:
             # If extension is installed, check policy and raise an error if the extension is disallowed (e.g., not in allowlist, signature not previously validated when required).
             # Uninstall extension goal states do not include encoded signature, so if the extension signature was previously validated, we treat it as signed.
-            extension_is_signed = signature_has_been_validated(ext_handler_i.get_signature_validation_state_file())
+            extension_is_signed = ext_handler_i.signature_validated
             self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
 
             if handler_state == ExtHandlerState.Enabled:
@@ -1191,6 +1191,11 @@ class ExtHandlerInstance(object):
         self.pkg_file = None
         self.logger = None
         self.set_logger(extension=extension, execution_log_max_size=execution_log_max_size)
+        self._signature_validated = self.get_signature_validated()
+
+    @property
+    def signature_validated(self):
+        return self._signature_validated
 
     @property
     def supports_multi_config(self):
@@ -1438,7 +1443,7 @@ class ExtHandlerInstance(object):
         package_file = os.path.join(conf.get_lib_dir(), self.get_extension_package_zipfile_name())
 
         should_validate_ext_signature = signature_validation_enabled() and self.ext_handler.encoded_signature != ""
-        signature_validated = False
+        signature_validation_succeeded = False
 
         # Handle case where extension zip package already exists, but has not been extracted. If signature is present,
         # validate the package signature, extract the package, and then validate handler manifest.
@@ -1452,7 +1457,7 @@ class ExtHandlerInstance(object):
             if should_validate_ext_signature:
                 try:
                     validate_signature(package_file, self.ext_handler.encoded_signature, package_full_name=self.get_full_name())
-                    signature_validated = True
+                    signature_validation_succeeded = True
                 except SignatureValidationError as ex:
                     # validate_signature() only raises SignatureValidationError.
                     if not ignore_signature_validation_errors:
@@ -1467,7 +1472,7 @@ class ExtHandlerInstance(object):
                 msg = "The existing extension package is invalid, will ignore it."
                 self.logger.info(msg)
                 add_event(op=WALAEventOperation.Download, message=msg, name=self.ext_handler.name, version=self.ext_handler.version, is_success=True, log_event=False)
-                signature_validated = False
+                signature_validation_succeeded = False
 
         # Handle the case where the extension package does not exist. Download the zip package, validate the signature
         # if present, and extract the package. If package is signed, validate handler manifest.
@@ -1492,7 +1497,7 @@ class ExtHandlerInstance(object):
                 if should_validate_ext_signature:
                     # download_zip_package() performs signature validation internally. If no exception is raised, the signature was successfully validated.
                     # Mark this here so that we can save validation state later, if handler manifest validation also succeeds.
-                    signature_validated = True
+                    signature_validation_succeeded = True
 
             except SignatureValidationError as ex:
                 # download_zip_package() will propagate a SignatureValidationError if validation fails. Re-raise if
@@ -1508,13 +1513,12 @@ class ExtHandlerInstance(object):
         if should_validate_ext_signature:
             try:
                 validate_handler_manifest_signing_info(self.load_manifest(), self.ext_handler)
-                # If both manifest and signature were validated successfully, save state.
-                if signature_validated:
-                    save_signature_validation_state(self.get_signature_validation_state_file())
+                # If both manifest and signature were validated successfully, update self._signature_validated. This
+                # attribute will be saved to the HandlerStatus file during status reporting.
+                self._signature_validated = signature_validation_succeeded
 
-            except PackageValidationError as ex:
-                # validate_handler_manifest_signing_info() raises only ManifestValidationError, save_signature_validation_state()
-                # raises only PackageValidationError.
+            except ManifestValidationError as ex:
+                # validate_handler_manifest_signing_info() raises only ManifestValidationError.
                 if not ignore_signature_validation_errors:
                     raise
                 report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING, message=ustr(ex), name=self.ext_handler.name,
@@ -2335,6 +2339,7 @@ class ExtHandlerInstance(object):
         handler_status.code = code
         handler_status.status = status
         handler_status.supports_multi_config = self.ext_handler.supports_multi_config
+        handler_status.signature_validated = self.signature_validated
         status_file = os.path.join(state_dir, "HandlerStatus")
 
         try:
@@ -2379,6 +2384,20 @@ class ExtHandlerInstance(object):
 
         return None
 
+    def get_signature_validated(self):
+        """
+        Returns the signature validation state recorded in the HandlerStatus file. If HandlerStatus has not been created,
+        returns False.
+        """
+        # Retrieve the ExtHandlerStatus object.
+        handler_status = self.get_handler_status()
+        if handler_status is None:
+            return False
+
+        # The "signature_validated" attribute defaults to False if it is missing from the HandlerStatus file,
+        # so there's no need to explicitly check for its existence here.
+        return handler_status.signature_validated
+
     def get_extension_package_zipfile_name(self):
         return "{0}__{1}{2}".format(self.ext_handler.name,
                                     self.ext_handler.version,
@@ -2414,9 +2433,6 @@ class ExtHandlerInstance(object):
 
     def get_log_dir(self):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
-
-    def get_signature_validation_state_file(self):
-        return os.path.join(self.get_base_dir(), PACKAGE_VALIDATION_STATE_FILE)
 
     @staticmethod
     def _read_status_file(ext_status_file):

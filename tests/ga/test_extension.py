@@ -49,7 +49,6 @@ from azurelinuxagent.ga.signing_certificate_util import write_signing_certificat
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, migrate_handler_state, \
     get_exthandlers_handler, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
     ExtensionStatusValue, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, GoalStateStatus, ExtHandlerState
-from azurelinuxagent.ga.signature_validation_util import signature_has_been_validated, PACKAGE_VALIDATION_STATE_FILE
 from azurelinuxagent.ga.policy.policy_engine import _PolicyEngine
 
 from tests.lib import wire_protocol_data
@@ -431,7 +430,8 @@ class TestHandlerStateMigration(AgentTestCase):
 class TestExtensionBase(AgentTestCase):
     def _assert_handler_status(self, report_vm_status, expected_status,
                                expected_ext_count, version,
-                               expected_handler_name="OSTCExtensions.ExampleHandlerLinux", expected_msg=None, expected_code=None):
+                               expected_handler_name="OSTCExtensions.ExampleHandlerLinux", expected_msg=None, expected_code=None,
+                               expected_validation_state=None):
         self.assertTrue(report_vm_status.called)
         args, kw = report_vm_status.call_args  # pylint: disable=unused-variable
         vm_status = args[0]
@@ -449,6 +449,9 @@ class TestExtensionBase(AgentTestCase):
 
         if expected_code is not None:
             self.assertEqual(expected_code, handler_status.code)
+
+        if expected_validation_state is not None:
+            self.assertEqual(expected_validation_state, handler_status.signature_validated)
 
 
 # Deprecated. New tests should be added to the TestExtension class
@@ -3857,7 +3860,6 @@ class _TestSignatureValidationBase(TestExtensionBase):
         self.patch_conf_flag = patch('azurelinuxagent.ga.exthandlers.conf.get_signature_validation_enabled', return_value=True)
         self.patch_conf_flag.start()
         write_signing_certificates()
-        self.state_file = self._get_signature_validation_state_file(os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0'))
 
     def tearDown(self):
         patch.stopall()
@@ -3908,10 +3910,6 @@ class _TestSignatureValidationBase(TestExtensionBase):
                 errors.append(kw)
         self.assertEqual(0, len(errors), "Signature validation should have completed with no errors. Errors: {0}".format(errors))
 
-    @staticmethod
-    def _get_signature_validation_state_file(base_dir):
-        return os.path.join(base_dir, PACKAGE_VALIDATION_STATE_FILE)
-
     def _test_enable_extension(self, data_file, signature_validation_should_succeed, expected_status_code, expected_handler_status, expected_ext_count,
                                expected_status_msg=None, expected_handler_name="OSTCExtensions.ExampleHandlerLinux", expected_version="1.0.0"):
 
@@ -3931,12 +3929,8 @@ class _TestSignatureValidationBase(TestExtensionBase):
             self.assertTrue(report_vm_status.called)
             self._assert_handler_status(report_vm_status, expected_handler_status, expected_ext_count=expected_ext_count,
                                         version=expected_version, expected_handler_name=expected_handler_name,
-                                        expected_msg=expected_status_msg, expected_code=expected_status_code)
-
-            # Assert signature validation state
-            base_dir = os.path.join(conf.get_lib_dir(), '{0}-{1}'.format(expected_handler_name, expected_version))
-            state_file = self._get_signature_validation_state_file(base_dir)
-            self.assertEqual(signature_validation_should_succeed, signature_has_been_validated(state_file))
+                                        expected_msg=expected_status_msg, expected_code=expected_status_code,
+                                        expected_validation_state=signature_validation_should_succeed)
 
 
 class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
@@ -4161,8 +4155,7 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
             self._assert_handler_status(report_vm_status, "Ready",
                                         expected_ext_count=1,
                                         version="1.0.0", expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
-                                        expected_msg="Plugin enabled", expected_code=0)
-            self.assertFalse(signature_has_been_validated(self.state_file))
+                                        expected_msg="Plugin enabled", expected_code=0, expected_validation_state=False)
 
             # Generate a new mock goal state to uninstall the extension - increment the incarnation
             protocol.mock_wire_data.set_incarnation(2)
@@ -4194,8 +4187,7 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
             self._assert_handler_status(report_vm_status, "Ready",
                                         expected_ext_count=1,
                                         version="1.0.0", expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
-                                        expected_msg="Plugin enabled", expected_code=0)
-            self.assertFalse(signature_has_been_validated(self.state_file))
+                                        expected_msg="Plugin enabled", expected_code=0, expected_validation_state=False)
 
             # Generate a new mock goal state to uninstall the extension - increment the incarnation
             protocol.mock_wire_data.set_incarnation(2)
@@ -4232,11 +4224,7 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
             self._assert_handler_status(report_vm_status, "Ready",
                                         expected_ext_count=1,
                                         version="1.7.0", expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
-                                        expected_msg="Plugin enabled", expected_code=0)
-
-            # Assert signature validation state
-            base_dir = os.path.join(conf.get_lib_dir(), 'Microsoft.OSTCExtensions.Edp.VMAccessForLinux-1.7.0')
-            self.assertTrue(signature_has_been_validated(base_dir))
+                                        expected_msg="Plugin enabled", expected_code=0, expected_validation_state=True)
 
             # Generate a new mock goal state to uninstall the extension - increment the incarnation
             protocol.mock_wire_data.set_incarnation(2)
@@ -4585,8 +4573,7 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
             self._assert_handler_status(report_vm_status, "Ready",
                                         expected_ext_count=1,
                                         version="1.0.0", expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
-                                        expected_msg="Plugin enabled", expected_code=0)
-            self.assertFalse(signature_has_been_validated(self.state_file))
+                                        expected_msg="Plugin enabled", expected_code=0, expected_validation_state=False)
 
             # Update policy to block unsigned extensions
             policy = \
@@ -4639,8 +4626,8 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
                 exthandlers_handler.report_ext_handlers_status()
                 report_vm_status = protocol.report_vm_status
                 self.assertTrue(report_vm_status.called)
-                self._assert_handler_status(report_vm_status, "NotReady", expected_ext_count=1, version="1.0.0")
-                self.assertFalse(signature_has_been_validated(self.state_file))
+                self._assert_handler_status(report_vm_status, "NotReady", expected_ext_count=1, version="1.0.0",
+                                            expected_validation_state=False)
 
             # Update policy to block unsigned extensions
             policy = \
@@ -4689,11 +4676,7 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
                                         expected_ext_count=1,
                                         version="1.7.0",
                                         expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
-                                        expected_msg="Plugin enabled", expected_code=0)
-
-            # Assert signature validation state
-            base_dir = os.path.join(conf.get_lib_dir(), 'Microsoft.OSTCExtensions.Edp.VMAccessForLinux-1.7.0')
-            self.assertTrue(signature_has_been_validated(base_dir))
+                                        expected_msg="Plugin enabled", expected_code=0, expected_validation_state=True)
 
             # Generate a new mock goal state to uninstall the extension - increment the incarnation
             protocol.mock_wire_data.set_incarnation(2)

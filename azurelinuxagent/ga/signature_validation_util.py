@@ -31,10 +31,6 @@ from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
 
-# This file tracks the state of signature and manifest validation for the package. If the file exists, signature and
-# manifest have both been successfully validated.
-PACKAGE_VALIDATION_STATE_FILE = "WALINUXAGENT_STATE_PACKAGE_VALIDATED"
-
 # Signature validation requires OpenSSL version 1.1.0 or later. The 'no_check_time' flag used for the 'openssl cms -verify'
 # command is not supported on older versions.
 _MIN_OPENSSL_VERSION_FOR_SIG_VALIDATION = FlexibleVersion("1.1.0")
@@ -280,29 +276,6 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
         # Catch any exceptions unrelated to 'signingInfo' validation (e.g. incorrectly formatted extension name) and raise as a ManifestValidationError with zero duration.
         raise ManifestValidationError(msg="Error during manifest 'signingInfo' validation for extension '{0}'. Error: {1}".format(ext_handler, ustr(ex)),
                                       operation=WALAEventOperation.SignatureValidation, duration=0)
-
-
-def save_signature_validation_state(state_file_path):
-    """
-    Create signature validation state file at the target file path. Existence of file indicates that signature and manifest
-    were successfully validated for the package.
-    """
-    try:
-        report_validation_event(op=WALAEventOperation.SignatureValidation, level=logger.LogLevel.INFO, name=AGENT_NAME, version=AGENT_VERSION,
-                                message="Saving signature validation state file: {0}".format(state_file_path), duration=0)
-        with open(state_file_path, 'w'):
-            pass
-    except Exception as e:
-        msg = "Error saving signature validation state file at location '{0}': {1}".format(state_file_path, ustr(e))
-        raise PackageValidationError(msg=msg, operation=WALAEventOperation.SignatureValidation, duration=0)
-
-
-def signature_has_been_validated(state_file_path):
-    """
-    Returns True if signature validation state file exists at the specified location.
-    Presence of the file indicates that the package signature was successfully validated.
-    """
-    return os.path.exists(state_file_path)
 
 
 def signature_validation_enabled():
