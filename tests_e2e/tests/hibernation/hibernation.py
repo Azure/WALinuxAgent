@@ -113,7 +113,7 @@ class Hibernation(AgentVmTest):
         log.info("Executing an extension with protected settings to verify it can use the new tenant certificate")
         custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
         message = str(uuid.uuid4())
-        custom_script.enable(protected_settings={'commandToExecute': f"echo \'{message}\'"}, force_update=True)
+        custom_script.enable(settings={}, protected_settings={'commandToExecute': f"echo \'{message}\'"}, force_update=True)
         custom_script.assert_instance_view(expected_message=message)
         log.info("")
 

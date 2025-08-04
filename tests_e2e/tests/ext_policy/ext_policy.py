@@ -64,7 +64,7 @@ class ExtPolicy(AgentVmTest):
     @staticmethod
     def __enable_extension(extension_case, timeout=None):
         """Helper to call 'enable' with appropriate parameters."""
-        args = {"settings": extension_case.settings}
+        args = {"settings": extension_case.settings, "protected_settings": {}}
 
         # VirtualMachineRunCommandClient (and VirtualMachineRunCommand) does not take force_update_tag as a parameter.
         # For all other extensions, always set force_update to true.

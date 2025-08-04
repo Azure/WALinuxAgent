@@ -61,6 +61,7 @@ class Fips(AgentVmTest):
         log.info("Installing %s", custom_script)
         message = f"Hello {uuid.uuid4()}!"
         custom_script.enable(
+            settings={},
             protected_settings={
                 'commandToExecute': f"echo \'{message}\'"
             }

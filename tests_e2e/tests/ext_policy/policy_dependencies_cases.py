@@ -25,6 +25,7 @@ def __get_extension_template(extension_id: VmExtensionIdentifier, depends_on=Non
         template["properties"]["enableAutomaticUpgrade"] = True
     elif extension_id == VmExtensionIds.CustomScript:
         template["properties"]["settings"] = {"commandToExecute": "date"}
+        template["properties"]["protectedSettings"] = {}
     elif extension_id == VmExtensionIds.RunCommandHandler:
         # Each time, we generate a RunCommand template with different settings
         unique = str(uuid.uuid4())
