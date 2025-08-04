@@ -76,7 +76,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
         osutil = DefaultOSUtil()
         osutil.get_agent_bin_path = MagicMock(return_value=self.__agent_bin_dir)
-        osutil.get_systemd_unit_file_install_path = MagicMock(return_value=self.__systemd_dir)
+        osutil.get_network_setup_service_install_path = MagicMock(return_value=self.__systemd_dir)
 
         self._expected_service_name = PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_NAME_FORMAT.format(
             osutil.get_service_name())
