@@ -135,7 +135,8 @@ class Extension(object):
         self.settings = []
         self.manifest_uris = []
         self.supports_multi_config = False
-        self.encoded_signature = None
+        # An empty string for encoded_signature indicates that the extension is not signed, or that the goal state API does not support the signature property.
+        self.encoded_signature = ""
         self.__invalid_handler_setting_reason = None
 
     @property

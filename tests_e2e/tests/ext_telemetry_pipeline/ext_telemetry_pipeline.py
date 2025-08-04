@@ -65,7 +65,7 @@ class ExtTelemetryPipeline(AgentVmTest):
         cse.assert_instance_view()
 
         # Check agent log to verify ETP is enabled
-        command = "agent_ext_workflow-check_data_in_agent_log.py --data 'Extension Telemetry pipeline enabled: True'"
+        command = "check_data_in_agent_log.py --data 'Extension Telemetry pipeline enabled: True'"
         log.info("")
         log.info("Check agent log to verify ETP is enabled...")
         log.info("Remote command [%s] completed:\n%s", command, ssh_client.run_command(command))

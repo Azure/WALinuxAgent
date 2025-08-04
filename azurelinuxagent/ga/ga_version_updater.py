@@ -111,7 +111,8 @@ class GAVersionUpdater(object):
         agent_pkg_path = ".".join((os.path.join(conf.get_lib_dir(), agent_name), "zip"))
         agent_handler_manifest_file = os.path.join(agent_dir, AGENT_MANIFEST_FILE)
         if not os.path.exists(agent_dir) or not os.path.isfile(agent_handler_manifest_file):
-            protocol.client.download_zip_package("agent package", package_to_download.uris, agent_pkg_path, agent_dir, use_verify_header=is_fast_track_goal_state)
+            protocol.client.download_zip_package(agent_name, package_to_download.uris, agent_pkg_path, agent_dir, use_verify_header=is_fast_track_goal_state,
+                                                 signature="", enforce_signature=False)
         else:
             logger.info("Agent {0} was previously downloaded - skipping download", agent_name)
 

@@ -171,7 +171,7 @@ class HostPluginProtocol(object):
         url = URI_FORMAT_VM_SETTINGS.format(self.endpoint, HOST_PLUGIN_PORT)
 
         headers = {
-            _HEADER_VERSION: API_VERSION,
+           _HEADER_VERSION: API_VERSION,
            _HEADER_CONTAINER_ID: self.container_id,
            _HEADER_HOST_CONFIG_NAME: self.role_config_name,
            _HEADER_CORRELATION_ID: correlation_id

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<GoalState xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="goalstate10.xsd">
+  <Version>2012-11-30</Version>
+  <Incarnation>1</Incarnation>
+  <Machine>
+    <ExpectedState>Started</ExpectedState>
+    <StopRolesDeadlineHint>300000</StopRolesDeadlineHint>
+    <LBProbePorts>
+      <Port>16001</Port>
+    </LBProbePorts>
+    <ExpectHealthReport>FALSE</ExpectHealthReport>
+  </Machine>
+  <Container>
+    <ContainerId>06185f00-1f00-4545-abaa-4b7baa121869</ContainerId>
+    <RoleInstanceList>
+      <RoleInstance>
+        <InstanceId>8cd0ae53-1baa-4f00-9356-a4e1a34f004c._test-vm</InstanceId>
+        <State>Started</State>
+        <Configuration>
+          <HostingEnvironmentConfig>http://168.63.129.16:80/machine/06185f00-1f00-4545-abaa-4b7baa121869/8cd0ae53%2D1ac5%2D4fe5%2D9356%2Da4e1a34f234c.%5Ftest%2Dvm?comp=config&amp;type=hostingEnvironmentConfig&amp;incarnation=1</HostingEnvironmentConfig>
+          <SharedConfig>http://168.63.129.16:80/machine/06185f00-1f00-4545-abaa-4b7baa121869/8cd0ae53%2D1ac5%2D4fe5%2D9356%2Da4e1a34f234c.%5Ftest%2Dvm?comp=config&amp;type=sharedConfig&amp;incarnation=1</SharedConfig>
+          <ExtensionsConfig>http://168.63.129.16:80/machine/06185f00-1f00-4545-abaa-4b7baa121869/8cd0ae53%2D1ac5%2D4fe5%2D9356%2Da4e1a34f234c.%5Ftest%2Dvm?comp=config&amp;type=extensionsConfig&amp;incarnation=1</ExtensionsConfig>
+          <FullConfig>http://168.63.129.16:80/machine/06185f00-1f00-4545-abaa-4b7baa121869/8cd0ae53%2D1ac5%2D4fe5%2D9356%2Da4e1a34f234c.%5Ftest%2Dvm?comp=config&amp;type=fullConfig&amp;incarnation=1</FullConfig>
+          <Certificates>http://168.63.129.16:80/machine/06185f00-1f00-4545-abaa-4b7baa121869/8cd0ae53%2D1ac5%2D4fe5%2D9356%2Da4e1a34f234c.%5Ftest%2Dvm?comp=certificates&amp;incarnation=1</Certificates>
+          <ConfigName>8cd0ae53-1baa-4f00-9356-a4e1a34f004c.0.8cd0ae53-1baa-4f00-9356-a4e1a34f004c.0._test-vm.1.xml</ConfigName>
+        </Configuration>
+      </RoleInstance>
+    </RoleInstanceList>
+  </Container>
+</GoalState>

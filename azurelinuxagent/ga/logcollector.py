@@ -50,6 +50,12 @@ CGROUPS_UNIT = "collect-logs.scope"
 
 GRACEFUL_KILL_ERRCODE = 3
 INVALID_CGROUPS_ERRCODE = 2
+UNEXPECTED_CGROUP_PATH_ERRCODE = 4
+
+LOG_COLLECTOR_CGROUP_PATH_VALIDATION_MAX_RETRIES = 3
+LOG_COLLECTOR_CGROUP_PATH_VALIDATION_RETRY_DELAY = 5
+LOG_COLLECTOR_CGROUP_PATH_VALIDATION_MAX_FAILURES = 3
+
 
 _MUST_COLLECT_FILES = [
     _AGENT_LOG,
@@ -104,7 +110,7 @@ class LogCollector(object):
 
     @staticmethod
     def initialize_telemetry():
-        protocol = get_protocol_util().get_protocol(init_goal_state=False)
+        protocol = get_protocol_util().get_protocol(init_goal_state=False, create_transport_certificate=False, save_to_history=False)
         protocol.client.reset_goal_state(goal_state_properties=GoalStateProperties.RoleConfig | GoalStateProperties.HostingEnv)
         # Initialize the common parameters for telemetry events
         initialize_event_logger_vminfo_common_parameters_and_protocol(protocol)

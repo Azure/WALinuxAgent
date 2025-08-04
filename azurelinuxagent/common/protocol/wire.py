@@ -48,6 +48,7 @@ from azurelinuxagent.common.utils.restutil import TELEMETRY_THROTTLE_DELAY_IN_SE
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, gettext, remove_bom, get_bytes_from_pem, parse_json, redact_sas_token
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
+from azurelinuxagent.ga.signature_validation_util import validate_signature, SignatureValidationError
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
 HEALTH_REPORT_URI = "http://{0}/machine?comp=health"
@@ -74,15 +75,16 @@ class WireProtocol(DataContract):
             raise ProtocolError("WireProtocol endpoint is None")
         self.client = WireClient(endpoint)
 
-    def detect(self, init_goal_state=True, save_to_history=False):
+    def detect(self, init_goal_state=True, create_transport_certificate=True, save_to_history=False):
         self.client.check_wire_protocol_version()
 
-        trans_prv_file = os.path.join(conf.get_lib_dir(),
-                                      TRANSPORT_PRV_FILE_NAME)
-        trans_cert_file = os.path.join(conf.get_lib_dir(),
-                                       TRANSPORT_CERT_FILE_NAME)
-        cryptutil = CryptUtil(conf.get_openssl_cmd())
-        cryptutil.gen_transport_cert(trans_prv_file, trans_cert_file)
+        if create_transport_certificate:
+            trans_prv_file = os.path.join(conf.get_lib_dir(),
+                                          TRANSPORT_PRV_FILE_NAME)
+            trans_cert_file = os.path.join(conf.get_lib_dir(),
+                                           TRANSPORT_CERT_FILE_NAME)
+            cryptutil = CryptUtil(conf.get_openssl_cmd())
+            cryptutil.gen_transport_cert(trans_prv_file, trans_cert_file)
 
         # Initialize the goal state, including all the inner properties
         if init_goal_state:
@@ -612,15 +614,24 @@ class WireClient(object):
 
         return self._download_with_fallback_channel(download_type, uris, direct_download=direct_download, hgap_download=hgap_download)
 
-    def download_zip_package(self, package_type, uris, target_file, target_directory, use_verify_header):
+    def download_zip_package(self, package_name, uris, target_file, target_directory, use_verify_header, signature, enforce_signature):
         """
         Downloads the ZIP package specified in 'uris' (which is a list of alternate locations for the ZIP), saving it to 'target_file' and then expanding
         its contents to 'target_directory'. Deletes the target file after it has been expanded.
 
-        The 'package_type' is only used in log messages and has no other semantics. It should specify the contents of the ZIP, e.g. "extension package"
-        or "agent package"
+        The 'package_name' parameter is used only for logging and telemetry. It should be the full name of the ZIP package,
+        formatted as "Name-Version" (e.g., "Microsoft.Azure.Extensions.CustomScript-2.1.13" for an extension package,
+        or "WALinuxAgent-9.9.9.9" for the agent package). The name and version will be extracted from this string
+        for telemetry purposes only.
 
         The 'use_verify_header' parameter indicates whether the verify header should be added when using the extensionArtifact API of the HostGAPlugin.
+
+        The 'signature' parameter should be a base64-encoded signature string. If signature is not an empty string, package signature will be validated
+        immediately after downloading the package but before expanding it.
+
+        Currently, the 'enforce_signature' flag only affects logging and telemetry. If set to False, a message is appended
+        to any validation failure indicating that the error can be safely ignored.
+        TODO: Update logic so that 'enforce_signature' also controls whether validation failures raise an exception.
         """
         host_ga_plugin = self.get_host_plugin()
 
@@ -630,9 +641,33 @@ class WireClient(object):
             request_uri, request_headers = host_ga_plugin.get_artifact_request(uri, use_verify_header=use_verify_header, artifact_manifest_url=host_ga_plugin.manifest_uri)
             return self.stream(request_uri, target_file, headers=request_headers, use_proxy=False)
 
-        on_downloaded = lambda: WireClient._try_expand_zip_package(package_type, target_file, target_directory)
+        def on_downloaded():
+            # If 'signature' parameter is not an empty string, validate the zip package signature immediately after download.
+            # Signature validation errors are caught and stored, allowing download to proceed. After zip package extraction,
+            # the error is re-raised to surface the failure, so the caller has knowledge of the failure and can handle appropriately.
+            # In future releases, once sufficient telemetry is collected and we gain confidence in the validation process,
+            # extraction will be blocked if signature validation fails, and the zip will be removed.
+            #
+            # TODO: Block packages failing signature validation when 'enforce_signature' is True
+            validation_error = None
+            if signature != "":
+                try:
+                    failure_log_level = logger.LogLevel.ERROR if enforce_signature else logger.LogLevel.WARNING
+                    validate_signature(target_file, signature, package_full_name=package_name, failure_log_level=failure_log_level)
+                except SignatureValidationError as ex:
+                    # validate_signature() only raises SignatureValidationError, and already sends logs/telemetry for the error.
+                    # If signature is not being enforced, catch the error and re-raise after expanding the zip.
+                    # TODO: if signature is being enforced, raise error and and cleanup zip file
+                    validation_error = ex
 
-        self._download_with_fallback_channel(package_type, uris, direct_download=direct_download, hgap_download=hgap_download, on_downloaded=on_downloaded)
+            WireClient._try_expand_zip_package(package_name, target_file, target_directory)
+
+            # Surface any validation errors after extraction so the caller can decide how to handle.
+            if validation_error is not None:
+                raise validation_error
+
+        # If on_downloaded() raises a SignatureValidationError, _download_with_fallback_channel will not attempt retries with other URIs, error will propagate immediately.
+        self._download_with_fallback_channel(package_name, uris, direct_download=direct_download, hgap_download=hgap_download, on_downloaded=on_downloaded)
 
     def _download_with_fallback_channel(self, download_type, uris, direct_download, hgap_download, on_downloaded=None):
         """
@@ -642,7 +677,7 @@ class WireClient(object):
         but the default can be depending on the success/failure of each channel (see _download_using_appropriate_channel() for the logic to do this).
 
         The 'download_type' is added to any log messages produced by this method; it should describe the type of content of the given URIs
-        (e.g. "manifest", "extension package, "agent package", etc).
+        (e.g. "manifest", "Microsoft.Azure.Extensions.CustomScript-2.1.13, "WALinuxAgent-9.9.9.9", etc).
 
         When the download is successful, _download_with_fallback_channel invokes the 'on_downloaded' function, which can be used to process the results of the download. This
         function should return True on success, and False on failure (it should not raise any exceptions). If the return value is False, the download is considered
@@ -674,6 +709,9 @@ class WireClient(object):
                     on_downloaded()
 
                 return uri, response
+            except SignatureValidationError:
+                # If download fails due to package signature validation, do not retry.
+                raise
             except Exception as exception:
                 most_recent_error = exception
 

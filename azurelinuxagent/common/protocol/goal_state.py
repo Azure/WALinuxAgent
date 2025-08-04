@@ -277,7 +277,16 @@ class GoalState(object):
         if self._extensions_goal_state is None or most_recent.created_on_timestamp >= self._extensions_goal_state.created_on_timestamp:
             self._extensions_goal_state = most_recent
 
-        #
+        # For each extension in the goal state being executed, we emit telemetry to indicate whether a signature is present
+        # for the extension. The "is_success" field reflects whether the extension was signed.
+        # If signature is missing, skip telemetry in the following cases:
+        #   - Extension requested state is 'uninstall' (uninstall goal states never include signature).
+        #   - The goal state API does not support the 'encoded_signature' property (e.g., fast track goal states where HGAP version does not support signature).
+        for ext in self._extensions_goal_state.extensions:
+            if ext.state == "uninstall" or not self._extensions_goal_state.supports_encoded_signature():
+                continue
+            add_event(op=WALAEventOperation.ExtensionSigned, message="", name=ext.name, version=ext.version, is_success=ext.encoded_signature != "", log_event=False)
+
         # Ensure all certificates are downloaded on Fast Track goal states in order to maintain backwards compatibility with previous
         # versions of the Agent, which used to download certificates from the WireServer on every goal state. Some customer applications
         # depend on this behavior (see https://github.com/Azure/WALinuxAgent/issues/2750).

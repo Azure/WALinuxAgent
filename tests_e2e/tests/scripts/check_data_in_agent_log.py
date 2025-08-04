@@ -22,7 +22,6 @@ import argparse
 import sys
 
 from datetime import datetime
-from pathlib import Path
 from azurelinuxagent.common.future import UTC
 from tests_e2e.tests.lib.agent_log import AgentLog
 
@@ -38,10 +37,10 @@ def main():
 
     try:
         if args.after_timestamp is not None:
-            after_datetime = datetime.strptime(args.after_timestamp, '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
-            found = AgentLog(Path('/var/log/waagent.log')).agent_log_contains(args.data, after_datetime)
+            after_datetime = datetime.strptime(args.after_timestamp, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=UTC)
+            found = AgentLog().agent_log_contains(args.data, after_datetime)
         else:
-            found = AgentLog(Path('/var/log/waagent.log')).agent_log_contains(args.data)
+            found = AgentLog().agent_log_contains(args.data)
         if found:
             print("Found data: {0} in agent log".format(args.data))
         else:

@@ -30,7 +30,7 @@ class TestAgentUpdate(UpdateTestCase):
         clear_singleton_instances(ProtocolUtil)
 
     @contextlib.contextmanager
-    def _get_agent_update_handler(self, test_data=None, autoupdate_frequency=0.001, autoupdate_enabled=True, initial_update_attempted=True, protocol_get_error=False, mock_get_header=None, mock_put_header=None, mock_random_update_time=True):
+    def _get_agent_update_handler(self, test_data=None, autoupdate_frequency=0.001, autoupdate_enabled=True, initial_update_attempted=True, rsm_update_attempted=False, protocol_get_error=False, mock_get_header=None, mock_put_header=None, mock_random_update_time=True):
         # Default to DATA_FILE of test_data parameter raises the pylint warning
         # W0102: Dangerous default value DATA_FILE (builtins.dict) as argument (dangerous-default-value)
         test_data = DATA_FILE if test_data is None else test_data
@@ -61,6 +61,9 @@ class TestAgentUpdate(UpdateTestCase):
 
             if initial_update_attempted:
                 open(os.path.join(conf.get_lib_dir(), INITIAL_UPDATE_STATE_FILE), "a").close()
+
+            if rsm_update_attempted:
+                open(os.path.join(conf.get_lib_dir(), RSM_UPDATE_STATE_FILE), "a").close()
 
             original_randint = random.randint
 
@@ -446,6 +449,29 @@ class TestAgentUpdate(UpdateTestCase):
             self.assertEqual(0, vm_agent_update_status.code)
             self.assertEqual(str(CURRENT_VERSION), vm_agent_update_status.expected_version)
 
+    def test_it_should_not_report_update_status_when_self_update_used(self):
+        self.prepare_agents(count=1)
+
+        data_file = DATA_FILE.copy()
+        data_file['ext_conf'] = "wire/ext_conf.xml"
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, _):
+            with self.assertRaises(AgentUpgradeExitException):
+                agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
+        vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
+        self.assertIsNone(vm_agent_update_status, "VM Agent Update Status should not be set when self-update is used")
+
+    def test_it_should_report_update_with_error_if_auto_update_is_disabled_and_rsm_update_used(self):
+        data_file = DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
+
+        with self._get_agent_update_handler(test_data=data_file, rsm_update_attempted=True) as (agent_update_handler, _):
+            with patch("azurelinuxagent.common.conf.get_auto_update_to_latest_version", return_value=False):
+                agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
+                vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
+                self.assertEqual(1, vm_agent_update_status.code)
+                self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
+                self.assertIn("Auto update is disabled, skipping agent update", vm_agent_update_status.message)
+
     def test_it_should_report_update_status_with_error_on_download_fail(self):
         data_file = DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
@@ -456,7 +482,7 @@ class TestAgentUpdate(UpdateTestCase):
             self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
             self.assertEqual(1, vm_agent_update_status.code)
             self.assertEqual("9.9.9.10", vm_agent_update_status.expected_version)
-            self.assertIn("Failed to download agent package from all URIs", vm_agent_update_status.message)
+            self.assertIn("Failed to download WALinuxAgent-9.9.9.10 from all URIs", vm_agent_update_status.message)
 
     def test_it_should_not_report_error_status_if_new_rsm_version_is_same_as_current_after_last_update_attempt_failed(self):
         data_file = DATA_FILE.copy()
@@ -468,7 +494,7 @@ class TestAgentUpdate(UpdateTestCase):
             self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
             self.assertEqual(1, vm_agent_update_status.code)
             self.assertEqual("9.9.9.10", vm_agent_update_status.expected_version)
-            self.assertIn("Failed to download agent package from all URIs", vm_agent_update_status.message)
+            self.assertIn("Failed to download WALinuxAgent-9.9.9.10 from all URIs", vm_agent_update_status.message)
 
             # Send same version GS after last update attempt failed
             agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(
@@ -485,7 +511,7 @@ class TestAgentUpdate(UpdateTestCase):
         data_file = DATA_FILE.copy()
         data_file['ext_conf'] = "wire/ext_conf_version_missing_in_agent_family.xml"
 
-        with self._get_agent_update_handler(test_data=data_file, protocol_get_error=True) as (agent_update_handler, _):
+        with self._get_agent_update_handler(test_data=data_file, protocol_get_error=True, rsm_update_attempted=True) as (agent_update_handler, _):
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
             vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
             self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)

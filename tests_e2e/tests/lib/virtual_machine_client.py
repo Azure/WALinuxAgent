@@ -20,7 +20,6 @@
 #
 
 import datetime
-import json
 import time
 from typing import Any, Dict, List
 
@@ -79,15 +78,18 @@ class VirtualMachineClient(AzureSdkClient):
         private_ip = nic.ip_configurations[0].private_ip_address
         return private_ip
 
-    def get_model(self) -> VirtualMachine:
+    def get_model(self, include_instance_view: bool = False) -> VirtualMachine:
         """
         Retrieves the model of the virtual machine.
         """
         log.info("Retrieving VM model for %s", self)
-        return execute_with_retry(
-            lambda: self._compute_client.virtual_machines.get(
-                resource_group_name=self.resource_group,
-                vm_name=self.name))
+        kwargs = {
+            "resource_group_name": self.resource_group,
+            "vm_name":  self.name
+        }
+        if include_instance_view:
+            kwargs["expand"] = "instanceView"
+        return execute_with_retry(lambda: self._compute_client.virtual_machines.get(**kwargs))
 
     def get_instance_view(self) -> VirtualMachineInstanceView:
         """
@@ -183,32 +185,69 @@ class VirtualMachineClient(AzureSdkClient):
             return
 
         start = datetime.datetime.now(UTC)
+
+        self._wait_for_status("PowerState/running", boot_timeout)
+
+        # self._wait_for_status() works by checking the instance view, and we may capture a view from before the reboot actually happened, so we verify
+        # that the reboot actually happened by checking the system's uptime.
         while datetime.datetime.now(UTC) < start + boot_timeout:
-            log.info("Waiting for VM %s to boot", self)
-            time.sleep(15)  # Note that we always sleep at least 1 time, to give the reboot time to start
-            instance_view = self.get_instance_view()
-            power_state = [s.code for s in instance_view.statuses if "PowerState" in s.code]
-            if len(power_state) != 1:
-                raise Exception(f"Could not find PowerState in the instance view statuses:\n{json.dumps(instance_view.serialize(), indent=2)}")
-            log.info("VM's Power State: %s", power_state[0])
-            if power_state[0] == "PowerState/running":
-                # We may get an instance view captured before the reboot actually happened; verify
-                # that the reboot actually happened by checking the system's uptime.
-                log.info("Verifying VM's uptime to ensure the reboot has completed...")
-                try:
-                    uptime = ssh_client.run_command("cat /proc/uptime | sed 's/ .*//'", attempts=1).rstrip()  # The uptime is the first field in the file
-                    log.info("Uptime: %s", uptime)
-                    boot_time = datetime.datetime.now(UTC) - datetime.timedelta(seconds=float(uptime))
-                    if boot_time > before_restart:
-                        log.info("VM %s completed boot and is running. Boot time: %s", self, boot_time)
-                        return
-                    log.info("The VM has not rebooted yet. Restart time: %s. Boot time: %s", before_restart, boot_time)
-                except CommandError as e:
-                    if (e.exit_code == 255 and ("Connection refused" in str(e) or "Connection timed out" in str(e))) or "Unprivileged users are not permitted to log in yet" in str(e):
-                        log.info("VM %s is not yet accepting SSH connections", self)
-                    else:
-                        raise
+            log.info("Verifying VM's uptime to ensure the reboot has completed...")
+            try:
+                uptime = ssh_client.run_command("cat /proc/uptime | sed 's/ .*//'", attempts=1).rstrip()  # The uptime is the first field in the file
+                log.info("Uptime: %s", uptime)
+                boot_time = datetime.datetime.now(UTC) - datetime.timedelta(seconds=float(uptime))
+                if boot_time > before_restart:
+                    log.info("VM %s completed boot and is running. Boot time: %s", self, boot_time)
+                    return
+                log.info("The VM has not rebooted yet. Restart time: %s. Boot time: %s", before_restart, boot_time)
+            except CommandError as e:
+                if (e.exit_code == 255 and ("Connection refused" in str(e) or "Connection timed out" in str(e))) or "Unprivileged users are not permitted to log in yet" in str(e):
+                    log.info("VM %s is not yet accepting SSH connections", self)
+                else:
+                    raise
+            time.sleep(10)
+
         raise Exception(f"VM {self} did not boot after {boot_timeout}")
+
+    def start(self, start_timeout: datetime.timedelta = datetime.timedelta(minutes=5), timeout: int = AzureSdkClient._DEFAULT_TIMEOUT) -> None:
+        """
+        Starts (allocates) the virtual machine.
+        """
+        self._execute_async_operation(
+            lambda: self._compute_client.virtual_machines.begin_start(
+                resource_group_name=self.resource_group,
+                vm_name=self.name),
+            operation_name=f"Start {self}",
+            timeout=timeout)
+        self._wait_for_status("PowerState/running", start_timeout)
+
+    def deallocate(self, hibernate: bool = False, deallocate_timeout: datetime.timedelta = datetime.timedelta(minutes=5), timeout: int = AzureSdkClient._DEFAULT_TIMEOUT) -> None:
+        """
+        Deallocates the virtual machine, optionally setting it up to hibernate.
+        """
+        log.info("Deallocating %s [hibernate=%s]...", self, hibernate)
+        self._execute_async_operation(
+            lambda: self._compute_client.virtual_machines.begin_deallocate(
+                resource_group_name=self.resource_group,
+                vm_name=self.name,
+                hibernate=hibernate),
+            operation_name=f"Deallocate {self} [hibernate={hibernate}]",
+            timeout=timeout)
+        self._wait_for_status('HibernationState/Hibernated' if hibernate else 'PowerState/deallocated', deallocate_timeout)
+
+    def _wait_for_status(self, status: str, timeout: datetime.timedelta = datetime.timedelta(minutes=5)) -> None:
+        start = datetime.datetime.now(UTC)
+
+        while datetime.datetime.now(UTC) < start + timeout:
+            log.info("Waiting for Status to reach %s", status)
+            instance_view = self.get_instance_view()
+            statuses = [s.code for s in instance_view.statuses]
+            log.info("Current status: %s", statuses)
+            if status in statuses:
+                return
+            time.sleep(10)
+
+        raise Exception(f"VM {self} did not reach {status} after {timeout}")
 
     def __str__(self):
         return f"{self.resource_group}:{self.name}"

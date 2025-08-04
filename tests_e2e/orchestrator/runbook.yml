@@ -50,6 +50,7 @@ variable:
       - ext_sequencing
       - ext_telemetry_pipeline
       - fips
+      - hibernation
       - keyvault_certificates
       - multi_config_ext
       - no_outbound_connections
@@ -57,6 +58,8 @@ variable:
       - recover_network_interface
       - cgroup_v2_enabled
       - log_collector
+      - ext_signature_validation
+      - ext_update
 
   #
   # Additional arguments pass to the test suites

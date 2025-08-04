@@ -1,0 +1,14 @@
+#
+# The test suite verifies that extension package signature and handler manifest 'signingInfo' is validated.
+#
+name: "ExtSignatureValidation"
+tests:
+  - "ext_signature_validation/ext_signature_validation.py"
+images: "signature-validation-endorsed"
+# This test needs to run in a canary region until all extensions being tested are published with signature in all prod regions.
+# Extension signatures are currently only available in the public cloud, so we skip this test on other clouds.
+locations: "AzureCloud:eastus2euap"
+skip_on_clouds:
+  - "AzureChinaCloud"
+  - "AzureUSGovernment"
+owns_vm: false

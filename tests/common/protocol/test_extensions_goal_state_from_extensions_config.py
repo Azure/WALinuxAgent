@@ -111,5 +111,5 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
         data_file["ext_conf"] = "wire/ext_conf-no_encoded_signature.xml"
         with mock_wire_protocol(data_file) as protocol:
             extensions = protocol.get_goal_state().extensions_goal_state.extensions
-            # extension.encoded_signature should be None if property is not in the EGS for the extension
-            self.assertIsNone(extensions[0].encoded_signature)
+            # extension.encoded_signature should be an empty string if property is not in the EGS for the extension
+            self.assertEqual(extensions[0].encoded_signature, "")

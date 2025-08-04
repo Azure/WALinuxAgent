@@ -1,0 +1,10 @@
+[
+    {
+        "thumbprint": "DC45A99039D4F9CFB0CD84D566BA065A763F3762",
+        "hasPrivateKey": false
+    },
+    {
+        "thumbprint": "1AF52E2E892C3A0DBC589F301F80073CBA924E26",
+        "hasPrivateKey": true
+    }
+]
