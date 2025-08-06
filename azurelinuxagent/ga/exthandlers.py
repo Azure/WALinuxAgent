@@ -314,7 +314,7 @@ class ExtHandlersHandler(object):
 
         # Maintain a list of extension handler objects that are disallowed (e.g. blocked by policy, extensions disabled, etc.).
         # Extension status, if it exists, is always reported for the extensions in this list. List is reset for each goal state.
-        self.__disallowed_ext_handlers = []
+        self._disallowed_ext_handlers = []
 
         # The GoalState Aggregate status needs to report the last status of the GoalState. Since we only process
         # extensions on goal state change, we need to maintain its state.
@@ -790,7 +790,7 @@ class ExtHandlersHandler(object):
         #       CRP will enforce a match on the sequence number for the settings, and skip stale status blobs.
 
         # Keep a list of disallowed extensions so that report_ext_handler_status() can report status for them.
-        self.__disallowed_ext_handlers.append(ext_handler_i.ext_handler)
+        self._disallowed_ext_handlers.append(ext_handler_i.ext_handler)
 
         ext_handler_i.set_handler_status(status=ExtHandlerStatusValue.not_ready, message=message, code=error_code)
 
@@ -1123,7 +1123,7 @@ class ExtHandlersHandler(object):
 
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_statuses = []
-        ext_disallowed = ext_handler in self.__disallowed_ext_handlers
+        ext_disallowed = ext_handler in self._disallowed_ext_handlers
         # For MultiConfig, we need to report status per extension even for Handler level failures.
         # If we have HandlerStatus for a MultiConfig handler and GS is requesting for it, we would report status per
         # extension even if HandlerState == NotInstalled (Sample scenario: ExtensionsGoalStateError, DecideVersionError, etc)
