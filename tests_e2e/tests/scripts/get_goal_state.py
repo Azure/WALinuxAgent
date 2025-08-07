@@ -32,10 +32,16 @@ from urllib.parse import urlparse
 from xml.dom import minidom
 
 
+verbose: bool = False
+
+
 def _get(url: str, headers: Dict[str, str], tries: int, timeout: int, delay: int) -> str:
     """
     Issues an HTTP GET request using the given 'url'; returns the response.
     """
+    if verbose:
+        print(f"\n{url}\n\n")
+
     p = urlparse(url)
     relative_uri = p.path
     if p.fragment:
@@ -214,7 +220,9 @@ Examples:
     parser.add_argument('--tag', required=False, default=None, help="Outputs only the XML elements that match the tag.")
     parser.add_argument('--tries', required=False, default=3, type=int, help="Number of times to attempt WireServer requests.")
     parser.add_argument('--timeout', required=False, default=10, type=int, help="Timeout in seconds for WireServer requests.")
+    parser.add_argument('-v', '--verbose', action='store_true', help='Display verbose output.')
     parser.add_argument('--waagent', required=False, default="/var/lib/waagent", help="Location of the Transport certificate for WireServer requests.")
+
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument('--certificates', action='store_true', help='Fetch the Certificates for the goal state')
     group.add_argument('--extensions', action='store_true', help='Fetch the ExtensionsConfig for the goal state')
@@ -234,6 +242,10 @@ Examples:
             raise Exception("The --expand option can only be used with --certificates")
         if args.tag is not None:
             raise Exception("--expand and --tag are mutually exclusive")
+
+    if args.verbose:
+        global verbose  # pylint: disable=global-statement
+        verbose = True
 
     goal_state = _get_goal_state(endpoint=args.endpoint, tries=args.tries, timeout=args.timeout, delay=args.delay)
 
