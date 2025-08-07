@@ -79,7 +79,7 @@ class AgentNotProvisioned(AgentVmTest):
         log.info("Executing CustomScript; it should fail.")
         custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
         try:
-            custom_script.enable(settings={'commandToExecute': "date"}, force_update=True, timeout=20 * 60)
+            custom_script.enable(settings={'commandToExecute': "date"}, protected_settings={}, force_update=True, timeout=20 * 60)
             fail("CustomScript should have failed")
         except Exception as error:
             assert_that("OperationNotAllowed" in str(error)) \

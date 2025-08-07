@@ -90,6 +90,7 @@ cp /proc/$$/cgroup /var/lib/waagent/tmp/custom_script_check
 
         log.info("Installing %s", custom_script_2_0)
         custom_script_2_0.enable(
+            settings={},
             protected_settings={
                 'commandToExecute': f"echo \'{script_contents}\' | bash"
             }
