@@ -47,7 +47,7 @@ class MultiConfigExt(AgentVmTest):
         for resource_name, test_case in cases_to_enable.items():
             log.info("")
             log.info("Adding {0} to the test VM. guid={1}".format(resource_name, test_case.test_guid))
-            test_case.extension.enable(settings=test_case.get_settings(test_case.test_guid))
+            test_case.extension.enable(settings=test_case.get_settings(test_case.test_guid), protected_settings={})
             test_case.extension.assert_instance_view()
 
         log.info("")

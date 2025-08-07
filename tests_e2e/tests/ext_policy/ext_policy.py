@@ -70,6 +70,9 @@ class ExtPolicy(AgentVmTest):
         # For all other extensions, always set force_update to true.
         if not isinstance(extension_case.extension, VirtualMachineRunCommandClient):
             args["force_update"] = True
+            # Always send empty protected settings to CSE
+            if extension_case.extension.extension_id == VmExtensionIds.CustomScript:
+                args["protected_settings"] = {}
 
         # Add timeout only if specified, else use default
         if timeout is not None:

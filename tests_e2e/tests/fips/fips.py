@@ -73,6 +73,7 @@ class Fips(AgentVmTest):
         log.info("Executing %s using protected settings to verify they can be decrypted when FIPS 140-3 is enabled.", custom_script)
         message = f"Hello {uuid.uuid4()}!"
         custom_script.enable(
+            settings={},
             protected_settings={
                 'commandToExecute': f"echo \'{message}\'"
             }
