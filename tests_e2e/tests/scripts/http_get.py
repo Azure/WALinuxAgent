@@ -75,8 +75,10 @@ def main():
                 connection.close()
         except Exception as exception:
             print("GET failed: {0}".format(exception), file=sys.stderr)
-        if i < tries - 1:
-            time.sleep(delay)
+            if i < tries - 1:
+                time.sleep(delay)
+            else:
+                raise
 
 
 if __name__ == "__main__":
