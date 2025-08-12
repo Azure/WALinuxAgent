@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+# Script to download pypy tarball
+#
+# Note that wget/curl are not available by default in some distros, so we use a Python script to download the tarball.
+#
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+    echo "Usage: download-pypy <cloud_name>"
+    exit 1
+fi
+cloud_name="$1"
+if [[ $(uname -m) == "aarch64" ]]; then
+    pypy_name="pypy3.7-arm64.tar.bz2"
+else
+    pypy_name="pypy3.7-x64.tar.bz2"
+fi
+python=$(~/bin/get-agent-python)
+if [[ ! -f ~/tmp/$pypy_name ]]; then
+  if [[ $cloud_name == "AzureChinaCloud" ]]; then
+    url="https://dcrdata.blob.core.chinacloudapi.cn/python/$pypy_name"
+  else
+    url="https://dcrdata.blob.core.windows.net/python/$pypy_name"
+  fi
+  echo "======== Downloading Pypy tarball"
+  echo "Downloading from $url to ~/tmp/$pypy_name"
+  $python ~/bin/http_get.py $url -O ~/tmp/$pypy_name
+  echo "Download completed"
+else
+  echo "Pypy tarball already exists at ~/tmp/$pypy_name"
+fi
