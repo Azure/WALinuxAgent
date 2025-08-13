@@ -68,7 +68,6 @@ image-sets:
       - "centos_82"
       - "rhel_82"
       - "rhel_95"
-      - "rhel_10"
       - "ubuntu_1604"
       - "ubuntu_1804"
       - "ubuntu_2004"
