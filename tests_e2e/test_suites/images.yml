@@ -243,6 +243,8 @@ images:
          AzureUSGovernment: []
    rhel_10:
       urn: "RedHat RHEL 10_0 latest"
+      locations:
+         AzureChinaCloud: []
    rocky_9:
       urn: "resf rockylinux-x86_64 9-base latest"
       locations:
