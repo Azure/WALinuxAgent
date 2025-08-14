@@ -62,6 +62,10 @@ image-sets:
       - "oracle_610"
       - "rhel_610"
 
+   # These distros are used by the partner vms, and are not tested on the daily runs. This image set is here just for reference.
+   partner-images:
+      - "databricks_ubuntu"
+
    # These are the distros which have periodic log collector support.
    log-collector-endorsed:
       - "azure-linux_3"
@@ -160,6 +164,8 @@ images:
       vm_sizes:
          # Since centos derived from redhat, please see the comment for vm size in rhel_82
          - "Standard_B2s"
+   databricks_ubuntu:
+      urn: "AzureDatabricks Databricks DatabricksWorker latest"
    debian_8: "credativ Debian 8 latest"
    debian_9: "credativ Debian 9 latest"
    debian_10: "Debian debian-10 10 latest"
