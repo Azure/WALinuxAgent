@@ -53,6 +53,7 @@ Debug.EnableGAVersioning = True
 Debug.EnableSignatureValidation = False
 Debug.EtpCollectionPeriod = 300
 Debug.FirewallRulesLogPeriod = 86400
+Debug.IgnoreSignatureValidationErrors = True
 Debug.LogCollectorInitialDelay = 300
 DetectScvmmEnv = False
 EnableOverProvisioning = True
