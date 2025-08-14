@@ -448,9 +448,14 @@ class AgentTestSuite(LisaTestSuite):
             #
             # Note that executables are placed directly under 'bin', while the path for Python modules is preserved under 'lib.
             #
-            log.info('Installing tools on the test node')
-            command = f"tar xvf {target_path/self._test_tools_tarball_path.name} && ~/bin/install-tools"
+            log.info("Extracting %s on the test node", self._test_tools_tarball_path)
+            command = f"tar xvf {target_path/self._test_tools_tarball_path.name}"
             log.info("Remote command [%s] completed:\n%s", command, ssh_client.run_command(command))
+
+            log.info("Downloading Pypy to %s", node.name)
+            log.info(ssh_client.run_command(f"~/bin/download-pypy {self._cloud}"))
+            log.info('Installing tools on the test node')
+            log.info(ssh_client.run_command("~/bin/install-tools"))
 
             # Update waagent.conf on test node
             log.info("Updating conf file on test node: setting 'Debug.EnableSignatureValidation' to true")
