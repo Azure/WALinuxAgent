@@ -208,6 +208,8 @@ class Fips(AgentVmTest):
                 # state. The reason is that, even if it cannot decrypt the response from the WireServer, 2.7.0.6 assumes that Certificates.pem always exists; if it does not, it goes
                 # into an infinite retry loop. To prevent this, before deallocating and reallocating, ensure that there is a Certificates.pem file, even if it is empty.
                 #
+                # The agent may remove the new file if it fetches the goal state certificate (after the VM restart in the previous step) and fails to decrypt it while we create the file below.
+                # Therefore, stop the agent service to prevent it from removing the file.
                 output = self._ssh_client.run_command('agent-service stop', use_sudo=True)
                 log.info(output)
                 pem_file = '/var/lib/waagent/Certificates.pem'
