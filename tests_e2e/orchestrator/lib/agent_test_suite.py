@@ -428,7 +428,7 @@ class AgentTestSuite(LisaTestSuite):
             ssh_client.run_command("rm -rvf ~/{bin,lib,tmp}", use_sudo=True)
 
             #
-            # Copy Pypy, the test Agent, and the test tools to the test node
+            # Copy the test Agent, and the test tools to the test node
             #
             ssh_client = SshClient(ip_address=node.ip_address, username=self._user, identity_file=Path(self._identity_file))
             target_path = Path("~")/"tmp"
@@ -452,8 +452,20 @@ class AgentTestSuite(LisaTestSuite):
             command = f"tar xvf {target_path/self._test_tools_tarball_path.name}"
             log.info("Remote command [%s] completed:\n%s", command, ssh_client.run_command(command))
 
-            log.info("Downloading Pypy to %s", node.name)
-            log.info(ssh_client.run_command(f"~/bin/download-pypy {self._cloud}"))
+            try:
+                log.info("Downloading Pypy in %s", node.name)
+                log.info(ssh_client.run_command(f"~/bin/download-pypy {self._cloud}"))
+            except Exception as error:
+                log.info("Failed to download Pypy in the test vm and now, will attempt copy from orchestrator:\n%s", error)
+                base_path = Path("/tmp")
+                if ssh_client.get_architecture() == "aarch64":
+                    pypy_name = "pypy3.7-arm64.tar.bz2"
+                else:
+                    pypy_name = "pypy3.7-x64.tar.bz2"
+                pypy_path = Path(base_path)/pypy_name
+                log.info("Copying %s to %s:%s", {pypy_path}, node.name, target_path)
+                ssh_client.copy_to_node(pypy_path, target_path)
+
             log.info('Installing tools on the test node')
             log.info(ssh_client.run_command("~/bin/install-tools"))
 
