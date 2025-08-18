@@ -250,6 +250,7 @@ images:
    rhel_10:
       urn: "RedHat RHEL 10_0 latest"
       locations:
+        # TODO: Remove this once RHEL 10 is available in AzureChinaCloud
          AzureChinaCloud: []
    rocky_9:
       urn: "resf rockylinux-x86_64 9-base latest"
