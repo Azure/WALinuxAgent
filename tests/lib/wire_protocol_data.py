@@ -481,6 +481,9 @@ class WireProtocolData(object):
     def set_version_in_agent_family(self, version):
         self.ext_conf = WireProtocolData.replace_xml_element_value(self.ext_conf, "Version", version)
 
+    def set_from_version_in_agent_family(self, from_version):
+        self.ext_conf = WireProtocolData.replace_xml_element_value(self.ext_conf, "FromVersion", from_version)
+
     def set_extension_config_is_vm_enabled_for_rsm_upgrades(self, is_vm_enabled_for_rsm_upgrades):
         self.ext_conf = WireProtocolData.replace_xml_element_value(self.ext_conf, "IsVMEnabledForRSMUpgrades", is_vm_enabled_for_rsm_upgrades)
 

@@ -76,7 +76,7 @@ class RsmUpdateBvt(AgentVmTest):
         log.info("Current agent version running on the vm before update is \n%s", stdout)
         self._downgrade_version: str = "2.3.15.0"
         log.info("Attempting downgrade version %s", self._downgrade_version)
-        request_rsm_update(self._downgrade_version, self._context.vm, arch_type, is_downgrade=True)
+        request_rsm_update(self._downgrade_version, self._context.vm, arch_type, is_downgrade=True, downgrade_from=self._installed_agent_version)
         self._check_rsm_gs(self._downgrade_version)
         self._prepare_agent()
         # Verify downgrade scenario
@@ -112,7 +112,8 @@ class RsmUpdateBvt(AgentVmTest):
         log.info("Current agent version running on the vm before update is \n%s", stdout)
         version: str = "1.5.0.0"
         log.info("Attempting requested version %s", version)
-        request_rsm_update(version, self._context.vm, arch_type, is_downgrade=True)
+        request_rsm_update(version, self._context.vm, arch_type, is_downgrade=True,
+                           downgrade_from=self._installed_agent_version)
         self._check_rsm_gs(version)
         self._verify_no_guest_agent_update(version)
         self._verify_agent_reported_update_status(version)

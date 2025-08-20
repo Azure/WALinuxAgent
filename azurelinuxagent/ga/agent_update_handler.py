@@ -48,6 +48,7 @@ class AgentUpdateHandler(object):
                     version: it will have what version to update
                     isVersionFromRSM: True if the version is from RSM deployment.
                     isVMEnabledForRSMUpgrades: True if the VM is enabled for RSM upgrades.
+                    fromVersion: This property specifies the version to update from. It is populated only for downgrade requests and subsequent goal states thereafter, until an upgrade request.
                     if vm enabled for RSM upgrades, we use RSM update path. But if requested update is not by rsm deployment( if isVersionFromRSM:False)
                     we ignore the update.
         Self update: We fallback to this if above condition not met. This update to the largest version available in the manifest.
