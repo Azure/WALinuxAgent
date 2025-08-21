@@ -83,7 +83,7 @@ class ExtensionsDisabled(AgentVmTest):
                 .format(t.extension.__str__()))
 
             try:
-                t.extension.enable(settings=t.settings, force_update=True, timeout=6 * 60)
+                t.extension.enable(settings=t.settings, protected_settings={}, force_update=True, timeout=6 * 60)
                 fail("The agent should have reported an error processing the goal state")
             except Exception as error:
                 assert_that("VMExtensionProvisioningError" in str(error)) \

@@ -204,6 +204,10 @@ class ExtSignatureValidation(AgentVmTest):
         distro = self._ssh_client.get_distro()
         log.info("VM distro: '{0}'".format(distro))
 
+        # TODO: RCv2 fails on AzureCloud for distros with GLIBC < 2.34, so we skip it on those distros in public cloud only.
+        # Once RCv2 is updated to support older GLIBC versions, remove the skip logic.
+        should_skip_rcv2 = self._context.vm.cloud == "AzureCloud" and not VmExtensionIds.RunCommandHandler.supports_distro(distro)
+
         # CustomScript 2.1 is a signed, single-config extension.
         cse_id_21 = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript',
                                           version="2.1")
@@ -290,8 +294,12 @@ class ExtSignatureValidation(AgentVmTest):
         # TODO: Add tests for the unsigned version once the "ForceRunCommandV2Version" flag is fixed for VirtualMachineRunCommandClient
         log.info("")
         log.info("*** Test case 3: should validate signature, enable, and uninstall signed multi-config extension (RunCommandHandler) successfully")
-        self._should_enable_extension(run_command_signed, should_validate_signature=True)
-        self._should_uninstall_extension(run_command_signed)
+        if not should_skip_rcv2:
+            self._should_enable_extension(run_command_signed, should_validate_signature=True)
+            self._should_uninstall_extension(run_command_signed)
+        else:
+            log.info("Skipping test case because RunCommandHandler is currently having issues on distro '{0}'".format(distro))
+
 
         # Test unsigned, no-config extension (AzureMonitorLinuxAgent). Extension should be enabled and uninstalled with no errors.
         log.info("")
@@ -313,7 +321,9 @@ class ExtSignatureValidation(AgentVmTest):
 
         log.info("")
         log.info("*** Test case 6: should enable multiple signed extensions in single goal state")
-        ext_to_enable = [custom_script_signed, run_command_signed, vm_access_signed, application_health_signed]
+        ext_to_enable = [custom_script_signed, vm_access_signed, application_health_signed]
+        if not should_skip_rcv2:
+            ext_to_enable.append(run_command_signed)
         self._should_enable_multiple_signed_extensions(ext_to_enable)
 
         # This set of test cases will test behavior when signature is validated AND enforced. Unsigned extensions should fail.

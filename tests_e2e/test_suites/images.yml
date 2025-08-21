@@ -26,6 +26,7 @@ image-sets:
       - "rhel_79"
       - "rhel_810"
       - "rhel_95"
+      - "rhel_10"
       - "rocky_9"
       - "suse_12"
       - "suse_15"
@@ -61,6 +62,10 @@ image-sets:
       - "oracle_610"
       - "rhel_610"
 
+   # These distros are used by the partner vms, and are not tested on the daily runs. This image set is here just for reference.
+   partner-images:
+      - "databricks_ubuntu"
+
    # These are the distros which have periodic log collector support.
    log-collector-endorsed:
       - "azure-linux_3"
@@ -92,6 +97,7 @@ image-sets:
       - "suse_15"
       - "rhel_810"
       - "rhel_95"
+      - "rhel_10"
       - "rocky_9"
       - "ubuntu_1804"
       - "ubuntu_2004"
@@ -158,6 +164,8 @@ images:
       vm_sizes:
          # Since centos derived from redhat, please see the comment for vm size in rhel_82
          - "Standard_B2s"
+   databricks_ubuntu:
+      urn: "AzureDatabricks Databricks DatabricksWorker latest"
    debian_8: "credativ Debian 8 latest"
    debian_9: "credativ Debian 9 latest"
    debian_10: "Debian debian-10 10 latest"
@@ -239,6 +247,11 @@ images:
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
+   rhel_10:
+      urn: "RedHat RHEL 10_0 latest"
+      locations:
+        # TODO: Remove this once RHEL 10 is available in AzureChinaCloud
+         AzureChinaCloud: []
    rocky_9:
       urn: "resf rockylinux-x86_64 9-base latest"
       locations:
@@ -254,6 +267,7 @@ images:
    ubuntu_2004: "Canonical 0001-com-ubuntu-server-focal 20_04-lts latest"
    ubuntu_2204: "Canonical 0001-com-ubuntu-server-jammy 22_04-lts latest"
    ubuntu_pro_2204: "Canonical 0001-com-ubuntu-pro-microsoft pro-22_04 latest"
+   ubuntu_pro_fips_2204: "Canonical 0001-com-ubuntu-pro-microsoft pro-fips-22_04 latest"
    ubuntu_2204_arm64:
       urn: "Canonical 0001-com-ubuntu-server-jammy 22_04-lts-arm64 latest"
       locations:

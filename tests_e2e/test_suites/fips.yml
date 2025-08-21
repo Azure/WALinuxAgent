@@ -13,6 +13,7 @@ tests:
   - source: "fips/fips.py"
 images:
   - "ubuntu_pro_2204" # Enabling FIPS on Ubuntu requires the "pro" client to be enabled; it is pre-enabled on these "pro" images.
+  - "ubuntu_pro_fips_2204" # FIPS is pre-enabled on these "fips" images.
   - "rhel_95"
 
 # Support for FIPS 140-3 is currently deployed only to the Canary regions
