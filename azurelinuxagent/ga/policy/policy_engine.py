@@ -74,26 +74,31 @@ class ExtensionDisallowedError(PolicyError):
 class _PolicyEngine(object):
     """
     Implements base policy engine API.
+
+    Note: All public methods in PolicyEngine classes must verify that policy enforcement is enabled and act as no-ops when it is not.
     """
     def __init__(self):
         """
         Initialize policy engine with a default policy. This should not raise any errors.
         """
-        self._policy_enforcement_enabled = self.__get_policy_enforcement_enabled()
+        self._policy = None
+        self._policy_enforcement_enabled = _PolicyEngine.get_policy_enforcement_enabled()
+        if not self._policy_enforcement_enabled:
+            return
 
         default_policy = {
             "policyVersion": ustr(_MAX_SUPPORTED_POLICY_VERSION)
         }
         self._policy = self._parse_policy(default_policy)
 
-    def update_policy(self, goal_state_history=None):
+    def update_policy(self, goal_state_history):
         """
         If policy enforcement is enabled, read and parse policy file, and update the policy being enforced.
         If 'goal_state_history' parameter is provided, policy file contents are saved to the history folder.
         """
         # Check and update if policy enforcement is enabled each time policy is updated
-        self._policy_enforcement_enabled = self.__get_policy_enforcement_enabled()
-        if not self.policy_enforcement_enabled:
+        self._policy_enforcement_enabled = _PolicyEngine.get_policy_enforcement_enabled()
+        if not self._policy_enforcement_enabled:
             return
 
         _PolicyEngine._log_policy_event("Policy enforcement is enabled.")
@@ -113,7 +118,7 @@ class _PolicyEngine(object):
             add_event(op=op, message=msg, is_success=is_success, log_event=False)
 
     @staticmethod
-    def __get_policy_enforcement_enabled():
+    def get_policy_enforcement_enabled():
         """
         Return True if policy enforcement is enabled. Policy is enabled if:
             1. policy file exists at the expected location
@@ -127,12 +132,8 @@ class _PolicyEngine(object):
             logger.warn("Error checking if policy is enabled: {0}".format(ex))
             return False
 
-    @property
-    def policy_enforcement_enabled(self):
-        return self._policy_enforcement_enabled
-
     @staticmethod
-    def __read_policy(goal_state_history=None):
+    def __read_policy(goal_state_history):
         """
         Read customer-provided policy JSON file, load and return as a dict. If 'goal_state_history' parameter is provided,
         policy file contents are saved to the history folder.
@@ -345,7 +346,7 @@ class ExtensionPolicyEngine(_PolicyEngine):
         If allowListedExtensionsOnly=true, return true only if extension present in "extensions" allowlist.
         If allowListedExtensions=false, return true always.
         """
-        if not self.policy_enforcement_enabled:
+        if not self._policy_enforcement_enabled:
             return True
 
         allow_listed_extension_only = self._policy.get("extensionPolicies").get("allowListedExtensionsOnly")
@@ -360,7 +361,7 @@ class ExtensionPolicyEngine(_PolicyEngine):
         If policy feature not enabled, return False.
         Individual policy takes precedence over global.
         """
-        if not self.policy_enforcement_enabled:
+        if not self._policy_enforcement_enabled:
             return False
 
         global_signature_required = self._policy.get("extensionPolicies").get("signatureRequired")
@@ -377,6 +378,9 @@ class ExtensionPolicyEngine(_PolicyEngine):
         :raises ExtensionDisallowedError: If the extension is not allowed by policy.
         :raises ExtensionSignaturePolicyError: If the extension is required to be signed but is not.
         """
+        if not self._policy_enforcement_enabled:
+            return
+
         extension_allowed = self._should_allow_extension(extension_name)
         if not extension_allowed:
             raise ExtensionDisallowedError()      # Caller sets message and error code, based on requested extension operation

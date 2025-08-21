@@ -84,8 +84,8 @@ class ExtSignatureValidation(AgentVmTest):
         log.info("")
 
         if should_validate_signature:
-            # Check that signature and manifest were successfully validated, and that state file was created.
-            log.info("Check that signature and manifest were successfully validated in agent log, and that state file was created.")
+            # Check that signature and manifest were successfully validated, and that state was saved correctly.
+            log.info("Check that signature and manifest were successfully validated in agent log, and that state was set correctly in HandlerStatus.")
             self._ssh_client.run_command(
                 f"ext_signature_validation-check_signature_validated.py "
                 f"--extension-name '{extension_case.extension._identifier.type}' --after_timestamp {enable_start_time}",

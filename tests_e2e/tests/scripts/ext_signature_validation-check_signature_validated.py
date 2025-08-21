@@ -93,7 +93,7 @@ def main():
         log.info("Checking that signature validation state in HandlerStatus file.")
         check_signature_validation_state(args.extension_name)
 
-        log.info("Signature validation state file found for extension '{0}'".format(args.extension_name))
+        log.info("Signature validation state was set correctly for extension '{0}'".format(args.extension_name))
 
     except Exception as e:
         fail("Error thrown when checking that signature was validated: {0}".format(str(e)))
