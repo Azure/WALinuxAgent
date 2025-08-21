@@ -313,13 +313,20 @@ class TestAgentUpdate(UpdateTestCase):
         downgrade_version = "2.5.0"
         from_version = "3.0.0"
 
-        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, _):
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgrade_version)
             agent_update_handler._protocol.mock_wire_data.set_from_version_in_agent_family(from_version)
             agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
             agent_update_handler._protocol.client.update_goal_state()
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
             self.assertFalse(os.path.exists(self.agent_dir(downgrade_version)),"New agent directory should not be found")
+            self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
+                                     "downgrade {0} is not allowed to update from".format(downgrade_version) in kwarg['message'] and kwarg[
+                                         'op'] == WALAEventOperation.AgentUpgrade]), "downgrade should not be allowed")
+            vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
+            self.assertEqual(1, vm_agent_update_status.code)
+            self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
+            self.assertIn("downgrade {0} is not allowed to update from".format(downgrade_version), vm_agent_update_status.message)
 
     def test_it_should_not_allow_rsm_downgrade_if_from_version_missing(self):
         data_file = DATA_FILE.copy()
@@ -367,13 +374,21 @@ class TestAgentUpdate(UpdateTestCase):
 
         downgrade_version = "1.2.0"
 
-        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, _):
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgrade_version)
             agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
             agent_update_handler._protocol.client.update_goal_state()
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
             self.assertFalse(os.path.exists(self.agent_dir(downgrade_version)),
                              "New agent directory should not be found")
+            self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
+                                     "downgrade {0} is not allowed to update from".format(downgrade_version) in kwarg['message'] and kwarg[
+                                         'op'] == WALAEventOperation.AgentUpgrade]), "downgrade should not be allowed below daemon version")
+            vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
+            self.assertEqual(1, vm_agent_update_status.code)
+            self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
+            self.assertIn("downgrade {0} is not allowed to update from".format(downgrade_version), vm_agent_update_status.message)
+
 
     def test_it_should_update_to_largest_version_if_vm_not_enabled_for_rsm_upgrades(self):
         self.prepare_agents(count=1)
@@ -501,7 +516,7 @@ class TestAgentUpdate(UpdateTestCase):
             vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
             self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
             self.assertEqual(1, vm_agent_update_status.code)
-            self.assertEqual("9.9.9.10", vm_agent_update_status.expected_version)
+            self.assertEqual("9.9.9.9", vm_agent_update_status.expected_version)
             self.assertIn("Failed to download WALinuxAgent-9.9.9.10 from all URIs", vm_agent_update_status.message)
 
     def test_it_should_not_report_error_status_if_new_rsm_version_is_same_as_current_after_last_update_attempt_failed(self):
@@ -513,7 +528,7 @@ class TestAgentUpdate(UpdateTestCase):
             vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
             self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
             self.assertEqual(1, vm_agent_update_status.code)
-            self.assertEqual("9.9.9.10", vm_agent_update_status.expected_version)
+            self.assertEqual("9.9.9.9", vm_agent_update_status.expected_version)
             self.assertIn("Failed to download WALinuxAgent-9.9.9.10 from all URIs", vm_agent_update_status.message)
 
             # Send same version GS after last update attempt failed

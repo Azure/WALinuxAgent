@@ -92,9 +92,13 @@ class RSMVersionUpdater(GAVersionUpdater):
         Downgrade is allowed only when from_version(updated from) should match the current agent version.
         """
 
-        if not agent_family.is_version_from_rsm or self._version < self._daemon_version or self._version == CURRENT_VERSION or (
-                self._version < CURRENT_VERSION and CURRENT_VERSION != FlexibleVersion(agent_family.from_version)):
+        if not agent_family.is_version_from_rsm or self._version == CURRENT_VERSION:
             return False
+
+        if self._version < self._daemon_version or (self._version < CURRENT_VERSION and CURRENT_VERSION != FlexibleVersion(agent_family.from_version)):
+            # If the version is below daemon version or if it is a downgrade and the current agent version is not the one we are downgrading from, we don't allow update
+            raise AgentUpdateError("Received invalid update request:{0}, downgrade {1} is not allowed to update from {2}.".format(
+                    self._gs_id, str(self._version), CURRENT_VERSION))
 
         return True
 

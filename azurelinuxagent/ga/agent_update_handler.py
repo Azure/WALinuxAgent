@@ -23,7 +23,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses, VMAgentUpdateStatus, VERSION_0
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import get_daemon_version
+from azurelinuxagent.common.version import get_daemon_version, CURRENT_VERSION
 from azurelinuxagent.ga.guestagent import GuestAgentUpdateUtil
 from azurelinuxagent.ga.rsm_version_updater import RSMVersionUpdater
 from azurelinuxagent.ga.self_update_version_updater import SelfUpdateVersionUpdater
@@ -237,7 +237,7 @@ class AgentUpdateHandler(object):
                 else:
                     status = VMAgentUpdateStatuses.Error
                     code = 1
-                return VMAgentUpdateStatus(expected_version=str(self._updater.version), status=status, code=code, message=self._last_attempted_update_error_msg)
+                return VMAgentUpdateStatus(expected_version=str(CURRENT_VERSION), status=status, code=code, message=self._last_attempted_update_error_msg)
         except Exception as err:
             msg = "Unable to report agent update status: {0}".format(textutil.format_exception(err))
             logger.warn(msg)
