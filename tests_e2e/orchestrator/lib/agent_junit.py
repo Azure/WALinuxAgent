@@ -22,22 +22,13 @@ from typing import Type
 #     E0401: Unable to import 'lisa.notifiers.junit' (import-error)
 #     E0401: Unable to import 'lisa' (import-error)
 #     E0401: Unable to import 'lisa.messages' (import-error)
-from dataclasses import dataclass  # pylint: disable=E0401
-from dataclasses_json import dataclass_json  # pylint: disable=E0401
-from lisa.notifiers.junit import JUnit  # pylint: disable=E0401
+from lisa.notifiers.junit import JUnit, JUnitSchema  # pylint: disable=E0401
 from lisa import schema  # pylint: disable=E0401
 from lisa.messages import (  # pylint: disable=E0401
     MessageBase,
     TestResultMessage,
     TestStatus
 )
-
-
-@dataclass_json()
-@dataclass
-class AgentJUnitSchema(schema.Notifier):
-    path: str = "agent.junit.xml"
-    include_subtest: bool = True
 
 
 class AgentJUnit(JUnit):
@@ -47,7 +38,7 @@ class AgentJUnit(JUnit):
 
     @classmethod
     def type_schema(cls) -> Type[schema.TypedSchema]:
-        return AgentJUnitSchema
+        return JUnitSchema
 
     def _received_message(self, message: MessageBase) -> None:
         # The Agent sends its own TestResultMessages setting their type as "AgentTestResultMessage".

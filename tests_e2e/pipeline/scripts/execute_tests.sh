@@ -2,6 +2,30 @@
 
 set -euxo pipefail
 
+#
+# Azure Pipelines does not allow an empty string as the value for a pipeline parameter; instead we use "-" to indicate
+# an empty value. Change "-" to "" for the variables that capture the parameter values.
+if [[ $TEST_SUITES == "-" ]]; then
+    TEST_SUITES=""  # Don't set the test_suites variable
+else
+    TEST_SUITES="-v test_suites:\"$TEST_SUITES\""
+fi
+if [[ $TEST_ARGS == "-" ]]; then
+    TEST_ARGS=""
+fi
+if [[ $IMAGE == "-" ]]; then
+    IMAGE=""
+fi
+if [[ $LOCATIONS == "-" ]]; then
+    LOCATIONS=""
+fi
+if [[ $VM_SIZE == "-" ]]; then
+    VM_SIZE=""
+fi
+if [[ $CONTAINER_IMAGE == "-" ]]; then
+    CONTAINER_IMAGE="waagenttests.azurecr.io/waagenttests:latest"
+fi
+
 echo "Hostname: $(hostname)"
 echo "\$USER: $USER"
 
@@ -45,27 +69,7 @@ newgrp docker < /dev/null
 #
 az acr login --name waagenttests --username "$CR_USER" --password "$CR_SECRET"
 
-docker pull waagenttests.azurecr.io/waagenttests:latest
-
-# Azure Pipelines does not allow an empty string as the value for a pipeline parameter; instead we use "-" to indicate
-# an empty value. Change "-" to "" for the variables that capture the parameter values.
-if [[ $TEST_SUITES == "-" ]]; then
-    TEST_SUITES=""  # Don't set the test_suites variable
-else
-    TEST_SUITES="-v test_suites:\"$TEST_SUITES\""
-fi
-if [[ $TEST_ARGS == "-" ]]; then
-    TEST_ARGS=""
-fi
-if [[ $IMAGE == "-" ]]; then
-    IMAGE=""
-fi
-if [[ $LOCATIONS == "-" ]]; then
-    LOCATIONS=""
-fi
-if [[ $VM_SIZE == "-" ]]; then
-    VM_SIZE=""
-fi
+docker pull "$CONTAINER_IMAGE"
 
 #
 # Get the external IP address of the VM.
@@ -90,7 +94,7 @@ docker run --rm \
     --env AZURE_TENANT_ID \
     --env AZURE_CLIENT_CERTIFICATE_PATH=$AZURE_CLIENT_CERTIFICATE_PATH \
     --env AZURE_CLIENT_SEND_CERTIFICATE_CHAIN=$AZURE_CLIENT_SEND_CERTIFICATE_CHAIN \
-    waagenttests.azurecr.io/waagenttests \
+    "$CONTAINER_IMAGE" \
     bash --login -c \
       "lisa \
           --runbook \$HOME/WALinuxAgent/tests_e2e/orchestrator/runbook.yml \
