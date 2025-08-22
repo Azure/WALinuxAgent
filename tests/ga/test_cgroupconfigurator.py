@@ -105,21 +105,22 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                                      '''CPUQuotaPerSecUSec=5ms
                                      ''')]
         with self._get_cgroup_configurator_v2(initialize=False, mock_commands=command_mocks) as configurator:
-            agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
+            with patch("azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv2.can_enforce_cpu", return_value=False):
+                agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
 
-            # The mock creates the drop-in file
-            configurator.mocks.add_data_file(os.path.join(data_dir, 'init', "12-CPUQuota.conf"),
-                                             UnitFilePaths.cpu_quota)
-            self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota),
-                            "{0} was not created".format(agent_drop_in_file_cpu_quota))
+                # The mock creates the drop-in file
+                configurator.mocks.add_data_file(os.path.join(data_dir, 'init', "12-CPUQuota.conf"),
+                                                 UnitFilePaths.cpu_quota)
+                self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota),
+                                "{0} was not created".format(agent_drop_in_file_cpu_quota))
 
-            configurator.initialize()
+                configurator.initialize()
 
-            self.assertFalse(os.path.exists(agent_drop_in_file_cpu_quota),
-                             "{0} was not cleaned up".format(agent_drop_in_file_cpu_quota))
-            cmd = 'systemctl set-property walinuxagent.service CPUQuota= --runtime'
-            self.assertIn(cmd, configurator.mocks.commands_call_list,
-                          "The command to reset the CPU quota was not called")
+                self.assertFalse(os.path.exists(agent_drop_in_file_cpu_quota),
+                                 "{0} was not cleaned up".format(agent_drop_in_file_cpu_quota))
+                cmd = 'systemctl set-property walinuxagent.service CPUQuota= --runtime'
+                self.assertIn(cmd, configurator.mocks.commands_call_list,
+                              "The command to reset the CPU quota was not called")
 
     def test_initialize_should_start_tracking_the_agent_cgroups(self):
         with self._get_cgroup_configurator() as configurator:
@@ -225,12 +226,12 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     any(cg for cg in tracked if tracked[cg].name == AGENT_NAME_TELEMETRY and 'cpu' in cg),
                     "The Agent's cpu is being tracked. Tracked: {0}".format(tracked))
 
-    def test_agent_enforcement_not_enabled_in_v2(self):
+    def test_agent_enforcement_enabled_in_v2(self):
         with self._get_cgroup_configurator_v2() as configurator:
-            cmd = 'systemctl set-property walinuxagent.service CPUQuota'
-            self.assertNotIn(cmd, configurator.mocks.commands_call_list, "The command to set CPU quota was called")
+            cmd = 'systemctl set-property walinuxagent.service CPUQuota=50% --runtime'
+            self.assertIn(cmd, configurator.mocks.commands_call_list, "The command to set CPU quota was not called")
 
-    def test_extension_enforcement_not_enabled_in_v2(self):
+    def test_extension_enforcement_enabled_in_v2(self):
         service_list = [
             {
                 "name": "extension.service",
@@ -239,19 +240,13 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         ]
         with self._get_cgroup_configurator_v2() as configurator:
             configurator.setup_extension_slice(extension_name="Microsoft.CPlat.Extension", cpu_quota=5)
-            cmd = 'systemctl set-property azure-vmextensions-Microsoft.CPlat.Extension.slice CPUAccounting=yes MemoryAccounting=yes CPUQuota'
-            self.assertNotIn(cmd, configurator.mocks.commands_call_list,
-                            "The command to set the CPU quota was not called")
-            cmd = 'systemctl set-property azure-vmextensions-Microsoft.CPlat.Extension.slice CPUQuota'
-            self.assertNotIn(cmd, configurator.mocks.commands_call_list,
+            cmd = 'systemctl set-property azure-vmextensions-Microsoft.CPlat.Extension.slice CPUAccounting=yes MemoryAccounting=yes CPUQuota=5% --runtime'
+            self.assertIn(cmd, configurator.mocks.commands_call_list,
                             "The command to set the CPU quota was not called")
             configurator.set_extension_services_cpu_memory_quota(service_list)
-            cmd = 'systemctl set-property extension.service CPUAccounting=yes MemoryAccounting=yes CPUQuota'
-            self.assertNotIn(cmd, configurator.mocks.commands_call_list,
+            cmd = 'systemctl set-property extension.service CPUAccounting=yes MemoryAccounting=yes CPUQuota=5% --runtime'
+            self.assertIn(cmd, configurator.mocks.commands_call_list,
                           "The command to set the reset CPU quota was not called")
-            cmd = 'systemctl set-property extension.service CPUQuota'
-            self.assertNotIn(cmd, configurator.mocks.commands_call_list,
-                            "The command to set the CPU quota was not called")
 
     def test_initialize_should_not_create_unit_files(self):
         with self._get_cgroup_configurator() as configurator:
