@@ -321,9 +321,8 @@ class ExtSignatureValidation(AgentVmTest):
 
         log.info("")
         log.info("*** Test case 6: should enable multiple signed extensions in single goal state")
+        # RunCommand v2 is excluded here since it should be deployed only via VirtualMachineRunCommandClient, not ARM template.
         ext_to_enable = [custom_script_signed, vm_access_signed, application_health_signed]
-        if not should_skip_rcv2:
-            ext_to_enable.append(run_command_signed)
         self._should_enable_multiple_signed_extensions(ext_to_enable)
 
         # This set of test cases will test behavior when signature is validated AND enforced. Unsigned extensions should fail.
@@ -374,7 +373,10 @@ class ExtSignatureValidation(AgentVmTest):
             log.info("*** Test case 10: should validate signature and successfully install signed single-config (CustomScript 2.1), no-config (VMApplicationManagerLinux) and multi-config (RunCommandHandler) extensions ")
             self._should_enable_extension(custom_script_signed, should_validate_signature=True)
             self._should_enable_extension(vm_app_signed, should_validate_signature=True)
-            self._should_enable_extension(run_command_signed, should_validate_signature=True)
+            if not should_skip_rcv2:
+                self._should_enable_extension(run_command_signed, should_validate_signature=True)
+            else:
+                log.info("Skipping RunCommandHandler because it is currently having issues on distro '{0}'".format(distro))
 
             # Positive case: extensions with signatures that were previously validated should all be uninstall successfully
             log.info("")
@@ -399,7 +401,10 @@ class ExtSignatureValidation(AgentVmTest):
             log.info(" - Install unsigned extension (CustomScript)")
             self._should_enable_extension(custom_script_unsigned, should_validate_signature=False)
             log.info(" - Install signed extension (RunCommandHandler)")
-            self._should_enable_extension(run_command_signed, should_validate_signature=True)
+            if not should_skip_rcv2:
+                self._should_enable_extension(run_command_signed, should_validate_signature=True)
+            else:
+                log.info("Skipping RunCommandHandler because it is currently having issues on distro '{0}'".format(distro))
             log.info(" - Update policy to disallow unsigned extensions")
             policy = \
                 {
@@ -418,9 +423,12 @@ class ExtSignatureValidation(AgentVmTest):
             log.info(" - Re-enable previously validated signed extension (RunCommandHandler), should succeed")
             # Update settings to force a change to the sequence number
             run_command_signed.settings = {'source': f"echo '{str(uuid.uuid4())}'"}
-            log.info(" - Re-enable unsigned extension (RunCommandHandler), should fail")
+            log.info(" - Re-enable unsigned extension (CustomScript), should fail")
             self._should_fail_to_enable_extension(custom_script_unsigned)
-            self._should_enable_extension(run_command_signed, should_validate_signature=False)
+            if not should_skip_rcv2:
+                self._should_enable_extension(run_command_signed, should_validate_signature=False)
+            else:
+                log.info("Skipping RunCommandHandler because it is currently having issues on distro '{0}'".format(distro))
 
             # If an unsigned extension was installed when "signatureRequired=False"
 

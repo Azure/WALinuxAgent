@@ -1331,9 +1331,10 @@ class ExtHandlerInstance(object):
         if self.pkg is not None:
             self.logger.verbose("Use version: {0}", self.pkg.version)
 
-        # We reset the logger here incase the handler version changes
+        # We reset the logger and signature validated state here incase the handler version changes
         if not requested_version.matches(FlexibleVersion(self.ext_handler.version)):
             self.set_logger(extension=extension)
+            self._signature_validated = self.get_signature_validated()
 
         return self.pkg
 
