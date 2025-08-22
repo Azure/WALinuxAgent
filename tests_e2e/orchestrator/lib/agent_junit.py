@@ -33,12 +33,6 @@ from lisa.messages import (  # pylint: disable=E0401
 )
 
 
-@dataclass_json()
-@dataclass
-class AgentJUnitSchema(JUnitSchema):
-    pass
-
-
 class AgentJUnit(JUnit):
     @classmethod
     def type_name(cls) -> str:
@@ -46,7 +40,7 @@ class AgentJUnit(JUnit):
 
     @classmethod
     def type_schema(cls) -> Type[schema.TypedSchema]:
-        return AgentJUnitSchema
+        return JUnitSchema
 
     def _received_message(self, message: MessageBase) -> None:
         # The Agent sends its own TestResultMessages setting their type as "AgentTestResultMessage".
