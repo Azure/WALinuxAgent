@@ -22,8 +22,6 @@ from typing import Type
 #     E0401: Unable to import 'lisa.notifiers.junit' (import-error)
 #     E0401: Unable to import 'lisa' (import-error)
 #     E0401: Unable to import 'lisa.messages' (import-error)
-from dataclasses import dataclass  # pylint: disable=E0401
-from dataclasses_json import dataclass_json  # pylint: disable=E0401
 from lisa.notifiers.junit import JUnit, JUnitSchema  # pylint: disable=E0401
 from lisa import schema  # pylint: disable=E0401
 from lisa.messages import (  # pylint: disable=E0401
