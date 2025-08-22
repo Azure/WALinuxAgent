@@ -104,6 +104,12 @@ class SUSEOSUtil(SUSE11OSUtil):
         )
 
     def set_dhcp_hostname(self, hostname):
+        # ensure localhost is not sent to the dhcp server
+        if hostname.lower() == "localhost" or hostname.lower() == "localhost.localdomain":
+            # if the DHCLIENT_HOSTNAME_OPTION is empty it will not send a hostname to the dhcp server
+            # reference: https://manpages.opensuse.org/Tumbleweed/wicked/ifcfg-dhcp.5.en.html
+            hostname = ""
+        
         dhcp_config_file_path = '/etc/sysconfig/network/dhcp'
         hostname_send_setting = fileutil.get_line_startingwith(
             'DHCLIENT_HOSTNAME_OPTION', dhcp_config_file_path
