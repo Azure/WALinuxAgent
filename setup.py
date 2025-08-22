@@ -223,6 +223,8 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
     elif name == 'freebsd':
         set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, src=["config/freebsd/waagent.conf"])
+        set_logrotate_files(data_files, dest="/etc/newsyslog.conf.d",
+                            src=["config/freebsd/newsyslog/waagent.conf"])
         set_freebsd_rc_files(data_files)
     elif name == 'openbsd':
         set_bin_files(data_files, dest=agent_bin_path)
