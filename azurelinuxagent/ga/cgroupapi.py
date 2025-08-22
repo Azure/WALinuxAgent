@@ -621,7 +621,7 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
                 log_cgroup_info("The {0} controller is not enabled at the root cgroup".format(controller))
 
     def can_enforce_cpu(self):
-        return False
+        return CgroupV2.CPU_CONTROLLER in self._controllers_enabled_at_root
 
 
 class Cgroup(object):
