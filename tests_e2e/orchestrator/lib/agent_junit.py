@@ -24,7 +24,7 @@ from typing import Type
 #     E0401: Unable to import 'lisa.messages' (import-error)
 from dataclasses import dataclass  # pylint: disable=E0401
 from dataclasses_json import dataclass_json  # pylint: disable=E0401
-from lisa.notifiers.junit import JUnit  # pylint: disable=E0401
+from lisa.notifiers.junit import JUnit, JUnitSchema  # pylint: disable=E0401
 from lisa import schema  # pylint: disable=E0401
 from lisa.messages import (  # pylint: disable=E0401
     MessageBase,
@@ -35,9 +35,8 @@ from lisa.messages import (  # pylint: disable=E0401
 
 @dataclass_json()
 @dataclass
-class AgentJUnitSchema(schema.Notifier):
-    path: str = "agent.junit.xml"
-    include_subtest: bool = True
+class AgentJUnitSchema(JUnitSchema):
+    pass
 
 
 class AgentJUnit(JUnit):
