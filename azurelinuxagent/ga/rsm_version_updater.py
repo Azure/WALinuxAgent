@@ -95,10 +95,14 @@ class RSMVersionUpdater(GAVersionUpdater):
         if not agent_family.is_version_from_rsm or self._version == CURRENT_VERSION:
             return False
 
-        if self._version < self._daemon_version or (self._version < CURRENT_VERSION and CURRENT_VERSION != FlexibleVersion(agent_family.from_version)):
-            # If the version is below daemon version or if it is a downgrade and the current agent version is not the one we are downgrading from, we don't allow update
-            raise AgentUpdateError("Received invalid update request:{0}, downgrade {1} is not allowed to update from {2}.".format(
-                    self._gs_id, str(self._version), CURRENT_VERSION))
+        # If the version is below daemon version or if it is a downgrade and the current agent version is not the one we are downgrading from, we don't allow update
+        elif self._version < self._daemon_version:
+            raise AgentUpdateError("Received invalid update request:{0}, new version {1} is below than daemon version {2}".format(
+                self._gs_id, str(self._version), str(self._daemon_version)))
+
+        elif self._version < CURRENT_VERSION and CURRENT_VERSION != FlexibleVersion(agent_family.from_version):
+            raise AgentUpdateError("Received invalid update request:{0}, downgrade {1} is not allowed to update from {2}. Current agent version running: {3}".format(
+                    self._gs_id, str(self._version), agent_family.from_version, str(CURRENT_VERSION)))
 
         return True
 

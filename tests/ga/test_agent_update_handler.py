@@ -321,12 +321,12 @@ class TestAgentUpdate(UpdateTestCase):
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
             self.assertFalse(os.path.exists(self.agent_dir(downgrade_version)),"New agent directory should not be found")
             self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                                     "downgrade {0} is not allowed to update from".format(downgrade_version) in kwarg['message'] and kwarg[
+                                     "downgrade {0} is not allowed to update from {1}".format(downgrade_version, from_version) in kwarg['message'] and kwarg[
                                          'op'] == WALAEventOperation.AgentUpgrade]), "downgrade should not be allowed")
             vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
             self.assertEqual(1, vm_agent_update_status.code)
             self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
-            self.assertIn("downgrade {0} is not allowed to update from".format(downgrade_version), vm_agent_update_status.message)
+            self.assertIn("downgrade {0} is not allowed to update from {1}".format(downgrade_version, from_version), vm_agent_update_status.message)
 
     def test_it_should_not_allow_rsm_downgrade_if_from_version_missing(self):
         data_file = DATA_FILE.copy()
@@ -382,12 +382,12 @@ class TestAgentUpdate(UpdateTestCase):
             self.assertFalse(os.path.exists(self.agent_dir(downgrade_version)),
                              "New agent directory should not be found")
             self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                                     "downgrade {0} is not allowed to update from".format(downgrade_version) in kwarg['message'] and kwarg[
+                                     "new version {0} is below than daemon version".format(downgrade_version) in kwarg['message'] and kwarg[
                                          'op'] == WALAEventOperation.AgentUpgrade]), "downgrade should not be allowed below daemon version")
             vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
             self.assertEqual(1, vm_agent_update_status.code)
             self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
-            self.assertIn("downgrade {0} is not allowed to update from".format(downgrade_version), vm_agent_update_status.message)
+            self.assertIn("new version {0} is below than daemon version".format(downgrade_version), vm_agent_update_status.message)
 
 
     def test_it_should_update_to_largest_version_if_vm_not_enabled_for_rsm_upgrades(self):
