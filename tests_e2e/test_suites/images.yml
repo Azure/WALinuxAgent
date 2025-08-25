@@ -134,6 +134,12 @@ image-sets:
 # URNs follow the format '<Publisher> <Offer> <Sku> <Version>' or
 # '<Publisher>:<Offer>:<Sku>:<Version>'
 #
+# NOTE ON VM SIZE FOR ARM64 VMs:
+#      The VM size chosen by LISA for ARM64 VMs has recently produced VM that do not start, so we explicitly use
+#      Standard_B2pls_v2 (which was the size LISA was using previously). Consider removing this explicit size
+#      if/when the issue with the size selected by LISA is fixed.
+#
+#
 images:
    alma_8:
       urn: "almalinux almalinux-x86_64 8-gen2 latest"
