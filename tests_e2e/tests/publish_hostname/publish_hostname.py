@@ -154,7 +154,7 @@ class PublishHostname(AgentVmTest):
                 if monitors_hostname == "y" or monitors_hostname == "yes":
                     log.info("Agent hostname monitoring is enabled")
                     hostname_detected = ""
-                    for _ in range(0, 4):
+                    for retry in range(4, -1, -1):
                         try:
                             hostname_detected = self.retry_ssh_if_connection_reset("grep -n 'Detected hostname change:.*-> {0}' /var/log/waagent.log".format(hostname), use_sudo=True)
                             if hostname_detected:
@@ -164,8 +164,9 @@ class PublishHostname(AgentVmTest):
                             # Exit code 1 indicates grep did not find a match. Sleep if exit code is 1, otherwise raise.
                             if e.exit_code != 1:
                                 raise
-                        log.info("Agent hasn't detected hostname change yet. Retrying after 30 seconds...")
-                        sleep(30)
+                        if retry > 0:
+                            log.info("Agent hasn't detected hostname change yet. Retrying after 30 seconds...")
+                            sleep(30)
 
                     if not hostname_detected:
                         fail("Agent did not detect hostname change: {0}".format(hostname))
