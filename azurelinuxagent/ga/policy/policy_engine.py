@@ -79,22 +79,24 @@ class _PolicyEngine(object):
     """
     def __init__(self):
         """
-        Initialize policy engine with a default policy. This should not raise any errors.
+        Initialize policy engine with a default policy. This should not fail or raise any errors.
         """
-        self._policy = None
         self._policy_enforcement_enabled = _PolicyEngine.get_policy_enforcement_enabled()
-        if not self._policy_enforcement_enabled:
-            return
-
         default_policy = {
-            "policyVersion": ustr(_MAX_SUPPORTED_POLICY_VERSION)
+            "policyVersion": ustr(_MAX_SUPPORTED_POLICY_VERSION),
+            "extensionPolicies": {
+                "allowListedExtensionsOnly": _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY,
+                "signatureRequired": _DEFAULT_SIGNATURE_REQUIRED,
+                "extensions": _DEFAULT_EXTENSIONS
+            }
         }
-        self._policy = self._parse_policy(default_policy)
+        self._policy = default_policy
 
     def update_policy(self, goal_state_history):
         """
         If policy enforcement is enabled, read and parse policy file, and update the policy being enforced.
-        If 'goal_state_history' parameter is provided, policy file contents are saved to the history folder.
+
+        :param goal_state_history: GoalStateHistory object. Policy file contents are saved to the history folder.
         """
         # Check and update if policy enforcement is enabled each time policy is updated
         self._policy_enforcement_enabled = _PolicyEngine.get_policy_enforcement_enabled()
