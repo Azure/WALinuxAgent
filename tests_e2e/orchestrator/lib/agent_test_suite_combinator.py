@@ -46,6 +46,7 @@ class AgentTestSuitesCombinatorSchema(schema.Combinator):
     user: str = field(default_factory=str, metadata=field_metadata(required=True))
     vm_name: str = field(default_factory=str, metadata=field_metadata(required=True))
     vm_size: str = field(default_factory=str, metadata=field_metadata(required=True))
+    vm_provisioning_timeout: int = field(default_factory=int, metadata=field_metadata(required=True))
     vmss_name: str = field(default_factory=str, metadata=field_metadata(required=True))
 
 
@@ -374,6 +375,7 @@ class AgentTestSuitesCombinator(Combinator):
                         "marketplace_image_information_location": self._MARKETPLACE_IMAGE_INFORMATION_LOCATIONS[self.runbook.cloud],
                         "shared_resource_group_location": self._SHARED_RESOURCE_GROUP_LOCATIONS[self.runbook.cloud],
                         "subscription_id": self.runbook.subscription_id,
+                        "provisioning_timeout": self.runbook.vm_provisioning_timeout,
                         "wait_delete": False,
                         "vm_tags": vm_tags
                     },
