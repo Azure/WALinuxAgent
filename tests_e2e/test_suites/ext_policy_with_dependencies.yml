@@ -7,6 +7,8 @@ tests:
 images: "endorsed"
 executes_on_scale_set: true
 owns_vm: false
+# This test is executed in southcentralus as a workaround for recurring fabric "ServiceUnavailableFault" issues observed in westus2.
+locations: "AzureCloud:southcentralus"
 skip_on_images:
   - "alma_8"
   - "alma_9"  # TODO: Currently AlmaLinux is not available for scale sets; enable this image when it is available.
