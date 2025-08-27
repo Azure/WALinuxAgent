@@ -32,10 +32,12 @@ from tests_e2e.tests.lib.agent_log import AgentLog
 # Usage: ext_signature_validation-check_signature_validated.py --extension-name "CustomScript"
 
 
-def check_signature_validation_state(extension_name):
+def check_signature_validation_state(extension_name, version=None):
     # Check that the HandlerStatus file contains "signature_validated": true
-
-    handler_status_file = "/var/lib/waagent/*{0}*/config/HandlerStatus".format(extension_name)
+    if version is not None:
+        handler_status_file = "/var/lib/waagent/*{0}-{1}*/config/HandlerStatus".format(extension_name, version)
+    else:
+        handler_status_file = "/var/lib/waagent/*{0}*/config/HandlerStatus".format(extension_name)
     matched_files = glob.glob(handler_status_file)
     if matched_files is None or len(matched_files) == 0:
         fail("No HandlerStatus file found for extension '{0}'".format(extension_name))
@@ -55,6 +57,7 @@ def check_signature_validation_state(extension_name):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--extension-name', dest='extension_name', required=True)
+    parser.add_argument('--extension-version', dest='extension_version', required=False)
     parser.add_argument("--after-timestamp", dest='after_timestamp', required=False)
 
     args, _ = parser.parse_known_args()
@@ -67,7 +70,7 @@ def main():
     if args.after_timestamp is None:
         after_datetime = datetime_min_utc
     else:
-        after_datetime = datetime.strptime(args.after_timestamp, '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
+        after_datetime = datetime.strptime(args.after_timestamp, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=UTC)
 
     try:
         # Check for the signature validation and manifest validation messages
@@ -91,7 +94,7 @@ def main():
 
         # Check that the handler status file indicates that signature was validated.
         log.info("Checking that signature validation state in HandlerStatus file.")
-        check_signature_validation_state(args.extension_name)
+        check_signature_validation_state(args.extension_name, args.extension_version)
 
         log.info("Signature validation state was set correctly for extension '{0}'".format(args.extension_name))
 

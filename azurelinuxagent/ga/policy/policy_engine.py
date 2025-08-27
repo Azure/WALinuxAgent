@@ -81,7 +81,7 @@ class _PolicyEngine(object):
         """
         Initialize policy engine with a default policy. This should not fail or raise any errors.
         """
-        self._policy_enforcement_enabled = _PolicyEngine.get_policy_enforcement_enabled()
+        self._policy_enforcement_enabled = _PolicyEngine.__get_policy_enforcement_enabled()
         default_policy = {
             "policyVersion": ustr(_MAX_SUPPORTED_POLICY_VERSION),
             "extensionPolicies": {
@@ -92,6 +92,10 @@ class _PolicyEngine(object):
         }
         self._policy = default_policy
 
+    @property
+    def policy_enforcement_enabled(self):
+        return self._policy_enforcement_enabled
+
     def update_policy(self, goal_state_history):
         """
         If policy enforcement is enabled, read and parse policy file, and update the policy being enforced.
@@ -99,7 +103,7 @@ class _PolicyEngine(object):
         :param goal_state_history: GoalStateHistory object. Policy file contents are saved to the history folder.
         """
         # Check and update if policy enforcement is enabled each time policy is updated
-        self._policy_enforcement_enabled = _PolicyEngine.get_policy_enforcement_enabled()
+        self._policy_enforcement_enabled = _PolicyEngine.__get_policy_enforcement_enabled()
         if not self._policy_enforcement_enabled:
             return
 
@@ -120,7 +124,7 @@ class _PolicyEngine(object):
             add_event(op=op, message=msg, is_success=is_success, log_event=False)
 
     @staticmethod
-    def get_policy_enforcement_enabled():
+    def __get_policy_enforcement_enabled():
         """
         Return True if policy enforcement is enabled. Policy is enabled if:
             1. policy file exists at the expected location
@@ -386,6 +390,10 @@ class ExtensionPolicyEngine(_PolicyEngine):
         if not extension_allowed:
             raise ExtensionDisallowedError()      # Caller sets message and error code, based on requested extension operation
 
+        # TODO: Differentiate error handling:
+        #   (1) New installation: extension is unsigned -> raise ExtensionUnsignedError
+        #   (2) Existing installation: signature was never validated -> raise ExtensionSignatureNotValidatedError
+        # Currently both cases raise the same error. They should use distinct exceptions/messages.
         enforce_signature = self.should_enforce_signature_validation(extension_name)
         if enforce_signature and not extension_is_signed:
             raise ExtensionSignaturePolicyError() # Caller sets message and error code, based on requested extension operation

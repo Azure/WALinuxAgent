@@ -551,7 +551,7 @@ class ExtHandlersHandler(object):
 
             # If an error was thrown during policy update, skip further processing of the extension if user has enabled policy enforcement.
             # CRP is still waiting for status, so we report error status here.
-            if policy_error is not None and ExtensionPolicyEngine.get_policy_enforcement_enabled():
+            if policy_error is not None and self._policy_engine.policy_enforcement_enabled:
                 msg = "Extension will not be processed due to an error verifying extension policy: {0}".format(ustr(policy_error))
                 self.__handle_ext_disallowed_error(ext_handler_i=handler_i, error_code=error_code,
                                                    report_op=WALAEventOperation.ExtensionPolicy, message=msg,
