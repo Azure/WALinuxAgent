@@ -137,8 +137,7 @@ class _PolicyEngine(object):
     @staticmethod
     def __read_policy(goal_state_history):
         """
-        Read customer-provided policy JSON file, load and return as a dict. If 'goal_state_history' parameter is provided,
-        policy file contents are saved to the history folder.
+        Read customer-provided policy JSON file, load and return as a dict. Policy file contents are saved to the goal state history folder.
 
         Policy file is expected to be at conf.get_policy_file_path(). Note that this method should only be called
         after verifying that the file exists (currently done in __init__).
