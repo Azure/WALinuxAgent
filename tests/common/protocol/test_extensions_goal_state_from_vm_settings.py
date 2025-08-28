@@ -64,6 +64,22 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
             for family in families:
                 self.assertEqual(family.version, "9.9.9.9", "Version should be 9.9.9.9")
 
+    def test_it_should_parse_from_version_properly(self):
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
+            goal_state = GoalState(protocol.client)
+            families = goal_state.extensions_goal_state.agent_families
+            for family in families:
+                self.assertIsNone(family.from_version, "fromVersion should be None")
+
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-agent_family_version.json"
+        with mock_wire_protocol(data_file) as protocol:
+            protocol.mock_wire_data.set_etag(888)
+            goal_state = GoalState(protocol.client)
+            families = goal_state.extensions_goal_state.agent_families
+            for family in families:
+                self.assertEqual(family.from_version, "9.9.9.9", "fromVersion should be 9.9.9.9")
+
     def test_it_should_parse_is_version_from_rsm_properly(self):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             goal_state = GoalState(protocol.client)
