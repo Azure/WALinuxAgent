@@ -57,7 +57,7 @@ fi
 #
 mkdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/runbook_logs
 mv "$LOGS_DIRECTORY"/lisa/*/*/lisa-*.log "$BUILD_ARTIFACTSTAGINGDIRECTORY"/runbook_logs
-mv "$LOGS_DIRECTORY"/lisa/*/*/agent.junit.xml "$BUILD_ARTIFACTSTAGINGDIRECTORY"/runbook_logs
+mv "$LOGS_DIRECTORY"/lisa/*/*/lisa.junit.xml "$BUILD_ARTIFACTSTAGINGDIRECTORY"/runbook_logs
 
 #
 # Move the rest of the LISA logs to "lisa_logs"

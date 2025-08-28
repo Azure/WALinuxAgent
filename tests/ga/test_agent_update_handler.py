@@ -18,7 +18,7 @@ from tests.ga.test_update import UpdateTestCase
 from tests.lib.http_request_predicates import HttpRequestPredicates
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
 from tests.lib.wire_protocol_data import DATA_FILE
-from tests.lib.tools import clear_singleton_instances, load_bin_data, patch, skip_if_predicate_true
+from tests.lib.tools import clear_singleton_instances, load_bin_data, patch
 
 
 class TestAgentUpdate(UpdateTestCase):
@@ -280,44 +280,71 @@ class TestAgentUpdate(UpdateTestCase):
             self._assert_agent_directories_exist_and_others_dont_exist(versions=["9.9.9.10", str(CURRENT_VERSION)])
             self._assert_agent_exit_process_telemetry_emitted(ustr(context.exception.reason))
 
-    def test_it_should_not_allow_rsm_downgrade_if_rsm_version_is_available_less_than_current_version(self):
-        data_file = DATA_FILE.copy()
-        data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
-
-        # Set the test environment by adding 20 random agents to the agent directory
-        self.prepare_agents()
-        self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
-
-        downgraded_version = "2.5.0"
-
-        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, _):
-            agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgraded_version)
-            agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
-            agent_update_handler._protocol.client.update_goal_state()
-            agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
-            self.assertFalse(os.path.exists(self.agent_dir(downgraded_version)),"New agent directory should not be found")
-
-    @skip_if_predicate_true(lambda: True, "Enable this test when rsm downgrade scenario fixed")
     def test_it_should_downgrade_agent_if_rsm_version_is_available_less_than_current_version(self):
         data_file = DATA_FILE.copy()
-        data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
+        data_file["ext_conf"] = "wire/ext_conf_downgrade_rsm_version.xml"
 
         # Set the test environment by adding 20 random agents to the agent directory
         self.prepare_agents()
         self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
 
-        downgraded_version = "2.5.0"
+        downgrade_version = "2.5.0"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
-            agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgraded_version)
+            agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgrade_version)
+            agent_update_handler._protocol.mock_wire_data.set_from_version_in_agent_family(str(CURRENT_VERSION))
             agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
             agent_update_handler._protocol.client.update_goal_state()
             with self.assertRaises(AgentUpgradeExitException) as context:
                 agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
-            self._assert_agent_rsm_version_in_goal_state(mock_telemetry, inc=2, version=downgraded_version)
+            self._assert_agent_rsm_version_in_goal_state(mock_telemetry, inc=2, version=downgrade_version)
             self._assert_agent_directories_exist_and_others_dont_exist(
-                versions=[downgraded_version, str(CURRENT_VERSION)])
+                versions=[downgrade_version, str(CURRENT_VERSION)])
             self._assert_agent_exit_process_telemetry_emitted(ustr(context.exception.reason))
+
+    def test_it_should_not_allow_rsm_downgrade_if_from_version_different_from_current_version(self):
+        data_file = DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_downgrade_rsm_version.xml"
+
+        # Set the test environment by adding 20 random agents to the agent directory
+        self.prepare_agents()
+        self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
+
+        downgrade_version = "2.5.0"
+        from_version = "3.0.0"
+
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgrade_version)
+            agent_update_handler._protocol.mock_wire_data.set_from_version_in_agent_family(from_version)
+            agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
+            agent_update_handler._protocol.client.update_goal_state()
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
+            self.assertFalse(os.path.exists(self.agent_dir(downgrade_version)),"New agent directory should not be found")
+            self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
+                                     "downgrade {0} is not allowed to update from {1}".format(downgrade_version, from_version) in kwarg['message'] and kwarg[
+                                         'op'] == WALAEventOperation.AgentUpgrade]), "downgrade should not be allowed")
+            vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
+            self.assertEqual(1, vm_agent_update_status.code)
+            self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
+            self.assertIn("downgrade {0} is not allowed to update from {1}".format(downgrade_version, from_version), vm_agent_update_status.message)
+
+    def test_it_should_not_allow_rsm_downgrade_if_from_version_missing(self):
+        data_file = DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
+
+        # Set the test environment by adding 20 random agents to the agent directory
+        self.prepare_agents()
+        self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
+
+        downgrade_version = "2.5.0"
+
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, _):
+            agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgrade_version)
+            agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
+            agent_update_handler._protocol.client.update_goal_state()
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
+            self.assertFalse(os.path.exists(self.agent_dir(downgrade_version)),
+                             "New agent directory should not be found")
 
     def test_it_should_not_do_rsm_update_if_gs_not_updated_in_next_attempt(self):
         self.prepare_agents(count=1)
@@ -345,15 +372,23 @@ class TestAgentUpdate(UpdateTestCase):
         self.prepare_agents()
         self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
 
-        downgraded_version = "1.2.0"
+        downgrade_version = "1.2.0"
 
-        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, _):
-            agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgraded_version)
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgrade_version)
             agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
             agent_update_handler._protocol.client.update_goal_state()
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
-            self.assertFalse(os.path.exists(self.agent_dir(downgraded_version)),
+            self.assertFalse(os.path.exists(self.agent_dir(downgrade_version)),
                              "New agent directory should not be found")
+            self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
+                                     "new version {0} is below than daemon version".format(downgrade_version) in kwarg['message'] and kwarg[
+                                         'op'] == WALAEventOperation.AgentUpgrade]), "downgrade should not be allowed below daemon version")
+            vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
+            self.assertEqual(1, vm_agent_update_status.code)
+            self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
+            self.assertIn("new version {0} is below than daemon version".format(downgrade_version), vm_agent_update_status.message)
+
 
     def test_it_should_update_to_largest_version_if_vm_not_enabled_for_rsm_upgrades(self):
         self.prepare_agents(count=1)
@@ -371,16 +406,16 @@ class TestAgentUpdate(UpdateTestCase):
         self.prepare_agents(count=1)
         data_file = DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_version_not_from_rsm.xml"
-        downgraded_version = "2.5.0"
+        downgrade_version = "2.5.0"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, _):
-            agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgraded_version)
+            agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgrade_version)
             agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
             agent_update_handler._protocol.client.update_goal_state()
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
             self._assert_agent_directories_exist_and_others_dont_exist(
                 versions=[str(CURRENT_VERSION)])
-            self.assertFalse(os.path.exists(self.agent_dir(downgraded_version)),
+            self.assertFalse(os.path.exists(self.agent_dir(downgrade_version)),
                              "New agent directory should not be found")
 
     def test_handles_if_rsm_version_not_found_in_pkgs_to_download(self):
@@ -481,7 +516,7 @@ class TestAgentUpdate(UpdateTestCase):
             vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
             self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
             self.assertEqual(1, vm_agent_update_status.code)
-            self.assertEqual("9.9.9.10", vm_agent_update_status.expected_version)
+            self.assertEqual("9.9.9.9", vm_agent_update_status.expected_version)
             self.assertIn("Failed to download WALinuxAgent-9.9.9.10 from all URIs", vm_agent_update_status.message)
 
     def test_it_should_not_report_error_status_if_new_rsm_version_is_same_as_current_after_last_update_attempt_failed(self):
@@ -493,7 +528,7 @@ class TestAgentUpdate(UpdateTestCase):
             vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
             self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
             self.assertEqual(1, vm_agent_update_status.code)
-            self.assertEqual("9.9.9.10", vm_agent_update_status.expected_version)
+            self.assertEqual("9.9.9.9", vm_agent_update_status.expected_version)
             self.assertIn("Failed to download WALinuxAgent-9.9.9.10 from all URIs", vm_agent_update_status.message)
 
             # Send same version GS after last update attempt failed
