@@ -134,6 +134,12 @@ image-sets:
 # URNs follow the format '<Publisher> <Offer> <Sku> <Version>' or
 # '<Publisher>:<Offer>:<Sku>:<Version>'
 #
+# NOTE ON VM SIZE FOR ARM64 VMs:
+#      The VM size chosen by LISA for ARM64 VMs has recently produced VM that do not start, so we explicitly use
+#      Standard_B2pls_v2 (which was the size LISA was using previously). Consider removing this explicit size
+#      if/when the issue with the size selected by LISA is fixed.
+#
+#
 images:
    alma_8:
       urn: "almalinux almalinux-x86_64 8-gen2 latest"
@@ -153,6 +159,9 @@ images:
          AzureChinaCloud: []
    azure-linux_3_arm64:
       urn: "microsoftcblmariner azure-linux-3 azure-linux-3-arm64 latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
       locations:
          AzureUSGovernment: []
          AzureChinaCloud: []
@@ -172,6 +181,9 @@ images:
    debian_11: "Debian debian-11 11 latest"
    debian_11_arm64:
       urn: "Debian debian-11 11-backports-arm64 latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
       locations:
          AzureUSGovernment: []
          AzureChinaCloud: []
@@ -182,6 +194,9 @@ images:
          AzureUSGovernment: []
    flatcar_arm64:
       urn: "kinvolk flatcar-container-linux-corevm stable latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
@@ -192,6 +207,9 @@ images:
    mariner_2: "microsoftcblmariner cbl-mariner cbl-mariner-2 latest"
    mariner_2_arm64:
       urn: "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
@@ -244,6 +262,9 @@ images:
          AzureChinaCloud: []
    rhel_95_arm64:
       urn: "RedHat rhel-arm64 9_5-arm64 latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
@@ -267,8 +288,12 @@ images:
    ubuntu_2004: "Canonical 0001-com-ubuntu-server-focal 20_04-lts latest"
    ubuntu_2204: "Canonical 0001-com-ubuntu-server-jammy 22_04-lts latest"
    ubuntu_pro_2204: "Canonical 0001-com-ubuntu-pro-microsoft pro-22_04 latest"
+   ubuntu_pro_fips_2204: "Canonical 0001-com-ubuntu-pro-microsoft pro-fips-22_04 latest"
    ubuntu_2204_arm64:
       urn: "Canonical 0001-com-ubuntu-server-jammy 22_04-lts-arm64 latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
@@ -276,6 +301,9 @@ images:
    ubuntu_2404: "Canonical ubuntu-24_04-lts server latest"
    ubuntu_2404_arm64:
       urn: "Canonical ubuntu-24_04-lts server-arm64 latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
