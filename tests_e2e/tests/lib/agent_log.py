@@ -453,6 +453,12 @@ class AgentLog(object):
             {
                 'message': r"(The walinuxagent.service cgroup is not mounted at the expected path|controller is not mounted at the expected path for the walinuxagent.service cgroup); will not track. Actual cgroup path:\[.*\] Expected:\[.*\]",
             },
+            # Timing issue when the CGroup has been deleted/reset quota by the time we are fetching the values
+            # from it. We would see IOError with file entry not found (ERRNO: 2).
+            # 2025-08-28T18:46:06.813016Z WARNING MonitorHandler ExtHandler [PERIODIC] Could not collect metrics for cgroup azuremonitor-coreagent. Error : [CGroupsException] Failed to read cpu.stat: Cannot find throttled_usec
+            {
+                'message': r"\[PERIODIC\] Could not collect metrics for cgroup .* Failed to read cpu.stat: Cannot find throttled_usec",
+            },
         ]
 
         def is_error(r: AgentLogRecord) -> bool:

@@ -48,6 +48,8 @@ class VMAgentFamily(object):
         self.name = name
         # Two-state: None, string. Set to None if version not specified in the GS
         self.version = None
+        # Two-state: None, string. Set to None if this property not specified in the GS.
+        self.from_version = None
         # Tri-state: None, True, False. Set to None if this property not specified in the GS.
         self.is_version_from_rsm = None
         # Tri-state: None, True, False. Set to None if this property not specified in the GS.
