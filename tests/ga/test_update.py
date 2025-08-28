@@ -1198,7 +1198,7 @@ class TestUpdate(UpdateTestCase):
                                         "updateStatus should be in status blob. Warns: {0}".format(patch_warn.call_args_list))
                         update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
                         self.assertEqual(VMAgentUpdateStatuses.Error, update_status['status'], "Status should be an error")
-                        self.assertEqual(update_status['expectedVersion'], "9.9.9.9", "incorrect version reported")
+                        self.assertEqual(update_status['expectedVersion'], str(CURRENT_VERSION), "incorrect version reported")
                         self.assertEqual(update_status['code'], 1, "incorrect code reported")
 
     def test_it_should_wait_to_fetch_first_goal_state(self):
