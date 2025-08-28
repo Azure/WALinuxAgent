@@ -262,6 +262,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #         {
         #             "name": "Prod",
         #             "version": "9.9.9.9",
+        #             "from_version": "9.9.9.9",
         #             "isVersionFromRSM": true,
         #             "isVMEnabledForRSMUpgrades": true,
         #             "uris": [
@@ -288,6 +289,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         for family in families:
             name = family["name"]
             version = family.get("version")
+            from_version = family.get("fromVersion")
             is_version_from_rsm = family.get("isVersionFromRSM")
             is_vm_enabled_for_rsm_upgrades = family.get("isVMEnabledForRSMUpgrades")
             uris = family.get("uris")
@@ -295,6 +297,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                 uris = []
             agent_family = VMAgentFamily(name)
             agent_family.version = version
+            agent_family.from_version = from_version
             agent_family.is_version_from_rsm = is_version_from_rsm
             agent_family.is_vm_enabled_for_rsm_upgrades = is_vm_enabled_for_rsm_upgrades
             for u in uris:

@@ -50,11 +50,18 @@ image-sets:
 
    # As of today agent only support and enabled resource governance feature on following distros
    cgroups-endorsed:
+      - "azure-linux_3"
       - "centos_82"
       - "rhel_82"
+      - "rhel_95"
+      - "rhel_95_arm64"
       - "ubuntu_1604"
       - "ubuntu_1804"
       - "ubuntu_2004"
+      - "ubuntu_2204"
+      - "ubuntu_2204_arm64"
+      - "ubuntu_2404"
+      - "ubuntu_2404_arm64"
 
    # These distros use Python 2.6. Currently they are not tested on the daily runs; this image set is here just for reference.
    python-26:

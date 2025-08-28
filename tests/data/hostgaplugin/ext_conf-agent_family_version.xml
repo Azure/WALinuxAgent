@@ -4,6 +4,7 @@
     <GAFamily>
       <Name>Prod</Name>
       <Version>9.9.9.10</Version>
+      <FromVersion>9.9.9.9</FromVersion>
       <IsVersionFromRSM>true</IsVersionFromRSM>
       <IsVMEnabledForRSMUpgrades>true</IsVMEnabledForRSMUpgrades>
       <Uris>
@@ -14,6 +15,7 @@
     <GAFamily>
       <Name>Test</Name>
       <Version>9.9.9.10</Version>
+      <FromVersion>9.9.9.9</FromVersion>
       <IsVersionFromRSM>true</IsVersionFromRSM>
       <IsVMEnabledForRSMUpgrades>true</IsVMEnabledForRSMUpgrades>
       <Uris>
