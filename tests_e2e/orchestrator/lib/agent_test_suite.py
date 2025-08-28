@@ -469,11 +469,6 @@ class AgentTestSuite(LisaTestSuite):
             log.info('Installing tools on the test node')
             log.info(ssh_client.run_command("~/bin/install-tools"))
 
-            # Update waagent.conf on test node
-            log.info("Updating conf file on test node: setting 'Debug.EnableSignatureValidation' to true")
-            command = "update-waagent-conf Debug.EnableSignatureValidation=y"
-            log.info("%s\n%s", command, ssh_client.run_command(command, use_sudo=True))
-
             if self._is_vhd:
                 log.info("Using a VHD; will not install the Test Agent.")
             elif not install_test_agent:

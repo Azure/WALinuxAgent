@@ -58,7 +58,6 @@ variable:
       - recover_network_interface
       - cgroup_v2_enabled
       - log_collector
-      - ext_signature_validation
       - ext_update
 
   #
