@@ -5,4 +5,6 @@ name: "ExtensionPolicy"
 tests:
   - "ext_policy/ext_policy.py"
 images: "endorsed"
+# This test is executed in southcentralus as a workaround for recurring fabric "ServiceUnavailableFault" issues observed in westus2.
+locations: "AzureCloud:southcentralus"
 owns_vm: false
