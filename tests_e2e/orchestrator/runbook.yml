@@ -57,7 +57,6 @@ variable:
       - publish_hostname
       - recover_network_interface
       - log_collector
-      - ext_signature_validation
       - ext_update
 
   #
