@@ -11,3 +11,7 @@ locations: "AzureCloud:southcentralus"
 skip_on_clouds:
   - "AzureChinaCloud"
   - "AzureUSGovernment"
+skip_on_images: # Skip arm64 images as DCR test extension is not published for arm64 images
+  - "rhel_95_arm64"
+  - "ubuntu_2204_arm64"
+  - "ubuntu_2404_arm64"
