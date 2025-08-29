@@ -252,6 +252,7 @@ class ExtHandlerStatus(DataContract):
         self.message = message
         self.supports_multi_config = False
         self.extension_status = None
+        self.signature_validated = False
 
 
 class VMAgentStatus(DataContract):

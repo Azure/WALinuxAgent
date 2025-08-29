@@ -36,7 +36,15 @@ _DEFAULT_EXTENSIONS = {}
 _MAX_SUPPORTED_POLICY_VERSION = "0.1.0"
 
 
-class InvalidPolicyError(AgentError):
+class PolicyError(AgentError):
+    """
+    Base class for policy-related errors.
+    """
+    def __init__(self, msg=None, inner=None):
+        super(PolicyError, self).__init__(msg, inner)
+
+
+class InvalidPolicyError(PolicyError):
     """
     Error raised if user-provided policy is invalid.
     """
@@ -45,25 +53,63 @@ class InvalidPolicyError(AgentError):
         super(InvalidPolicyError, self).__init__(msg, inner)
 
 
+class ExtensionSignaturePolicyError(PolicyError):
+    """
+    Error raised when policy requires signature, but extension is not signed and was not previously validated.
+    This error does not accept a message.
+    """
+    def __init__(self):
+        super(ExtensionSignaturePolicyError, self).__init__()
+
+
+class ExtensionDisallowedError(PolicyError):
+    """
+    Error raised when extension is not present in the policy allowlist.
+    This error does not accept a message.
+    """
+    def __init__(self):
+        super(ExtensionDisallowedError, self).__init__()
+
+
 class _PolicyEngine(object):
     """
     Implements base policy engine API.
+
+    Note: All public methods in PolicyEngine classes must verify that policy enforcement is enabled and act as no-ops when it is not.
     """
     def __init__(self):
         """
-        Initialize policy engine: if policy enforcement is enabled, read and parse policy file.
+        Initialize policy engine with a default policy. This should not fail or raise any errors.
         """
-        self._policy_enforcement_enabled = self.__get_policy_enforcement_enabled()
-        self._policy_file_contents = None   # Raw policy file contents will be saved in __read_policy()
-        if not self.policy_enforcement_enabled:
+        self._policy_enforcement_enabled = _PolicyEngine.__get_policy_enforcement_enabled()
+        default_policy = {
+            "policyVersion": ustr(_MAX_SUPPORTED_POLICY_VERSION),
+            "extensionPolicies": {
+                "allowListedExtensionsOnly": _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY,
+                "signatureRequired": _DEFAULT_SIGNATURE_REQUIRED,
+                "extensions": _DEFAULT_EXTENSIONS
+            }
+        }
+        self._policy = default_policy
+
+    @property
+    def policy_enforcement_enabled(self):
+        return self._policy_enforcement_enabled
+
+    def update_policy(self, goal_state_history):
+        """
+        If policy enforcement is enabled, read and parse policy file, and update the policy being enforced.
+
+        :param goal_state_history: GoalStateHistory object. Policy file contents are saved to the history folder.
+        """
+        # Check and update if policy enforcement is enabled each time policy is updated
+        self._policy_enforcement_enabled = _PolicyEngine.__get_policy_enforcement_enabled()
+        if not self._policy_enforcement_enabled:
             return
 
         _PolicyEngine._log_policy_event("Policy enforcement is enabled.")
-        self._policy = self._parse_policy(self.__read_policy())
-
-    @property
-    def policy_file_contents(self):
-        return self._policy_file_contents
+        policy_file_contents = self.__read_policy(goal_state_history)
+        self._policy = self._parse_policy(policy_file_contents)
 
     @staticmethod
     def _log_policy_event(msg, is_success=True, op=WALAEventOperation.Policy, send_event=True):
@@ -80,41 +126,55 @@ class _PolicyEngine(object):
     @staticmethod
     def __get_policy_enforcement_enabled():
         """
-        Policy will be enabled if (1) policy file exists at the expected location and (2) the conf flag "Debug.EnableExtensionPolicy" is true.
-        """
-        return conf.get_extension_policy_enabled() and os.path.exists(conf.get_policy_file_path())
+        Return True if policy enforcement is enabled. Policy is enabled if:
+            1. policy file exists at the expected location
+            2. the conf flag "Debug.EnableExtensionPolicy" is set to True.
 
-    @property
-    def policy_enforcement_enabled(self):
-        return self._policy_enforcement_enabled
-
-    def __read_policy(self):
+        This method runs during policy engine initialization and should not raise errors. If an error occurs, return False.
         """
-        Read customer-provided policy JSON file, load and return as a dict.
+        try:
+            return conf.get_extension_policy_enabled() and os.path.exists(conf.get_policy_file_path())
+        except Exception as ex:
+            logger.warn("Error checking if policy is enabled: {0}".format(ex))
+            return False
+
+    @staticmethod
+    def __read_policy(goal_state_history):
+        """
+        Read customer-provided policy JSON file, load and return as a dict. Policy file contents are saved to the goal state history folder.
 
         Policy file is expected to be at conf.get_policy_file_path(). Note that this method should only be called
         after verifying that the file exists (currently done in __init__).
 
         Raise InvalidPolicyError if JSON is invalid, or any exceptions are thrown while reading the file.
         """
+        policy_file_contents = None
         with open(conf.get_policy_file_path(), 'r') as f:
             try:
-                self._policy_file_contents = f.read()
+                policy_file_contents = f.read()
+
+                # Save policy file contents to goal state history folder
+                if goal_state_history is not None:
+                    try:
+                        goal_state_history.save(policy_file_contents, "waagent_policy.json")
+                    except Exception as ex:
+                        logger.warn("Failed to save policy to history, continuing with goal state processing. Error: {0}", ustr(ex))
+
                 _PolicyEngine._log_policy_event(
                     "Enforcing policy using policy file found at '{0}'.".format(conf.get_policy_file_path()))
 
                 # json.loads will raise error if file contents are not a valid json (including empty file).
-                custom_policy = json.loads(self._policy_file_contents)
+                custom_policy = json.loads(policy_file_contents)
 
             except ValueError as ex:
                 msg = "policy file does not conform to valid json syntax."
-                if self._policy_file_contents is not None:
-                    msg += " File contents: {0}".format(self._policy_file_contents)
+                if policy_file_contents is not None:
+                    msg += " File contents: {0}".format(policy_file_contents)
                 raise InvalidPolicyError(msg=msg, inner=ex)
             except Exception as ex:
                 msg = "unable to read or load policy file."
-                if self._policy_file_contents is not None:
-                    msg += " File contents: {0}".format(self._policy_file_contents)
+                if policy_file_contents is not None:
+                    msg += " File contents: {0}".format(policy_file_contents)
                 raise InvalidPolicyError(msg=msg, inner=ex)
 
             return custom_policy
@@ -284,14 +344,14 @@ class _PolicyEngine(object):
 
 class ExtensionPolicyEngine(_PolicyEngine):
 
-    def should_allow_extension(self, extension_name):
+    def _should_allow_extension(self, extension_name):
         """
         Return whether we should allow extension download based on policy.
         If policy feature not enabled, return True.
         If allowListedExtensionsOnly=true, return true only if extension present in "extensions" allowlist.
         If allowListedExtensions=false, return true always.
         """
-        if not self.policy_enforcement_enabled:
+        if not self._policy_enforcement_enabled:
             return True
 
         allow_listed_extension_only = self._policy.get("extensionPolicies").get("allowListedExtensionsOnly")
@@ -306,7 +366,7 @@ class ExtensionPolicyEngine(_PolicyEngine):
         If policy feature not enabled, return False.
         Individual policy takes precedence over global.
         """
-        if not self.policy_enforcement_enabled:
+        if not self._policy_enforcement_enabled:
             return False
 
         global_signature_required = self._policy.get("extensionPolicies").get("signatureRequired")
@@ -314,3 +374,26 @@ class ExtensionPolicyEngine(_PolicyEngine):
         individual_signature_required = individual_policy.get("signatureRequired") if individual_policy is not None else None
 
         return individual_signature_required if individual_signature_required is not None else global_signature_required
+
+    def check_extension_policy(self, extension_name, extension_is_signed):
+        """
+        Enforce all applicable extension policies.
+        :param extension_name: extension name (string).
+        :param extension_is_signed: Boolean indicating whether the extension is signed (or signature was previously validated, if extension is not being installed).
+        :raises ExtensionDisallowedError: If the extension is not allowed by policy.
+        :raises ExtensionSignaturePolicyError: If the extension is required to be signed but is not.
+        """
+        if not self._policy_enforcement_enabled:
+            return
+
+        extension_allowed = self._should_allow_extension(extension_name)
+        if not extension_allowed:
+            raise ExtensionDisallowedError()      # Caller sets message and error code, based on requested extension operation
+
+        # TODO: Differentiate error handling:
+        #   (1) New installation: extension is unsigned -> raise ExtensionUnsignedError
+        #   (2) Existing installation: signature was never validated -> raise ExtensionSignatureNotValidatedError
+        # Currently both cases raise the same error. They should use distinct exceptions/messages.
+        enforce_signature = self.should_enforce_signature_validation(extension_name)
+        if enforce_signature and not extension_is_signed:
+            raise ExtensionSignaturePolicyError() # Caller sets message and error code, based on requested extension operation
