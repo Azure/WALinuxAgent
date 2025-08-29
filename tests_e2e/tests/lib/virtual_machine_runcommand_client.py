@@ -117,7 +117,7 @@ class VirtualMachineRunCommandClient(AzureSdkClient):
         attempt = 1
         instance_view = self.get_instance_view()
         while instance_view.execution_state == 'Pending' and attempt < 3:
-            log.info("Instance view is incomplete: %s\nRetrying attempt to get instance view...",
+            log.info("Instance view is incomplete [execution_state == Pending]: %s\nRetrying attempt to get instance view...",
                      instance_view.serialize())
             sleep(10)
             instance_view = self.get_instance_view()
