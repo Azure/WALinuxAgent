@@ -454,9 +454,9 @@ class AgentTestSuite(LisaTestSuite):
                 log.info("Remote command [%s] completed:\n%s", command, ssh_client.run_command(command))
             except CommandError as e:
                 # Some distros do not have tar installed by default. Install it if needed.
-                if ssh_client.get_distro() in ["alma_8"] and "tar: command not found" in e.stderr:
+                if "tar: command not found" in e.stderr:
                     log.info("Failed to extract waagent-tools.tar on the test node because tar is not installed. Installing tar...")
-                    ssh_client.run_command("dnf -y install tar", use_sudo=True)
+                    ssh_client.run_command("dnf -y install tar", use_sudo=True)     # Alma 8 is the only image without tar by default, so using dnf. If needed, we can add logic to use other package managers as needed.
                     log.info("Retrying extracting %s on the test node after installing tar", self._test_tools_tarball_path)
                     log.info("Remote command [%s] completed:\n%s", command, ssh_client.run_command(command))
                 else:
