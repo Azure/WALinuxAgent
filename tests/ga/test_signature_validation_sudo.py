@@ -22,8 +22,6 @@ from tests.lib.tools import AgentTestCase, data_dir, patch, i_am_root
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 from azurelinuxagent.ga.signature_validation_util import validate_signature
 from azurelinuxagent.common.utils import shellutil
-from azurelinuxagent.common.logger import LogLevel
-
 
 
 class TestSignatureValidationSudo(AgentTestCase):
@@ -52,7 +50,7 @@ class TestSignatureValidationSudo(AgentTestCase):
             delta = target_year - int(original_system_year)
             if delta > 0:
                 shellutil.run_command(["sudo", "date", "-s", "{0} years".format(delta)])
-            validate_signature(package_path, signature, package_name_and_version, failure_log_level=LogLevel.WARNING)
+            validate_signature(package_path, signature, package_name_and_version)
         except shellutil.CommandError as ex:
             raise Exception("Failed to retrieve or update system time.\nExit code: {0}\nError details: {1}".format(ex.returncode, ex.stderr))
         finally:

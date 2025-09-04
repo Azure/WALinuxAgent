@@ -640,7 +640,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                         "policyVersion": "0.0.1",
                         "extensionPolicies": {
                             "allowListedExtensionsOnly": True,
-                            "signatureRequired": True,
+                            "signatureRequired": False,
                             "extensions": {
                                 "Microsoft.Powershell.ExampleExtension": {}
                             }
@@ -703,7 +703,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                         "policyVersion": "0.0.1",
                         "extensionPolicies": {
                             "allowListedExtensionsOnly": True,
-                            "signatureRequired": True,
+                            "signatureRequired": False,
                             "extensions": {
                                 "OSTCExtensions.ExampleHandlerLinux": {},
                                 "Microsoft.Powershell.ExampleExtension": {}
