@@ -189,6 +189,14 @@ class AgentLog(object):
                 'if': lambda r: r.level == "WARNING" and r.prefix == "Daemon"
             },
             #
+            # 2025-09-06T08:48:54.929425Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] GET vmSettings [correlation ID: 646b1f58-d57e-4ea1-9fc8-848d5a65fe65 eTag: 2142019640769130536]: [HTTP Failed] [403: Forbidden] b'{  "errorCode": "AccessDenied",  "message": "Error during client validation.",  "details": ""}'
+            #
+            # This can be ignored, if the issue persist the log would include other errors as well.
+            {
+                'message': r"\[ProtocolError\] GET vmSettings.*\[403: Forbidden\].*AccessDenied",
+                'if': lambda r: r.level == "ERROR"
+            },
+            #
             # 2022-02-09T04:50:37.384810Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] GET vmSettings [correlation ID: 2bed9b62-188e-4668-b1a8-87c35cfa4927 eTag: 7031887032544600793]: [Internal error in HostGAPlugin] [HTTP Failed] [502: Bad Gateway] b'{  "errorCode": "VMArtifactsProfileBlobContentNotFound",  "message": "VM artifacts profile blob has no content in it.",  "details": ""}'
             #
             # Fetching the goal state may catch the HostGAPlugin in the process of computing the vmSettings. This can be ignored, if the issue persist the log would include other errors as well.
@@ -227,9 +235,10 @@ class AgentLog(object):
             },
             #
             # 2022-12-02T05:45:51.771876Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] [Wireserver Exception] [HttpError] [HTTP Failed] GET http://168.63.129.16/machine/ -- IOError [Errno 104] Connection reset by peer -- 6 attempts made
+            # 2025-09-06T08:47:16.941247Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] [Wireserver Exception] [HttpError] [HTTP Failed] GET http://168.63.129.16/machine/ -- IOError timed out -- 6 attempts made
             #
             {
-                'message': r"\[HttpError\] \[HTTP Failed\] GET http://168.63.129.16/machine/ -- IOError \[Errno 104\] Connection reset by peer",
+                'message': r"\[HttpError\] \[HTTP Failed\] GET http://168.63.129.16/machine/ -- IOError (\[Errno 104\] Connection reset by peer|timed out)",
                 'if': lambda r: r.level in ("WARNING", "ERROR")
             },
             #
@@ -260,6 +269,14 @@ class AgentLog(object):
                 'if': lambda r: r.level == "WARNING"
             },
             #
+            # 2025-09-06T08:47:42.367645Z WARNING MonitorHandler ExtHandler Error in SendHostPluginHeartbeat: [ProtocolError] [Wireserver Exception] [HttpError] [HTTP Failed] GET http://168.63.129.16/machine/ -- IOError timed out -- 6 attempts made --- [NOTE: Will not log the same error for the next hour]
+            #
+            # As part of health check, we refresh goal state to update HGPA with latest containerId. That goal state refresh failures can be ignored as if the issue persist the log would include other errors as well.
+            #
+            {
+                'message': r"SendHostPluginHeartbeat:.*GET http:\/\/168.63.129.16\/machine.*timed out",
+                'if': lambda r: r.level == "WARNING"
+            },
             # 2022-09-30T03:09:25.013398Z WARNING MonitorHandler ExtHandler Error in SendHostPluginHeartbeat: [ResourceGoneError] [HTTP Failed] [410: Gone]
             #
             # ResourceGone should not happen very often, since the monitor thread already refreshes the goal state before sending the HostGAPlugin heartbeat. Errors can still happen, though, since the goal state
@@ -286,6 +303,13 @@ class AgentLog(object):
                 'if': lambda r: r.thread == 'SendTelemetryHandler' and self._increment_counter("SendTelemetryHandler-telemetrydata-Status Code 410") < 2  # ignore unless there are 2 or more instances
             },
             #
+            # 2025-09-06T08:46:51.298681Z ERROR SendTelemetryHandler ExtHandler Event: name=WALinuxAgent, op=ReportEventErrors, message=DroppedEventsCount: 1
+            # Reasons (first 5 errors): [ProtocolError] [Wireserver Exception] [HttpError] [HTTP Failed] POST http://168.63.129.16/machine -- IOError timed out -- 3 attempts made:
+            #
+            {
+                'message': r"(?s)\[ProtocolError\].*http:\/\/168.63.129.16\/machine.*timed out",
+                'if': lambda r: r.thread == 'SendTelemetryHandler' and self._increment_counter("SendTelemetryHandler-telemetrydata-IOError-timed-out") < 2  # ignore unless there are 2 or more instances
+            },
             # Ignore these errors in flatcar:
             #
             #    1)  2023-03-16T14:30:33.091427Z ERROR Daemon Daemon Failed to mount resource disk [ResourceDiskError] unable to detect disk topology
