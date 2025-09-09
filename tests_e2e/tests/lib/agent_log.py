@@ -194,7 +194,7 @@ class AgentLog(object):
             # This can be ignored, if the issue persist the log would include other errors as well.
             {
                 'message': r"\[ProtocolError\] GET vmSettings.*\[403: Forbidden\].*AccessDenied",
-                'if': lambda r: r.level == "ERROR"
+                'if': lambda r: r.level == "ERROR" and self._increment_counter("ProtocolError-vmSettings-403") < 6 # ignore unless there are 6 or more instances
             },
             #
             # 2022-02-09T04:50:37.384810Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] GET vmSettings [correlation ID: 2bed9b62-188e-4668-b1a8-87c35cfa4927 eTag: 7031887032544600793]: [Internal error in HostGAPlugin] [HTTP Failed] [502: Bad Gateway] b'{  "errorCode": "VMArtifactsProfileBlobContentNotFound",  "message": "VM artifacts profile blob has no content in it.",  "details": ""}'
@@ -239,7 +239,7 @@ class AgentLog(object):
             #
             {
                 'message': r"\[HttpError\] \[HTTP Failed\] GET http://168.63.129.16/machine/ -- IOError (\[Errno 104\] Connection reset by peer|timed out)",
-                'if': lambda r: r.level in ("WARNING", "ERROR")
+                'if': lambda r: r.level in ("WARNING", "ERROR") and self._increment_counter("ProtocolError-Goalstate-IOError") < 6  # ignore unless there are 6 or more instances
             },
             #
             # 2022-03-08T03:03:23.036161Z WARNING ExtHandler ExtHandler Fetch failed from [http://168.63.129.16:32526/extensionArtifact]: [HTTP Failed] [400: Bad Request] b''
@@ -275,7 +275,7 @@ class AgentLog(object):
             #
             {
                 'message': r"SendHostPluginHeartbeat:.*GET http:\/\/168.63.129.16\/machine.*timed out",
-                'if': lambda r: r.level == "WARNING"
+                'if': lambda r: r.level == "WARNING" and self._increment_counter("SendHostPluginHeartbeat-Goalstate-timedout") < 6  # ignore unless there are 6 or more instances
             },
             # 2022-09-30T03:09:25.013398Z WARNING MonitorHandler ExtHandler Error in SendHostPluginHeartbeat: [ResourceGoneError] [HTTP Failed] [410: Gone]
             #
