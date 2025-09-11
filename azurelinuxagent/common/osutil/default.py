@@ -369,7 +369,7 @@ class DefaultOSUtil(object):
                 raise OSUtilError("Bad public key: {0}".format(value))
             if not value.endswith("\n"):
                 value += "\n"
-            fileutil.write_file(path, value, append=True)
+            fileutil.append_file(path, value, append=True)
         elif thumbprint is not None:
             lib_dir = conf.get_lib_dir()
             crt_path = os.path.join(lib_dir, thumbprint + '.crt')
