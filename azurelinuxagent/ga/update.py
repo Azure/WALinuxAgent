@@ -125,7 +125,6 @@ def get_update_handler():
 
 class UpdateHandler(object):
     TELEMETRY_HEARTBEAT_PERIOD = timedelta(minutes=30)
-    CHECK_MEMORY_USAGE_PERIOD = timedelta(seconds=conf.get_cgroup_check_period())
 
     def __init__(self):
         self.osutil = get_osutil()
