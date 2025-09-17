@@ -46,7 +46,7 @@ class InstallExtensions:
     def _install_ama(self):
         ama_extension = VirtualMachineExtensionClient(
             self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent,
-            resource_name="AzureMonitorLinuxAgent")
+            resource_name="AMAAgent")
         log.info("Installing %s", ama_extension)
         ama_extension.enable()
         ama_extension.assert_instance_view()
