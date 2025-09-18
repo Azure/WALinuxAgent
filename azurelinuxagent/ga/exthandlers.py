@@ -61,6 +61,7 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.signature_validation_util import validate_handler_manifest_signing_info, SignatureValidationError, \
     PackageValidationError, ManifestValidationError, signature_validation_enabled, validate_signature, \
     cleanup_package_with_invalid_signature, report_validation_event
+from azurelinuxagent.common.opentelemetrybuilder import initialize_tracer
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
 _HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
@@ -333,46 +334,53 @@ class ExtHandlersHandler(object):
                self.__gs_aggregate_status.code == GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures
 
     def run(self):
-        try:
-            gs = self.protocol.get_goal_state()
-            egs = gs.extensions_goal_state
-            self._gs_activity_id = egs.activity_id
-
-
-            # self.ext_handlers needs to be initialized before returning, since status reporting depends on it; also
-            # we make a deep copy of the extensions, since changes are made to self.ext_handlers while processing the extensions
-            self.ext_handlers = copy.deepcopy(egs.extensions)
-
-            if self._extensions_on_hold():
-                return
-
-            utc_start = datetime.datetime.now(UTC)
-            error = None
-            message = "ProcessExtensionsGoalState started [{0} channel: {1} source: {2} activity: {3} correlation {4} created: {5}]".format(
-                egs.id, egs.channel, egs.source, egs.activity_id, egs.correlation_id, egs.created_on_timestamp)
-            logger.info('')
-            logger.info(message)
-            add_event(op=WALAEventOperation.ExtensionProcessing, message=message)
-
+        tracer = initialize_tracer(service_name="ExtHandlers.run")
+        with tracer.start_as_current_span("ProcessExtensionsGoalState") as span:
             try:
-                self.__process_and_handle_extensions(egs.svd_sequence_number, egs.id)
-                self._cleanup_outdated_handlers()
-            except Exception as e:
-                error = u"Error processing extensions:{0}".format(textutil.format_exception(e))
-            finally:
-                duration = elapsed_milliseconds(utc_start)
-                if error is None:
-                    message = 'ProcessExtensionsGoalState completed [{0} {1} ms]\n'.format(egs.id, duration)
-                    logger.info(message)
-                else:
-                    message = 'ProcessExtensionsGoalState failed [{0} {1} ms]\n{2}'.format(egs.id, duration, error)
-                    logger.error(message)
-                add_event(op=WALAEventOperation.ExtensionProcessing, is_success=(error is None), message=message, log_event=False, duration=duration)
+                gs = self.protocol.get_goal_state()
+                egs = gs.extensions_goal_state
+                self._gs_activity_id = egs.activity_id
 
-        except Exception as error:
-            msg = u"ProcessExtensionsInGoalState - Exception processing extension handlers:{0}".format(textutil.format_exception(error))
-            logger.error(msg)
-            add_event(op=WALAEventOperation.ExtensionProcessing, is_success=False, message=msg, log_event=False)
+
+                # self.ext_handlers needs to be initialized before returning, since status reporting depends on it; also
+                # we make a deep copy of the extensions, since changes are made to self.ext_handlers while processing the extensions
+                self.ext_handlers = copy.deepcopy(egs.extensions)
+
+                if self._extensions_on_hold():
+                    return
+
+                utc_start = datetime.datetime.now(UTC)
+                error = None
+                message = "ProcessExtensionsGoalState started [{0} channel: {1} source: {2} activity: {3} correlation {4} created: {5}]".format(
+                    egs.id, egs.channel, egs.source, egs.activity_id, egs.correlation_id, egs.created_on_timestamp)
+                logger.info('')
+                logger.info(message)
+                span.add_event(name="StartEvent", attributes={"message": message})
+                add_event(op=WALAEventOperation.ExtensionProcessing, message=message)
+
+                try:
+                    self.__process_and_handle_extensions(egs.svd_sequence_number, egs.id)
+                    self._cleanup_outdated_handlers()
+                except Exception as e:
+
+                    span.record_exception(e)
+                    error = u"Error processing extensions:{0}".format(textutil.format_exception(e))
+                finally:
+                    duration = elapsed_milliseconds(utc_start)
+                    if error is None:
+                        message = 'ProcessExtensionsGoalState completed [{0} {1} ms]\n'.format(egs.id, duration)
+                        logger.info(message)
+                    else:
+                        message = 'ProcessExtensionsGoalState failed [{0} {1} ms]\n{2}'.format(egs.id, duration, error)
+                        logger.error(message)
+                    span.add_event(name="EndEvent", attributes={"message": message, "duration_ms": duration})
+                    add_event(op=WALAEventOperation.ExtensionProcessing, is_success=(error is None), message=message, log_event=False, duration=duration)
+
+            except Exception as error:
+                msg = u"ProcessExtensionsInGoalState - Exception processing extension handlers:{0}".format(textutil.format_exception(error))
+                logger.error(msg)
+                span.record_exception(error)
+                add_event(op=WALAEventOperation.ExtensionProcessing, is_success=False, message=msg, log_event=False)
 
     def __get_unsupported_features(self):
         required_features = self.protocol.get_goal_state().extensions_goal_state.required_features

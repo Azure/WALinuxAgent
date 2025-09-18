@@ -24,3 +24,8 @@ azure-mgmt-network>=19.3.0
 azure-mgmt-resource>=15.0.0
 msrestazure
 pytz
+
+# Requirements for otel instrumentation
+opentelemetry-api~=1.23.0
+opentelemetry-sdk~=1.23.0
+opentelemetry-exporter-otlp-proto-grpc~=1.23.0
