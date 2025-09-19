@@ -12,4 +12,11 @@ tests:
 images:
   - "endorsed"
   - "endorsed-arm64"
+  -
+# The KeyVault and test VM need to be in the same region. The KeyVaults used by this test are in these regions.
+locations:
+  - "AzureCloud:westus2"
+  - "AzureUSGovernment:usgovarizona"
+  - "AzureChinaCloud:chinanorth2"
+
 owns_vm: true
