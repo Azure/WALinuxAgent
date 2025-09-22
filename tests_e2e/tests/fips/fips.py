@@ -185,15 +185,28 @@ class Fips(AgentVmTest):
 
         if random.choice([1, 2]) == 1:
             log.info("Adding a keyvault certificate to the osProfile to force a new PFX...")
+
+            certificates_by_cloud = {
+                'AzureCloud': {
+                    'source_vault': f"/subscriptions/{self._context.vm.subscription}/resourceGroups/waagent-tests/providers/Microsoft.KeyVault/vaults/waagenttests-canary",
+                    'certificate_url': 'https://waagenttests-canary.vault.azure.net/secrets/rsa/85d92c80443e44058cb034b2008e1e75'
+                },
+                'AzureUSGovernment': {
+                    'source_vault': f"/subscriptions/{self._context.vm.subscription}/resourceGroups/waagent-tests/providers/Microsoft.KeyVault/vaults/waagenttst-usdodcentral",
+                    'certificate_url': 'https://waagenttst-usdodcentral.vault.usgovcloudapi.net/secrets/rsa/2ba415fd15b148bc970c666ae9e1bff6'
+                },
+            }
+            certificate = certificates_by_cloud[self._context.vm.cloud]
+
             self._context.vm.update({
                 "properties": {
                     "osProfile": {
                         "secrets": [
                             {
                                 "sourceVault": {
-                                    "id": f"/subscriptions/{self._context.vm.subscription}/resourceGroups/waagent-tests/providers/Microsoft.KeyVault/vaults/waagenttests-canary"
+                                    "id": certificate["source_vault"],
                                 },
-                                "vaultCertificates": [{"certificateUrl": "https://waagenttests-canary.vault.azure.net/secrets/rsa/85d92c80443e44058cb034b2008e1e75"}]
+                                "vaultCertificates": [{"certificateUrl": certificate["certificate_url"]}],
                             }
                         ],
                     }
