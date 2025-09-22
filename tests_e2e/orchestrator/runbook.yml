@@ -45,7 +45,10 @@ variable:
       - agent_update
       - ext_cgroups
       - extensions_disabled
-      - ext_policy
+#
+# The GuestConfiguration extension is currently broken and causing these test to fail. Disable test for now while a better solution is investigated
+#
+#      - ext_policy
       - ext_policy_with_dependencies
       - ext_sequencing
       - ext_telemetry_pipeline
@@ -57,7 +60,10 @@ variable:
       - publish_hostname
       - recover_network_interface
       - log_collector
-      - ext_signature_validation
+#
+# The GuestConfiguration extension is currently broken and causing these test to fail. Disable test for now while a better solution is investigated
+#
+#      - ext_signature_validation
       - ext_update
 
   #
