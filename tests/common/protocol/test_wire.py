@@ -24,8 +24,7 @@ import time
 import unittest
 import uuid
 
-from azurelinuxagent.common.agent_supported_feature import SupportedFeatureNames, get_supported_feature_by_name, \
-    get_agent_supported_features_list_for_crp
+from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_crp, _MultiConfigFeature, _GAVersioningGovernanceFeature
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
@@ -369,7 +368,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
 
                     self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
                     self.assertIn("supportedFeatures", protocol.aggregate_status, "supported features not reported")
-                    multi_config_feature = get_supported_feature_by_name(SupportedFeatureNames.MultiConfig)
+                    multi_config_feature = _MultiConfigFeature()
                     found = False
                     for feature in protocol.aggregate_status['supportedFeatures']:
                         if feature['Key'] == multi_config_feature.name and feature['Value'] == multi_config_feature.version:
@@ -377,7 +376,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
                             break
                     self.assertTrue(found, "Multi-config name should be present in supportedFeatures")
 
-                    ga_versioning_feature = get_supported_feature_by_name(SupportedFeatureNames.GAVersioningGovernance)
+                    ga_versioning_feature = _GAVersioningGovernanceFeature()
                     found = False
                     for feature in protocol.aggregate_status['supportedFeatures']:
                         if feature['Key'] == ga_versioning_feature.name and feature['Value'] == ga_versioning_feature.version:
@@ -402,7 +401,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
                         return
 
                     # If there are other features available, confirm MultiConfig and GA versioning was not reported
-                    multi_config_feature = get_supported_feature_by_name(SupportedFeatureNames.MultiConfig)
+                    multi_config_feature = _MultiConfigFeature()
                     found = False
                     for feature in protocol.aggregate_status['supportedFeatures']:
                         if feature['Key'] == multi_config_feature.name and feature['Value'] == multi_config_feature.version:
@@ -410,7 +409,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
                             break
                     self.assertFalse(found, "Multi-config name should not be present in supportedFeatures")
 
-                    ga_versioning_feature = get_supported_feature_by_name(SupportedFeatureNames.GAVersioningGovernance)
+                    ga_versioning_feature = _GAVersioningGovernanceFeature()
                     found = False
                     for feature in protocol.aggregate_status['supportedFeatures']:
                         if feature['Key'] == ga_versioning_feature.name and feature['Value'] == ga_versioning_feature.version:

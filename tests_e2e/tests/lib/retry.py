@@ -80,6 +80,27 @@ def retry_if_false(operation: Callable[[], bool], attempts: int = 5, delay: int 
     return success
 
 
+def retry_if_true(operation: Callable[[], bool], attempts: int = 5, delay: int = 30) -> bool:
+    """
+    This method attempts the given operation retrying a few times if expected value is false but its true
+    (after a short delay)
+    Note: Method used for operations which are return True or False
+    """
+    success: bool = True
+    while attempts > 0 and success:
+        attempts -= 1
+        try:
+            success = operation()
+        except Exception as e:
+            log.warning("Error in operation: %s", e)
+            if attempts == 0:
+                raise
+        if success and attempts != 0:
+            log.info("Current operation failed, retrying in %s secs.", delay)
+            time.sleep(delay)
+    return success
+
+
 # R1710: Either all return statements in a function should return an expression, or none of them should. (inconsistent-return-statements)
 def retry(operation: Callable[[], Any], attempts: int = 5, delay: int = 30) -> Any:  # pylint: disable=inconsistent-return-statements
     """
