@@ -25,11 +25,14 @@ images:
 #
 locations:
   - "AzureCloud:eastus2euap"
-  # - "AzureUSGovernment:usdodcentral"
+  - "AzureUSGovernment:usdodcentral"
 
 skip_on_clouds:
   - "AzureChinaCloud"
-  - "AzureUSGovernment"
+
+skip_on_images:
+  - "AzureUSGovernment:ubuntu_pro_2204"
+  - "AzureUSGovernment:ubuntu_pro_fips_2204"
 
 # The test VM could be shared with other test suites, but we want to ensure there is a mix of FIPS and non-FIPS environments in the test run,
 # so we take ownership of the VM for this test suite.

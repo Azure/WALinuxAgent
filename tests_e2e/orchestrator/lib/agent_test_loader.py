@@ -176,16 +176,27 @@ class AgentTestLoader(object):
                 if image not in self.images:
                     raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {image} in images.yml or image from a shared gallery")
 
-            # If the suite specifies a cloud and it's location<cloud:location>, validate that location string is start with <cloud:> and then validate that the images it uses are available in that location
+            valid_clouds = ["AzureCloud", "AzureChinaCloud", "AzureUSGovernment"]
+
+            def split_on_cloud(value):
+                split = value.split(":")
+                if len(split) == 2:
+                    if split[0] not in valid_clouds:
+                        raise Exception(f"{value} does not contain a valid cloud: {split[0]}")
+                    return split
+                if len(split) == 1:
+                    return "", split[0]
+                raise Exception(f"{value} is not a valid value in the test configuration")
+
+            # If the test suite specifies any locations, validate that the images it uses are available in those locations
             for suite_location in suite.locations:
-                if suite_location.startswith(self.__cloud + ":"):
-                    suite_location = suite_location.split(":")[1]
-                else:
+                cloud, suite_location = split_on_cloud(suite_location)
+                if self.__cloud != cloud:
                     continue
                 for suite_image in suite.images:
                     suite_image = _parse_image(suite_image)
-                    # skip validation if suite image from gallery image
-                    if CustomImage._is_image_from_gallery(suite_image):
+                    # skip validation if suite image is a gallery image or is in 'skip_images'
+                    if CustomImage._is_image_from_gallery(suite_image) or f"{self.__cloud}:{suite_image}" in suite.skip_on_images:
                         continue
                     for image in self.images[suite_image]:
                         # If the image has a location restriction, validate that it is available on the location the suite must run on
@@ -196,11 +207,12 @@ class AgentTestLoader(object):
 
             # if the suite specifies skip clouds, validate that cloud used in our tests
             for suite_skip_cloud in suite.skip_on_clouds:
-                if suite_skip_cloud not in ["AzureCloud", "AzureChinaCloud", "AzureUSGovernment"]:
+                if suite_skip_cloud not in valid_clouds:
                     raise Exception(f"Invalid cloud {suite_skip_cloud} for in {suite.name}")
 
-            # if the suite specifies skip images, validate that images used in our tests
+            # if the suite specifies skip_on_images, validate that the images are valid
             for suite_skip_image in suite.skip_on_images:
+                _, suite_skip_image = split_on_cloud(suite_skip_image)
                 if suite_skip_image not in self.images:
                     raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {suite_skip_image} in images.yml")
 

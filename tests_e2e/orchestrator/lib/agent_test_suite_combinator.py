@@ -253,6 +253,12 @@ class AgentTestSuitesCombinator(Combinator):
 
         environments.extend(shared_environments.values())
 
+        if len(skip_test_suites) > 0:
+            self._log.info("Skipping test suites %s", skip_test_suites)
+
+        if len(skip_test_suites_images) > 0:
+            self._log.info("Skipping test suits run on images \n %s", '\n'.join([f"\t{skip}" for skip in skip_test_suites_images]))
+
         if len(environments) == 0:
             raise Exception("No VM images were found to execute the test suites.")
 
@@ -261,12 +267,6 @@ class AgentTestSuitesCombinator(Combinator):
         summary = [f"{e['c_env_name']}: [{format_suites(e['c_test_suites'])}]" for e in environments]
         summary.sort()
         self._log.info("Executing tests on %d environments\n\n%s\n", len(environments), '\n'.join([f"\t{s}" for s in summary]))
-
-        if len(skip_test_suites) > 0:
-            self._log.info("Skipping test suites %s", skip_test_suites)
-
-        if len(skip_test_suites_images) > 0:
-            self._log.info("Skipping test suits run on images \n %s", '\n'.join([f"\t{skip}" for skip in skip_test_suites_images]))
 
         return environments
 
@@ -497,8 +497,7 @@ class AgentTestSuitesCombinator(Combinator):
                 unique[i.urn] = i
         return [v for k, v in unique.items()]
 
-    @staticmethod
-    def _get_test_suite_skip_images(suite: TestSuiteInfo, loader: AgentTestLoader) -> List[VmImageInfo]:
+    def _get_test_suite_skip_images(self, suite: TestSuiteInfo, loader: AgentTestLoader) -> List[VmImageInfo]:
         """
         Returns images that need to be skipped by the suite.
 
@@ -506,6 +505,12 @@ class AgentTestSuitesCombinator(Combinator):
         """
         skip_unique: Dict[str, VmImageInfo] = {}
         for image in suite.skip_on_images:
+            cloud = ""
+            split = image.split(':')
+            if len(split) == 2:
+                cloud, image = split
+            if self.runbook.cloud != cloud:
+                continue
             image_list = loader.images[image]
             for i in image_list:
                 skip_unique[i.urn] = i
