@@ -19,10 +19,6 @@ images:
 #
 # Support for FIPS 140-3 is currently deployed only to a few regions.
 #
-# The Ubuntu images are not available on AzureChinaCloud and AzureUSGovernment, so they are skipped. The RHEL image is available on those
-# clouds and FIPS 140-3 is already enabled on AzureUSGovernment:usdodcentral. Allowing the test to run on AzureUSGovernment using RHEL
-# requires changes in the test infrastructure, so it is disabled for now.
-#
 locations:
   - "AzureCloud:eastus2euap"
   - "AzureUSGovernment:usdodcentral"
