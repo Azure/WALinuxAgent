@@ -166,6 +166,8 @@ class AgentTestLoader(object):
                 return match.group('image_set')
             return image
 
+        valid_clouds = ["AzureCloud", "AzureChinaCloud", "AzureUSGovernment"]
+
         for suite in self.test_suites:
             # Validate that the images the suite must run on are in images.yml
             for image in suite.images:
@@ -175,8 +177,6 @@ class AgentTestLoader(object):
                     continue
                 if image not in self.images:
                     raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {image} in images.yml or image from a shared gallery")
-
-            valid_clouds = ["AzureCloud", "AzureChinaCloud", "AzureUSGovernment"]
 
             def split_on_cloud(value):
                 split = value.split(":")
