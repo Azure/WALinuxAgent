@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Type
 
 import tests_e2e
+from tests_e2e.tests.lib.azure_clouds import AZURE_CLOUDS
 from tests_e2e.tests.lib.agent_test import AgentTest, AgentVmTest, AgentVmssTest
 
 
@@ -166,8 +167,6 @@ class AgentTestLoader(object):
                 return match.group('image_set')
             return image
 
-        valid_clouds = ["AzureCloud", "AzureChinaCloud", "AzureUSGovernment"]
-
         for suite in self.test_suites:
             # Validate that the images the suite must run on are in images.yml
             for image in suite.images:
@@ -181,7 +180,7 @@ class AgentTestLoader(object):
             def split_on_cloud(value):
                 split = value.split(":")
                 if len(split) == 2:
-                    if split[0] not in valid_clouds:
+                    if split[0] not in AZURE_CLOUDS:
                         raise Exception(f"{value} does not contain a valid cloud: {split[0]}")
                     return split
                 if len(split) == 1:
@@ -191,12 +190,12 @@ class AgentTestLoader(object):
             # If the test suite specifies any locations, validate that the images it uses are available in those locations
             for suite_location in suite.locations:
                 cloud, suite_location = split_on_cloud(suite_location)
-                if self.__cloud != cloud:
+                if cloud != "" and cloud != self.__cloud:
                     continue
                 for suite_image in suite.images:
                     suite_image = _parse_image(suite_image)
                     # skip validation if suite image is a gallery image or is in 'skip_images'
-                    if CustomImage._is_image_from_gallery(suite_image) or f"{self.__cloud}:{suite_image}" in suite.skip_on_images:
+                    if CustomImage._is_image_from_gallery(suite_image) or suite_image in suite.skip_on_images or f"{self.__cloud}:{suite_image}" in suite.skip_on_images:
                         continue
                     for image in self.images[suite_image]:
                         # If the image has a location restriction, validate that it is available on the location the suite must run on
@@ -207,7 +206,7 @@ class AgentTestLoader(object):
 
             # if the suite specifies skip clouds, validate that cloud used in our tests
             for suite_skip_cloud in suite.skip_on_clouds:
-                if suite_skip_cloud not in valid_clouds:
+                if suite_skip_cloud not in AZURE_CLOUDS:
                     raise Exception(f"Invalid cloud {suite_skip_cloud} for in {suite.name}")
 
             # if the suite specifies skip_on_images, validate that the images are valid

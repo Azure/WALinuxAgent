@@ -509,7 +509,7 @@ class AgentTestSuitesCombinator(Combinator):
             split = image.split(':')
             if len(split) == 2:
                 cloud, image = split
-            if self.runbook.cloud != cloud:
+            if cloud != "" and cloud != self.runbook.cloud:
                 continue
             image_list = loader.images[image]
             for i in image_list:

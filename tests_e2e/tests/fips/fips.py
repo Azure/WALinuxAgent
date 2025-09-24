@@ -192,8 +192,8 @@ class Fips(AgentVmTest):
                     'certificate_url': 'https://waagenttests-canary.vault.azure.net/secrets/rsa/85d92c80443e44058cb034b2008e1e75'
                 },
                 'AzureUSGovernment': {
-                    'source_vault': f"/subscriptions/{self._context.vm.subscription}/resourceGroups/waagent-tests/providers/Microsoft.KeyVault/vaults/waagenttst-usdodcentral",
-                    'certificate_url': 'https://waagenttst-usdodcentral.vault.usgovcloudapi.net/secrets/rsa/2ba415fd15b148bc970c666ae9e1bff6'
+                    'source_vault': f"/subscriptions/{self._context.vm.subscription}/resourceGroups/waagent-tests/providers/Microsoft.KeyVault/vaults/waagenttests",
+                    'certificate_url': 'https://waagenttests.vault.usgovcloudapi.net/secrets/rsa-cert/100dd15190f2485fa200ab948afc1d2e'
                 },
             }
             certificate = certificates_by_cloud[self._context.vm.cloud]
@@ -260,28 +260,36 @@ class Fips(AgentVmTest):
             {
                 'message': 'Error fetching the goal state certificates: Cannot convert PFX to PEM',
                 'if': lambda r: r.level == "ERROR"
-            }
-        ]
-        #
-        # The current Daemon on RHEL_95 tries to fetch the certificates during initialization and has not been updated to support FIPS 140-3
-        #
-        #		2025-07-31T19:06:59.878313Z ERROR Daemon Daemon Failed to decrypt /var/lib/waagent/Certificates.p7m (return code: 1)
-        #
-        # 		[stdout]
-        #
-        # 		[stderr]
-        # 		Error decrypting CMS structure
-        # 		00DED7E6A77F0000:error:0308010C:digital envelope routines:inner_evp_generic_fetch:unsupported:crypto/evp/evp_fetch.c:355:Global default library context, Algorithm (DES-EDE3-CBC : 65), Properties ()
-        # 		00DED7E6A77F0000:error:17000065:CMS routines:ossl_cms_EncryptedContent_init_bio:cipher initialisation error:crypto/cms/cms_enc.c:79:
-        # 		2025-07-31T19:07:06.309758Z ERROR Daemon Daemon Failed to decrypt /var/lib/waagent/Certificates.p7m (return code: 1)
-        # 		[stdout]
-        #
-        if self._distro == 'rhel_95':
-            ignore_rules.append({
+            },
+            #
+            # The current Daemon on RHEL_95 tries to fetch the certificates during initialization and has not been updated to support FIPS 140-3
+            #
+            #		2025-07-31T19:06:59.878313Z ERROR Daemon Daemon Failed to decrypt /var/lib/waagent/Certificates.p7m (return code: 1)
+            #
+            # 		[stdout]
+            #
+            # 		[stderr]
+            # 		Error decrypting CMS structure
+            # 		00DED7E6A77F0000:error:0308010C:digital envelope routines:inner_evp_generic_fetch:unsupported:crypto/evp/evp_fetch.c:355:Global default library context, Algorithm (DES-EDE3-CBC : 65), Properties ()
+            # 		00DED7E6A77F0000:error:17000065:CMS routines:ossl_cms_EncryptedContent_init_bio:cipher initialisation error:crypto/cms/cms_enc.c:79:
+            # 		2025-07-31T19:07:06.309758Z ERROR Daemon Daemon Failed to decrypt /var/lib/waagent/Certificates.p7m (return code: 1)
+            # 		[stdout]
+            #
+            {
                 'message': 'Failed to decrypt /var/lib/waagent/Certificates.p7m',
-                'if': lambda r: r.prefix == "Daemon"
-
-            })
+                'if': lambda r: self._distro == 'rhel_95' and r.prefix == "Daemon"
+            },
+            #
+            # There are several extensions that are installed by policy, which is executed asynchronously to the test. If these extensions are installed before a new PFX has been generated, the Agent may issue those warnings, and the extensions may fail.
+            #
+            # 2025-09-24T14:40:48.206696Z WARNING ExtHandler ExtHandler The extensions goal state is out of sync with the tenant cert. Certificate 5650EDBE9A71E45E60A664A910F9B130811B8868, needed by Microsoft.GuestConfiguration.ConfigurationforLinux, is missing.
+            # 2025-09-24T14:40:48.207290Z WARNING ExtHandler ExtHandler The extensions are still out of sync with the tenant cert. Will continue execution, but some extensions may fail.
+            #
+            {
+                'message': r"(The extensions goal state is out of sync with the tenant cert|The extensions are still out of sync with the tenant cert. Will continue execution, but some extensions may fail)",
+                'if': lambda r: r.level == 'WARNING'
+            },
+        ]
 
         return ignore_rules
 
