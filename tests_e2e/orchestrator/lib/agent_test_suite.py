@@ -31,14 +31,13 @@ from typing import Any, Dict, List, Tuple
 from lisa import (  # pylint: disable=E0401
     Environment,
     Logger,
-    notifier,
     simple_requirement,
     TestCaseMetadata,
     TestSuite as LisaTestSuite,
     TestSuiteMetadata,
 )
 from lisa.environment import EnvironmentStatus  # pylint: disable=E0401
-from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
+from lisa.messages import TestStatus  # pylint: disable=E0401
 from lisa.node import LocalNode, Nodes  # pylint: disable=E0401
 from lisa.util.constants import RUN_ID  # pylint: disable=E0401
 from lisa.sut_orchestrator.azure.common import get_node_context  # pylint: disable=E0401
@@ -54,6 +53,7 @@ from tests_e2e.tests.lib.virtual_machine_scale_set_client import VirtualMachineS
 
 import tests_e2e
 from tests_e2e.orchestrator.lib.agent_test_loader import TestSuiteInfo
+from tests_e2e.orchestrator.lib.agent_test_result import AgentTestResult
 from tests_e2e.tests.lib.agent_log import AgentLog, AgentLogRecord
 from tests_e2e.tests.lib.agent_test import TestSkipped, RemoteTestError
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext, AgentVmTestContext, AgentVmssTestContext
@@ -612,7 +612,7 @@ class AgentTestSuite(LisaTestSuite):
                     # Report the error and raise an exception to let LISA know that the test errored out.
                     unexpected_error = True
                     log.exception("UNEXPECTED ERROR.")
-                    self._report_test_result(
+                    AgentTestResult.report(
                         self._environment_name,
                         "Unexpected Error",
                         TestStatus.FAILED,
@@ -672,31 +672,31 @@ class AgentTestSuite(LisaTestSuite):
                             summary.append(f"[Passed]  {test.name}")
                             log.info("******** [Passed] %s", test.name)
                             self._lisa_log.info("[Passed] %s", test_full_name)
-                            self._report_test_result(suite_full_name, test.name, TestStatus.PASSED, test_start_time)
+                            AgentTestResult.report(suite_full_name, test.name, TestStatus.PASSED, test_start_time)
                         except TestSkipped as e:
                             summary.append(f"[Skipped] {test.name}")
                             log.info("******** [Skipped] %s: %s", test.name, e)
                             self._lisa_log.info("******** [Skipped] %s", test_full_name)
-                            self._report_test_result(suite_full_name, test.name, TestStatus.SKIPPED, test_start_time, message=str(e))
+                            AgentTestResult.report(suite_full_name, test.name, TestStatus.SKIPPED, test_start_time, message=str(e))
                         except AssertionError as e:
                             test_success = False
                             summary.append(f"[Failed]  {test.name}")
                             log.error("******** [Failed] %s: %s", test.name, e)
                             self._lisa_log.error("******** [Failed] %s", test_full_name)
-                            self._report_test_result(suite_full_name, test.name, TestStatus.FAILED, test_start_time, message=str(e))
+                            AgentTestResult.report(suite_full_name, test.name, TestStatus.FAILED, test_start_time, message=str(e))
                         except RemoteTestError as e:
                             test_success = False
                             summary.append(f"[Failed]  {test.name}")
                             message = f"UNEXPECTED ERROR IN [{e.command}] {e.stderr}\n{e.stdout}"
                             log.error("******** [Failed] %s: %s", test.name, message)
                             self._lisa_log.error("******** [Failed] %s", test_full_name)
-                            self._report_test_result(suite_full_name, test.name, TestStatus.FAILED, test_start_time, message=str(message))
+                            AgentTestResult.report(suite_full_name, test.name, TestStatus.FAILED, test_start_time, message=str(message))
                         except:  # pylint: disable=bare-except
                             test_success = False
                             summary.append(f"[Error]   {test.name}")
                             log.exception("UNEXPECTED ERROR IN %s", test.name)
                             self._lisa_log.exception("UNEXPECTED ERROR IN %s", test_full_name)
-                            self._report_test_result(suite_full_name, test.name, TestStatus.FAILED, test_start_time, message="Unexpected error.", add_exception_stack_trace=True)
+                            AgentTestResult.report(suite_full_name, test.name, TestStatus.FAILED, test_start_time, message="Unexpected error.", add_exception_stack_trace=True)
 
                         log.info("")
 
@@ -723,7 +723,7 @@ class AgentTestSuite(LisaTestSuite):
 
                 except Exception as e:
                     suite_success = False
-                    self._report_test_result(suite_full_name, suite_name, TestStatus.FAILED, suite_start_time, message=f"Unhandled exception while executing test suite {suite_name}: {e}", add_exception_stack_trace=True)
+                    AgentTestResult.report(suite_full_name, suite_name, TestStatus.FAILED, suite_start_time, message=f"Unhandled exception while executing test suite {suite_name}: {e}", add_exception_stack_trace=True)
                 finally:
                     if not suite_success:
                         self._mark_log_as_failed()
@@ -773,7 +773,7 @@ class AgentTestSuite(LisaTestSuite):
                     self._mark_log_as_failed()
                     success = False
 
-                    self._report_test_result(
+                    AgentTestResult.report(
                         test_result_name,
                         "CheckAgentLog",
                         TestStatus.FAILED,
@@ -782,7 +782,7 @@ class AgentTestSuite(LisaTestSuite):
             except:    # pylint: disable=bare-except
                 log.exception("Error checking agent log on %s", node_name)
                 success = False
-                self._report_test_result(
+                AgentTestResult.report(
                     test_result_name,
                     "CheckAgentLog",
                     TestStatus.FAILED,
@@ -855,41 +855,6 @@ class AgentTestSuite(LisaTestSuite):
         Adds a message to indicate the log contains errors.
         """
         log.info("MARKER-LOG-WITH-ERRORS")
-
-    @staticmethod
-    def _report_test_result(
-            suite_name: str,
-            test_name: str,
-            status: TestStatus,
-            start_time: datetime.datetime,
-            message: str = "",
-            add_exception_stack_trace: bool = False
-    ) -> None:
-        """
-        Reports a test result to the junit notifier
-        """
-        # The junit notifier requires an initial RUNNING message in order to register the test in its internal cache.
-        msg: TestResultMessage = TestResultMessage()
-        msg.type = "AgentTestResultMessage"
-        msg.id_ = str(uuid.uuid4())
-        msg.status = TestStatus.RUNNING
-        msg.suite_full_name = suite_name
-        msg.suite_name = msg.suite_full_name
-        msg.full_name = test_name
-        msg.name = msg.full_name
-        msg.elapsed = 0
-
-        notifier.notify(msg)
-
-        # Now send the actual result. The notifier pipeline makes a deep copy of the message so it is OK to re-use the
-        # same object and just update a few fields. If using a different object, be sure that the "id_" is the same.
-        msg.status = status
-        msg.message = message
-        if add_exception_stack_trace:
-            msg.stacktrace = traceback.format_exc()
-        msg.elapsed = (datetime.datetime.now(UTC) - start_time).total_seconds()
-
-        notifier.notify(msg)
 
     def _create_test_scale_set(self) -> None:
         """
