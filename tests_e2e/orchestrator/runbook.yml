@@ -45,7 +45,10 @@ variable:
       - agent_update
       - ext_cgroups
       - extensions_disabled
-      - ext_policy
+#
+# The GuestConfiguration extension is currently broken and causing these test to fail. Disable test for now while a better solution is investigated
+#
+#      - ext_policy
       - ext_policy_with_dependencies
       - ext_sequencing
       - ext_telemetry_pipeline
@@ -56,9 +59,11 @@ variable:
       - no_outbound_connections
       - publish_hostname
       - recover_network_interface
-      - cgroup_v2_enabled
       - log_collector
-      - ext_signature_validation
+#
+# The GuestConfiguration extension is currently broken and causing these test to fail. Disable test for now while a better solution is investigated
+#
+#      - ext_signature_validation
       - ext_update
 
   #
@@ -68,6 +73,7 @@ variable:
     value: ""
     is_case_visible: true
 
+  #
   # Parameters used to create test VMs
   #
   - name: subscription_id
@@ -82,6 +88,8 @@ variable:
     value: ""
   - name: vm_size
     value: ""
+  - name: vm_provisioning_timeout
+    value: 900
 
   #
   # Whether to skip deletion of the test VMs after the test run completes.
@@ -233,6 +241,7 @@ combinator:
   user: $(user)
   vm_name: $(vm_name)
   vm_size: $(vm_size)
+  vm_provisioning_timeout: $(vm_provisioning_timeout)
   vmss_name: $(vmss_name)
 
 concurrency: 32

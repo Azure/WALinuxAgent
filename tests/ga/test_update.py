@@ -1198,7 +1198,7 @@ class TestUpdate(UpdateTestCase):
                                         "updateStatus should be in status blob. Warns: {0}".format(patch_warn.call_args_list))
                         update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
                         self.assertEqual(VMAgentUpdateStatuses.Error, update_status['status'], "Status should be an error")
-                        self.assertEqual(update_status['expectedVersion'], "9.9.9.999", "incorrect version reported")
+                        self.assertEqual(update_status['expectedVersion'], str(CURRENT_VERSION), "incorrect version reported")
                         self.assertEqual(update_status['code'], 1, "incorrect code reported")
 
     def test_it_should_wait_to_fetch_first_goal_state(self):
@@ -1790,31 +1790,53 @@ class TestAgentUpgrade(UpdateTestCase):
             self.__assert_exit_code_successful(update_handler)
             self.__assert_upgrade_telemetry_emitted(mock_telemetry, version="9.9.9.10")
 
-    @skip_if_predicate_true(lambda: True, "Enable this test when rsm downgrade scenario fixed")
     def test_it_should_mark_current_agent_as_bad_version_on_downgrade(self):
-        # Create Agent directory for current agent
+        no_of_iterations = 100
+        downgrade_version = "2.5.0"
+
         self.prepare_agents(count=1)
         self.assertTrue(os.path.exists(self.agent_dir(CURRENT_VERSION)))
         self.assertFalse(next(agent for agent in self.agents() if agent.version == CURRENT_VERSION).is_blacklisted,
                          "The current agent should not be blacklisted")
-        downgraded_version = "2.5.0"
+
+        def reload_conf(url, protocol):
+            mock_wire_data = protocol.mock_wire_data
+
+            # This function reloads the conf mid-run to mimic an actual customer scenario
+            if HttpRequestPredicates.is_goal_state_request(url) and mock_wire_data.call_counts[
+             "goalstate"] >= 10 and mock_wire_data.call_counts["goalstate"] < 15:
+
+                # Ensure we didn't try to download any agents except during the incarnation change
+                self.__assert_agent_directories_available(versions=[str(CURRENT_VERSION)])
+
+                # mimic the rsm downgrade request
+                mock_wire_data.data_files["ext_conf"] = "wire/ext_conf_downgrade_rsm_version.xml"
+                data_file['ga_manifest'] = "wire/ga_manifest.xml"
+                mock_wire_data.reload()
+                self._add_write_permission_to_goal_state_files()
+                mock_wire_data.set_incarnation(2)
+                mock_wire_data.set_version_in_agent_family(downgrade_version)
+                mock_wire_data.set_from_version_in_agent_family(str(CURRENT_VERSION))
+
+        reload_conf.call_count = 0
 
         data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
-        with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
-            update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgraded_version)
-            update_handler._protocol.mock_wire_data.set_incarnation(2)
+        with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf) as (update_handler, mock_telemetry):
+            # Set to current version to ensure no upgrade happens initially
+            update_handler._protocol.mock_wire_data.set_version_in_agent_family(str(CURRENT_VERSION))
+            update_handler._protocol.mock_wire_data.set_incarnation(20)
             update_handler.run(debug=True)
 
             self.__assert_exit_code_successful(update_handler)
             self.__assert_upgrade_telemetry_emitted(mock_telemetry, upgrade=False,
-                                                                          version=downgraded_version)
+                                                                          version=downgrade_version)
             current_agent = next(agent for agent in self.agents() if agent.version == CURRENT_VERSION)
             self.assertTrue(current_agent.is_blacklisted, "The current agent should be blacklisted")
             self.assertEqual(current_agent.error.reason, "Marking the agent {0} as bad version since a downgrade was requested in the GoalState, "
                                                          "suggesting that we really don't want to execute any extensions using this version".format(CURRENT_VERSION),
                              "Invalid reason specified for blacklisting agent")
-            self.__assert_agent_directories_exist_and_others_dont_exist(versions=[downgraded_version, str(CURRENT_VERSION)])
+            self.__assert_agent_directories_exist_and_others_dont_exist(versions=[downgrade_version, str(CURRENT_VERSION)])
 
     def test_it_should_do_self_update_if_vm_opt_out_rsm_upgrades_later(self):
         no_of_iterations = 100

@@ -9,3 +9,5 @@ tests:
   - "agent_cgroups/agent_cgroups_process_check.py"
 images: "cgroups-endorsed"
 owns_vm: true
+skip_on_images: # AMA extension used in agent_cgroups_process_check, and it is not supported on these images
+  - "rhel_95_arm64"

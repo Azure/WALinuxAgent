@@ -29,6 +29,7 @@
         {
             "name": "Prod",
             "version": "9.9.9.9",
+            "fromVersion": "9.9.9.9",
             "isVersionFromRSM": true,
             "isVMEnabledForRSMUpgrades": true,
             "uris": [
@@ -39,6 +40,7 @@
         {
             "name": "Test",
             "version": "9.9.9.9",
+            "fromVersion": "9.9.9.9",
             "isVersionFromRSM": true,
             "isVMEnabledForRSMUpgrades": true,
             "uris": [

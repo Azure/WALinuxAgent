@@ -33,7 +33,6 @@ echo "========== Python info"
 python=$(get-agent-python)
 echo "Python executable: $python"
 echo "Python version: $($python --version)"
-
 #
 # Install Pypy as ~/bin/pypy3
 #

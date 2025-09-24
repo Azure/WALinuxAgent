@@ -19,6 +19,7 @@
 # This module includes facilities to execute VM extension runcommand operations (enable, remove, etc).
 #
 import json
+from time import sleep
 from typing import Any, Dict, Callable
 from assertpy import soft_assertions, assert_that
 
@@ -111,7 +112,16 @@ class VirtualMachineRunCommandClient(AzureSdkClient):
         If 'assert_function' is provided, it is invoked passing as parameter the instance view. This function can be used to perform
         additional validations.
         """
+        # Sometimes we get incomplete instance view with 'Pending' executationState. Retry attempt to get instance
+        # view if executionState is 'Pending'.
+        attempt = 1
         instance_view = self.get_instance_view()
+        while instance_view.execution_state == 'Pending' and attempt < 3:
+            log.info("Instance view is incomplete [execution_state == Pending]: %s\nRetrying attempt to get instance view...",
+                     instance_view.serialize())
+            sleep(10)
+            instance_view = self.get_instance_view()
+            attempt += 1
         log.info("Instance view:\n%s", json.dumps(instance_view.serialize(), indent=4))
 
         with soft_assertions():

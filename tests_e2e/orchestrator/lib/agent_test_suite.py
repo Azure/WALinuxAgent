@@ -189,8 +189,6 @@ class AgentTestSuite(LisaTestSuite):
         self._test_agent_package_path = self._working_directory/"eggs"/f"WALinuxAgent-{AGENT_VERSION}.zip"
         self._test_source_directory = Path(tests_e2e.__path__[0])
         self._test_tools_tarball_path = self._working_directory/"waagent-tools.tar"
-        self._pypy_x64_path = Path("/tmp/pypy3.7-x64.tar.bz2")
-        self._pypy_arm64_path = Path("/tmp/pypy3.7-arm64.tar.bz2")
 
         self._runbook_name = variables["name"]
 
@@ -345,18 +343,6 @@ class AgentTestSuite(LisaTestSuite):
             if not self._test_agent_package_path.exists():  # the target path is created by makepkg, ensure we are using the correct value
                 raise Exception(f"The test Agent package was not created at the expected path {self._test_agent_package_path}")
 
-            #
-            # Ensure that Pypy (both x64 and ARM) has been downloaded to the local machine; it is pre-downloaded to /tmp on
-            # the container image used for Azure Pipelines runs, but for developer runs it may need to be downloaded.
-            #
-            for pypy in [self._pypy_x64_path, self._pypy_arm64_path]:
-                if pypy.exists():
-                    log.info("Found Pypy at %s", pypy)
-                else:
-                    pypy_download = f"https://dcrdata.blob.core.windows.net/python/{pypy.name}"
-                    self._lisa_log.info("Downloading %s to %s", pypy_download, pypy)
-                    log.info("Downloading %s to %s", pypy_download, pypy)
-                    run_command(["wget", pypy_download, "-O",  pypy])
 
             #
             # Create a tarball with the tools we need to copy to the test node. The tarball includes two directories:
@@ -442,21 +428,15 @@ class AgentTestSuite(LisaTestSuite):
             ssh_client.run_command("rm -rvf ~/{bin,lib,tmp}", use_sudo=True)
 
             #
-            # Copy Pypy, the test Agent, and the test tools to the test node
+            # Copy the test Agent, and the test tools to the test node
             #
             ssh_client = SshClient(ip_address=node.ip_address, username=self._user, identity_file=Path(self._identity_file))
-            if ssh_client.get_architecture() == "aarch64":
-                pypy_path = self._pypy_arm64_path
-            else:
-                pypy_path = self._pypy_x64_path
             target_path = Path("~")/"tmp"
             ssh_client.run_command(f"mkdir {target_path}")
             log.info("Copying %s to %s:%s", self._test_agent_package_path, node.name, target_path)
             ssh_client.copy_to_node(self._test_agent_package_path, target_path)
             log.info("Copying %s to %s:%s", self._test_tools_tarball_path, node.name, target_path)
             ssh_client.copy_to_node(self._test_tools_tarball_path, target_path)
-            log.info("Copying %s to %s:%s", pypy_path, node.name, target_path)
-            ssh_client.copy_to_node(pypy_path, target_path)
 
             #
             # Extract the tarball with the test tools. The tarball includes two directories:
@@ -468,9 +448,36 @@ class AgentTestSuite(LisaTestSuite):
             #
             # Note that executables are placed directly under 'bin', while the path for Python modules is preserved under 'lib.
             #
+            log.info("Extracting %s on the test node", self._test_tools_tarball_path)
+            command = f"tar xvf {target_path/self._test_tools_tarball_path.name}"
+            try:
+                log.info("Remote command [%s] completed:\n%s", command, ssh_client.run_command(command))
+            except CommandError as e:
+                # Some distros do not have tar installed by default. Install it if needed.
+                if "tar: command not found" in e.stderr:
+                    log.info("Failed to extract waagent-tools.tar on the test node because tar is not installed. Installing tar...")
+                    ssh_client.run_command("dnf -y install tar", use_sudo=True)     # Alma 8 is the only image without tar by default, so using dnf. If needed, we can add logic to use other package managers as needed.
+                    log.info("Retrying extracting %s on the test node after installing tar", self._test_tools_tarball_path)
+                    log.info("Remote command [%s] completed:\n%s", command, ssh_client.run_command(command))
+                else:
+                    raise
+
+            try:
+                log.info("Downloading Pypy in %s", node.name)
+                log.info(ssh_client.run_command(f"~/bin/download-pypy {self._cloud}"))
+            except Exception as error:
+                log.info("Failed to download Pypy in the test vm and now, will attempt copy from orchestrator:\n%s", error)
+                base_path = Path("/tmp")
+                if ssh_client.get_architecture() == "aarch64":
+                    pypy_name = "pypy3.7-arm64.tar.bz2"
+                else:
+                    pypy_name = "pypy3.7-x64.tar.bz2"
+                pypy_path = Path(base_path)/pypy_name
+                log.info("Copying %s to %s:%s", {pypy_path}, node.name, target_path)
+                ssh_client.copy_to_node(pypy_path, target_path)
+
             log.info('Installing tools on the test node')
-            command = f"tar xvf {target_path/self._test_tools_tarball_path.name} && ~/bin/install-tools"
-            log.info("Remote command [%s] completed:\n%s", command, ssh_client.run_command(command))
+            log.info(ssh_client.run_command("~/bin/install-tools"))
 
             # Update waagent.conf on test node
             log.info("Updating conf file on test node: setting 'Debug.EnableSignatureValidation' to true")

@@ -171,6 +171,7 @@ class AgentPublishTest(AgentVmTest):
         log.info("Installing %s", custom_script_2_1)
         message = f"Hello {uuid.uuid4()}!"
         custom_script_2_1.enable(
+            settings={},
             protected_settings={
                 'commandToExecute': f"echo \'{message}\'"
             },

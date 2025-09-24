@@ -73,6 +73,7 @@ class Fips(AgentVmTest):
         log.info("Executing %s using protected settings to verify they can be decrypted when FIPS 140-3 is enabled.", custom_script)
         message = f"Hello {uuid.uuid4()}!"
         custom_script.enable(
+            settings={},
             protected_settings={
                 'commandToExecute': f"echo \'{message}\'"
             }
@@ -184,15 +185,28 @@ class Fips(AgentVmTest):
 
         if random.choice([1, 2]) == 1:
             log.info("Adding a keyvault certificate to the osProfile to force a new PFX...")
+
+            certificates_by_cloud = {
+                'AzureCloud': {
+                    'source_vault': f"/subscriptions/{self._context.vm.subscription}/resourceGroups/waagent-tests/providers/Microsoft.KeyVault/vaults/waagenttests-canary",
+                    'certificate_url': 'https://waagenttests-canary.vault.azure.net/secrets/rsa/85d92c80443e44058cb034b2008e1e75'
+                },
+                'AzureUSGovernment': {
+                    'source_vault': f"/subscriptions/{self._context.vm.subscription}/resourceGroups/waagent-tests/providers/Microsoft.KeyVault/vaults/waagenttst-usdodcentral",
+                    'certificate_url': 'https://waagenttst-usdodcentral.vault.usgovcloudapi.net/secrets/rsa/2ba415fd15b148bc970c666ae9e1bff6'
+                },
+            }
+            certificate = certificates_by_cloud[self._context.vm.cloud]
+
             self._context.vm.update({
                 "properties": {
                     "osProfile": {
                         "secrets": [
                             {
                                 "sourceVault": {
-                                    "id": f"/subscriptions/{self._context.vm.subscription}/resourceGroups/waagent-tests/providers/Microsoft.KeyVault/vaults/waagenttests-canary"
+                                    "id": certificate["source_vault"],
                                 },
-                                "vaultCertificates": [{"certificateUrl": "https://waagenttests-canary.vault.azure.net/secrets/rsa/85d92c80443e44058cb034b2008e1e75"}]
+                                "vaultCertificates": [{"certificateUrl": certificate["certificate_url"]}],
                             }
                         ],
                     }
@@ -207,6 +221,10 @@ class Fips(AgentVmTest):
                 # state. The reason is that, even if it cannot decrypt the response from the WireServer, 2.7.0.6 assumes that Certificates.pem always exists; if it does not, it goes
                 # into an infinite retry loop. To prevent this, before deallocating and reallocating, ensure that there is a Certificates.pem file, even if it is empty.
                 #
+                # The agent may remove the new file if it fetches the goal state certificate (after the VM restart in the previous step) and fails to decrypt it while we create the file below.
+                # Therefore, stop the agent service to prevent it from removing the file.
+                output = self._ssh_client.run_command('agent-service stop', use_sudo=True)
+                log.info(output)
                 pem_file = '/var/lib/waagent/Certificates.pem'
                 log.info("Ensuring that %s exists...", pem_file)
                 self._ssh_client.run_command(f"touch {pem_file}", use_sudo=True)
