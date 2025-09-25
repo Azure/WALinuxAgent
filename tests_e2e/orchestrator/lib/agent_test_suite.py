@@ -18,8 +18,6 @@ import datetime
 import json
 import logging
 import time
-import traceback
-import uuid
 
 from pathlib import Path
 from threading import RLock
