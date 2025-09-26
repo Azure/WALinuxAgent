@@ -506,8 +506,7 @@ class AgentTestSuitesCombinator(Combinator):
                 unique[i.urn] = i
         return [v for k, v in unique.items()]
 
-    @staticmethod
-    def _get_test_suite_skip_images(suite: TestSuiteInfo, loader: AgentTestLoader) -> List[VmImageInfo]:
+    def _get_test_suite_skip_images(self, suite: TestSuiteInfo, loader: AgentTestLoader) -> List[VmImageInfo]:
         """
         Returns images that need to be skipped by the suite.
 
@@ -515,6 +514,12 @@ class AgentTestSuitesCombinator(Combinator):
         """
         skip_unique: Dict[str, VmImageInfo] = {}
         for image in suite.skip_on_images:
+            cloud = ""
+            split = image.split(':')
+            if len(split) == 2:
+                cloud, image = split
+            if cloud != "" and cloud != self.runbook.cloud:
+                continue
             image_list = loader.images[image]
             for i in image_list:
                 skip_unique[i.urn] = i
