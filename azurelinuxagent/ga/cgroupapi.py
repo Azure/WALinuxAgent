@@ -69,7 +69,8 @@ class CGroupUtil(object):
         return (distro_name.lower() == 'ubuntu' and distro_version.major >= 16) or \
             (distro_name.lower() in ('centos', 'redhat') and distro_version.major == 8) or \
             (distro_name.lower() == 'rhel' and distro_version.major == 9) or \
-            (distro_name.lower() == 'azurelinux' and distro_version.major == 3)
+            (distro_name.lower() == 'azurelinux' and distro_version.major == 3) or \
+            distro_name.lower() == 'chainguard'
 
     @staticmethod
     def get_extension_slice_name(extension_name, old_slice=False):
