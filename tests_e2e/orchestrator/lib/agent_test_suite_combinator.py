@@ -1,12 +1,15 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
+import datetime
 import logging
 import random
 import re
 import urllib.parse
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional, Tuple, Type
+
+from azurelinuxagent.common.future import UTC
 
 # E0401: Unable to import 'dataclasses_json' (import-error)
 from dataclasses_json import dataclass_json  # pylint: disable=E0401
@@ -16,9 +19,11 @@ from dataclasses_json import dataclass_json  # pylint: disable=E0401
 #     etc
 from lisa import schema  # pylint: disable=E0401
 from lisa.combinator import Combinator  # pylint: disable=E0401
+from lisa.messages import TestStatus  # pylint: disable=E0401
 from lisa.util import field_metadata  # pylint: disable=E0401
 
 from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, VmImageInfo, TestSuiteInfo, CustomImage
+from tests_e2e.orchestrator.lib.agent_test_result import AgentTestResult
 from tests_e2e.tests.lib.logging import set_thread_name
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 from tests_e2e.tests.lib.virtual_machine_scale_set_client import VirtualMachineScaleSetClient
@@ -150,7 +155,7 @@ class AgentTestSuitesCombinator(Combinator):
         runbook_images = self._get_runbook_images(loader)
 
         skip_test_suites: List[str] = []
-        skip_test_suites_images: List[str] = []
+        skip_test_suites_images: List[Tuple[str, str]] = []
         for test_suite_info in loader.test_suites:
             if self.runbook.cloud in test_suite_info.skip_on_clouds:
                 skip_test_suites.append(test_suite_info.name)
@@ -162,8 +167,7 @@ class AgentTestSuitesCombinator(Combinator):
 
             skip_images_info: List[VmImageInfo] = self._get_test_suite_skip_images(test_suite_info, loader)
             if len(skip_images_info) > 0:
-                skip_test_suite_image = f"{test_suite_info.name}: {','.join([i.urn for i in skip_images_info])}"
-                skip_test_suites_images.append(skip_test_suite_image)
+                skip_test_suites_images.append((test_suite_info.name, ', '.join([i.urn for i in skip_images_info])))
 
             for image in images_info:
                 if image in skip_images_info:
@@ -255,9 +259,14 @@ class AgentTestSuitesCombinator(Combinator):
 
         if len(skip_test_suites) > 0:
             self._log.info("Skipping test suites %s", skip_test_suites)
+            for skipped in skip_test_suites:
+                AgentTestResult.report(skipped, skipped, TestStatus.SKIPPED, datetime.datetime.now(UTC), message=f"Skipping test suite {skipped}")
 
         if len(skip_test_suites_images) > 0:
-            self._log.info("Skipping test suits run on images \n %s", '\n'.join([f"\t{skip}" for skip in skip_test_suites_images]))
+            self._log.info("Skipping test suits run on images \n %s", '\n'.join([f"\t{suite}: {images}" for suite, images in skip_test_suites_images]))
+            for skipped in skip_test_suites_images:
+                suite, images = skipped
+                AgentTestResult.report(suite, suite, TestStatus.SKIPPED, datetime.datetime.now(UTC), message=f"Skipping test suite {suite} on images {images}")
 
         if len(environments) == 0:
             raise Exception("No VM images were found to execute the test suites.")

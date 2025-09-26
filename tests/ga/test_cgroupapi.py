@@ -54,7 +54,7 @@ class _MockedFileSystemTestCase(AgentTestCase):
 
 
 class CGroupUtilTestCase(AgentTestCase):
-    def test_cgroups_should_be_supported_only_on_ubuntu16plus_centos8_redhat8_rhel9_azurelinux3(self):
+    def test_cgroups_should_be_supported_only_on_ubuntu16plus_centos8_redhat8_rhel9_azurelinux3_chainguard(self):
         test_cases = [
             (['ubuntu', '16.04', 'xenial'], True),
             (['ubuntu', '16.10', 'yakkety'], True),
@@ -84,7 +84,8 @@ class CGroupUtilTestCase(AgentTestCase):
             (['mariner', '1.0', ''], False),
             (['mariner', '2.2', ''], False),
             (['azurelinux', '3.0', ''], True),
-            (['azurelinux', '3.10', ''], True)
+            (['azurelinux', '3.10', ''], True),
+            (['chainguard', '20230214', ''], True)
         ]
 
         for (distro, supported) in test_cases:
