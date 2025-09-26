@@ -24,6 +24,7 @@
 # For each scenario, we initiate the rsm request with target version and then verify agent updated to that target version.
 #
 import re
+from time import sleep
 from typing import List, Dict, Any
 
 from assertpy import assert_that, fail
@@ -68,8 +69,16 @@ class RsmUpdateBvt(AgentVmTest):
         arch_type = self._ssh_client.get_architecture()
         # retrieve the installed agent version in the vm before run the scenario
         self._retrieve_installed_agent_version()
+
+        # Verify agent stops reporting supported feature flag when agent updates is disabled
+        log.info("*******Verifying agent stops reporting supported feature flag when agent updates is disabled*******")
+        self._disable_agent_updates()
+        self._verify_agent_reported_supported_feature_flag(supported=False)
+
+        # Preparing agent for rsm upgrades
+        self._prepare_agent()
         # Allow agent to send supported feature flag
-        self._verify_agent_reported_supported_feature_flag()
+        self._verify_agent_reported_supported_feature_flag(supported=True)
 
         log.info("*******Verifying the Agent Downgrade scenario*******")
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
@@ -78,10 +87,11 @@ class RsmUpdateBvt(AgentVmTest):
         log.info("Attempting downgrade version %s", self._downgrade_version)
         request_rsm_update(self._downgrade_version, self._context.vm, arch_type, is_downgrade=True, downgrade_from=self._installed_agent_version)
         self._check_rsm_gs(self._downgrade_version)
-        self._prepare_agent()
         # Verify downgrade scenario
         self._verify_guest_agent_update(self._downgrade_version)
         self._verify_agent_reported_update_status(self._downgrade_version)
+
+        sleep(60)  # sleep to allow the CRP finish processing the previous req before we attempt next update
 
         # Verify upgrade scenario
         log.info("*******Verifying the Agent Upgrade scenario*******")
@@ -94,6 +104,8 @@ class RsmUpdateBvt(AgentVmTest):
         self._verify_guest_agent_update(upgrade_version)
         self._verify_agent_reported_update_status(upgrade_version)
 
+        sleep(60)  # sleep to allow the CRP finish processing the previous req before we attempt next update
+
         # verify no version update.
         log.info("*******Verifying the no version update scenario*******")
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
@@ -104,6 +116,8 @@ class RsmUpdateBvt(AgentVmTest):
         self._check_rsm_gs(current_version)
         self._verify_guest_agent_update(current_version)
         self._verify_agent_reported_update_status(current_version)
+
+        sleep(60)  # sleep to allow the CRP finish processing the previous req before we attempt next update
 
         # verify requested version below daemon version
         # All the daemons set to 2.2.53, so requesting version below daemon version
@@ -176,15 +190,17 @@ class RsmUpdateBvt(AgentVmTest):
             f"Agent version changed.\n Current agent {current_agent}")
         log.info("Verified agent was not updated to requested version")
 
-    def _verify_agent_reported_supported_feature_flag(self):
+    def _verify_agent_reported_supported_feature_flag(self, supported):
         """
         RSM update rely on supported flag that agent sends to CRP.So, checking if GA reports feature flag from the agent log
         """
 
-        log.info(
-            "Executing verify_versioning_supported_feature.py remote script to verify agent reported supported feature flag, so that CRP can send RSM update request")
-        self._run_remote_test(self._ssh_client, "agent_update-verify_versioning_supported_feature.py", use_sudo=True)
-        log.info("Successfully verified that Agent reported VersioningGovernance supported feature flag")
+        log.info("Executing verify_versioning_supported_feature.py remote script to verify agent reported supported feature flag")
+        self._run_remote_test(self._ssh_client, f"agent_update-verify_versioning_supported_feature.py --supported {supported}", use_sudo=True)
+        if supported:
+            log.info("Successfully verified that Agent reported VersioningGovernance supported feature flag")
+        else:
+            log.info("Successfully verified that Agent not reported VersioningGovernance supported feature flag")
 
     def _verify_agent_reported_update_status(self, version: str):
         """
@@ -211,6 +227,14 @@ class RsmUpdateBvt(AgentVmTest):
         else:
             log.warning("Unable to retrieve installed agent version and set to default value {0}".format(
                 self._installed_agent_version))
+
+    def _disable_agent_updates(self):
+        """
+        Disable agent updates
+        """
+        log.info("Updating AutoUpdate.UpdateToLatestVersion to false")
+        output: str = self._ssh_client.run_command("update-waagent-conf AutoUpdate.UpdateToLatestVersion=n", use_sudo=True)
+        log.info('Successfully updated agent update config \n %s', output)
 
 
 if __name__ == "__main__":
