@@ -12,6 +12,7 @@ tests:
   - "agent_bvt/extension_operations.py"
   - "agent_bvt/run_command.py"
   - "agent_bvt/vm_access.py"
+  - "no_outbound_connections/check_does_not_switch_to_direct.py"
 images: "random(endorsed)"
 template: "no_outbound_connections/deny_outbound_connections.py"
 owns_vm: true
