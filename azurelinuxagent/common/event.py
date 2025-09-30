@@ -26,7 +26,6 @@ import time
 import traceback
 from datetime import datetime
 
-import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import EventError, OSUtilError
@@ -176,7 +175,7 @@ class EventStatus(object):
             return True
         return self._status[event] is True
 
-    def initialize(self, status_dir=conf.get_lib_dir()):
+    def initialize(self, status_dir):
         self._path = os.path.join(status_dir, EventStatus.EVENT_STATUS_FILE)
         self._load()
 
