@@ -39,19 +39,18 @@ class CheckDoesNotSwitchToDirect(AgentVmTest):
     def run(self):
         ssh_client: SshClient = self._context.create_ssh_client()
 
-        # Delete CSE if already installed. Later in test we will attempt to install and verify that the installation
-        # fails due to download failures.
+        # Delete all extensions on VM to reduce the amount of manifest downloads attempted in the agent after we block
+        # outbound requests to HGAP port. Test will be too long if we keep all extensions in the GS.
         extensions_on_vm = self._context.vm.get_extensions().value
         for ext in extensions_on_vm:
-            if ext.type_properties_type == VmExtensionIds.CustomScript.type:
-                log.info("CSE is already installed, cleaning it up...")
-                VirtualMachineExtensionClient(self._context.vm,
-                                              VmExtensionIdentifier(publisher=ext.publisher,
-                                                                    ext_type=ext.type_properties_type,
-                                                                    version=ext.type_handler_version),
-                                              resource_name=ext._resource_name).delete()
-                log.info("Deleted CSE.")
-                break
+            ext_name = ext._resource_name
+            log.info(f"Removing {ext_name}...")
+            VirtualMachineExtensionClient(self._context.vm,
+                                          VmExtensionIdentifier(publisher=ext.publisher,
+                                                                ext_type=ext.type_properties_type,
+                                                                version=ext.type_handler_version),
+                                          resource_name=ext_name).delete()
+            log.info(f"Deleted {ext_name}.")
 
         # Stop the agent service
         log.info("")
