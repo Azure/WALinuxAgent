@@ -18,12 +18,13 @@
 #
 # Verify if the agent reported supportedfeature VersioningGovernance flag to CRP via status file
 #
+import argparse
 import glob
 import json
 
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import run_remote_test
-from tests_e2e.tests.lib.retry import retry_if_false
+from tests_e2e.tests.lib.retry import retry_if_false, retry_if_true
 
 
 def check_agent_supports_versioning() -> bool:
@@ -41,11 +42,20 @@ def check_agent_supports_versioning() -> bool:
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-s', '--supported', required=True)
+    args = parser.parse_args()
+
     log.info("checking agent status file for VersioningGovernance supported feature flag")
-    found: bool = retry_if_false(check_agent_supports_versioning)
-    if not found:
-        raise Exception("Agent failed to report supported feature flag. So, skipping agent update validations "
-                        "since CRP will not send RSM requested version in GS if feature flag not found in status")
+    if args.supported == "True":
+        found: bool = retry_if_false(check_agent_supports_versioning)
+        if not found:
+            raise Exception("Agent failed to report supported feature flag. So, skipping agent update validations "
+                            "since CRP will not send RSM requested version in GS if feature flag not found in status")
+    else:
+        found: bool = retry_if_true(check_agent_supports_versioning)
+        if found:
+            raise Exception("Agent should not report supported feature flag while agent updates disabled in the vm.")
 
 
 run_remote_test(main)
