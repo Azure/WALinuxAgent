@@ -69,7 +69,7 @@ class Fips(AgentVmTest):
         #
         # Execute an extension with protected settings to ensure the tenant certificate can be decrypted under FIPS
         #
-        custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
+        custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript)
         log.info("Executing %s using protected settings to verify they can be decrypted when FIPS 140-3 is enabled.", custom_script)
         message = f"Hello {uuid.uuid4()}!"
         custom_script.enable(

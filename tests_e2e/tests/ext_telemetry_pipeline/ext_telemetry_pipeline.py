@@ -55,7 +55,7 @@ class ExtTelemetryPipeline(AgentVmTest):
         # Add CSE to the test VM twice to ensure its events directory still exists after re-enabling
         log.info("")
         log.info("Add CSE to the test VM...")
-        cse = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
+        cse = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript)
         cse.enable(settings={'commandToExecute': "echo 'enable'"}, protected_settings={})
         cse.assert_instance_view()
 

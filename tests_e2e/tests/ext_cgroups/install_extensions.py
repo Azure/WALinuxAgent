@@ -45,8 +45,7 @@ class InstallExtensions:
 
     def _install_ama(self):
         ama_extension = VirtualMachineExtensionClient(
-            self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent,
-            resource_name="AMAAgent")
+            self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent)
         log.info("Installing %s", ama_extension)
         ama_extension.enable()
         ama_extension.assert_instance_view()
@@ -57,7 +56,7 @@ class InstallExtensions:
         with public_key_file.open() as f:
             public_key = f.read()
         # Invoke the extension
-        vm_access = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.VmAccess, resource_name="VmAccess")
+        vm_access = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.VmAccess)
         log.info("Installing %s", vm_access)
         vm_access.enable(
             protected_settings={
@@ -70,8 +69,7 @@ class InstallExtensions:
 
     def _install_gatest_extension(self):
         gatest_extension = VirtualMachineExtensionClient(
-            self._context.vm, VmExtensionIds.GATestExtension,
-            resource_name="GATestExt")
+            self._context.vm, VmExtensionIds.GATestExtension)
         log.info("Installing %s", gatest_extension)
         gatest_extension.enable()
         gatest_extension.assert_instance_view()
@@ -85,8 +83,7 @@ cp /proc/$$/cgroup /var/lib/waagent/tmp/custom_script_check
 """
         custom_script_2_0 = VirtualMachineExtensionClient(
             self._context.vm,
-            VmExtensionIds.CustomScript,
-            resource_name="CustomScript")
+            VmExtensionIds.CustomScript)
 
         log.info("Installing %s", custom_script_2_0)
         custom_script_2_0.enable(
