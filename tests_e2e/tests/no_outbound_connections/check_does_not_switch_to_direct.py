@@ -43,7 +43,7 @@ class CheckDoesNotSwitchToDirect(AgentVmTest):
         # outbound requests to HGAP port. Test will be too long if we keep all extensions in the GS.
         extensions_on_vm = self._context.vm.get_extensions().value
         for ext in extensions_on_vm:
-            ext_name = ext._resource_name
+            ext_name = ext.name
             log.info(f"Removing {ext_name}...")
             VirtualMachineExtensionClient(self._context.vm,
                                           VmExtensionIdentifier(publisher=ext.publisher,
