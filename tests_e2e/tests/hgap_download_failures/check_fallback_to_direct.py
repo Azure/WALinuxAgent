@@ -89,7 +89,7 @@ class CheckFallbackToDirect(AgentVmTest):
             # incremented.
             log.info("")
             log.info("Reapplying the VM to force new incarnation...")
-            self._context.vm.reapply()
+            self._context.vm.reapply(timeout=15*60) # Allow extra time for download failures
 
         # Check the status of custom script to assert that it was installed successfully
         log.info("")
