@@ -111,7 +111,7 @@ class Hibernation(AgentVmTest):
         # Execute an extension with protected settings and verify that the new tenant certificate was downloaded.
         #
         log.info("Executing an extension with protected settings to verify it can use the new tenant certificate")
-        custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
+        custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript)
         message = str(uuid.uuid4())
         custom_script.enable(settings={}, protected_settings={'commandToExecute': f"echo \'{message}\'"}, force_update=True)
         custom_script.assert_instance_view(expected_message=message)
@@ -184,7 +184,7 @@ class Hibernation(AgentVmTest):
             log.info("The Hibernation extension is already installed")
         else:
             log.info("Installing the Hibernation extension")
-            hibernate = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.Hibernate, resource_name="Hibernate")
+            hibernate = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.Hibernate)
             hibernate.enable(auto_upgrade_minor_version=True)
 
     def _do_hibernate_resume_cycle(self) -> None:

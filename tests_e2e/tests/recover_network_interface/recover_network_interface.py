@@ -134,7 +134,7 @@ class RecoverNetworkInterface(AgentVmTest):
         """
         log.info("")
         log.info("Using CSE to bring the primary network interface down and call the OSUtil to bring the interface back up. Command to execute: {0}".format(script))
-        custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
+        custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript)
         try:
             custom_script.enable(protected_settings={'commandToExecute': script}, settings={})
         except TimeoutError:
