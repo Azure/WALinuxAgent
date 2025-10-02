@@ -135,21 +135,21 @@ class ExtSignatureValidation(AgentVmTest):
         cse_id_21 = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript',
                                           version="2.1")
         custom_script_signed = ExtSignatureValidation._TestCase(
-            VirtualMachineExtensionClient(self._context.vm, cse_id_21, resource_name="CustomScript"),
+            VirtualMachineExtensionClient(self._context.vm, cse_id_21),
             {'commandToExecute': f"echo '{str(uuid.uuid4())}'"}
         )
 
         # CustomScript 2.0 is an unsigned, single-config extension.
         cse_id_20 = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript', version="2.0")
         custom_script_unsigned = ExtSignatureValidation._TestCase(
-            VirtualMachineExtensionClient(self._context.vm, cse_id_20, resource_name="CustomScript"),
+            VirtualMachineExtensionClient(self._context.vm, cse_id_20),
             {'commandToExecute': f"echo '{str(uuid.uuid4())}'"}
         )
 
         # RunCommandHandler 1.3 is a signed, multi-config extension.
         rc_id_1_3 = VmExtensionIdentifier(publisher="Microsoft.CPlat.Core", ext_type="RunCommandHandlerLinux", version="1.3")
         run_command_signed = ExtSignatureValidation._TestCase(
-            VirtualMachineRunCommandClient(self._context.vm, rc_id_1_3, resource_name="RunCommandHandler"),
+            VirtualMachineRunCommandClient(self._context.vm, rc_id_1_3),
             {'source': f"echo '{str(uuid.uuid4())}'"}
         )
 
@@ -157,14 +157,14 @@ class ExtSignatureValidation(AgentVmTest):
         vmapp_id_1_0 = VmExtensionIdentifier(publisher='Microsoft.CPlat.Core', ext_type='VMApplicationManagerLinux',
                                             version='1.0')
         vm_app_signed = ExtSignatureValidation._TestCase(
-            VirtualMachineExtensionClient(self._context.vm, vmapp_id_1_0, resource_name="VMApplicationManagerLinux"),
+            VirtualMachineExtensionClient(self._context.vm, vmapp_id_1_0),
             None
         )
 
         # AzureMonitorLinuxAgent 1.33 is an unsigned, no-config extension.
         ama_id_1_33 = VmExtensionIdentifier(publisher='Microsoft.Azure.Monitor', ext_type='AzureMonitorLinuxAgent', version="1.33")
         azure_monitor_unsigned = ExtSignatureValidation._TestCase(
-            VirtualMachineExtensionClient(self._context.vm, ama_id_1_33, resource_name="AzureMonitorLinuxAgent"),
+            VirtualMachineExtensionClient(self._context.vm, ama_id_1_33),
             None
         )
 
@@ -173,13 +173,13 @@ class ExtSignatureValidation(AgentVmTest):
         # signed extensions in a single goal state.
         vmaccess_id_1_5 = VmExtensionIdentifier(publisher='Microsoft.OSTCExtensions.Edp', ext_type='VMAccessForLinux', version="1.5")
         vm_access_signed = ExtSignatureValidation._TestCase(
-            VirtualMachineExtensionClient(self._context.vm, vmaccess_id_1_5, resource_name="VMAccessForLinux"),
+            VirtualMachineExtensionClient(self._context.vm, vmaccess_id_1_5),
             settings = None,
             protected_settings={'username': 'testuser'}
         )
         ahl_id_2_0 = VmExtensionIdentifier(publisher='Microsoft.ManagedServices.Edp', ext_type='ApplicationHealthLinux', version="2.0")
         application_health_signed = ExtSignatureValidation._TestCase(
-            VirtualMachineExtensionClient(self._context.vm, ahl_id_2_0, resource_name="ApplicationHealthLinux"),
+            VirtualMachineExtensionClient(self._context.vm, ahl_id_2_0),
             None
         )
 

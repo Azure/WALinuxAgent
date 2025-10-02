@@ -46,8 +46,7 @@ class ExtensionOperationsBvt(AgentVmTest):
 
         custom_script_2_0 = VirtualMachineExtensionClient(
             self._context.vm,
-            VmExtensionIds.CustomScript,
-            resource_name="CustomScript")
+            VmExtensionIds.CustomScript)
 
         if is_arm64:
             log.info("Will skip the update scenario, since currently there is only 1 version of CSE on ARM64")
@@ -65,8 +64,7 @@ class ExtensionOperationsBvt(AgentVmTest):
 
         custom_script_2_1 = VirtualMachineExtensionClient(
             self._context.vm,
-            VmExtensionIdentifier(VmExtensionIds.CustomScript.publisher, VmExtensionIds.CustomScript.type, "2.1"),
-            resource_name="CustomScript")
+            VmExtensionIdentifier(VmExtensionIds.CustomScript.publisher, VmExtensionIds.CustomScript.type, "2.1"))
 
         if is_arm64:
             log.info("Installing %s", custom_script_2_1)
