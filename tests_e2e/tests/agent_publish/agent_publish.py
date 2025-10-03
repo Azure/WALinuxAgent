@@ -165,8 +165,7 @@ class AgentPublishTest(AgentVmTest):
     def _check_cse(self) -> None:
         custom_script_2_1 = VirtualMachineExtensionClient(
             self._context.vm,
-            VmExtensionIdentifier(VmExtensionIds.CustomScript.publisher, VmExtensionIds.CustomScript.type, "2.1"),
-            resource_name="CustomScript")
+            VmExtensionIdentifier(VmExtensionIds.CustomScript.publisher, VmExtensionIds.CustomScript.type, "2.1"))
 
         log.info("Installing %s", custom_script_2_1)
         message = f"Hello {uuid.uuid4()}!"

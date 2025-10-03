@@ -40,8 +40,7 @@ class ExtensionUpdateFailureTest(AgentVmTest):
         custom_script = VmExtensionIds.CustomScript
         custom_script_2_0 = VirtualMachineExtensionClient(
             self._context.vm,
-            custom_script,
-            resource_name="CustomScript")
+            custom_script)
         extensions_to_cleanup = {
             custom_script: custom_script_2_0
         }
@@ -67,8 +66,7 @@ class ExtensionUpdateFailureTest(AgentVmTest):
 
             custom_script_2_1 = VirtualMachineExtensionClient(
                 self._context.vm,
-                VmExtensionIdentifier(VmExtensionIds.CustomScript.publisher, VmExtensionIds.CustomScript.type, "2.1"),
-                resource_name="CustomScript")
+                VmExtensionIdentifier(VmExtensionIds.CustomScript.publisher, VmExtensionIds.CustomScript.type, "2.1"))
 
             log.info("Updating %s", custom_script_2_0)
 

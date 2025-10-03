@@ -53,8 +53,7 @@ class AgentCgroupsProcessCheck(AgentVmTest):
 
     def _install_ama_extension(self):
         ama_extension = VirtualMachineExtensionClient(
-            self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent,
-            resource_name="AMAAgent")
+            self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent)
         log.info("Installing %s", ama_extension)
         ama_extension.enable()
         ama_extension.assert_instance_view()
