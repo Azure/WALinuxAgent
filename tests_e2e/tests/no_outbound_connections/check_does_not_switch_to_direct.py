@@ -55,7 +55,9 @@ class CheckDoesNotSwitchToDirect(AgentVmTest):
         custom_script = VirtualMachineExtensionClient(
             self._context.vm,
             VmExtensionIds.CustomScript)
-        custom_script.enable(settings={'commandToExecute': f"echo '{str(uuid.uuid4())}'"})
+        data = str(uuid.uuid4())
+        custom_script.enable(settings={'commandToExecute': f"echo '{data}'"})
+        custom_script.assert_instance_view(expected_message=data)
         log.info("Enabled CSE successfully.")
 
         # Check the agent log to verify that there is no log indicating that the agent switched to the direct
