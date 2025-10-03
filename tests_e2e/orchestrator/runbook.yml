@@ -45,10 +45,7 @@ variable:
       - agent_update
       - ext_cgroups
       - extensions_disabled
-#
-# The GuestConfiguration extension is currently broken and causing these test to fail. Disable test for now while a better solution is investigated
-#
-#      - ext_policy
+      - ext_policy
       - ext_policy_with_dependencies
       - ext_sequencing
       - ext_telemetry_pipeline
