@@ -70,11 +70,18 @@ class AgentLogRecord:
         ext_timestamp_regex_1 = r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}[.\d]+"
         # 2023/07/10 20:50:13
         ext_timestamp_regex_2 = r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}"
+        # 2023/07/10 20:50:1
+        ext_timestamp_regex_3 = r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{1}(?!\d)"
 
         if re.match(ext_timestamp_regex_1, self.when):
             return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S.%f').replace(tzinfo=UTC)
         elif re.match(ext_timestamp_regex_2, self.when):
             return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S').replace(tzinfo=UTC)
+        elif re.match(ext_timestamp_regex_3, self.when):
+            # Pad the 1-digit second to 2-digits (e.g, 00:1 -> 00:01)
+            padded_time = self.when[:-1] + '0' + self.when[-1]
+            return datetime.strptime(padded_time, u'%Y/%m/%d %H:%M:%S').replace(tzinfo=UTC)
+
         # Logs from agent follow this format: 2023-07-10T20:50:13.038599Z
         return datetime.strptime(self.when, u'%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=UTC)
 
