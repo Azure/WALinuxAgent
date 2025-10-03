@@ -199,21 +199,6 @@ class IpTables(_IpTablesFirewalldManager):
     def _get_accept_drop_command(self, command_option: str) -> str:
         return f"sudo iptables -w -t security {command_option} OUTPUT -d {self._wire_server_address} -p tcp -m conntrack --ctstate INVALID,NEW -j DROP"
 
-    def setup_outbound_drop_rule_hgap(self) -> None:
-        """
-        Creates a DROP rule for outbound traffic to HGAP port (used in the no_outbound_connections test to force
-        download failures)
-        """
-        command = f"sudo iptables -I OUTPUT -d {self._wire_server_address} -p tcp --dport 32526 -j DROP"
-        self._log_and_run_command(command)
-
-    def delete_outbound_drop_rule_hgap(self) -> None:
-        """
-        Deletes DROP rule for outbound traffic to HGAP port in e2etest table (used in the no_outbound_connections test)
-        """
-        command = f"sudo iptables -D OUTPUT -d {self._wire_server_address} -p tcp --dport 32526 -j DROP"
-        self._log_and_run_command(command)
-
 
 class Firewalld(_IpTablesFirewalldManager):
     """
@@ -349,29 +334,3 @@ class NfTables(FirewallManager):
             raise Exception(f"Invalid rule name: {rule_name}")
 
         self._log_and_run_command(add_rule_command)
-
-    def setup_outbound_drop_rule_hgap(self) -> None:
-        """
-        Creates a DROP rule for outbound traffic to HGAP port (used in the no_outbound_connections test to force
-        download failures)
-        """
-        command = ["nft", "-f", "-"]
-        command_input = """
-            add table ip e2etest
-            add chain ip e2etest output {{ type filter hook output priority 0 ; }}
-            add rule ip e2etest output ip daddr {0} tcp dport 32526 drop
-        """.format(self._wire_server_address)
-        log.info(f"Executing command: {command}\nwith input: {command_input}")
-        shellutil.run_command(command, input=command_input)
-
-    def delete_outbound_drop_rule_hgap(self) -> None:
-        """
-        Deletes DROP rule for outbound traffic to HGAP port in e2etest table (used in the no_outbound_connections test)
-        """
-        output: str = shellutil.run_command(["sudo", "nft", "--json", "--handle", "list", "table", "e2etest"])
-        state = json.loads(output)
-        handles = [i["rule"]["handle"] for i in state["nftables"] if i.get("rule") is not None and i["rule"]["table"] == "e2etest"]
-        if len(handles) != 1:
-            raise Exception(f"Expected exactly one rule in the e2etest table.\n{output}")
-
-        self._log_and_run_command(f"sudo nft delete rule ip e2etest output handle {handles[0]}")

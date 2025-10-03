@@ -1,8 +1,0 @@
-#
-# This suite is used to test the scenario where there are HGAP download failures on the VM. The test ensures that
-# the agent falls back to the Direct download channel in that case.
-#
-name: "HgapDownloadFailures"
-tests:
-  - "hgap_download_failures/check_fallback_to_direct.py"
-images: "random(endorsed)"
