@@ -87,31 +87,15 @@ image-sets:
       - "ubuntu_2404"
       - "ubuntu_2404_arm64"
 
-   # These are distros with default OpenSSL version 1.1.0 or later, as required for signature validation.
-   # TODO: Remove this image set once timestamp validation is implemented and the "no_check_time" flag
-   # (which requires OpenSSL 1.1.0) is no longer needed.
-   signature-validation-endorsed:
-      - "alma_8"
-      - "alma_9"
-      - "centos_82"
-      - "debian_9"
-      - "debian_10"
-      - "debian_11"
-      - "flatcar"
-      - "mariner_2"
-      - "azure-linux_3"
-      - "azure-linux_3_fips"
-      - "suse_15"
-      - "rhel_810"
-      - "rhel_95"
-      - "rhel_10"
-      - "rocky_9"
-      - "ubuntu_1804"
-      - "ubuntu_2004"
-      - "ubuntu_2204"
-      - "ubuntu_2204_minimal"
-      - "ubuntu_2404"
-      - "ubuntu_2404_minimal"
+   # These distros are supported for CVMs.
+   cvm-supported:
+      - "azure-linux_3_cvm"
+      - "rhel_94_cvm"
+      - "rhel_95_cvm"
+      - "ubuntu_2004_cvm"
+      - "ubuntu_2204_cvm"
+      - "ubuntu_2404_cvm"
+      - "rocky_9_cvm"
 
 #
 # An image can be specified by a string giving its urn, as in
@@ -172,6 +156,10 @@ images:
       locations:
          AzureUSGovernment: []
          AzureChinaCloud: []
+   azure-linux_3_cvm:
+      urn: "microsoftcblmariner azure-linux-3 azure-linux-3-cvm latest"
+      vm_sizes:
+         - "Standard_DC2ads_v5" # CVM v5 SKU
    centos_610: "OpenLogic:CentOS:6.10:latest"
    centos_75: "OpenLogic:CentOS:7.5:latest"
    centos_79: "OpenLogic:CentOS:7_9:latest"
@@ -280,11 +268,23 @@ images:
       locations:
         # TODO: Remove this once RHEL 10 is available in AzureChinaCloud
          AzureChinaCloud: []
+   rhel_94_cvm:
+      urn: "RedHat rhel-cvm 9_4_cvm latest"
+      vm_sizes:
+         - "Standard_DC2ads_v5" # CVM v5 SKU
+   rhel_95_cvm:
+      urn: "RedHat rhel-cvm 9_5_cvm latest"
+      vm_sizes:
+         - "Standard_DC2ads_v5" # CVM v5 SKU
    rocky_9:
       urn: "resf:rockylinux-x86_64:9-base:latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
+   rocky_9_cvm:
+      urn: "ciq rocky-lts ciqrl94lts-cvm latest"
+      vm_sizes:
+         - "Standard_DC2ads_v5" # CVM v5 SKU
    suse_12:
       urn: "SUSE:sles-12-sp5:gen1:latest"
       locations:
@@ -323,3 +323,15 @@ images:
          AzureChinaCloud: []
          AzureUSGovernment: []
    ubuntu_2404_minimal: "Canonical:ubuntu-24_04-lts:minimal:latest"
+   ubuntu_2004_cvm:
+      urn: "Canonical 0001-com-ubuntu-confidential-vm-focal 20_04-lts-cvm latest"
+      vm_sizes:
+         - "Standard_DC2ads_v5" # CVM v5 SKU
+   ubuntu_2204_cvm:
+      urn: "Canonical 0001-com-ubuntu-confidential-vm-jammy 22_04-lts-cvm latest"
+      vm_sizes:
+         - "Standard_DC2ads_v5" # CVM v5 SKU
+   ubuntu_2404_cvm:
+      urn: "Canonical ubuntu-24_04-lts cvm latest"
+      vm_sizes:
+         - "Standard_DC2ads_v5" # CVM v5 SKU

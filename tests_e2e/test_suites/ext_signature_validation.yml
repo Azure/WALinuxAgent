@@ -4,7 +4,8 @@
 name: "ExtSignatureValidation"
 tests:
   - "ext_signature_validation/ext_signature_validation.py"
-images: "signature-validation-endorsed"
+# Extension signature is sent by CRP only for CVMs, so this test suite should run exclusively on CVMs.
+images: "cvm-supported"
 # This test needs to run in a canary region until all extensions being tested are published with signature in all prod regions.
 # Extension signatures are currently only available in the public cloud, so we skip this test on other clouds.
 locations: "AzureCloud:eastus2euap"
