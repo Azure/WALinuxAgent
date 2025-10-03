@@ -2,9 +2,8 @@
 # This suite is used to test the scenario where outbound connections are blocked on the VM.
 #
 # The suite uses a custom ARM template to create a VM with a Network Security Group that blocks all outbound
-# connections. The first test in the suite verifies that the setup of the NSG was successful, then the rest
-# of the tests exercise different extension operations. The last test ensures that the agent does not switch to
-# direct download by default when there are HGAP download failures.
+# connections. The sutie verifies that artifact downloads succeed via HGAP when outbound connectivity on the VM
+# is disabled.
 #
 name: "NoOutboundConnections"
 tests:

@@ -523,8 +523,6 @@ class AgentLog(object):
         for record in self.read():
             if data in record.text and record.timestamp > after_timestamp:
                 return True
-            elif record.timestamp > after_timestamp and re.search(data, record.text, re.DOTALL) is not None:
-                return True
         return False
 
     @staticmethod
