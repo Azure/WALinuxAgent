@@ -42,12 +42,12 @@ class CheckDoesNotSwitchToDirect(AgentVmTest):
         extensions_on_vm = self._context.vm.get_extensions().value
         for ext in extensions_on_vm:
             if ext.type_properties_type == VmExtensionIds.CustomScript.type:
-                log.info(f"Removing CSE...")
+                log.info("Removing CSE...")
                 VirtualMachineExtensionClient(self._context.vm,
                                               VmExtensionIdentifier(publisher=ext.publisher,
                                                                     ext_type=ext.type_properties_type,
                                                                     version=ext.type_handler_version)).delete()
-                log.info(f"Deleted CSE.")
+                log.info("Deleted CSE.")
 
         # Attempt to install CSE. This should succeed.
         log.info("")
