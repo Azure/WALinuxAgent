@@ -130,18 +130,13 @@ class _PolicyEngine(object):
             1. policy file exists at the expected location
             2. the conf flag "Debug.EnableExtensionPolicy" is set to True.
 
-        This method runs during policy engine initialization and should not raise errors.
-        """
-        try:
-            policy_file_exists = os.path.isfile(conf.get_policy_file_path())
-        except Exception as ex:
-            # os.path.isfile() should only raise an error if the customer-specified policy file path is invalid.
-            # In that case, we assume the customer intends to enable policy. Any error from the invalid
-            # path will be surfaced to the user when reading the file in update_policy().
-            _PolicyEngine._log_policy_event("Error checking if policy file exists: {0}".format(ex), is_success=False)
-            return True
+        TODO: this behavior is temporary for telemetry release only. After telemetry release, remove
+        the check for the policy file, and always enforce policy if the conf flag is True. 
 
-        return conf.get_extension_policy_enabled() and policy_file_exists
+        This method runs during policy engine initialization and should not raise errors.
+
+        """
+        return conf.get_extension_policy_enabled() and os.path.isfile(conf.get_policy_file_path())
 
 
     @staticmethod
