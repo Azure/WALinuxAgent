@@ -1191,7 +1191,7 @@ class ExtHandlerInstance(object):
         self.pkg_file = None
         self.logger = None
         self.set_logger(extension=extension, execution_log_max_size=execution_log_max_size)
-        self._signature_validated = self.get_signature_validated()
+        self._signature_validated = self.__get_signature_validated()
 
     @property
     def signature_validated(self):
@@ -1319,7 +1319,7 @@ class ExtHandlerInstance(object):
             if installed_version is not None:
                 self.ext_handler.version = str(installed_version)
                 # In the case of uninstall, signature_validated should reflect the state of the extension version that is currently installed
-                self._signature_validated = self.get_signature_validated()
+                self._signature_validated = self.__get_signature_validated()
             else:
                 self.ext_handler.version = None
         else:
@@ -2388,7 +2388,7 @@ class ExtHandlerInstance(object):
 
         return None
 
-    def get_signature_validated(self):
+    def __get_signature_validated(self):
         """
         Returns the signature validation state recorded in the HandlerStatus file. If HandlerStatus has not been created,
         returns False.
