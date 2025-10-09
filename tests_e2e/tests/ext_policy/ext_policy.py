@@ -185,8 +185,7 @@ class ExtPolicy(AgentVmTest):
             # without settings have different status reporting logic, so we should test all cases.
             # CustomScript is a single-config extension.
             custom_script = ExtPolicy.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
-                                              resource_name="CustomScript"),
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript),
                 {'commandToExecute': f"echo '{str(uuid.uuid4())}'"}
             )
 
@@ -206,15 +205,13 @@ class ExtPolicy(AgentVmTest):
 
             # AzureMonitorLinuxAgent is a no-config extension (extension without settings).
             azure_monitor = ExtPolicy.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent,
-                                              resource_name="AzureMonitorLinuxAgent"),
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent),
                 None
             )
 
             # AzureSecurityLinuxAgent is an extension that reports heartbeat.
             azure_security = ExtPolicy.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureSecurityLinuxAgent,
-                                              resource_name="AzureSecurityLinuxAgent"),
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureSecurityLinuxAgent),
                 {}
             )
 
@@ -246,12 +243,12 @@ class ExtPolicy(AgentVmTest):
             # does not support the distro, skip this workaround and the test case (5).
             distro = self._ssh_client.run_command("get_distro.py").rstrip()
             if VmExtensionIds.GuestConfig.supports_distro(distro):
-                guest_config_resource_name = "AzurePolicyforLinux"
-                if guest_config_resource_name not in extension_names_on_vm:
+                # Refresh the list of installed extensions and check if GuestConfig is already present
+                extension_types_on_vm = {ext.type_properties_type for ext in self._context.vm.get_extensions().value}
+                if "ConfigurationforLinux" not in extension_types_on_vm:
                     log.info("")
                     log.info("Installing GuestConfig extension.")
-                    guest_config = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.GuestConfig,
-                                                                 resource_name=guest_config_resource_name)
+                    guest_config = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.GuestConfig)
                     guest_config.enable(auto_upgrade_minor_version=True)
 
             log.info("")

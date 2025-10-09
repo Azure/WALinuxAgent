@@ -58,7 +58,7 @@ class VmAccessBvt(AgentVmTest):
             public_key = f.read()
 
         # Invoke the extension
-        vm_access = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.VmAccess, resource_name="VmAccess")
+        vm_access = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.VmAccess)
         vm_access.enable(
             protected_settings={
                 'username': username,
