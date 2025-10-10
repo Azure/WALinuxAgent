@@ -87,8 +87,8 @@ image-sets:
       - "ubuntu_2404"
       - "ubuntu_2404_arm64"
 
-   # These distros are supported for CVMs.
-   cvm-supported:
+   # These distros are endorsed for confidential VMs.
+   cvm-endorsed:
       - "azure-linux_3_cvm"
       - "rhel_94_cvm"
       - "rhel_95_cvm"
