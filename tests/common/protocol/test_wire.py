@@ -224,6 +224,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
                 return MockHttpResponse(200)
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_put_handler=http_put_handler) as protocol:
+            HostPluginProtocol.is_default_channel = True
             protocol.client.status_blob.vm_status = VMStatus(message="Ready", status="Ready")
 
             protocol.client.upload_status_blob()
@@ -239,6 +240,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
             with patch.object(HostPluginProtocol, "ensure_initialized", return_value=True):
                 with patch.object(StatusBlob, "upload", return_value=False) as patch_direct_upload:
                     with patch.object(HostPluginProtocol, "_put_block_blob_status") as patch_http:
+                        HostPluginProtocol.is_default_channel = True
                         protocol.client.upload_status_blob()
                         patch_direct_upload.assert_not_called()
                         patch_http.assert_called_once_with(testurl, protocol.client.status_blob)
@@ -608,6 +610,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             return None
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_get_handler=http_get_handler) as protocol:
+            HostPluginProtocol.is_default_channel = True
             protocol.client.download_zip_package("Microsoft.FakeExtension-1.0.0.0", [extension_url], target_file, target_directory, use_verify_header=False,
                                                  signature="", ignore_signature_validation_errors=True)
 
@@ -631,6 +634,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             try:
+                HostPluginProtocol.is_default_channel = True
+
                 protocol.client.download_zip_package("Microsoft.FakeExtension-1.0.0.0", [extension_url], target_file, target_directory, use_verify_header=False,
                                                      signature="", ignore_signature_validation_errors=True)
 
@@ -663,6 +668,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         http_get_handler.goal_state_requests = 0
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            HostPluginProtocol.is_default_channel = True
+
             # initialization of the host plugin triggers a request for the goal state; do it here before we start tracking those requests.
             protocol.client.get_host_plugin()
 
@@ -692,6 +699,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             return None
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            HostPluginProtocol.is_default_channel = True
+
             # initialization of the host plugin triggers a request for the goal state; do it here before we start tracking those requests.
             protocol.client.get_host_plugin()
 
@@ -740,6 +749,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             return None
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_get_handler=http_get_handler) as protocol:
+            HostPluginProtocol.is_default_channel = True
+
             manifest = protocol.client.fetch_manifest("test", [manifest_url], use_verify_header=False)
 
             urls = protocol.get_tracked_urls()
@@ -747,8 +758,6 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertEqual(len(urls), 1, "Unexpected number of HTTP requests: [{0}]".format(urls))
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[0]), "The manifest should have been downloaded over the host channel")
             self.assertTrue(HostPluginProtocol.is_default_channel, "The default channel should not have changed")
-            default_chan = HostPluginProtocol.is_default_channel
-            self.assertTrue(True)
 
     def test_fetch_manifest_should_use_direct_channel_when_host_channel_fails_and_set_it_to_default(self):
         manifest_url = 'https://fake_host/fake_manifest.xml'
@@ -762,8 +771,9 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             return None
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_get_handler=http_get_handler) as protocol:
+            HostPluginProtocol.is_default_channel = True
+
             try:
-                default_chan = HostPluginProtocol.is_default_channel
                 manifest = protocol.client.fetch_manifest("test", [manifest_url], use_verify_header=False)
 
                 urls = protocol.get_tracked_urls()
@@ -794,6 +804,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         http_get_handler.goal_state_requests = 0
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            HostPluginProtocol.is_default_channel = True
+
             # initialization of the host plugin triggers a request for the goal state; do it here before we start tracking those requests.
             protocol.client.get_host_plugin()
 
@@ -820,6 +832,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
         # Everything fails. Goal state should have been updated and host channel should not have been set as default.
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            HostPluginProtocol.is_default_channel = True
+
             # initialization of the host plugin triggers a request for the goal state; do it here before we start
             # tracking those requests.
             protocol.client.get_host_plugin()
@@ -847,6 +861,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
             protocol.set_http_handlers(http_get_handler=http_get_handler)
+            HostPluginProtocol.is_default_channel = True
+
             protocol.client.reset_goal_state()
 
             urls = protocol.get_tracked_urls()
