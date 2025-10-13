@@ -130,13 +130,14 @@ class _PolicyEngine(object):
             1. policy file exists at the expected location
             2. the conf flag "Debug.EnableExtensionPolicy" is set to True.
 
-        This method runs during policy engine initialization and should not raise errors. If an error occurs, return False.
+        TODO: this behavior is temporary for telemetry release only. After telemetry release, remove
+        the check for the policy file, and always enforce policy if the conf flag is True. 
+
+        This method runs during policy engine initialization and should not raise errors.
+
         """
-        try:
-            return conf.get_extension_policy_enabled() and os.path.exists(conf.get_policy_file_path())
-        except Exception as ex:
-            logger.warn("Error checking if policy is enabled: {0}".format(ex))
-            return False
+        return conf.get_extension_policy_enabled() and os.path.isfile(conf.get_policy_file_path())
+
 
     @staticmethod
     def __read_policy(goal_state_history):
@@ -149,16 +150,15 @@ class _PolicyEngine(object):
         Raise InvalidPolicyError if JSON is invalid, or any exceptions are thrown while reading the file.
         """
         policy_file_contents = None
-        with open(conf.get_policy_file_path(), 'r') as f:
-            try:
+        try:
+            with open(conf.get_policy_file_path(), 'r') as f:
                 policy_file_contents = f.read()
 
                 # Save policy file contents to goal state history folder
-                if goal_state_history is not None:
-                    try:
-                        goal_state_history.save(policy_file_contents, "waagent_policy.json")
-                    except Exception as ex:
-                        logger.warn("Failed to save policy to history, continuing with goal state processing. Error: {0}", ustr(ex))
+                try:
+                    goal_state_history.save(policy_file_contents, "waagent_policy.json")
+                except Exception as ex:
+                    logger.warn("Failed to save policy to history, continuing with goal state processing. Error: {0}", ustr(ex))
 
                 _PolicyEngine._log_policy_event(
                     "Enforcing policy using policy file found at '{0}'.".format(conf.get_policy_file_path()))
@@ -166,18 +166,18 @@ class _PolicyEngine(object):
                 # json.loads will raise error if file contents are not a valid json (including empty file).
                 custom_policy = json.loads(policy_file_contents)
 
-            except ValueError as ex:
-                msg = "policy file does not conform to valid json syntax."
-                if policy_file_contents is not None:
-                    msg += " File contents: {0}".format(policy_file_contents)
-                raise InvalidPolicyError(msg=msg, inner=ex)
-            except Exception as ex:
-                msg = "unable to read or load policy file."
-                if policy_file_contents is not None:
-                    msg += " File contents: {0}".format(policy_file_contents)
-                raise InvalidPolicyError(msg=msg, inner=ex)
+        except ValueError as ex:
+            msg = "policy file does not conform to valid json syntax."
+            if policy_file_contents is not None:
+                msg += " File contents: {0}".format(policy_file_contents)
+            raise InvalidPolicyError(msg=msg, inner=ex)
+        except Exception as ex:
+            msg = "unable to read or load policy file."
+            if policy_file_contents is not None:
+                msg += " File contents: {0}".format(policy_file_contents)
+            raise InvalidPolicyError(msg=msg, inner=ex)
 
-            return custom_policy
+        return custom_policy
 
     @staticmethod
     def _parse_policy(policy):
