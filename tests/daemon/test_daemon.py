@@ -22,6 +22,8 @@ from multiprocessing import Process
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.daemon.main import OPENSSL_FIPS_ENVIRONMENT, get_daemon_handler
 from azurelinuxagent.pa.provision.default import ProvisionHandler
+from azurelinuxagent.common.protocol.wire import WireProtocol
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from tests.lib.tools import AgentTestCase, Mock, patch
 
 
@@ -88,17 +90,18 @@ class TestDaemon(AgentTestCase):
             daemon_handler.run()
             self.assertFalse(OPENSSL_FIPS_ENVIRONMENT in os.environ)
 
+    @patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=WireProtocol(KNOWN_WIRESERVER_IP))  # skip protocol detection
     @patch('azurelinuxagent.common.conf.get_provisioning_agent', return_value='waagent')
     @patch('azurelinuxagent.ga.update.UpdateHandler.run_latest')
     @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.run')
-    def test_daemon_agent_enabled(self, patch_run_provision, patch_run_latest, gpa):  # pylint: disable=unused-argument
+    def test_daemon_agent_enabled(self, patch_run_provision, patch_run_latest, *_):
         """
         Agent should run normally when no disable_agent is found
         """
         with patch('azurelinuxagent.pa.provision.get_provision_handler', return_value=ProvisionHandler()):
-            # DaemonHandler._initialize_telemetry requires communication with WireServer and IMDS; since we
+            # initialize_event_logger_vminfo_common_parameters_and_protocol requires communication with WireServer and IMDS; since we
             # are not using telemetry in this test we mock it out
-            with patch('azurelinuxagent.daemon.main.DaemonHandler._initialize_telemetry'):
+            with patch('azurelinuxagent.daemon.main.initialize_event_logger_vminfo_common_parameters_and_protocol'):
                 self.assertFalse(os.path.exists(conf.get_disable_agent_file_path()))
                 daemon_handler = get_daemon_handler()
 
