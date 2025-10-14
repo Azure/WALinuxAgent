@@ -35,7 +35,7 @@ class TestRemoteAccess(AgentTestCase):
 
     def test_goal_state_with_no_remote_access(self):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
-            self.assertIsNone(protocol.client.get_remote_access())
+            self.assertIsNone(protocol.client.get_goal_state().remote_access)
 
     def test_parse_two_remote_access_accounts(self):
         data_str = load_data('wire/remote_access_two_accounts.xml')
@@ -76,10 +76,11 @@ class TestRemoteAccess(AgentTestCase):
 
     def test_update_remote_access_conf_remote_access(self):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE_REMOTE_ACCESS) as protocol:
-            self.assertIsNotNone(protocol.client.get_remote_access())
-            self.assertEqual(1, len(protocol.client.get_remote_access().user_list.users))
-            self.assertEqual('testAccount', protocol.client.get_remote_access().user_list.users[0].name)
-            self.assertEqual('encryptedPasswordString', protocol.client.get_remote_access().user_list.users[0].encrypted_password)
+            remote_access = protocol.client.get_goal_state().remote_access
+            self.assertIsNotNone(remote_access)
+            self.assertEqual(1, len(remote_access.user_list.users))
+            self.assertEqual('testAccount', remote_access.user_list.users[0].name)
+            self.assertEqual('encryptedPasswordString', remote_access.user_list.users[0].encrypted_password)
 
     def test_parse_bad_remote_access_data(self):
         data = "foobar"

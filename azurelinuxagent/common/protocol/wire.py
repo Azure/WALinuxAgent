@@ -105,8 +105,8 @@ class WireProtocol(DataContract):
         return self.client.get_endpoint()
 
     def get_vminfo(self):
-        goal_state = self.client.get_goal_state()
-        hosting_env = self.client.get_hosting_env()
+        goal_state = GoalState(self.client, goal_state_properties=GoalStateProperties.HostingEnv|GoalStateProperties.RoleConfig)
+        hosting_env = goal_state.hosting_env
 
         vminfo = VMInfo()
         vminfo.subscriptionId = None
@@ -115,9 +115,6 @@ class WireProtocol(DataContract):
         vminfo.roleName = hosting_env.role_name
         vminfo.roleInstanceName = goal_state.role_instance_id
         return vminfo
-
-    def get_certs(self):
-        return self.client.get_certs()
 
     def get_goal_state(self):
         return self.client.get_goal_state()
@@ -851,26 +848,6 @@ class WireClient(object):
         if self._goal_state is None:
             raise ProtocolError("Trying to fetch goal state before initialization!")
         return self._goal_state
-
-    def get_hosting_env(self):
-        if self._goal_state is None:
-            raise ProtocolError("Trying to fetch Hosting Environment before initialization!")
-        return self._goal_state.hosting_env
-
-    def get_shared_conf(self):
-        if self._goal_state is None:
-            raise ProtocolError("Trying to fetch Shared Conf before initialization!")
-        return self._goal_state.shared_conf
-
-    def get_certs(self):
-        if self._goal_state is None:
-            raise ProtocolError("Trying to fetch Certificates before initialization!")
-        return self._goal_state.certs
-
-    def get_remote_access(self):
-        if self._goal_state is None:
-            raise ProtocolError("Trying to fetch Remote Access before initialization!")
-        return self._goal_state.remote_access
 
     def check_wire_protocol_version(self):
         uri = VERSION_INFO_URI.format(self.get_endpoint())

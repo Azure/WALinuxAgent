@@ -117,14 +117,9 @@ class DaemonHandler(object):
             fileutil.mkdir(conf.get_lib_dir(), mode=0o700)
             os.chdir(conf.get_lib_dir())
 
-    def _initialize_telemetry(self):
-        protocol = self.protocol_util.get_protocol()
-        initialize_event_logger_vminfo_common_parameters_and_protocol(protocol)
-
     def daemon(self, child_args=None):
         logger.info("Run daemon")
 
-        self.protocol_util = get_protocol_util()  # pylint: disable=W0201
         self.scvmm_handler = get_scvmm_handler()  # pylint: disable=W0201
         self.resourcedisk_handler = get_resourcedisk_handler()  # pylint: disable=W0201
         self.rdma_handler = get_rdma_handler()  # pylint: disable=W0201
@@ -139,13 +134,17 @@ class DaemonHandler(object):
 
         # Always redetermine the protocol start (e.g., wireserver vs.
         # on-premise) since a VHD can move between environments
-        self.protocol_util.clear_protocol()
+        protocol_util = get_protocol_util()
+        protocol_util.clear_protocol()
 
         self.provision_handler.run()
 
+        # Create an instance of the protocol without initializing the goal state
+        protocol = protocol_util.get_protocol(init_goal_state=False)
+
         # Once we have the protocol, complete initialization of the telemetry fields
         # that require the goal state and IMDS
-        self._initialize_telemetry()
+        initialize_event_logger_vminfo_common_parameters_and_protocol(protocol)
 
         # Enable RDMA, continue in errors
         if conf.enable_rdma():
@@ -158,10 +157,7 @@ class DaemonHandler(object):
                 # - Changes to RDMA state may not increment the goal state
                 #   incarnation number. A forced update ensures the most
                 #   current values.
-                protocol = self.protocol_util.get_protocol()
-
                 goal_state = GoalState(protocol.client, goal_state_properties=GoalStateProperties.SharedConfig)
-
                 setup_rdma_device(nd_version, goal_state.shared_conf)
             except Exception as e:
                 logger.error("Error setting up rdma device: %s" % e)
