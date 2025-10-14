@@ -1175,7 +1175,7 @@ class ExtHandlersHandler(object):
             1. The configuration flag "Debug.IgnoreSignatureValidationError" is set to True, AND
             2. The policy does NOT require signature validation for this extension.
 \
-        Note: After telemetry release, condition #2 will be removed, and signature validation errors will block the
+        TODO: After telemetry release, remove condition #2 so that signature validation errors will block the
         extension regardless of policy.
         """
         return conf.get_ignore_signature_validation_errors() and not self._policy_engine.should_enforce_signature_validation(ext_handler_i.ext_handler.name)
@@ -1191,7 +1191,7 @@ class ExtHandlerInstance(object):
         self.pkg_file = None
         self.logger = None
         self.set_logger(extension=extension, execution_log_max_size=execution_log_max_size)
-        self._signature_validated = self.get_signature_validated()
+        self._signature_validated = self.__get_signature_validated()
 
     @property
     def signature_validated(self):
@@ -1316,8 +1316,12 @@ class ExtHandlerInstance(object):
                     installed_version, self.ext_handler.name)
                 self.logger.warn(msg)
             self.pkg = installed_pkg
-            self.ext_handler.version = str(installed_version) \
-                if installed_version is not None else None
+            if installed_version is not None:
+                self.ext_handler.version = str(installed_version)
+                # In the case of uninstall, signature_validated should reflect the state of the extension version that is currently installed
+                self._signature_validated = self.__get_signature_validated()
+            else:
+                self.ext_handler.version = None
         else:
             self.pkg = selected_pkg
             if self.pkg is not None:
@@ -1331,10 +1335,9 @@ class ExtHandlerInstance(object):
         if self.pkg is not None:
             self.logger.verbose("Use version: {0}", self.pkg.version)
 
-        # We reset the logger and signature validated state here incase the handler version changes
+        # We reset the logger here incase the handler version changes
         if not requested_version.matches(FlexibleVersion(self.ext_handler.version)):
             self.set_logger(extension=extension)
-            self._signature_validated = self.get_signature_validated()
 
         return self.pkg
 
@@ -2385,7 +2388,7 @@ class ExtHandlerInstance(object):
 
         return None
 
-    def get_signature_validated(self):
+    def __get_signature_validated(self):
         """
         Returns the signature validation state recorded in the HandlerStatus file. If HandlerStatus has not been created,
         returns False.
