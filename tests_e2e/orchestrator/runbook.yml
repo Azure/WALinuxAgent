@@ -57,10 +57,7 @@ variable:
       - publish_hostname
       - recover_network_interface
       - log_collector
-#
-# The GuestConfiguration extension is currently broken and causing these test to fail. Disable test for now while a better solution is investigated
-#
-#      - ext_signature_validation
+      - ext_signature_validation
       - ext_update
 
   #
