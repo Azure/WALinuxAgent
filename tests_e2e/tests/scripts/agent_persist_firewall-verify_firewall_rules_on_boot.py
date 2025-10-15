@@ -28,6 +28,7 @@ from assertpy import fail
 from azurelinuxagent.common.utils import shellutil
 from tests_e2e.tests.lib.firewall_manager import FirewallManager
 from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.remote_test import run_remote_test, RemoteTestSkipped
 from tests_e2e.tests.lib.retry import retry
 
 
@@ -73,7 +74,7 @@ def verify_data_in_cron_logs(cron_log, verify, err_msg):
             raise Exception("Empty cron file, looks like cronjob didnt run")
 
         if any("Unable to connect to network, exiting now" in line for line in cron_logs_lines):
-            raise Exception("VM was unable to connect to network on startup. Skipping test validation")
+            raise RemoteTestSkipped("VM was unable to connect to network on startup. Skipping test validation")
 
         if not any("ExitCode" in line for line in cron_logs_lines):
             raise Exception("Cron logs still incomplete, will try again in a minute")
@@ -184,4 +185,5 @@ ROOT_CRON_LOG = "/tmp/reboot-cron-root.log"
 NON_ROOT_CRON_LOG = f"/tmp/reboot-cron-{NON_ROOT_USER}.log"
 NON_ROOT_WIRE_XML = f"/tmp/wire-versions-{NON_ROOT_USER}.xml"
 ROOT_WIRE_XML = "/tmp/wire-versions-root.xml"
-main()
+
+run_remote_test(main)
