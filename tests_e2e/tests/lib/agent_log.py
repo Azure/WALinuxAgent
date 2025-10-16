@@ -506,8 +506,7 @@ class AgentLog(object):
                     if r.prefix is not None and re.match(extension_prefix_re, r.prefix) is not None and re.match(extension_message_re, r.message, re.DOTALL) is not None:
                         continue  # The error is on the extension, ignore it
                     return True
-            else:
-                return False
+            return False
 
         errors = []
         primary_interface_error = None
