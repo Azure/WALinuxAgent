@@ -47,6 +47,7 @@ from azurelinuxagent.ga.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PA
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.utils.shellutil import run_command, CommandError
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, \
     PY_VERSION_MAJOR, PY_VERSION_MINOR, \
@@ -305,9 +306,22 @@ class Agent(object):
         threading.current_thread().name = "Firewall"
         event.info(event.WALAEventOperation.Firewall, "Setting up firewall after boot. Endpoint: {0}", ustr(endpoint))
         try:
+            try:
+                stdout = run_command(['systemctl', 'list-unit-files', '--type=service', '--no-legend', 'firewalld.service']).rstrip()
+                event.info(event.WALAEventOperation.Firewall, "Firewalld is installed (state: {0}). Will not setup the firewall rules.", stdout)
+                sys.exit(0)
+            except CommandError as command_error:
+                if command_error.returncode == 1 and (command_error.stdout, command_error.stderr) == ('', ''):
+                    pass  # Not installed, continue
+                else:
+                    raise
+        except Exception as error:
+            event.error(event.WALAEventOperation.Firewall, "Unable to determine whether firewalld is installed. Will not setup the firewall rules. Error: {0}", ustr(error))
+            sys.exit(1)
+        try:
             firewall_manager = FirewallManager.create(endpoint)
             firewall_manager.setup()
-            event.info(event.WALAEventOperation.Firewall, "Successfully set the firewall rules")
+            event.info(event.WALAEventOperation.Firewall, "Successfully set up the firewall rules:\n{0}", firewall_manager.get_state())
         except Exception as error:
             event.error(event.WALAEventOperation.Firewall, "Unable to add firewall rules. Error: {0}", ustr(error))
             sys.exit(1)

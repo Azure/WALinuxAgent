@@ -1,0 +1,9 @@
+#
+# Set of tests around configuration of the firewalld and waagent-network-setup services
+#
+name: "Firewalld"
+tests:
+  - "firewalld/boot_conflicts.py"
+images:
+  - "rhel_95"
+owns_vm: true

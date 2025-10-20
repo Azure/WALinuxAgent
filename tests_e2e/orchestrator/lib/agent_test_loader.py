@@ -153,6 +153,9 @@ class AgentTestLoader(object):
     # Matches a reference to a random subset of images within a set with an optional count: random(<image_set>, [<count>]), e.g. random(endorsed, 3), random(endorsed)
     RANDOM_IMAGES_RE = re.compile(r"random\((?P<image_set>[^,]+)(\s*,\s*(?P<count>\d+))?\)")
 
+    # Matches an image URN, which must consist of 4 components separated by ':', e.g. "Canonical:ubuntu-24_04-lts:server:latest"
+    IMAGE_URN_RE = re.compile(r"^[^:]+:[^:]+:[^:]+:[^:]+$")
+
     def _validate(self):
         """
         Performs some basic validations on the data loaded from the YAML description files
@@ -172,7 +175,7 @@ class AgentTestLoader(object):
             for image in suite.images:
                 image = _parse_image(image)
                 # skip validation if suite image from gallery image
-                if CustomImage._is_image_from_gallery(image):
+                if CustomImage._is_image_from_gallery(image) or AgentTestLoader.IMAGE_URN_RE.match(image) is not None:
                     continue
                 if image not in self.images:
                     raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {image} in images.yml or image from a shared gallery")
@@ -248,7 +251,8 @@ class AgentTestLoader(object):
                           rest of the tests in the suite will not be executed). By default, a failure on a test does not stop execution of
                           the test suite.
         * images   - A string, or a list of strings, specifying the images on which the test suite must be executed. Each value
-                     can be the name of a single image (e.g."ubuntu_2004"), or the name of an image set (e.g. "endorsed") or shared gallery image(e.g. "gallery/wait-cloud-init/1.0.2").
+                     can be the name of a single image (e.g."ubuntu_2004"), the name of an image set (e.g. "endorsed"), a shared gallery image
+                     (e.g. "gallery/wait-cloud-init/1.0.2"), or a URN (e.g.""Canonical:ubuntu-24_04-lts:server:latest").
                      The names for images and image sets are defined in WALinuxAgent/tests_e2e/tests_suites/images.yml.
         * locations - [Optional; string or list of strings] If given, the test suite must be executed on that cloud location(e.g. "AzureCloud:eastus2euap").
                      If not specified, or set to an empty string, the test suite will be executed in the default location. This is useful
