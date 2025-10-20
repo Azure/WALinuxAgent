@@ -36,8 +36,9 @@ from azurelinuxagent.common.future import datetime_min_utc
 from azurelinuxagent.common.future import UTC
 
 from assertpy import fail
-from tests_e2e.tests.lib.agent_test import AgentVmssTest, TestSkipped
+from tests_e2e.tests.lib.agent_test import AgentVmssTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
+from tests_e2e.tests.lib.exception import TestSkipped
 from tests_e2e.tests.lib.virtual_machine_scale_set_client import VmssInstanceIpAddress
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.resource_group_client import ResourceGroupClient

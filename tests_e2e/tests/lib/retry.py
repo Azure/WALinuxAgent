@@ -18,8 +18,8 @@ import time
 
 from typing import Callable, Any
 
+from tests_e2e.tests.lib.exception import CommandError
 from tests_e2e.tests.lib.logging import log
-from tests_e2e.tests.lib.shell import CommandError
 
 
 # R1710: Either all return statements in a function should return an expression, or none of them should. (inconsistent-return-statements)

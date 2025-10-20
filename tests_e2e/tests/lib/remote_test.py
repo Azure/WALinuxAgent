@@ -20,18 +20,13 @@ import sys
 
 from typing import Callable
 
+from tests_e2e.tests.lib.exception import TestSkipped
 from tests_e2e.tests.lib.logging import log
 
 SUCCESS_EXIT_CODE = 0
 SKIP_EXIT_CODE = 50
 FAIL_EXIT_CODE = 100
 ERROR_EXIT_CODE = 200
-
-
-class RemoteTestSkipped(Exception):
-    """
-    Remote tests can raise this exception to indicate they should not be executed
-    """
 
 
 def run_remote_test(test_method: Callable[[], None]) -> None:
@@ -42,7 +37,7 @@ def run_remote_test(test_method: Callable[[], None]) -> None:
     try:
         test_method()
         log.info("*** PASSED")
-    except RemoteTestSkipped as e:
+    except TestSkipped as e:
         print(f"SKIPPED: {e}", file=sys.stderr)
         log.info("SKIPPED: %s", e)
         sys.exit(SKIP_EXIT_CODE)
