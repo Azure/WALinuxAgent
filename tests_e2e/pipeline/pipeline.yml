@@ -48,11 +48,6 @@ parameters:
     - failed
     - no
 
-  - name: collect_lisa_logs
-    displayName: Collect LISA logs
-    type: boolean
-    default: true
-
   - name: keep_environment
     displayName: Keep the test VMs (do not delete them)
     type: string
@@ -143,8 +138,6 @@ jobs:
         displayName: "Collect test artifacts"
         # Collect artifacts even if the previous step is cancelled (e.g. timeout)
         condition: always()
-        env:
-          COLLECT_LISA_LOGS: ${{ parameters.collect_lisa_logs }}
 
       - publish: $(Build.ArtifactStagingDirectory)
         artifact: 'artifacts'
