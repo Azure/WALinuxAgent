@@ -947,7 +947,7 @@ class WireClient(object):
 
     def _download_using_appropriate_channel(self, direct_download, hgap_download):
         """
-        Does a download using both the default and fallback channels. By default, the primary channel is direct, host channel is the fallback.
+        Does a download using both the default and fallback channels. By default, the primary channel is hgap, direct channel is the fallback.
         We call the primary channel first and return on success. If primary fails, we try the fallback. If fallback fails,
         we return and *don't* switch the default channel. If fallback succeeds, we change the default channel.
         """

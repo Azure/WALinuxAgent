@@ -51,6 +51,23 @@ class NetworkSecurityRule:
                 }}
             }}"""))
 
+    def add_deny_outbound_connections_rule(self) -> None:
+        self.add_security_rule(
+            json.loads("""{
+                "name": "waagent-no-outbound",
+                "properties": {
+                    "description": "Denies all outbound connections.",
+                    "protocol": "*",
+                    "sourcePortRange": "*",
+                    "destinationPortRange": "*",
+                    "sourceAddressPrefix": "*",
+                    "destinationAddressPrefix": "Internet",
+                    "access": "Deny",
+                    "priority": 200,
+                    "direction": "Outbound"
+                }
+            }"""))
+
     def add_security_rule(self, security_rule: Dict[str, Any]) -> None:
         self._get_network_security_group()["properties"]["securityRules"].append(security_rule)
 
