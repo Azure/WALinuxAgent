@@ -89,7 +89,6 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
             protocol = WireProtocol(WIRESERVER_URL)
             protocol.detect()
             protocol.get_vminfo()
-            protocol.get_certs()
             ext_handlers = protocol.get_goal_state().extensions_goal_state.extensions
             for ext_handler in ext_handlers:
                 protocol.get_goal_state().fetch_extension_manifest(ext_handler.name, ext_handler.manifest_uris)
@@ -161,7 +160,8 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
         # -- Tracking calls to retrieve GoalState is problematic since it is
         #    fetched often; however, the dependent documents, such as the
         #    HostingEnvironmentConfig, will be retrieved the expected number
-        self.assertEqual(1, test_data.call_counts["hostingEnvironmentConfig"])
+        self.assertEqual(2, test_data.call_counts["hostingEnvironmentConfig"])  # Both WireProtocol.detect() and WireProtocol.get_vminfo() get the hosting environment
+
         self.assertEqual(1, patch_report.call_count)
 
     def test_call_storage_kwargs(self, *args):  # pylint: disable=unused-argument
@@ -1121,11 +1121,12 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
                 sequence_number = protocol.get_goal_state().extensions_goal_state.extensions[0].settings[0].sequenceNumber
 
-                self.assertEqual(protocol.client.get_goal_state().incarnation, new_incarnation)
-                self.assertEqual(protocol.client.get_hosting_env().deployment_name, new_hosting_env_deployment_name)
-                self.assertEqual(protocol.client.get_shared_conf().xml_text, new_shared_conf)
+                goal_state = protocol.client.get_goal_state()
+                self.assertEqual(goal_state.incarnation, new_incarnation)
+                self.assertEqual(goal_state.hosting_env.deployment_name, new_hosting_env_deployment_name)
+                self.assertEqual(goal_state.shared_conf.xml_text, new_shared_conf)
                 self.assertEqual(sequence_number, new_sequence_number)
-                self.assertEqual(len(protocol.client.get_certs().summary), 0)
+                self.assertEqual(len(goal_state.certs.summary), 0)
 
                 self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
                 self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
@@ -1171,8 +1172,9 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
             protocol.client.reset_goal_state()
 
-            self.assertEqual(protocol.client.get_goal_state().incarnation, incarnation)
-            self.assertEqual(protocol.client.get_shared_conf().xml_text, new_shared_conf)
+            goal_state = protocol.client.get_goal_state()
+            self.assertEqual(goal_state.incarnation, incarnation)
+            self.assertEqual(goal_state.shared_conf.xml_text, new_shared_conf)
 
             self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
             self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
@@ -1182,7 +1184,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             protocol.client.reset_goal_state(goal_state_properties=GoalStateProperties.All & ~GoalStateProperties.Certificates)
 
             with self.assertRaises(ProtocolError) as context:
-                _ = protocol.client.get_certs()
+                _ = protocol.client.get_goal_state().certs
 
             expected_message = "Certificates is not in goal state properties"
             self.assertIn(expected_message, str(context.exception))
