@@ -495,7 +495,19 @@ class AgentLog(object):
         ]
 
         def is_error(r: AgentLogRecord) -> bool:
-            return r.level in ('ERROR', 'WARNING') or any(err in r.text for err in ['Exception', 'Traceback', '[CGW]'])
+            if r.level in ('ERROR', 'WARNING'):
+                return True
+
+            # Some agent errors are not logged at the proper log level so we look for some strings that may indicate an error in the text of the message, but skip them
+            # if they are coming from an extension
+            for err in ['Exception', 'Traceback', '[CGW]']:
+                if err in r.message:
+                    extension_prefix_re = r'\[.+]'  # The prefix for extension-related messages is the name of the extension in brackets
+                    extension_message_re = r'Command:[^\n]+\n\[stdout]\n.*\n\[stderr].*'  # The message logged by the agent includes the extension command and its stdout and stderr
+                    if r.prefix is not None and re.match(extension_prefix_re, r.prefix) is not None and re.match(extension_message_re, r.message, re.DOTALL) is not None:
+                        continue  # The error is on the extension, ignore it
+                    return True
+            return False
 
         errors = []
         primary_interface_error = None
