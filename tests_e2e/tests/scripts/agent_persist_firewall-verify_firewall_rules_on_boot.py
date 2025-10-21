@@ -26,7 +26,7 @@ import shutil
 from assertpy import fail
 
 from azurelinuxagent.common.utils import shellutil
-from tests_e2e.tests.lib.exception import TestSkipped
+from tests_e2e.tests.lib.test_result import TestSkipped
 from tests_e2e.tests.lib.firewall_manager import FirewallManager
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import run_remote_test

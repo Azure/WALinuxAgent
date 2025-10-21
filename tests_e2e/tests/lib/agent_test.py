@@ -28,9 +28,10 @@ from typing import Any, Dict, List
 from azurelinuxagent.common.future import datetime_min_utc
 
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext, AgentVmTestContext, AgentVmssTestContext
-from tests_e2e.tests.lib.exception import RemoteTestError, TestSkipped, CommandError
+from tests_e2e.tests.lib.test_result import RemoteTestError, TestSkipped
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import FAIL_EXIT_CODE, SKIP_EXIT_CODE
+from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.ssh_client import ATTEMPTS, ATTEMPT_DELAY, SshClient
 
 

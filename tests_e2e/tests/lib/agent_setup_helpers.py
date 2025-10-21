@@ -18,7 +18,7 @@
 import time
 
 from tests_e2e.tests.lib.logging import log
-from tests_e2e.tests.lib.exception import CommandError
+from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
 
 

@@ -20,7 +20,7 @@ import sys
 
 from typing import Callable
 
-from tests_e2e.tests.lib.exception import TestSkipped
+from tests_e2e.tests.lib.test_result import TestSkipped
 from tests_e2e.tests.lib.logging import log
 
 SUCCESS_EXIT_CODE = 0
