@@ -96,7 +96,7 @@ class BootConflicts(AgentVmTest):
 
         waagent_log_size = self._get_waagent_log_size()
 
-        log.info("Starting waagent service to create waagent-network-setup.service...")
+        log.info("Starting waagent service to install waagent-network-setup.service...")
         self._ssh_client.run_command("systemctl start waagent", use_sudo=True)
 
         waagent_log = self._wait_for_log_message(waagent_log_size, r"firewalld|waagent-network-setup\.service", "Successfully added and enabled the waagent-network-setup.service")
@@ -112,7 +112,6 @@ class BootConflicts(AgentVmTest):
 
     def _wait_for_log_message(self, offset: int, selector_re: str, message: str) -> str:
         log.info(f"Checking waagent.log starting at offset {offset}")
-        log.info(f"{(offset, selector_re, message)}")
 
         limit = datetime.now() + timedelta(minutes=5)
 
