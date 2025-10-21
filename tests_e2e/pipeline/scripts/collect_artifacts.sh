@@ -62,8 +62,7 @@ mv "$LOGS_DIRECTORY"/lisa/*/*/lisa.junit.xml "$BUILD_ARTIFACTSTAGINGDIRECTORY"/r
 #
 # Move the rest of the LISA logs to "lisa_logs"
 #
-if [[ ${COLLECT_LISA_LOGS,,} == 'true' ]]; then  # case-insensitive comparison
-  mkdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa_logs
-  mv "$LOGS_DIRECTORY"/lisa/*/*/* "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa_logs
-fi
+mkdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa_logs
+mv "$LOGS_DIRECTORY"/lisa/*/*/* "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa_logs
+
 
