@@ -85,11 +85,11 @@ else:
     from datetime import tzinfo, timedelta
 
     class _UTC(tzinfo):
-        def utcoffset(self, dt):
+        def utcoffset(self, _):
             return timedelta(0)
-        def tzname(self, dt):
+        def tzname(self, _):
             return "UTC"
-        def dst(self, dt):
+        def dst(self, _):
             return timedelta(0)
 
     UTC = _UTC()
