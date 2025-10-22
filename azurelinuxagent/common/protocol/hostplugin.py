@@ -62,7 +62,7 @@ MAXIMUM_PAGEBLOB_PAGE_SIZE = 4 * 1024 * 1024  # Max page size: 4MB
 
 
 class HostPluginProtocol(object):
-    is_default_channel = False
+    is_default_channel = True
 
     FETCH_REPORTING_PERIOD = datetime.timedelta(minutes=1)
     STATUS_REPORTING_PERIOD = datetime.timedelta(minutes=1)
