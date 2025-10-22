@@ -601,7 +601,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 HostPluginProtocol.is_default_channel = True
 
                 protocol.client.download_zip_package("Microsoft.FakeExtension-1.0.0.0", [extension_url], target_file, target_directory, use_verify_header=False,
-                                                     signature="", ignore_signature_validation_errors=True)
+                                                     signature="", enforce_signature=False)
 
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
@@ -640,7 +640,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
             protocol.client.download_zip_package("Microsoft.FakeExtension-1.0.0.0", [extension_url], target_file, target_directory, use_verify_header=False,
-                                                 signature="", ignore_signature_validation_errors=True)
+                                                 signature="", enforce_signature=False)
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 3, "Unexpected number of HTTP requests: [{0}]".format(urls))
