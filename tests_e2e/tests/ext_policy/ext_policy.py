@@ -246,12 +246,12 @@ class ExtPolicy(AgentVmTest):
             # does not support the distro, skip this workaround and the test case (5).
             distro = self._ssh_client.run_command("get_distro.py").rstrip()
             if VmExtensionIds.GuestConfig.supports_distro(distro):
-                guest_config_resource_name = "AzurePolicyforLinux"
-                if guest_config_resource_name not in extension_names_on_vm:
+                # Refresh the list of installed extensions and check if GuestConfig is already present
+                extension_types_on_vm = {ext.type_properties_type for ext in self._context.vm.get_extensions().value}
+                if "ConfigurationforLinux" not in extension_types_on_vm:
                     log.info("")
                     log.info("Installing GuestConfig extension.")
-                    guest_config = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.GuestConfig,
-                                                                 resource_name=guest_config_resource_name)
+                    guest_config = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.GuestConfig)
                     guest_config.enable(auto_upgrade_minor_version=True)
 
             log.info("")
