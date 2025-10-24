@@ -185,8 +185,7 @@ class ExtPolicy(AgentVmTest):
             # without settings have different status reporting logic, so we should test all cases.
             # CustomScript is a single-config extension.
             custom_script = ExtPolicy.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
-                                              resource_name="CustomScript"),
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript),
                 {'commandToExecute': f"echo '{str(uuid.uuid4())}'"}
             )
 
@@ -206,15 +205,13 @@ class ExtPolicy(AgentVmTest):
 
             # AzureMonitorLinuxAgent is a no-config extension (extension without settings).
             azure_monitor = ExtPolicy.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent,
-                                              resource_name="AzureMonitorLinuxAgent"),
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent),
                 None
             )
 
             # AzureSecurityLinuxAgent is an extension that reports heartbeat.
             azure_security = ExtPolicy.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureSecurityLinuxAgent,
-                                              resource_name="AzureSecurityLinuxAgent"),
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureSecurityLinuxAgent),
                 {}
             )
 
