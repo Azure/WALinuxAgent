@@ -18,6 +18,13 @@
 from tests_e2e.tests.lib.shell import CommandError
 
 
+class RemoteTestExitCode(object):
+    SUCCESS_EXIT_CODE = 0
+    SKIP_EXIT_CODE = 50
+    FAIL_EXIT_CODE = 100
+    ERROR_EXIT_CODE = 200
+
+
 class TestSkipped(Exception):
     """
     Tests can raise this exception to indicate they should not be executed (for example, if trying to execute them on

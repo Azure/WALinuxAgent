@@ -20,13 +20,8 @@ import sys
 
 from typing import Callable
 
-from tests_e2e.tests.lib.test_result import TestSkipped
+from tests_e2e.tests.lib.test_result import TestSkipped, RemoteTestExitCode
 from tests_e2e.tests.lib.logging import log
-
-SUCCESS_EXIT_CODE = 0
-SKIP_EXIT_CODE = 50
-FAIL_EXIT_CODE = 100
-ERROR_EXIT_CODE = 200
 
 
 def run_remote_test(test_method: Callable[[], None]) -> None:
@@ -40,15 +35,15 @@ def run_remote_test(test_method: Callable[[], None]) -> None:
     except TestSkipped as e:
         print(f"SKIPPED: {e}", file=sys.stderr)
         log.info("SKIPPED: %s", e)
-        sys.exit(SKIP_EXIT_CODE)
+        sys.exit(RemoteTestExitCode.SKIP_EXIT_CODE)
     except AssertionError as e:
         print(f"{e}", file=sys.stderr)
         log.error("%s", e)
-        sys.exit(FAIL_EXIT_CODE)
+        sys.exit(RemoteTestExitCode.FAIL_EXIT_CODE)
     except Exception as e:
         print(f"UNEXPECTED ERROR: {e}", file=sys.stderr)
         log.exception("*** UNEXPECTED ERROR")
-        sys.exit(ERROR_EXIT_CODE)
+        sys.exit(RemoteTestExitCode.ERROR_EXIT_CODE)
 
-    sys.exit(SUCCESS_EXIT_CODE)
+    sys.exit(RemoteTestExitCode.SUCCESS_EXIT_CODE)
 

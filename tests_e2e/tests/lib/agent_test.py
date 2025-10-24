@@ -28,9 +28,8 @@ from typing import Any, Dict, List
 from azurelinuxagent.common.future import datetime_min_utc
 
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext, AgentVmTestContext, AgentVmssTestContext
-from tests_e2e.tests.lib.test_result import RemoteTestError, TestSkipped
+from tests_e2e.tests.lib.test_result import RemoteTestError, TestSkipped, RemoteTestExitCode
 from tests_e2e.tests.lib.logging import log
-from tests_e2e.tests.lib.remote_test import FAIL_EXIT_CODE, SKIP_EXIT_CODE
 from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.ssh_client import ATTEMPTS, ATTEMPT_DELAY, SshClient
 
@@ -92,9 +91,9 @@ class AgentTest(ABC):
             output = ssh_client.run_command(command=command, use_sudo=use_sudo, attempts=attempts, attempt_delay=attempt_delay)
             log.info("*** PASSED: [%s]\n%s", command, self._indent(output))
         except CommandError as error:
-            if error.exit_code == SKIP_EXIT_CODE:
+            if error.exit_code == RemoteTestExitCode.SKIP_EXIT_CODE:
                 raise TestSkipped(f"[{command}] {error.stderr}{self._indent(error.stdout)}")
-            if error.exit_code == FAIL_EXIT_CODE:
+            if error.exit_code == RemoteTestExitCode.FAIL_EXIT_CODE:
                 fail(f"[{command}] {error.stderr}{self._indent(error.stdout)}")
             raise RemoteTestError(command=error.command, exit_code=error.exit_code, stdout=self._indent(error.stdout), stderr=error.stderr)
 
