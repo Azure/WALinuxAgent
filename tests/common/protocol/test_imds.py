@@ -41,6 +41,12 @@ def get_mock_compute_response():
     "platformUpdateDomain": "0",
     "publisher": "UnitPublisher",
     "resourceGroupName": "UnitResourceGroupName",
+    "securityProfile": {
+            "secureBootEnabled": "true",
+            "virtualTpmEnabled": "true",
+            "encryptionAtHost": "true",
+            "securityType": "ConfidentialVM"
+    },
     "sku": "UnitSku",
     "subscriptionId": "e4402c6c-2804-4a0a-9dee-d61918fc4d28",
     "tags": "Key1:Value1;Key2:Value2",
@@ -62,7 +68,7 @@ class TestImds(AgentTestCase):
         self.assertEqual(1, mock_http_get.call_count)
         positional_args, kw_args = mock_http_get.call_args
 
-        self.assertEqual('http://169.254.169.254/metadata/instance/compute?api-version=2018-02-01', positional_args[0])
+        self.assertEqual('http://169.254.169.254/metadata/instance/compute?api-version={0}'.format(imds.APIVERSION), positional_args[0])
         self.assertTrue('User-Agent' in kw_args['headers'])
         self.assertTrue('Metadata' in kw_args['headers'])
         self.assertEqual(True, kw_args['headers']['Metadata'])
@@ -99,6 +105,12 @@ class TestImds(AgentTestCase):
         "platformUpdateDomain": "0",
         "publisher": "UnitPublisher",
         "resourceGroupName": "UnitResourceGroupName",
+        "securityProfile": {
+            "secureBootEnabled": "true",
+            "virtualTpmEnabled": "true",
+            "encryptionAtHost": "true",
+            "securityType": "ConfidentialVM"
+        },
         "sku": "UnitSku",
         "subscriptionId": "e4402c6c-2804-4a0a-9dee-d61918fc4d28",
         "tags": "Key1:Value1;Key2:Value2",
@@ -133,6 +145,14 @@ class TestImds(AgentTestCase):
         self.assertEqual('In', compute_info.zone)
 
         self.assertEqual('UnitPublisher:UnitOffer:UnitSku:UnitVersion', compute_info.image_info)
+
+        security_profile = {
+            "secureBootEnabled": "true",
+            "virtualTpmEnabled": "true",
+            "encryptionAtHost": "true",
+            "securityType": "ConfidentialVM"
+        }
+        self.assertEqual(security_profile, compute_info.securityProfile)
 
     def test_is_custom_image(self):
         image_origin = self._setup_image_origin_assert("", "", "", "")
@@ -373,7 +393,7 @@ class TestImds(AgentTestCase):
         self.assertEqual(restutil.HTTP_USER_AGENT_HEALTH, kw_args['headers']['User-Agent'])
         self.assertTrue('Metadata' in kw_args['headers'])
         self.assertEqual(True, kw_args['headers']['Metadata'])
-        self.assertEqual('http://169.254.169.254/metadata/instance?api-version=2018-02-01',
+        self.assertEqual('http://169.254.169.254/metadata/instance?api-version={0}'.format(imds.APIVERSION),
                          positional_args[0])
         self.assertEqual(expected_valid, validate_response[0])
         self.assertTrue(expected_response in validate_response[1],
@@ -476,6 +496,37 @@ class TestImds(AgentTestCase):
             resp.status = httpclient.OK
             resp.read.return_value = 'Mock success response'
         return resp
+
+    def test_is_cvm(self):
+        s = '''{
+                "securityProfile": {
+                    "secureBootEnabled": "true",
+                    "virtualTpmEnabled": "true",
+                    "encryptionAtHost": "true",
+                    "securityType": "ConfidentialVM"
+                }
+            }'''
+
+        data = json.loads(s)
+        compute_info = imds.ComputeInfo()
+        set_properties("compute", compute_info, data)
+        self.assertTrue(compute_info.is_cvm())
+
+        s = '''{
+                    "securityProfile": {
+                        "secureBootEnabled": "true",
+                        "virtualTpmEnabled": "true",
+                        "encryptionAtHost": "true",
+                        "securityType": "TrustedLaunch"
+                    }
+            }'''
+
+        data = json.loads(s)
+        compute_info = imds.ComputeInfo()
+        set_properties("compute", compute_info, data)
+        self.assertFalse(compute_info.is_cvm())
+
+
 
 
 if __name__ == '__main__':

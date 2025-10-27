@@ -12,7 +12,7 @@ from azurelinuxagent.common.datacontract import DataContract, set_properties
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 IMDS_ENDPOINT = '169.254.169.254'
-APIVERSION = '2018-02-01'
+APIVERSION = '2025-04-07'
 BASE_METADATA_URI = "http://{0}/metadata/{1}?api-version={2}"
 
 IMDS_IMAGE_ORIGIN_UNKNOWN = 0
@@ -199,6 +199,7 @@ class ComputeInfo(DataContract):
                  placementUpdateDomain=None,
                  publisher=None,
                  resourceGroupName=None,
+                 securityProfile=None,
                  sku=None,
                  subscriptionId=None,
                  tags=None,
@@ -216,6 +217,7 @@ class ComputeInfo(DataContract):
         self.platformUpdateDomain = placementUpdateDomain
         self.publisher = publisher
         self.resourceGroupName = resourceGroupName
+        self.securityProfile = securityProfile
         self.sku = sku
         self.subscriptionId = subscriptionId
         self.tags = tags
