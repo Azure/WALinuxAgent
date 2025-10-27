@@ -19,10 +19,10 @@ from tests_e2e.tests.lib.shell import CommandError
 
 
 class RemoteTestExitCode(object):
-    SUCCESS_EXIT_CODE = 0
-    SKIP_EXIT_CODE = 50
-    FAIL_EXIT_CODE = 100
-    ERROR_EXIT_CODE = 200
+    SUCCESS = 0
+    SKIP = 50
+    FAIL = 100
+    ERROR = 200
 
 
 class TestSkipped(Exception):

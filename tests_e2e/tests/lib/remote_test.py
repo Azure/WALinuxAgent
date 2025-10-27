@@ -35,15 +35,15 @@ def run_remote_test(test_method: Callable[[], None]) -> None:
     except TestSkipped as e:
         print(f"SKIPPED: {e}", file=sys.stderr)
         log.info("SKIPPED: %s", e)
-        sys.exit(RemoteTestExitCode.SKIP_EXIT_CODE)
+        sys.exit(RemoteTestExitCode.SKIP)
     except AssertionError as e:
         print(f"{e}", file=sys.stderr)
         log.error("%s", e)
-        sys.exit(RemoteTestExitCode.FAIL_EXIT_CODE)
+        sys.exit(RemoteTestExitCode.FAIL)
     except Exception as e:
         print(f"UNEXPECTED ERROR: {e}", file=sys.stderr)
         log.exception("*** UNEXPECTED ERROR")
-        sys.exit(RemoteTestExitCode.ERROR_EXIT_CODE)
+        sys.exit(RemoteTestExitCode.ERROR)
 
-    sys.exit(RemoteTestExitCode.SUCCESS_EXIT_CODE)
+    sys.exit(RemoteTestExitCode.SUCCESS)
 
