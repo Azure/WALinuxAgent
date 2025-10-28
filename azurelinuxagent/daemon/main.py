@@ -132,19 +132,38 @@ class DaemonHandler(object):
         if conf.get_resourcedisk_format():
             self.resourcedisk_handler.run()
 
-        # Always redetermine the protocol start (e.g., wireserver vs.
-        # on-premise) since a VHD can move between environments
+        #
+        # Clear the saved protocol state in order to force protocol detection.
+        #
+        # Initially this was done to detect changes in the protocol used to communicate with the Host. Azure Stack used to have its own protocol (the "Metadata"
+        # protocol) and, since VMs can move between Azure Stack and Azure, protocol detection was needed. Currently, both Azure Stack and Azure use the WireServer
+        # protocol, but there are some side effects of protocol detection that are still needed: generating the Transport certificate for communication with the
+        # WireServer, initializing the goal state, and cleaning up the state saved by Azure Stack. That functionality needs be refactored out from protocol
+        # detection, but in the meanwhile we keep the approach of forcing protocol detection during initialization.
+        #
         protocol_util = get_protocol_util()
         protocol_util.clear_protocol()
 
+        #
+        # Telemetry events include several fields that are retrieved from the goal state. The call to ProtocolUtil.get_protocol() will trigger protocol detection;
+        # If there are any errors, clear any protocol state that was saved to disk and continue execution.
+        #
+        protocol = None
+        try:
+            protocol = protocol_util.get_protocol(init_goal_state=False)
+        except Exception as e:
+            logger.warn("Failed to instantiate the WireProtocol; will continue execution, but some telemetry events will not be associated to the current VM. Error: {0}", str(e))
+            protocol_util.clear_protocol()
+        if protocol is not None:
+            try:
+                initialize_event_logger_vminfo_common_parameters_and_protocol(protocol)
+            except Exception as e:
+                logger.warn("Failed to initialize telemetry; will continue execution, but some telemetry events will not be associated to the current VM: {0}", str(e))
+
+        #
+        # Run the provisioning code if needed.
+        #
         self.provision_handler.run()
-
-        # Create an instance of the protocol without initializing the goal state
-        protocol = protocol_util.get_protocol(init_goal_state=False)
-
-        # Once we have the protocol, complete initialization of the telemetry fields
-        # that require the goal state and IMDS
-        initialize_event_logger_vminfo_common_parameters_and_protocol(protocol)
 
         # Enable RDMA, continue in errors
         if conf.enable_rdma():
@@ -153,10 +172,7 @@ class DaemonHandler(object):
 
             logger.info("RDMA capabilities are enabled in configuration")
             try:
-                # Ensure the most recent SharedConfig is available
-                # - Changes to RDMA state may not increment the goal state
-                #   incarnation number. A forced update ensures the most
-                #   current values.
+                protocol = protocol_util.get_protocol(init_goal_state=False)
                 goal_state = GoalState(protocol.client, goal_state_properties=GoalStateProperties.SharedConfig)
                 setup_rdma_device(nd_version, goal_state.shared_conf)
             except Exception as e:

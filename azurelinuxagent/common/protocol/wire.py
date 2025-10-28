@@ -122,13 +122,12 @@ class WireProtocol(DataContract):
     def report_provision_status(self, provision_status):
         validate_param("provision_status", provision_status, ProvisionStatus)
 
+        goal_state = GoalState(self.client, goal_state_properties=GoalStateProperties.RoleConfig)
         if provision_status.status is not None:
-            self.client.report_health(provision_status.status,
-                                      provision_status.subStatus,
-                                      provision_status.description)
+            self.client.report_health(goal_state, provision_status.status, provision_status.subStatus, provision_status.description)
         if provision_status.properties.certificateThumbprint is not None:
             thumbprint = provision_status.properties.certificateThumbprint
-            self.client.report_role_prop(thumbprint)
+            self.client.report_role_prop(goal_state, thumbprint)
 
     def report_vm_status(self, vm_status):
         validate_param("vm_status", vm_status, VMStatus)
@@ -999,8 +998,7 @@ class WireClient(object):
 
         raise ProtocolError("Failed to upload status blob via either channel")
 
-    def report_role_prop(self, thumbprint):
-        goal_state = self.get_goal_state()
+    def report_role_prop(self, goal_state, thumbprint):
         role_prop = _build_role_properties(goal_state.container_id,
                                            goal_state.role_instance_id,
                                            thumbprint)
@@ -1020,8 +1018,7 @@ class WireClient(object):
                                  u",{0}: {1}").format(resp.status,
                                                       resp.read()))
 
-    def report_health(self, status, substatus, description):
-        goal_state = self.get_goal_state()
+    def report_health(self, goal_state, status, substatus, description):
         health_report = _build_health_report(goal_state.incarnation,
                                              goal_state.container_id,
                                              goal_state.role_instance_id,
