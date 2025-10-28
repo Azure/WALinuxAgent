@@ -30,6 +30,8 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
+from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, EXT_SIGNATURE_VALIDATION_CPU_QUOTA, EXT_SIGNATURE_VALIDATION_SLICE, EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT
+
 
 # Signature validation requires OpenSSL version 1.1.0 or later. The 'no_check_time' flag used for the 'openssl cms -verify'
 # command is not supported on older versions.
@@ -191,6 +193,19 @@ def validate_signature(package_path, signature, package_full_name):
             '-CAfile', microsoft_root_cert_file,  # Path to the trusted root certificate file used for verification
             '-no_check_time'  # Skips checking whether the certificate is expired
         ]
+
+        # Signature validation is a CPU-intensive operation. If cgroups are enabled and the agent's CPU quota is set too low,
+        # the validation process may take an excessive amount of time. As a workaround, if cgroups are enabled,
+        # we run extension signature validation in a separate cgroup with its own dedicated CPU quota.
+        if CGroupConfigurator.get_instance().enabled():
+            systemd_cmd = [
+                'systemd-run',
+                '--unit={0}'.format(EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT),
+                '--slice={0}'.format(EXT_SIGNATURE_VALIDATION_SLICE),
+                '--scope', '--property=CPUAccounting=yes',
+                '--property=CPUQuota={0}'.format(EXT_SIGNATURE_VALIDATION_CPU_QUOTA)
+            ]
+            command = systemd_cmd + command
         run_command(command, encode_output=False)
 
         report_validation_event(op=WALAEventOperation.PackageSignatureResult, level=logger.LogLevel.INFO,
