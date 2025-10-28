@@ -452,8 +452,9 @@ class AgentLog(object):
             # 2025-03-31T08:46:39.253900Z INFO ExtHandler ExtHandler [CGW] Failed to set the extension azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice slice and quotas: Can't set properties ['CPUQuota='] of azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice: 'systemctl set-property azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice CPUQuota= --runtime' failed: 1 (Failed to set unit properties on azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice: Message recipient disconnected from message bus without replying)
             # 2025-04-28T12:27:25.311806Z INFO ExtHandler ExtHandler [CGW] Failed to set the extension azure-vmextensions-Microsoft.CPlat.Core.RunCommandHandlerLinux.slice slice and quotas: 'systemctl show azure-vmextensions-Microsoft.CPlat.Core.RunCommandHandlerLinux.slice --property CPUAccounting' failed: 1 (Failed to get properties: Remote peer disconnected)
             # 2025-04-27T12:28:14.585253Z INFO ExtHandler ExtHandler [CGW] Error parsing current CPUQuotaPerSecUSec: 'systemctl show azure-vmextensions-Microsoft.CPlat.Core.RunCommandHandlerLinux.RunCommandHandler.slice --property CPUQuotaPerSecUSec' failed: 1 (Failed to get properties: Transport endpoint is not connected)
+            # 2025-10-20T10:42:19.413988Z INFO ExtHandler ExtHandler [CGW] Failed to get the properties to update for gatestext.service: 'systemctl show gatestext.service --property MemoryAccounting' failed: 1 (Failed to get properties: Transport endpoint is not connected)
             {
-                'message': r"(Failed to set the extension|Error parsing).*systemctl (show|set-property).*failed: 1.*(Message recipient disconnected from message bus without replying|Connection reset by peer|Remote peer disconnected|Transport endpoint is not connected)",
+                'message': r"(Failed to set the extension|Failed to get the properties|Error parsing).*systemctl (show|set-property).*failed: 1.*(Message recipient disconnected from message bus without replying|Connection reset by peer|Remote peer disconnected|Transport endpoint is not connected)",
             },
             #
             # 2025-01-06T09:32:44.641948Z INFO ExtHandler ExtHandler [CGW] Disabling resource usage monitoring. Reason: Failed to start Microsoft.Azure.Extensions.CustomScript-2.1.10 using systemd-run, will try invoking the extension directly. Error: [SystemdRunError] Systemd process exited with code 1 and output [stdout]
@@ -494,7 +495,19 @@ class AgentLog(object):
         ]
 
         def is_error(r: AgentLogRecord) -> bool:
-            return r.level in ('ERROR', 'WARNING') or any(err in r.text for err in ['Exception', 'Traceback', '[CGW]'])
+            if r.level in ('ERROR', 'WARNING'):
+                return True
+
+            # Some agent errors are not logged at the proper log level so we look for some strings that may indicate an error in the text of the message, but skip them
+            # if they are coming from an extension
+            for err in ['Exception', 'Traceback', '[CGW]']:
+                if err in r.message:
+                    extension_prefix_re = r'\[.+]'  # The prefix for extension-related messages is the name of the extension in brackets
+                    extension_message_re = r'Command:[^\n]+\n\[stdout]\n.*\n\[stderr].*'  # The message logged by the agent includes the extension command and its stdout and stderr
+                    if r.prefix is not None and re.match(extension_prefix_re, r.prefix) is not None and re.match(extension_message_re, r.message, re.DOTALL) is not None:
+                        continue  # The error is on the extension, ignore it
+                    return True
+            return False
 
         errors = []
         primary_interface_error = None
