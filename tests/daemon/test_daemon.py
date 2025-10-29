@@ -24,7 +24,7 @@ from azurelinuxagent.daemon.main import OPENSSL_FIPS_ENVIRONMENT, get_daemon_han
 from azurelinuxagent.pa.provision.default import ProvisionHandler
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
-from tests.lib.tools import AgentTestCase, Mock, patch
+from tests.lib.tools import AgentTestCase, MagicMock, Mock, patch
 
 
 class MockDaemonCall(object):
@@ -117,27 +117,30 @@ class TestDaemon(AgentTestCase):
     @patch('azurelinuxagent.common.conf.get_provisioning_agent', return_value='waagent')
     @patch('azurelinuxagent.ga.update.UpdateHandler.run_latest', side_effect=AgentTestCase.fail)
     @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.run', side_effect=ProvisionHandler.write_agent_disabled)
-    def test_daemon_agent_disabled(self, _, patch_run_latest, gpa):  # pylint: disable=unused-argument
+    def test_daemon_agent_disabled(self, _, patch_run_latest, __):
         """
         Agent should provision, then sleep forever when disable_agent is found
         """
+        protocol_util = MagicMock()
+        protocol_util.get_protocol - MagicMock()
+        with patch('azurelinuxagent.daemon.main.get_protocol_util', return_value=protocol_util):
+            with patch('azurelinuxagent.daemon.main.initialize_event_logger_vminfo_common_parameters_and_protocol'):
+                with patch('azurelinuxagent.pa.provision.get_provision_handler', return_value=ProvisionHandler()):
+                    # file is created by provisioning handler
+                    self.assertFalse(os.path.exists(conf.get_disable_agent_file_path()))
+                    daemon_handler = get_daemon_handler()
 
-        with patch('azurelinuxagent.pa.provision.get_provision_handler', return_value=ProvisionHandler()):
-            # file is created by provisioning handler
-            self.assertFalse(os.path.exists(conf.get_disable_agent_file_path()))
-            daemon_handler = get_daemon_handler()
+                    # we need to assert this thread will sleep forever, so fork it
+                    daemon = Process(target=daemon_handler.run)
+                    daemon.start()
+                    daemon.join(timeout=5)
 
-            # we need to assert this thread will sleep forever, so fork it
-            daemon = Process(target=daemon_handler.run)
-            daemon.start()
-            daemon.join(timeout=5)
+                    self.assertTrue(daemon.is_alive())
+                    daemon.terminate()
 
-            self.assertTrue(daemon.is_alive())
-            daemon.terminate()
-
-            # disable_agent was written, run_latest was not called
-            self.assertTrue(os.path.exists(conf.get_disable_agent_file_path()))
-            self.assertEqual(0, patch_run_latest.call_count)
+                    # disable_agent was written, run_latest was not called
+                    self.assertTrue(os.path.exists(conf.get_disable_agent_file_path()))
+                    self.assertEqual(0, patch_run_latest.call_count)
 
 
 if __name__ == '__main__':
