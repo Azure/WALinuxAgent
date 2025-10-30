@@ -4359,9 +4359,6 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
         data_file["manifest"] = "wire/manifest_vm_access.xml"
 
-        handler_name = "Microsoft.OSTCExtensions.Edp.VMAccessForLinux"
-        handler_version = "1.7.0"
-
         # Extension should be enabled, but signature should not be validated
         with patch('azurelinuxagent.ga.signature_validation_util.validate_signature') as mock_validate:
             self._test_enable_extension(data_file=data_file,

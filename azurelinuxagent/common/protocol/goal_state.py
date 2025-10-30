@@ -35,6 +35,7 @@ from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.utils.archive import GoalStateHistory, SHARED_CONF_FILE_NAME
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
+from azurelinuxagent.ga.confidential_vm_util import ConfidentialVMInfo
 
 
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
@@ -279,13 +280,15 @@ class GoalState(object):
 
         # For each extension in the goal state being executed, we emit telemetry to indicate whether a signature is present
         # for the extension. The "is_success" field reflects whether the extension was signed.
-        # If signature is missing, skip telemetry in the following cases:
-        #   - Extension requested state is 'uninstall' (uninstall goal states never include signature).
-        #   - The goal state API does not support the 'encoded_signature' property (e.g., fast track goal states where HGAP version does not support signature).
-        for ext in self._extensions_goal_state.extensions:
-            if ext.state == "uninstall" or not self._extensions_goal_state.supports_encoded_signature():
-                continue
-            add_event(op=WALAEventOperation.ExtensionSigned, message="", name=ext.name, version=ext.version, is_success=ext.encoded_signature != "", log_event=False)
+        # Only send telemetry if the following conditions are met:
+        #   - Goal state API supports 'encoded_signature' property (e.g., for fast track goal states, HGAP version should support signature)
+        #   - Agent is running on a CVM (signature is currently only supported for CVMs)
+        #   - Extension requested state is *not* 'uninstall' (uninstall goal states never include signature).
+        if self._extensions_goal_state.supports_encoded_signature() and ConfidentialVMInfo.is_confidential_vm():
+            for ext in self._extensions_goal_state.extensions:
+                if ext.state == "uninstall":
+                    continue
+                add_event(op=WALAEventOperation.ExtensionSigned, message="", name=ext.name, version=ext.version, is_success=ext.encoded_signature != "", log_event=False)
 
         # Ensure all certificates are downloaded on Fast Track goal states in order to maintain backwards compatibility with previous
         # versions of the Agent, which used to download certificates from the WireServer on every goal state. Some customer applications
