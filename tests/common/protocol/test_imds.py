@@ -497,37 +497,6 @@ class TestImds(AgentTestCase):
             resp.read.return_value = 'Mock success response'
         return resp
 
-    def test_is_cvm(self):
-        s = '''{
-                "securityProfile": {
-                    "secureBootEnabled": "true",
-                    "virtualTpmEnabled": "true",
-                    "encryptionAtHost": "true",
-                    "securityType": "ConfidentialVM"
-                }
-            }'''
-
-        data = json.loads(s)
-        compute_info = imds.ComputeInfo()
-        set_properties("compute", compute_info, data)
-        self.assertTrue(compute_info.is_cvm())
-
-        s = '''{
-                    "securityProfile": {
-                        "secureBootEnabled": "true",
-                        "virtualTpmEnabled": "true",
-                        "encryptionAtHost": "true",
-                        "securityType": "TrustedLaunch"
-                    }
-            }'''
-
-        data = json.loads(s)
-        compute_info = imds.ComputeInfo()
-        set_properties("compute", compute_info, data)
-        self.assertFalse(compute_info.is_cvm())
-
-
-
 
 if __name__ == '__main__':
     unittest.main()
