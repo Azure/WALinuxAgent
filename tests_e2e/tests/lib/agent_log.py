@@ -68,20 +68,23 @@ class AgentLogRecord:
         # Extension logs may follow different timestamp formats
         # 2023/07/10 20:50:13.459260
         ext_timestamp_regex_1 = r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}[.\d]+"
-        # 2023/07/10 20:50:13
-        # OR
-        # 2023/07/10 20:50:1
-        ext_timestamp_regex_2 = r"(\d{4}/\d{2}/\d{2} \d{2}:\d{2}):(\d{1,2})"
+
+        # 2023/07/10 20:50:13 OR 2023/07/10 20:50:1
+        # 2023/07/10 20:50 OR 2023/07/10 20:5
+        ext_timestamp_regex_2 = r"(\d{4}/\d{2}/\d{2} \d{2}:\d{1,2})(?::(\d{1,2}))?"
 
         if re.match(ext_timestamp_regex_1, self.when):
             return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S.%f').replace(tzinfo=UTC)
 
-        match_regex_2 = re.match(ext_timestamp_regex_2, self.when)
-        if match_regex_2:
-            # Pad second to 2-digits (e.g, 00:1 -> 00:01)
-            seconds = match_regex_2.group(2).zfill(2)
-            padded_time = match_regex_2.group(1) + ':' + seconds
-            return datetime.strptime(padded_time, u'%Y/%m/%d %H:%M:%S').replace(tzinfo=UTC)
+        # Pad seconds to 2 digits (e.g, 00:1 -> 00:01)
+        match = re.match(ext_timestamp_regex_2, self.when)
+        if match:
+            base_time = match.group(1)
+            seconds = match.group(2).zfill(2) if match.group(2) else "00"
+            date, time = base_time.split()
+            hour, minute = time.split(":")
+            padded_time = f"{hour.zfill(2)}:{minute.zfill(2)}:{seconds}"
+            return datetime.strptime(f"{date} {padded_time}", '%Y/%m/%d %H:%M:%S').replace(tzinfo=UTC)
 
         # Logs from agent follow this format: 2023-07-10T20:50:13.038599Z
         return datetime.strptime(self.when, u'%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=UTC)
