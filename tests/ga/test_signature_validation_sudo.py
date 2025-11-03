@@ -17,6 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import os
+import contextlib
 
 from tests.lib.tools import AgentTestCase, data_dir, patch, i_am_root
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
@@ -41,6 +42,20 @@ class TestSignatureValidationSudo(AgentTestCase):
     def tearDown(self):
         patch.stopall()
         AgentTestCase.tearDown(self)
+
+    @staticmethod
+    @contextlib.contextmanager
+    def create_mock_run_command():
+        calls = []
+
+        original_run_command = shellutil.run_command
+
+        def run_command_mock(cmd, *args, **kwargs):
+            calls.append((cmd, args, kwargs))
+            return original_run_command(cmd, *args, **kwargs)
+
+        with patch("azurelinuxagent.ga.signature_validation_util.run_command", side_effect=run_command_mock):
+            yield calls
 
     @staticmethod
     def _validate_signature_in_another_year(target_year, package_path, signature, package_name_and_version):
@@ -77,3 +92,22 @@ class TestSignatureValidationSudo(AgentTestCase):
         # Signature validation should still pass, because the signature was generated when the root certificate was unexpired.
         self.assertTrue(i_am_root(), "Test does not run when non-root")
         TestSignatureValidationSudo._validate_signature_in_another_year(2026, self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
+
+    def test_validate_signature_should_use_systemd_run(self):
+        with patch("azurelinuxagent.ga.signature_validation_util.CGroupConfigurator.get_instance") as mock_get_instance:
+            mock_instance = mock_get_instance.return_value
+            mock_instance.enabled.return_value = True
+            with self.create_mock_run_command() as run_command_calls:
+                validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
+
+            # Check if 'openssl cms -verify' was called with systemd-run
+            systemd_run_called = any(
+                all(s in " ".join(cmd) for s in ["systemd-run", "openssl", "cms", "-verify"])
+                for cmd, _, _ in run_command_calls
+            )
+
+            self.assertTrue(
+                systemd_run_called,
+                "Expected 'validate_signature' to run using 'systemd-run'. "
+                "Commands called:\n{0}".format("\n".join(str(cmd) for cmd, _, _ in run_command_calls))
+            )
