@@ -601,11 +601,11 @@ class UpdateHandler(object):
                     continue
                 certificates = goal_state.certs.summary
                 if not any(settings.certificateThumbprint == c['thumbprint'] for c in certificates):
-                    event.warn(
-                        WALAEventOperation.FetchGoalState,
-                        "The extensions goal state is out of sync with the tenant cert. Certificate {0}, needed by {1}, is missing.",
-                        settings.certificateThumbprint, extension.name)
-                    return False
+                    # check if the certificate was saved to disk on a previous goal state.
+                    certificate_path = os.path.join(conf.get_lib_dir(), settings.certificateThumbprint + '.crt')
+                    if not os.path.isfile(certificate_path):
+                        event.warn(WALAEventOperation.FetchGoalState, "The extensions goal state is out of sync with the tenant cert. Certificate {0}, needed by {1}, is missing.", settings.certificateThumbprint, extension.name)
+                        return False
         return True
 
     def _processing_new_incarnation(self):
