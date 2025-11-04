@@ -29,8 +29,9 @@ from typing import List, Dict, Any
 from assertpy import fail, assert_that
 from time import sleep
 
-from tests_e2e.tests.lib.agent_test import AgentVmTest, TestSkipped
+from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
+from tests_e2e.tests.lib.test_result import TestSkipped
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
