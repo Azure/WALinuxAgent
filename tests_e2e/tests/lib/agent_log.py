@@ -65,28 +65,6 @@ class AgentLogRecord:
 
     @property
     def timestamp(self) -> datetime:
-        # Extension logs may follow different timestamp formats
-        # 2023/07/10 20:50:13.459260
-        ext_timestamp_regex_1 = r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}[.\d]+"
-
-        # 2023/07/10 20:50:13 OR 2023/07/10 20:50:1
-        # 2023/07/10 20:50 OR 2023/07/10 20:5
-        ext_timestamp_regex_2 = r"(\d{4}/\d{2}/\d{2} \d{2}:\d{1,2})(?::(\d{1,2}))?"
-
-        if re.match(ext_timestamp_regex_1, self.when):
-            return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S.%f').replace(tzinfo=UTC)
-
-        # Pad seconds to 2 digits (e.g, 00:1 -> 00:01)
-        match = re.match(ext_timestamp_regex_2, self.when)
-        if match:
-            base_time = match.group(1)
-            seconds = match.group(2).zfill(2) if match.group(2) else "00"
-            date, time = base_time.split()
-            hour, minute = time.split(":")
-            padded_time = f"{hour.zfill(2)}:{minute.zfill(2)}:{seconds}"
-            return datetime.strptime(f"{date} {padded_time}", '%Y/%m/%d %H:%M:%S').replace(tzinfo=UTC)
-
-        # Logs from agent follow this format: 2023-07-10T20:50:13.038599Z
         return datetime.strptime(self.when, u'%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=UTC)
 
     def __str__(self):
@@ -505,9 +483,7 @@ class AgentLog(object):
             # if they are coming from an extension
             for err in ['Exception', 'Traceback', '[CGW]']:
                 if err in r.message:
-                    extension_prefix_re = r'\[.+]'  # The prefix for extension-related messages is the name of the extension in brackets
-                    extension_message_re = r'Command:[^\n]+\n\[stdout]\n.*\n\[stderr].*'  # The message logged by the agent includes the extension command and its stdout and stderr
-                    if r.prefix is not None and re.match(extension_prefix_re, r.prefix) is not None and re.match(extension_message_re, r.message, re.DOTALL) is not None:
+                    if r.prefix is not None and self._EXTENSION_COMMAND_PREFIX.match(r.prefix) is not None and self._EXTENSION_COMMAND_MESSAGE.match(r.message, re.DOTALL) is not None:
                         continue  # The error is on the extension, ignore it
                     return True
             return False
@@ -587,14 +563,47 @@ class AgentLog(object):
     #
     #     Oldest Agent: 2023/06/07 08:04:35.336313 WARNING Disabling guest agent in accordance with ovf-env.xml
     #
-    #     Extension: 2021/03/30 19:45:31 Azure Monitoring Agent for Linux started to handle.
-    #                2021/03/30 19:45:31 [Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.7.0] cwd is /var/lib/waagent/Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.7.0
-    #
     _NEWER_AGENT_RECORD = re.compile(r'(?P<when>[\d-]+T[\d:.]+Z)\s(?P<level>VERBOSE|INFO|WARNING|ERROR)\s(?P<thread>\S+)\s(?P<prefix>(Daemon)|(ExtHandler)|(LogCollector)|(\[\S+\]))\s(?P<message>.*)')
     _2_2_46_AGENT_RECORD = re.compile(r'(?P<when>[\d-]+T[\d:.]+Z)\s(?P<level>VERBOSE|INFO|WARNING|ERROR)\s(?P<thread>)(?P<prefix>Daemon|ExtHandler|\[\S+\])\s(?P<message>.*)')
     _OLDER_AGENT_RECORD = re.compile(r'(?P<when>[\d/]+\s[\d:.]+)\s(?P<level>VERBOSE|INFO|WARNING|ERROR)\s(?P<thread>)(?P<prefix>Daemon|ExtHandler)\s(?P<message>.*)')
     _OLDEST_AGENT_RECORD = re.compile(r'(?P<when>[\d/]+\s[\d:.]+)\s(?P<level>VERBOSE|INFO|WARNING|ERROR)\s(?P<thread>)(?P<prefix>)(?P<message>.*)')
+
+    #
+    # Some extensions write to the Agent's log via legacy code that is a variation of bin/waagent2.0. Those records usually begin with a timestamp that does not match the timestamps used
+    # by the agent, and do not have a level (VERBOSE|INFO|WARNING|ERROR), for example
+    #
+    #    2021/03/30 19:45:31 Azure Monitoring Agent for Linux started to handle.
+    #    2021/03/30 19:45:31 [Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.7.0] cwd is /var/lib/waagent/Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.7.0
+    #
+    # We use this regular expression to try skipping as many as those records as possible.
+    #
     _EXTENSION_RECORD = re.compile(r'(?P<when>[\d/]+\s[\d:.]+)\s(?P<level>)(?P<thread>)((?P<prefix>\[[^\]]+\])\s)?(?P<message>.*)')
+
+    #
+    # When the Agent executes an extension, it captures the extension's stdout/stderr and produces a log record similar to
+    #
+    #    2025-11-03T09:37:23.930274Z INFO ExtHandler [Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.101] Command: guest-configuration-shim gc_extension.py enable
+    #    [stdout]
+    #    a placeholder status file, already exists: /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.101/status/0.status
+    #    + nohup python2 /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.101/gc_extension.py enable
+    #    2025/11/03 09:37:22 ConfigurationforLinux started to handle.
+    #    2025/11/03 09:37:22 [Microsoft.GuestConfiguration.ConfigurationForLinux-1.26.101] cwd is /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.101
+    #    2025/11/03 09:37:22 [Microsoft.GuestConfiguration.ConfigurationForLinux-1.26.101] Change log file to /var/log/azure/Microsoft.GuestConfiguration.ConfigurationforLinux/extension.log
+    #    2025/11/03 09:37:22 [Microsoft.GuestConfiguration.ConfigurationForLinux-1.26.101] sequence number is 0
+    #    2025/11/03 09:37:22 [Microsoft.GuestConfiguration.ConfigurationForLinux-1.26.101] setting file path is/var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.101/config/0.settings
+    #    2025/11/03 09:37:22 [Microsoft.GuestConfiguration.ConfigurationForLinux-1.26.101] JSON config:
+    #    2025/11/03 09:37:22 ERROR:[Microsoft.GuestConfiguration.ConfigurationForLinux-1.26.101] JSON exception decoding
+    #    2025/11/03 09:37:22 ERROR:[Microsoft.GuestConfiguration.ConfigurationForLinux-1.26.101] JSON error processing settings file:
+    #    2025/11/03 09:37:22 Checking for curl dependency
+    #    2025/11/03 09:37:22 Linux distribution is Ubuntu.
+    #    2025/11/03 09:37:22 Checking for package 'curl'...
+    #    2025/11/03 09:37:22 Package 'curl' is already installed.
+    #    2025/11/03 09:37
+    #    [stderr]
+    #    Running scope as unit enable_46ccdbd9-c4d5-4010-a20d-3939eed5a5cd.scope.
+    #
+    _EXTENSION_COMMAND_PREFIX = re.compile(r'\[.+]')  # The prefix for extension command is the name of the extension in brackets, e.g. "[Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.101]"
+    _EXTENSION_COMMAND_MESSAGE = re.compile(r'Command:[^\n]+\n\[stdout]\n.*\n\[stderr].*')  # The message logged by the agent includes the extension command and its stdout and stderr
 
     def read(self) -> Iterable[AgentLogRecord]:
         """
@@ -611,8 +620,7 @@ class AgentLog(object):
                 m = regex.match(line)
                 if m is not None:
                     return m
-            # The extension regex also matches the old agent records, so it needs to be last
-            return self._EXTENSION_RECORD.match(line)
+            return None
 
         def complete_record():
             record.text = record.text.rstrip()  # the text includes \n
@@ -622,6 +630,7 @@ class AgentLog(object):
             return record
 
         log = self._open_log()
+        in_extension_command_record = False
         try:
             record = None
             extra_lines = ""
@@ -631,11 +640,16 @@ class AgentLog(object):
                 match = match_record()
                 if match is not None:
                     if record is not None:
+                        in_extension_command_record = False
                         yield complete_record()
                     record = AgentLogRecord.from_match(match)
+                    in_extension_command_record = (self._EXTENSION_COMMAND_PREFIX.match(record.prefix) is not None) and record.level == "INFO" and record.thread == "ExtHandler" and record.message.startswith("Command: ")
                     extra_lines = ""
                 else:
-                    extra_lines = extra_lines + line
+                    if self._EXTENSION_RECORD.match(line) and not in_extension_command_record:
+                        pass  # Some extensions write to the Agent's log. Ignore those lines.
+                    else:
+                        extra_lines = extra_lines + line
                 line = log.readline()
 
             if record is not None:
