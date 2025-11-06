@@ -65,7 +65,11 @@ class AgentLogRecord:
 
     @property
     def timestamp(self) -> datetime:
-        return datetime.strptime(self.when, u'%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=UTC)
+        # The timestamps emitted by the Agent can follow two formats: 2025-11-05T23:52:48.037713Z (newer) or 2025-11-05T23:52:48.790673Z (older)
+        try:
+            return datetime.strptime(self.when, u'%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=UTC)
+        except ValueError:
+            return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S.%f').replace(tzinfo=UTC)
 
     def __str__(self):
         return self.text
