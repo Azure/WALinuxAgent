@@ -597,11 +597,7 @@ class UpdateHandler(object):
         # Check that the certificates needed by extensions are in the goal state certificates summary
         for extension in goal_state.extensions_goal_state.extensions:
             for settings in extension.settings:
-                if settings.protectedSettings is None:
-                    continue
-                certificates = goal_state.certs.summary
-                if not any(settings.certificateThumbprint == c['thumbprint'] for c in certificates):
-                    # check if the certificate was saved to disk on a previous goal state.
+                if settings.protectedSettings is not None:
                     certificate_path = os.path.join(conf.get_lib_dir(), settings.certificateThumbprint + '.crt')
                     if not os.path.isfile(certificate_path):
                         event.warn(WALAEventOperation.FetchGoalState, "The extensions goal state is out of sync with the tenant cert. Certificate {0}, needed by {1}, is missing.", settings.certificateThumbprint, extension.name)

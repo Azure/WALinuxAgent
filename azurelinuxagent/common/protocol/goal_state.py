@@ -525,21 +525,27 @@ class Certificates(LogEvent):
         pfx_file = os.path.join(conf.get_lib_dir(), PFX_FILE_NAME)
         pem_file = os.path.join(conf.get_lib_dir(), PEM_FILE_NAME)
 
+        create_empty_pem_file = False
+
         try:
             if not self._try_download_certificates_pfx(wire_client, uri, pfx_file):
+                create_empty_pem_file = True
                 return  # The response from the WireServer did not have any certificates, or they were not in the expected format
             self._convert_certificates_pfx_to_pem(pfx_file, pem_file)
         except Exception as e:
-            self.error(WALAEventOperation.GoalStateCertificates, "Error fetching the goal state certificates: {0}", ustr(e))
-            # Agents older than 2.13.1.1 can go into an infinite loop during initialization of the Daemon if the certificates cannot
-            # be downloaded and the PEM file does not exist. Create an empty file or overwrite any existing file from previous
-            # goal states.
-            open(pem_file, "w").close()
             # A failure to download the certificates won't necessarily produce an error. Certificates do not change often and they may have
-            # already been saved to disk on a previous goal state. We continue with an empty summary and later on we check whether the
-            # certificates needed by extensions are already on disk and refresh the goal state if they are not.
+            # already been saved to disk on a previous goal state. We simply report the error and continue processing the goal_state; later on,
+            # before extensions are processed, the Agent checks whether the required certificates are already on disk and refreshes the goal
+            # state if they are not.
+            self.error(WALAEventOperation.GoalStateCertificates, "Error fetching the goal state certificates: {0}", ustr(e))
+            create_empty_pem_file = True
             return
         finally:
+            if create_empty_pem_file:
+                # Agents older than 2.13.1.1 can go into an infinite loop during initialization of the Daemon if the certificates cannot
+                # be downloaded/decrypted and the PEM file does not exist. Create an empty file (or overwrite any existing file from previous
+                # goal states) to ensure it exists.
+                open(pem_file, "w").close()
             self._remove_file(pfx_file)
 
         try:
