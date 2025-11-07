@@ -18,7 +18,6 @@
 #
 
 from azurelinuxagent.common.protocol.imds import get_imds_client
-from azurelinuxagent.common import logger
 from azurelinuxagent.common import event
 from azurelinuxagent.common.future import ustr
 
@@ -45,7 +44,7 @@ class ConfidentialVMInfo(object):
             try:
                 compute_info = get_imds_client().get_compute()
                 security_type = compute_info.securityProfile.get('securityType')
-                event.info("VM security type: {0}".format(security_type))
+                event.info("VM security type: {0}", security_type)
                 ConfidentialVMInfo._security_type = security_type
             except Exception as ex:
                 event.warn("Failed to get virtual machine security type from IMDS: {0}", ustr(ex))

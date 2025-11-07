@@ -64,7 +64,6 @@ from azurelinuxagent.ga.guestagent import GuestAgent
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates, get_microsoft_signing_certificate_path
-from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 
 
 CHILD_HEALTH_INTERVAL = 15 * 60
