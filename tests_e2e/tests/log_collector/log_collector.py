@@ -21,9 +21,9 @@ import time
 
 from assertpy import fail
 
-from azurelinuxagent.common.utils.shellutil import CommandError
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.shell import CommandError
 
 
 class LogCollector(AgentVmTest):

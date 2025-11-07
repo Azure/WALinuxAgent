@@ -44,6 +44,7 @@ from lisa.sut_orchestrator.azure.platform_ import AzurePlatform  # pylint: disab
 import makepkg
 from azurelinuxagent.common.version import AGENT_VERSION
 from azurelinuxagent.common.future import UTC, datetime_min_utc, datetime_max_utc
+from tests_e2e.tests.lib.test_result import TestSkipped, RemoteTestError
 from tests_e2e.tests.lib.retry import retry_if_false
 
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
@@ -53,7 +54,6 @@ import tests_e2e
 from tests_e2e.orchestrator.lib.agent_test_loader import TestSuiteInfo
 from tests_e2e.orchestrator.lib.agent_test_result import AgentTestResult
 from tests_e2e.tests.lib.agent_log import AgentLog, AgentLogRecord
-from tests_e2e.tests.lib.agent_test import TestSkipped, RemoteTestError
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext, AgentVmTestContext, AgentVmssTestContext
 from tests_e2e.tests.lib.logging import log, set_thread_name, set_current_thread_log
 from tests_e2e.tests.lib.network_security_rule import NetworkSecurityRule

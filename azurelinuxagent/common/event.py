@@ -89,6 +89,7 @@ class WALAEventOperation:
     ExtensionHandlerManifest = "ExtensionHandlerManifest"
     ExtensionPolicy = "ExtensionPolicy"                                 # Event for any extension policy-related operations (e.g., extension not in allowlist).
     ExtensionSignaturePolicy = "ExtensionSignaturePolicy"               # Event for unsigned extension blocked due to extension signature policy.
+    ExtensionSigned = "ExtensionSigned"                                 # Event indicating whether an extension is signed.
     ExtensionProcessing = "ExtensionProcessing"
     ExtensionResourceGovernance = "ExtensionResourceGovernance"
     ExtensionTelemetryEventProcessing = "ExtensionTelemetryEventProcessing"
@@ -114,6 +115,8 @@ class WALAEventOperation:
     NoExec = "NoExec"
     OSInfo = "OSInfo"
     OpenSsl = "OpenSsl"
+    PackageSignatureResult = "PackageSignatureResult"                   # Event with the result of package signature validation.
+    PackageSigningInfoResult = "PackageSigningInfoResult"               # Event with the result of package manifest 'signingInfo' validation.
     PersistFirewallRules = "PersistFirewallRules"
     Policy = "Policy"                                                   # Event for policy operations not tied to a specific policy type (e.g., policy initialization).
     ProvisionAfterExtensions = "ProvisionAfterExtensions"
@@ -131,11 +134,8 @@ class WALAEventOperation:
     RequestedVersionMismatch = "RequestedVersionMismatch"
     ResetFirewall = "ResetFirewall"
     Restart = "Restart"
-    SignatureValidation = "SignatureValidation"                         # Event for general logs related to package signature or manifest validation that don't fall under a specific operation.
-    ExtensionSigned = "ExtensionSigned"                                 # Event indicating whether an extension is signed.
-    PackageSignatureResult = "PackageSignatureResult"                   # Event with the result of package signature validation.
-    PackageSigningInfoResult = "PackageSigningInfoResult"               # Event with the result of package manifest 'signingInfo' validation.
     SetCGroupsLimits = "SetCGroupsLimits"
+    SignatureValidation = "SignatureValidation"                         # Event for general logs related to package signature or manifest validation that don't fall under a specific operation.
     SkipUpdate = "SkipUpdate"
     StatusProcessing = "StatusProcessing"
     UnhandledError = "UnhandledError"

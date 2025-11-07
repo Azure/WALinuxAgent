@@ -63,7 +63,6 @@ class ProvisionHandler(object):
 
         try:
             utc_start = datetime.now(UTC)
-            thumbprint = None  # pylint: disable=W0612
 
             if self.check_provisioned_file():
                 logger.info("Provisioning already completed, skipping.")
@@ -78,13 +77,12 @@ class ProvisionHandler(object):
             logger.info("Copying ovf-env.xml")
             ovf_env = self.protocol_util.copy_ovf_env()
 
-            self.protocol_util.get_protocol()  # Trigger protocol detection
             self.report_not_ready("Provisioning", "Starting")
             logger.info("Starting provisioning")
 
             self.provision(ovf_env)
 
-            thumbprint = self.reg_ssh_host_key()
+            self.reg_ssh_host_key()
             self.osutil.restart_ssh_service()
 
             self.write_provisioned()

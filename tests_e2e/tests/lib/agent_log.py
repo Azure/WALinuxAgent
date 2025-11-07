@@ -68,20 +68,23 @@ class AgentLogRecord:
         # Extension logs may follow different timestamp formats
         # 2023/07/10 20:50:13.459260
         ext_timestamp_regex_1 = r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}[.\d]+"
-        # 2023/07/10 20:50:13
-        # OR
-        # 2023/07/10 20:50:1
-        ext_timestamp_regex_2 = r"(\d{4}/\d{2}/\d{2} \d{2}:\d{2}):(\d{1,2})"
+
+        # 2023/07/10 20:50:13 OR 2023/07/10 20:50:1
+        # 2023/07/10 20:50 OR 2023/07/10 20:5
+        ext_timestamp_regex_2 = r"(\d{4}/\d{2}/\d{2} \d{2}:\d{1,2})(?::(\d{1,2}))?"
 
         if re.match(ext_timestamp_regex_1, self.when):
             return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S.%f').replace(tzinfo=UTC)
 
-        match_regex_2 = re.match(ext_timestamp_regex_2, self.when)
-        if match_regex_2:
-            # Pad second to 2-digits (e.g, 00:1 -> 00:01)
-            seconds = match_regex_2.group(2).zfill(2)
-            padded_time = match_regex_2.group(1) + ':' + seconds
-            return datetime.strptime(padded_time, u'%Y/%m/%d %H:%M:%S').replace(tzinfo=UTC)
+        # Pad seconds to 2 digits (e.g, 00:1 -> 00:01)
+        match = re.match(ext_timestamp_regex_2, self.when)
+        if match:
+            base_time = match.group(1)
+            seconds = match.group(2).zfill(2) if match.group(2) else "00"
+            date, time = base_time.split()
+            hour, minute = time.split(":")
+            padded_time = f"{hour.zfill(2)}:{minute.zfill(2)}:{seconds}"
+            return datetime.strptime(f"{date} {padded_time}", '%Y/%m/%d %H:%M:%S').replace(tzinfo=UTC)
 
         # Logs from agent follow this format: 2023-07-10T20:50:13.038599Z
         return datetime.strptime(self.when, u'%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=UTC)
@@ -452,8 +455,9 @@ class AgentLog(object):
             # 2025-03-31T08:46:39.253900Z INFO ExtHandler ExtHandler [CGW] Failed to set the extension azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice slice and quotas: Can't set properties ['CPUQuota='] of azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice: 'systemctl set-property azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice CPUQuota= --runtime' failed: 1 (Failed to set unit properties on azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice: Message recipient disconnected from message bus without replying)
             # 2025-04-28T12:27:25.311806Z INFO ExtHandler ExtHandler [CGW] Failed to set the extension azure-vmextensions-Microsoft.CPlat.Core.RunCommandHandlerLinux.slice slice and quotas: 'systemctl show azure-vmextensions-Microsoft.CPlat.Core.RunCommandHandlerLinux.slice --property CPUAccounting' failed: 1 (Failed to get properties: Remote peer disconnected)
             # 2025-04-27T12:28:14.585253Z INFO ExtHandler ExtHandler [CGW] Error parsing current CPUQuotaPerSecUSec: 'systemctl show azure-vmextensions-Microsoft.CPlat.Core.RunCommandHandlerLinux.RunCommandHandler.slice --property CPUQuotaPerSecUSec' failed: 1 (Failed to get properties: Transport endpoint is not connected)
+            # 2025-10-20T10:42:19.413988Z INFO ExtHandler ExtHandler [CGW] Failed to get the properties to update for gatestext.service: 'systemctl show gatestext.service --property MemoryAccounting' failed: 1 (Failed to get properties: Transport endpoint is not connected)
             {
-                'message': r"(Failed to set the extension|Error parsing).*systemctl (show|set-property).*failed: 1.*(Message recipient disconnected from message bus without replying|Connection reset by peer|Remote peer disconnected|Transport endpoint is not connected)",
+                'message': r"(Failed to set the extension|Failed to get the properties|Error parsing).*systemctl (show|set-property).*failed: 1.*(Message recipient disconnected from message bus without replying|Connection reset by peer|Remote peer disconnected|Transport endpoint is not connected)",
             },
             #
             # 2025-01-06T09:32:44.641948Z INFO ExtHandler ExtHandler [CGW] Disabling resource usage monitoring. Reason: Failed to start Microsoft.Azure.Extensions.CustomScript-2.1.10 using systemd-run, will try invoking the extension directly. Error: [SystemdRunError] Systemd process exited with code 1 and output [stdout]
@@ -494,7 +498,19 @@ class AgentLog(object):
         ]
 
         def is_error(r: AgentLogRecord) -> bool:
-            return r.level in ('ERROR', 'WARNING') or any(err in r.text for err in ['Exception', 'Traceback', '[CGW]'])
+            if r.level in ('ERROR', 'WARNING'):
+                return True
+
+            # Some agent errors are not logged at the proper log level so we look for some strings that may indicate an error in the text of the message, but skip them
+            # if they are coming from an extension
+            for err in ['Exception', 'Traceback', '[CGW]']:
+                if err in r.message:
+                    extension_prefix_re = r'\[.+]'  # The prefix for extension-related messages is the name of the extension in brackets
+                    extension_message_re = r'Command:[^\n]+\n\[stdout]\n.*\n\[stderr].*'  # The message logged by the agent includes the extension command and its stdout and stderr
+                    if r.prefix is not None and re.match(extension_prefix_re, r.prefix) is not None and re.match(extension_message_re, r.message, re.DOTALL) is not None:
+                        continue  # The error is on the extension, ignore it
+                    return True
+            return False
 
         errors = []
         primary_interface_error = None
