@@ -27,6 +27,7 @@ from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoal
 from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension, VMAgentFamily, ExtensionState, InVMGoalStateMetaData
 from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall, find, findtext, getattrib, gettext, \
     format_exception, is_str_none_or_whitespace, is_str_empty, gettextxml
+from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 
 
 class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
@@ -575,9 +576,13 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
 
     def supports_encoded_signature(self):
         """
-        Returns bool indicating if the ExtensionsConfig API supports the 'encoded_signature' extension property. Should always return True.
+        Return True if the ExtensionsConfig API supports the 'encoded_signature' extension property and agent is
+        running on a CVM.
+
+        Currently, encoded signature is supported only for CVMs for preview/telemetry releases.
+        TODO: Remove CVM check and always return True once encoded signature is supported on all VMs.
         """
-        return True
+        return ConfidentialVMInfo.is_confidential_vm()
 
 
 # Do not extend this class

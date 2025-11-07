@@ -25,7 +25,7 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.ga.confidential_vm_util import ConfidentialVMInfo
+from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 
 
 # Default policy values to be used when customer does not specify these attributes in the policy file.

@@ -26,6 +26,7 @@ from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoal
 from azurelinuxagent.common.protocol.restapi import VMAgentFamily, Extension, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils import timeutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 
 # The 'encodedSignature' property is only supported on newer versions of HGAP.
 _MIN_HGAP_VERSION_FOR_EXT_SIGNATURE = FlexibleVersion("1.0.8.159")
@@ -564,9 +565,11 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
     def supports_encoded_signature(self):
         """
-        Returns True if the HGAP version supports the 'encoded_signature' extension property.
+        Returns True if the HGAP version supports the 'encoded_signature' extension property, and agent is running on a CVM.
+
+        TODO: Remove CVM check once encoded signature is supported for all VMs, not just CVMs.
         """
-        return self._host_ga_plugin_version >= _MIN_HGAP_VERSION_FOR_EXT_SIGNATURE
+        return self._host_ga_plugin_version >= _MIN_HGAP_VERSION_FOR_EXT_SIGNATURE and ConfidentialVMInfo.is_confidential_vm()
 
 
 #

@@ -633,7 +633,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
     def test_it_should_report_failed_status_for_extensions_disallowed_by_policy(self):
         """If multiconfig extension is disallowed by policy, all instances should be blocked."""
         policy_path = os.path.join(self.tmp_dir, "waagent_policy.json")
-        with patch('azurelinuxagent.ga.confidential_vm_util.ConfidentialVMInfo.is_confidential_vm', return_value=True):
+        with patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm', return_value=True):
             with patch('azurelinuxagent.common.conf.get_policy_file_path', return_value=str(policy_path)):
                 with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
                     policy = \
@@ -697,7 +697,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
     def test_it_should_report_successful_status_for_extensions_allowed_by_policy(self):
         """If multiconfig extension is allowed by policy, all instances should be allowed."""
         policy_path = os.path.join(self.tmp_dir, "waagent_policy.json")
-        with patch('azurelinuxagent.ga.confidential_vm_util.ConfidentialVMInfo.is_confidential_vm', return_value=True):
+        with patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm', return_value=True):
             with patch('azurelinuxagent.common.conf.get_policy_file_path', return_value=str(policy_path)):
                 with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
                     policy = \

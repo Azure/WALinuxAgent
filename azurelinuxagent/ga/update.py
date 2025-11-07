@@ -64,7 +64,7 @@ from azurelinuxagent.ga.guestagent import GuestAgent
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates, get_microsoft_signing_certificate_path
-from azurelinuxagent.ga.confidential_vm_util import ConfidentialVMInfo
+from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 
 
 CHILD_HEALTH_INTERVAL = 15 * 60
@@ -400,9 +400,6 @@ class UpdateHandler(object):
             self._ensure_extension_telemetry_state_configured_properly(protocol)
             self._cleanup_legacy_goal_state_history()
             write_signing_certificates()
-
-            # Check security type and update if VM is a confidential VM. This should be done on each agent start.
-            ConfidentialVMInfo.set_security_type()
 
             # Get all thread handlers
             telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)

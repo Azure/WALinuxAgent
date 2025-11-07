@@ -111,7 +111,6 @@ class TestImds(AgentTestCase):
             "osProfile": {},
             "osType": "Linux",
             "offer": "UbuntuServer",
-            "physicalZone": "1",
             "placementGroupId": "",
             "platformFaultDomain": "0",
             "platformSubFaultDomain": "0",

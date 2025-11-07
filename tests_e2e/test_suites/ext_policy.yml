@@ -4,7 +4,9 @@
 name: "ExtensionPolicy"
 tests:
   - "ext_policy/ext_policy.py"
-images: "endorsed"
+images:
+  - "endorsed"
+  - "cvm-endorsed"
 # This test is executed in southcentralus as a workaround for recurring fabric "ServiceUnavailableFault" issues observed in westus2.
 locations: "AzureCloud:southcentralus"
 # TODO: This test is currently failing on usgov cloud due to an issue with the GuestConfig extension. Re-enable once the extension fix has been rolled out.
