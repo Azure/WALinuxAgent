@@ -82,16 +82,24 @@ class Hibernation(AgentVmTest):
         log.info("Tenant certificate: %s", pre_hibernation_tenant_certificate)
         log.info("")
 
-        log.info("Triggering a hibernate-resume cycle to test the tenant certificate...")
-        hibernate_time = self._ssh_client.get_time()
-        self._do_hibernate_resume_cycle()
-        log.info("")
+        # Azure policy may install an extension while the machine is resuming, which would increment the incarnation, so try a couple of times
+        for i in range(2):
+            log.info("Triggering a hibernate-resume cycle to test the tenant certificate...")
+            hibernate_time = self._ssh_client.get_time()
+            self._do_hibernate_resume_cycle()
+            log.info("")
 
-        log.info("Verifying that the current incarnation is 1 after resume...")
-        incarnation = self._ssh_client.run_command("get_goal_state.py --tag Incarnation", use_sudo=True).rstrip()
-        if incarnation != "1":
-            raise Exception(f"Unexpected behavior: The incarnation is not 1 after a hibernate-resume cycle. Incarnation is {incarnation}")
-        log.info("The current incarnation is 1")
+            log.info("Verifying that the current incarnation is 1 after resume...")
+            incarnation = self._ssh_client.run_command("get_goal_state.py --tag Incarnation", use_sudo=True).rstrip()
+            if incarnation == "1":
+                log.info("The current incarnation is 1")
+                break
+            if i > 0:
+                raise Exception(f"Unexpected behavior: The incarnation is not 1 after a couple of hibernate-resume cycles. Incarnation is {incarnation}")
+            log.info(f"The current incarnation is not 1, as was expected. A new goal state was generated after resuming the VM. An extension installed by policy may have been the reason. Incarnation: {incarnation}")
+            log.info("Will retry the hibernate-resume cycle to reset it to 1...")
+            log.info("")
+
         log.info("")
 
         log.info("Checking tenant certificate after resume...")
