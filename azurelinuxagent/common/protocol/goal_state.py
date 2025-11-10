@@ -522,23 +522,39 @@ class Certificates(LogEvent):
         self.summary = []
         self._crypt_util = CryptUtil(conf.get_openssl_cmd())
 
+        pfx_file = os.path.join(conf.get_lib_dir(), PFX_FILE_NAME)
+        pem_file = os.path.join(conf.get_lib_dir(), PEM_FILE_NAME)
+
+        create_empty_pem_file = False
+
         try:
-            pfx_file = self._download_certificates_pfx(wire_client, uri)
-            if pfx_file is None:  # The response from the WireServer may not have any certificates
-                return
-
-            try:
-                pem_file = self._convert_certificates_pfx_to_pem(pfx_file)
-            finally:
-                self._remove_file(pfx_file)
-
-            self.summary = self._extract_certificate(pem_file)
-
-            for c in self.summary:
-                self.info(WALAEventOperation.GoalStateCertificates, "Downloaded certificate {0}", c)
-
+            if not self._try_download_certificates_pfx(wire_client, uri, pfx_file):
+                create_empty_pem_file = True
+                return  # The response from the WireServer did not have any certificates, or they were not in the expected format
+            self._convert_certificates_pfx_to_pem(pfx_file, pem_file)
         except Exception as e:
+            # A failure to download the certificates won't necessarily produce an error. Certificates do not change often and they may have
+            # already been saved to disk on a previous goal state. We simply report the error and continue processing the goal_state; later on,
+            # before extensions are processed, the Agent checks whether the required certificates are already on disk and refreshes the goal
+            # state if they are not.
             self.error(WALAEventOperation.GoalStateCertificates, "Error fetching the goal state certificates: {0}", ustr(e))
+            create_empty_pem_file = True
+            return
+        finally:
+            if create_empty_pem_file:
+                # Agents older than 2.13.1.1 can go into an infinite loop during initialization of the Daemon if the certificates cannot
+                # be downloaded/decrypted and the PEM file does not exist. Create an empty file (or overwrite any existing file from previous
+                # goal states) to ensure it exists.
+                open(pem_file, "w").close()
+            self._remove_file(pfx_file)
+
+        try:
+            self.summary = self._extract_certificate(pem_file)
+        except Exception as e:
+            self.error(WALAEventOperation.GoalStateCertificates, "Error extracting the goal state certificates from {0}: {1}", pem_file, ustr(e))
+
+        for c in self.summary:
+            self.info(WALAEventOperation.GoalStateCertificates, "Downloaded certificate {0}", c)
 
     def _remove_file(self, file):
         if os.path.exists(file):
@@ -547,15 +563,14 @@ class Certificates(LogEvent):
             except Exception as e:
                 self.warn(WALAEventOperation.GoalStateCertificates, "Failed to remove {0}: {1}", file, ustr(e))
 
-    def _download_certificates_pfx(self, wire_client, uri):
+    def _try_download_certificates_pfx(self, wire_client, uri, pfx_file):
         """
-        Downloads the certificates from the WireServer and saves them to a pfx file.
-        Returns the full path of the pfx file, or None, if the WireServer response does not have a "Data" element
+        Downloads the certificates from the WireServer and saves them to the given pfx file path.
+        Returns True if the certificates were downloaded, False if the WireServer response does not have a "Data" element, or if the certificates are not in the expected format.
         """
         trans_prv_file = os.path.join(conf.get_lib_dir(), TRANSPORT_PRV_FILE_NAME)
         trans_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
         xml_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
-        pfx_file = os.path.join(conf.get_lib_dir(), PFX_FILE_NAME)
 
         for cypher in ["AES128_CBC", "DES_EDE3_CBC"]:
             headers = wire_client.get_headers_for_encrypted_request(cypher)
@@ -572,11 +587,11 @@ class Certificates(LogEvent):
             data = findtext(xml_doc, "Data")
             if data is None:
                 self.info(WALAEventOperation.GoalStateCertificates, "The Data element of the Certificates response is empty")
-                return None
+                return False
             certificate_format = findtext(xml_doc, "Format")
             if certificate_format and certificate_format != "Pkcs7BlobWithPfxContents":
                 self.warn(WALAEventOperation.GoalStateCertificates, "The Certificates format is not Pkcs7BlobWithPfxContents; skipping. Format is {0}", certificate_format)
-                return None
+                return False
 
             p7m_file = Certificates._create_p7m_file(data)
 
@@ -587,7 +602,7 @@ class Certificates(LogEvent):
                 self._remove_file(pfx_file)
                 continue
 
-            return pfx_file
+            return True
 
         raise Exception("Cannot download certificates using any of the supported cyphers")
 
@@ -603,18 +618,15 @@ class Certificates(LogEvent):
         fileutil.write_file(p7m_file, p7m)
         return p7m_file
 
-    def _convert_certificates_pfx_to_pem(self, pfx_file):
+    def _convert_certificates_pfx_to_pem(self, pfx_file, pem_file):
         """
-        Convert the pfx file to pem file.
+        Convert the pfx file to PEM and saves the result to the given file.
         """
-        pem_file = os.path.join(conf.get_lib_dir(), PEM_FILE_NAME)
-
         for nomacver in [True, False]:
             try:
                 self._crypt_util.convert_pfx_to_pem(pfx_file, nomacver, pem_file)
                 return pem_file
             except shellutil.CommandError as e:
-                self._remove_file(pem_file)  # An error may leave an empty pem file, which can produce a failure on some versions of open SSL (e.g. 3.2.2) on the next invocation
                 self.warn(WALAEventOperation.GoalState, "Error converting PFX to PEM [-nomacver: {0}]: {1}", nomacver, ustr(e))
                 continue
 
