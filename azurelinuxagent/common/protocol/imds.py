@@ -12,7 +12,7 @@ from azurelinuxagent.common.datacontract import DataContract, set_properties
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 IMDS_ENDPOINT = '169.254.169.254'
-APIVERSION = '2023-07-01'
+APIVERSION = '2021-12-13'
 BASE_METADATA_URI = "http://{0}/metadata/{1}?api-version={2}"
 
 IMDS_IMAGE_ORIGIN_UNKNOWN = 0
