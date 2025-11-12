@@ -1,3 +1,4 @@
+
 # Microsoft Azure Linux Agent
 #
 # Copyright 2018 Microsoft Corporation
@@ -41,12 +42,6 @@ def get_mock_compute_response():
     "platformUpdateDomain": "0",
     "publisher": "UnitPublisher",
     "resourceGroupName": "UnitResourceGroupName",
-    "securityProfile": {
-            "secureBootEnabled": "true",
-            "virtualTpmEnabled": "true",
-            "encryptionAtHost": "true",
-            "securityType": "ConfidentialVM"
-    },
     "sku": "UnitSku",
     "subscriptionId": "e4402c6c-2804-4a0a-9dee-d61918fc4d28",
     "tags": "Key1:Value1;Key2:Value2",
@@ -68,7 +63,7 @@ class TestImds(AgentTestCase):
         self.assertEqual(1, mock_http_get.call_count)
         positional_args, kw_args = mock_http_get.call_args
 
-        self.assertEqual('http://169.254.169.254/metadata/instance/compute?api-version={0}'.format(imds.APIVERSION), positional_args[0])
+        self.assertEqual('http://169.254.169.254/metadata/instance/compute?api-version=2018-02-01', positional_args[0])
         self.assertTrue('User-Agent' in kw_args['headers'])
         self.assertTrue('Metadata' in kw_args['headers'])
         self.assertEqual(True, kw_args['headers']['Metadata'])
@@ -95,63 +90,50 @@ class TestImds(AgentTestCase):
         self.assertRaises(ValueError, test_subject.get_compute)
 
     def test_deserialize_ComputeInfo(self):
-        data = {
-            "additionalCapabilities": {},
-            "azEnvironment": "AzurePublicCloud",
-            "customData": "customDataValue",
-            "evictionPolicy": "Deallocate",
-            "extendedLocation": {},
-            "host": {},
-            "hostGroup": {},
-            "isHostCompatibilityLayerVm": False,
-            "isVmInStandbyPool": False,
-            "licenseType": "",
-            "location": "westcentralus",
-            "name": "unit_test",
-            "osProfile": {},
-            "osType": "Linux",
-            "offer": "UbuntuServer",
-            "placementGroupId": "",
-            "platformFaultDomain": "0",
-            "platformSubFaultDomain": "0",
-            "platformUpdateDomain": "0",
-            "plan": {},
-            "priority": "Regular",
-            "publisher": "Canonical",
-            "provider": "Microsoft.Compute",
-            "publicKeys": [],
-            "resourceGroupName": "UnitResourceGroupName",
-            "resourceId": "/test/resource/id/123",
-            "securityProfile": {
-                "secureBootEnabled": "true",
-                "virtualTpmEnabled": "true",
-                "encryptionAtHost": "true",
-                "securityType": "ConfidentialVM"
-            },
-            "sku": "UnitSku",
-            "storageProfile": {},
-            "subscriptionId": "e4402c6c-2804-4a0a-9dee-d61918fc4d28",
-            "systemFaultDomain": "0",
-            "tags": "Key1:Value1;Key2:Value2",
-            "tagsList": [],
-            "userData": "userDataValue",
-            "version": "UnitVersion",
-            "vmId": "f62f23fb-69e2-4df0-a20b-cb5c201a3e7a",
-            "vmSize": "Standard_D1_v2",
-            "virtualMachineScaleSet": {},
-            "vmScaleSetName": "MyScaleSet",
-            "zone": "In"
-        }
+        s = '''{
+        "location": "westcentralus",
+        "name": "unit_test",
+        "offer": "UnitOffer",
+        "osType": "Linux",
+        "placementGroupId": "",
+        "platformFaultDomain": "0",
+        "platformUpdateDomain": "0",
+        "publisher": "UnitPublisher",
+        "resourceGroupName": "UnitResourceGroupName",
+        "sku": "UnitSku",
+        "subscriptionId": "e4402c6c-2804-4a0a-9dee-d61918fc4d28",
+        "tags": "Key1:Value1;Key2:Value2",
+        "vmId": "f62f23fb-69e2-4df0-a20b-cb5c201a3e7a",
+        "version": "UnitVersion",
+        "vmSize": "Standard_D1_v2",
+        "vmScaleSetName": "MyScaleSet",
+        "zone": "In"
+        }'''
+
+        data = json.loads(s)
 
         compute_info = imds.ComputeInfo()
         set_properties("compute", compute_info, data)
-        for key, expected_value in data.items():
-            actual_value = getattr(compute_info, key)
-            self.assertEqual(
-                expected_value,
-                actual_value,
-                msg="Mismatch for field '{0}': expected {1}, got {2}".format(key, expected_value, actual_value)
-            )
+
+        self.assertEqual('westcentralus', compute_info.location)
+        self.assertEqual('unit_test', compute_info.name)
+        self.assertEqual('UnitOffer', compute_info.offer)
+        self.assertEqual('Linux', compute_info.osType)
+        self.assertEqual('', compute_info.placementGroupId)
+        self.assertEqual('0', compute_info.platformFaultDomain)
+        self.assertEqual('0', compute_info.platformUpdateDomain)
+        self.assertEqual('UnitPublisher', compute_info.publisher)
+        self.assertEqual('UnitResourceGroupName', compute_info.resourceGroupName)
+        self.assertEqual('UnitSku', compute_info.sku)
+        self.assertEqual('e4402c6c-2804-4a0a-9dee-d61918fc4d28', compute_info.subscriptionId)
+        self.assertEqual('Key1:Value1;Key2:Value2', compute_info.tags)
+        self.assertEqual('f62f23fb-69e2-4df0-a20b-cb5c201a3e7a', compute_info.vmId)
+        self.assertEqual('UnitVersion', compute_info.version)
+        self.assertEqual('Standard_D1_v2', compute_info.vmSize)
+        self.assertEqual('MyScaleSet', compute_info.vmScaleSetName)
+        self.assertEqual('In', compute_info.zone)
+
+        self.assertEqual('UnitPublisher:UnitOffer:UnitSku:UnitVersion', compute_info.image_info)
 
     def test_is_custom_image(self):
         image_origin = self._setup_image_origin_assert("", "", "", "")
@@ -392,7 +374,7 @@ class TestImds(AgentTestCase):
         self.assertEqual(restutil.HTTP_USER_AGENT_HEALTH, kw_args['headers']['User-Agent'])
         self.assertTrue('Metadata' in kw_args['headers'])
         self.assertEqual(True, kw_args['headers']['Metadata'])
-        self.assertEqual('http://169.254.169.254/metadata/instance?api-version={0}'.format(imds.APIVERSION),
+        self.assertEqual('http://169.254.169.254/metadata/instance?api-version=2018-02-01',
                          positional_args[0])
         self.assertEqual(expected_valid, validate_response[0])
         self.assertTrue(expected_response in validate_response[1],

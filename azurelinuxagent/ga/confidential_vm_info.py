@@ -17,13 +17,22 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from azurelinuxagent.common.protocol.imds import get_imds_client
+import json
+
+from azurelinuxagent.common.protocol.imds import ImdsClient
 from azurelinuxagent.common import event
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.exception import HttpError
+
+
+# Minimum IMDS version that supports the "securityProfile.securityType" attribute.
+MIN_IMDS_VERSION_WITH_SECURITY_TYPE = '2021-12-13'
 
 
 class SecurityType(object):
-    # The 'securityType' field comes from the VM's securityProfile section in Azure IMDS metadata.
+    # These values correspond to the 'securityProfile.securityType' field
+    # in the Microsoft.Compute/virtualMachines ARM template schema.
+    # See: https://learn.microsoft.com/azure/templates/microsoft.compute/virtualmachines#securityprofile
     TrustedVM = "TrustedLaunch"
     ConfidentialVM = "ConfidentialVM"
 
@@ -38,12 +47,31 @@ class ConfidentialVMInfo(object):
     _security_type = None
 
     @staticmethod
+    def _get_security_type_from_imds():
+        imds_client = ImdsClient(MIN_IMDS_VERSION_WITH_SECURITY_TYPE)
+        result = imds_client.get_metadata('instance/compute', is_health=False)
+        if not result.success:
+            raise HttpError(result.response)
+
+        # Get securityProfile attribute
+        compute_json = json.loads(ustr(result.response, encoding="utf-8"))
+        security_profile = compute_json.get('securityProfile')
+        if security_profile is None:
+            raise ValueError("missing field 'securityProfile'")
+
+        # Get securityType attribute
+        security_type = security_profile.get('securityType')
+        if security_type is None:
+            raise ValueError("missing field 'securityProfile'")
+
+        return security_type
+
+    @staticmethod
     def is_confidential_vm():
         # Get and cache the VM's security type from IMDS if not already done
         if ConfidentialVMInfo._security_type is None:
             try:
-                compute_info = get_imds_client().get_compute()
-                security_type = compute_info.securityProfile.get('securityType')
+                security_type = ConfidentialVMInfo._get_security_type_from_imds()
                 event.info("VM security type: {0}", security_type)
                 ConfidentialVMInfo._security_type = security_type
             except Exception as ex:

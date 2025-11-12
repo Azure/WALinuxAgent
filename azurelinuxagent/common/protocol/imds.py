@@ -12,7 +12,7 @@ from azurelinuxagent.common.datacontract import DataContract, set_properties
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 IMDS_ENDPOINT = '169.254.169.254'
-APIVERSION = '2021-12-13'
+APIVERSION = '2018-02-01'
 BASE_METADATA_URI = "http://{0}/metadata/{1}?api-version={2}"
 
 IMDS_IMAGE_ORIGIN_UNKNOWN = 0
@@ -190,84 +190,38 @@ class ComputeInfo(DataContract):
     __matcher = ImageInfoMatcher(ENDORSED_IMAGE_INFO_MATCHER_JSON)
 
     def __init__(self,
-                 additionalCapabilities=None,
-                 azEnvironment=None,
-                 customData=None,
-                 evictionPolicy=None,
-                 extendedLocation=None,
-                 host=None,
-                 hostGroup=None,
-                 isHostCompatibilityLayerVm=None,
-                 isVmInStandbyPool=None,
-                 licenseType=None,
                  location=None,
                  name=None,
-                 osProfile=None,
-                 osType=None,
                  offer=None,
+                 osType=None,
                  placementGroupId=None,
                  platformFaultDomain=None,
-                 platformSubFaultDomain=None,
-                 platformUpdateDomain=None,
-                 plan=None,
-                 priority=None,
+                 placementUpdateDomain=None,
                  publisher=None,
-                 provider=None,
-                 publicKeys=None,
                  resourceGroupName=None,
-                 resourceId=None,
-                 securityProfile=None,
                  sku=None,
-                 storageProfile=None,
                  subscriptionId=None,
-                 systemFaultDomain=None,
                  tags=None,
-                 tagsList=None,
-                 userData=None,
                  version=None,
                  vmId=None,
                  vmSize=None,
-                 virtualMachineScaleSet=None,
                  vmScaleSetName=None,
                  zone=None):
-        self.additionalCapabilities = additionalCapabilities
-        self.azEnvironment = azEnvironment
-        self.customData = customData
-        self.evictionPolicy = evictionPolicy
-        self.extendedLocation = extendedLocation
-        self.host = host
-        self.hostGroup = hostGroup
-        self.isHostCompatibilityLayerVm = isHostCompatibilityLayerVm
-        self.isVmInStandbyPool = isVmInStandbyPool
-        self.licenseType = licenseType
         self.location = location
         self.name = name
-        self.osProfile = osProfile
-        self.osType = osType
         self.offer = offer
+        self.osType = osType
         self.placementGroupId = placementGroupId
         self.platformFaultDomain = platformFaultDomain
-        self.platformSubFaultDomain = platformSubFaultDomain
-        self.platformUpdateDomain = platformUpdateDomain
-        self.plan = plan
-        self.priority = priority
+        self.platformUpdateDomain = placementUpdateDomain
         self.publisher = publisher
-        self.provider = provider
-        self.publicKeys = publicKeys
         self.resourceGroupName = resourceGroupName
-        self.resourceId = resourceId
-        self.securityProfile = securityProfile
         self.sku = sku
-        self.storageProfile = storageProfile
         self.subscriptionId = subscriptionId
-        self.systemFaultDomain = systemFaultDomain
         self.tags = tags
-        self.tagsList = tagsList
-        self.userData = userData
         self.version = version
         self.vmId = vmId
         self.vmSize = vmSize
-        self.virtualMachineScaleSet = virtualMachineScaleSet
         self.vmScaleSetName = vmScaleSetName
         self.zone = zone
 
@@ -350,11 +304,11 @@ class ImdsClient(object):
 
         if resp.status >= 500:
             return IMDS_INTERNAL_SERVER_ERROR, "IMDS error in /metadata/{0}: {1}".format(
-                                               resource_path, restutil.read_response_error(resp)) 
+                                               resource_path, restutil.read_response_error(resp))
 
         if restutil.request_failed(resp):
             return IMDS_RESPONSE_ERROR, "IMDS error in /metadata/{0}: {1}".format(
-                                        resource_path, restutil.read_response_error(resp)) 
+                                        resource_path, restutil.read_response_error(resp))
 
         return IMDS_RESPONSE_SUCCESS, resp.read()
 
