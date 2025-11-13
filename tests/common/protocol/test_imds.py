@@ -1,4 +1,3 @@
-
 # Microsoft Azure Linux Agent
 #
 # Copyright 2018 Microsoft Corporation
