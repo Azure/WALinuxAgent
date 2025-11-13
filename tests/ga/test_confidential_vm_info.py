@@ -16,7 +16,6 @@
 #
 
 import json
-import os
 
 from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 from tests.lib.tools import AgentTestCase, MagicMock, patch
