@@ -78,6 +78,9 @@ class ConfidentialVMInfo(object):
             except Exception as ex:
                 event.warn("Failed to get virtual machine security type from IMDS: {0}", ustr(ex))
             finally:
+                # We set _is_initialized = True even if the IMDS fetch fails. This intentionally records that we've
+                # attempted initialization and prevents repeated IMDS calls on subsequent fetch_is_confidential_vm() calls.
+                # As a result, transient IMDS failures are effectively treated as "not confidential" until the agent restarts.
                 ConfidentialVMInfo._is_initialized = True
 
         return ConfidentialVMInfo._security_type == SecurityType.ConfidentialVM

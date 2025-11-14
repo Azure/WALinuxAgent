@@ -20,10 +20,12 @@ import os
 from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 from tests.lib.tools import AgentTestCase, MagicMock, patch, data_dir
 
+
 class TestConfidentialVMInfo(AgentTestCase):
 
     def setUp(self):
         ConfidentialVMInfo._security_type = None
+        ConfidentialVMInfo._is_initialized = False
         AgentTestCase.setUp(self)
 
     @staticmethod
@@ -57,3 +59,23 @@ class TestConfidentialVMInfo(AgentTestCase):
 
             is_cvm = ConfidentialVMInfo.fetch_is_confidential_vm()
             self.assertFalse(is_cvm)
+
+    def test_should_always_return_false_after_transient_imds_failure(self):
+        with patch('azurelinuxagent.ga.confidential_vm_info.ImdsClient.get_metadata') as mock_get_metadata:
+            # Mock a transient IMDS failure - error on first call, success on second call
+            failure_response = MagicMock()
+            failure_response.success = False
+            failure_response.response = b"Network timeout"
+            success_response = MagicMock()
+            success_response.success = True
+            success_response.response = b'{"securityProfile": {"securityType": "ConfidentialVM"}}'
+            mock_get_metadata.side_effect = [failure_response, success_response]
+
+            # First call should return False due to failure, second call should still return False
+            first_call = ConfidentialVMInfo.fetch_is_confidential_vm()
+            self.assertFalse(first_call)
+            second_call = ConfidentialVMInfo.fetch_is_confidential_vm()
+            self.assertFalse(second_call)
+
+            # Verify IMDS was only called once
+            self.assertEqual(mock_get_metadata.call_count, 1)
