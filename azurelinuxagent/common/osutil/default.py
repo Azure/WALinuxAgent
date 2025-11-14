@@ -38,6 +38,8 @@ import time
 import warnings
 from pwd import getpwall
 
+import azurelinuxagent.common.utils.shellutil as shellutil
+
 from azurelinuxagent.common.exception import OSUtilError
 
 #
@@ -1325,6 +1327,21 @@ class DefaultOSUtil(object):
             self._update_nic_state(state, inet_command, NetworkInterfaceCard.add_ipv4, "an IPv4 address")
             self._update_nic_state(state, inet6_command, NetworkInterfaceCard.add_ipv6, "an IPv6 address")
             return state
+
+    def is_fips_enabled(self):
+        """
+        Check if fips is enabled and return True if it is
+        """
+        fips_chk_cmd = ['sysctl', 'crypto.fips_enabled']
+        try:
+            fips_state = shellutil.run_command(fips_chk_cmd)
+            if '1' in fips_state:
+                return True
+        except shellutil.CommandError:
+            logger.info('Could not determine fips state using '
+                        'sysctl command assume fips is disabled')
+
+        return False
 
     @staticmethod
     def _update_nic_state_all(state, command_output):

@@ -31,6 +31,7 @@ from azurelinuxagent.common.protocol.extensions_goal_state_factory import Extens
 from azurelinuxagent.common.protocol.extensions_goal_state import VmSettingsParseError, GoalStateSource
 from azurelinuxagent.common.protocol.hostplugin import VmSettingsNotSupported, VmSettingsSupportStopped
 from azurelinuxagent.common.protocol.restapi import RemoteAccessUser, RemoteAccessUsersList, ExtHandlerPackage, ExtHandlerPackageList
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.utils.archive import GoalStateHistory, SHARED_CONF_FILE_NAME
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
@@ -568,6 +569,12 @@ class Certificates(LogEvent):
         Downloads the certificates from the WireServer and saves them to the given pfx file path.
         Returns True if the certificates were downloaded, False if the WireServer response does not have a "Data" element, or if the certificates are not in the expected format.
         """
+        # The pfx certificate is PKCS#12 encrypted which is not FIPS-140-3
+        # compliant. Skip the use of this certificate if FIPS is enabled.
+        osutil = get_osutil()
+        if osutil.is_fips_enabled():
+            return False
+
         trans_prv_file = os.path.join(conf.get_lib_dir(), TRANSPORT_PRV_FILE_NAME)
         trans_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
         xml_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
