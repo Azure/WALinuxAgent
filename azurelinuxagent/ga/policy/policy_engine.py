@@ -299,7 +299,7 @@ class _PolicyEngine(object):
             if k not in valid_attributes:
                 raise InvalidPolicyError("unrecognized attribute '{0}' in {1}".format(k, object_name))
 
-            if not ConfidentialVMInfo.is_confidential_vm() and k in _CVM_ONLY_POLICIES:
+            if not ConfidentialVMInfo.fetch_is_confidential_vm() and k in _CVM_ONLY_POLICIES:
                 raise InvalidPolicyError("attribute '{0}' is only supported on confidential virtual machines (CVMs).".format(k))
 
     @staticmethod

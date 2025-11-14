@@ -285,7 +285,7 @@ class GoalState(object):
         #   - Signature validation is enabled
         #   - Extension requested state is *not* 'uninstall' (uninstall goal states never include signature).
         #
-        if self._extensions_goal_state.supports_encoded_signature() and signature_validation_enabled():
+        if signature_validation_enabled() and self._extensions_goal_state.supports_encoded_signature():
             for ext in self._extensions_goal_state.extensions:
                 if ext.state == "uninstall":
                     continue

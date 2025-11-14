@@ -45,9 +45,10 @@ class ConfidentialVMInfo(object):
     # TODO: Remove once extension signature validation is supported on all VMs.
 
     _security_type = None
+    _is_initialized = False
 
     @staticmethod
-    def _get_security_type_from_imds():
+    def _fetch_security_type_from_imds():
         imds_client = ImdsClient(MIN_IMDS_VERSION_WITH_SECURITY_TYPE)
         result = imds_client.get_metadata('instance/compute', is_health=False)
         if not result.success:
@@ -62,19 +63,21 @@ class ConfidentialVMInfo(object):
         # Get securityType attribute
         security_type = security_profile.get('securityType')
         if security_type is None:
-            raise ValueError("missing field 'securityProfile'")
+            raise ValueError("missing field 'securityType'")
 
         return security_type
 
     @staticmethod
-    def is_confidential_vm():
+    def fetch_is_confidential_vm():
         # Get and cache the VM's security type from IMDS if not already done
-        if ConfidentialVMInfo._security_type is None:
+        if not ConfidentialVMInfo._is_initialized:
             try:
-                security_type = ConfidentialVMInfo._get_security_type_from_imds()
+                security_type = ConfidentialVMInfo._fetch_security_type_from_imds()
                 event.info("VM security type: {0}", security_type)
                 ConfidentialVMInfo._security_type = security_type
             except Exception as ex:
                 event.warn("Failed to get virtual machine security type from IMDS: {0}", ustr(ex))
+            finally:
+                ConfidentialVMInfo._is_initialized = True
 
         return ConfidentialVMInfo._security_type == SecurityType.ConfidentialVM

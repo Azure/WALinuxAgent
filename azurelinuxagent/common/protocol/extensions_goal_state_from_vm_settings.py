@@ -569,7 +569,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
         TODO: Remove CVM check once encoded signature is supported for all VMs, not just CVMs.
         """
-        return self._host_ga_plugin_version >= _MIN_HGAP_VERSION_FOR_EXT_SIGNATURE and ConfidentialVMInfo.is_confidential_vm()
+        return self._host_ga_plugin_version >= _MIN_HGAP_VERSION_FOR_EXT_SIGNATURE and ConfidentialVMInfo.fetch_is_confidential_vm()
 
 
 #

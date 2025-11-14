@@ -3531,7 +3531,7 @@ class TestExtensionPolicy(TestExtensionBase):
         self.patch_conf_flag = patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled',
                                      return_value=True)
         self.patch_conf_flag.start()
-        self.patch_is_cvm = patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm', return_value=True)
+        self.patch_is_cvm = patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.fetch_is_confidential_vm', return_value=True)
         self.patch_is_cvm.start()
         self.maxDiff = None     # When long error messages don't match, display the entire diff.
 
@@ -3861,7 +3861,7 @@ class _TestSignatureValidationBase(TestExtensionBase):
         self.mock_sleep.start()
         self.patch_conf_flag = patch('azurelinuxagent.ga.exthandlers.conf.get_signature_validation_enabled', return_value=True)
         self.patch_conf_flag.start()
-        self.patch_is_cvm = patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm', return_value=True)
+        self.patch_is_cvm = patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.fetch_is_confidential_vm', return_value=True)
         self.patch_is_cvm.start()
         write_signing_certificates()
 

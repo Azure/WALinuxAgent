@@ -41,7 +41,7 @@ class _TestPolicyBase(AgentTestCase):
                                      return_value=True)
         self.patch_conf_flag.start()
     
-        self.patch_is_cvm = patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm', return_value=True)
+        self.patch_is_cvm = patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.fetch_is_confidential_vm', return_value=True)
         self.mock_is_cvm = self.patch_is_cvm.start()
 
         self.goal_state_history = MagicMock()

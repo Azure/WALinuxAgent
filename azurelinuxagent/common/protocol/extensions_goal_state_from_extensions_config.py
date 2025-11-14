@@ -582,7 +582,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         Currently, encoded signature is supported only for CVMs for preview/telemetry releases.
         TODO: Remove CVM check and always return True once encoded signature is supported on all VMs.
         """
-        return ConfidentialVMInfo.is_confidential_vm()
+        return ConfidentialVMInfo.fetch_is_confidential_vm()
 
 
 # Do not extend this class

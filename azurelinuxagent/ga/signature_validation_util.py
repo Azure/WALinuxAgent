@@ -285,9 +285,9 @@ def signature_validation_enabled():
     Returns True if signature validation is enabled in conf file, OpenSSL version supports all validation parameters, and agent is running on a Confidential VM.
 
     Extension signature validation is currently limited to CVMs for telemetry/preview releases. It will be expanded to all VMs after we gain confidence in the feature.
-    TODO: Remove the is_confidential_vm() check once signature validation is supported on all VMs.
+    TODO: Remove the fetch_is_confidential_vm() check once signature validation is supported on all VMs.
     """
-    return conf.get_signature_validation_enabled() and openssl_version_supported_for_signature_validation() and ConfidentialVMInfo.is_confidential_vm()
+    return conf.get_signature_validation_enabled() and openssl_version_supported_for_signature_validation() and ConfidentialVMInfo.fetch_is_confidential_vm()
 
 
 def cleanup_package_with_invalid_signature(package_file):
