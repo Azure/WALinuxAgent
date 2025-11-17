@@ -495,6 +495,8 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
 
             goal_state = GoalState(protocol.client)
 
+            expected_file = os.path.join(conf.get_lib_dir(), "Certificates.pem")
+            self.assertTrue(os.path.isfile(expected_file), "{0} was not created".format(expected_file))
             self.assertEqual(0, len(goal_state.certs.summary), "Certificates should be empty")
             self.assertEqual(2, http_get_handler.certificate_requests, "There should have been exactly 2 requests for the goal state certificates")  # 1 for the initial request, 1 for the retry with an older cypher
 
