@@ -387,6 +387,11 @@ class AgentLog(object):
             {'message': r"Error parsing current CPUQuotaPerSecUSec: (could not convert string to float|invalid literal for float)",
              'if': lambda r: re.match(r"((ubuntu16\.04)|(centos7\.9))\D*", "{0}{1}".format(DISTRO_NAME, DISTRO_VERSION), flags=re.IGNORECASE)
             },
+
+            # 2025-12-01T18:53:28.482291Z INFO ExtHandler ExtHandler [CGW] Error parsing current MemoryHigh: Can't find property MemoryHigh of walinuxagent.service
+            {'message': r"Error parsing current MemoryHigh: Can't find property MemoryHigh",
+             'if': lambda r: re.match(r"((ubuntu16\.04)|(centos7\.9))\D*", "{0}{1}".format(DISTRO_NAME, DISTRO_VERSION), flags=re.IGNORECASE)
+            },
             #
             # GuestConfiguration produces a lot of errors in test runs due to issues in the extension. Some samples:
             #
