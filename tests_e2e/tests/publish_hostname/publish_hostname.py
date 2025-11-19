@@ -65,7 +65,7 @@ class PublishHostname(AgentVmTest):
         except CommandError as e:
             if "dig: command not found" in e.stderr:
                 distro = self._ssh_client.run_command("get_distro.py").rstrip().lower()
-                if "debian_9" in distro:
+                if distro.startswith("debian_9") or distro.startswith("debian_10"):
                     # Debian 9 hostname look up needs to be done with "host" instead of dig
                     lookup_cmd = "host {0}".format(self._private_ip)
                     dns_regex = r".*pointer\s(?P<hostname>.*)\.internal\.(cloudapp\.net|chinacloudapp\.cn|usgovcloudapp\.net).*"
@@ -153,9 +153,8 @@ class PublishHostname(AgentVmTest):
                 # Wait for the agent to detect the hostname change for up to 2 minutes if hostname monitoring is enabled
                 if monitors_hostname == "y" or monitors_hostname == "yes":
                     log.info("Agent hostname monitoring is enabled")
-                    timeout = datetime.datetime.now(UTC) + datetime.timedelta(minutes=2)
                     hostname_detected = ""
-                    while datetime.datetime.now(UTC) <= timeout:
+                    for retry in range(4, -1, -1):
                         try:
                             hostname_detected = self.retry_ssh_if_connection_reset("grep -n 'Detected hostname change:.*-> {0}' /var/log/waagent.log".format(hostname), use_sudo=True)
                             if hostname_detected:
@@ -165,7 +164,9 @@ class PublishHostname(AgentVmTest):
                             # Exit code 1 indicates grep did not find a match. Sleep if exit code is 1, otherwise raise.
                             if e.exit_code != 1:
                                 raise
-                        sleep(15)
+                        if retry > 0:
+                            log.info("Agent hasn't detected hostname change yet. Retrying after 30 seconds...")
+                            sleep(30)
 
                     if not hostname_detected:
                         fail("Agent did not detect hostname change: {0}".format(hostname))

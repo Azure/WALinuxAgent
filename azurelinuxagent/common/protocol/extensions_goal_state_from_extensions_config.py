@@ -26,7 +26,7 @@ from azurelinuxagent.common.future import ustr, urlparse
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel, GoalStateSource
 from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension, VMAgentFamily, ExtensionState, InVMGoalStateMetaData
 from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall, find, findtext, getattrib, gettext, \
-    format_exception, is_str_none_or_whitespace, is_str_empty, hasattrib, gettextxml
+    format_exception, is_str_none_or_whitespace, is_str_empty, gettextxml
 
 
 class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
@@ -63,12 +63,14 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         for ga_family in ga_families:
             name = findtext(ga_family, "Name")
             version = findtext(ga_family, "Version")
+            from_version = findtext(ga_family, "FromVersion")
             is_version_from_rsm = findtext(ga_family, "IsVersionFromRSM")
             is_vm_enabled_for_rsm_upgrades = findtext(ga_family, "IsVMEnabledForRSMUpgrades")
             uris_list = find(ga_family, "Uris")
             uris = findall(uris_list, "Uri")
             family = VMAgentFamily(name)
             family.version = version
+            family.from_version = from_version
             if is_version_from_rsm is not None:  # checking None because converting string to lowercase
                 family.is_version_from_rsm = is_version_from_rsm.lower() == "true"
             if is_vm_enabled_for_rsm_upgrades is not None:  # checking None because converting string to lowercase
@@ -315,9 +317,10 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         if extension.state in (None, ""):
             raise ExtensionsConfigError("Received empty Extensions.Plugins.Plugin.state, failing Handler")
 
-        # extension.encoded_signature value should be None if the property does not exist for the plugin. getattrib
-        # returns "" if an attribute does not exist in a node, so use hasattrib here to check if the attribute exists
-        extension.encoded_signature = getattrib(plugin, "encodedSignature") if hasattrib(plugin, "encodedSignature") else None
+        # The 'encodedSignature' property is optional. If absent, it may mean the ExtensionsConfig API does not support
+        # it, or the extension is not signed. In either case, we set extension.encoded_signature to an empty string.
+        # Note that getattrib returns an empty string already if an attribute does not exist in a node.
+        extension.encoded_signature = getattrib(plugin, "encodedSignature")
 
         def getattrib_wrapped_in_list(node, attr_name):
             attr = getattrib(node, attr_name)
@@ -569,6 +572,12 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             thumbprint = handler_settings.get("protectedSettingsCertThumbprint")
             extension_settings.certificateThumbprint = thumbprint
             extension.settings.append(extension_settings)
+
+    def supports_encoded_signature(self):
+        """
+        Returns bool indicating if the ExtensionsConfig API supports the 'encoded_signature' extension property. Should always return True.
+        """
+        return True
 
 
 # Do not extend this class

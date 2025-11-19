@@ -151,6 +151,9 @@ def get_distro():
     if os.path.exists("/etc/photon-release"):
         osinfo[0] = "photonos"
 
+    if os.path.exists('/etc/alpaquita-release'):
+        osinfo[0] = 'alpaquita'
+
     # Remove trailing whitespace and quote in distro name
     osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
     return osinfo
@@ -209,7 +212,7 @@ AGENT_LONG_NAME = "Azure Linux Agent"
 #
 #            When doing a release, be sure to use the actual agent version. Current agent version: 2.4.0.0
 #
-AGENT_VERSION = '2.14.0.1'
+AGENT_VERSION = '2.15.0.1'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """
 The Azure Linux Agent supports the provisioning and running of Linux

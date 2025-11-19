@@ -22,13 +22,15 @@ from datetime import datetime, timedelta
 from threading import current_thread
 
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
-from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, AGENT_ERROR_FILE, INITIAL_UPDATE_STATE_FILE
+from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, AGENT_ERROR_FILE, INITIAL_UPDATE_STATE_FILE, \
+    RSM_UPDATE_STATE_FILE
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.logger import LogLevel
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
 from azurelinuxagent.common.exception import HttpError, \
     ExitException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc, httpclient
+from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentFamily, \
     ExtHandlerPackage, ExtHandlerPackageList, Extension, VMStatus, ExtHandlerStatus, ExtensionStatus, \
@@ -50,7 +52,7 @@ from tests.lib.mock_update_handler import mock_update_handler
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
 from tests.lib.wire_protocol_data import DATA_FILE, DATA_FILE_MULTIPLE_EXT, DATA_FILE_VM_SETTINGS
 from tests.lib.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
-    clear_singleton_instances, skip_if_predicate_true, load_data, mock_sleep
+    clear_singleton_instances, skip_if_predicate_true, load_data
 from tests.lib import wire_protocol_data
 from tests.lib.http_request_predicates import HttpRequestPredicates
 
@@ -681,6 +683,39 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(agent.get_agent_dir(), kwargs['cwd'])
         self.assertEqual(False, '\x00' in cmds[0])
 
+    def test_run_latest_picks_latest_agent_when_update_to_latest_version_is_used(self):
+        self.prepare_agents(10)
+
+        with patch("azurelinuxagent.common.conf.is_present", return_value=True):
+            with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):
+                running_agent_args, running_agent_kwargs = self._test_run_latest()
+                running_agent_args = running_agent_args[0]
+                latest_agent = self.update_handler.get_latest_agent_greater_than_daemon()
+                latest_agent_cmds = textutil.safe_shlex_split(latest_agent.get_agent_cmd())
+                if latest_agent_cmds[0].lower() == "python":
+                    latest_agent_cmds[0] = sys.executable
+
+        self.assertEqual(running_agent_args, latest_agent_cmds)
+        self.assertTrue(len(running_agent_args) > 1)
+        self.assertRegex(running_agent_args[0], r"^(/.*/python[\d.]*)$", "The command doesn't contain full python path")
+        self.assertEqual("-run-exthandlers", running_agent_args[len(running_agent_args) - 1])
+        self.assertEqual(True, 'cwd' in running_agent_kwargs)
+        self.assertEqual(latest_agent.get_agent_dir(), running_agent_kwargs['cwd'])
+
+    def test_run_latest_picks_installed_agent_when_update_to_latest_version_is_not_used_and_autoupdates_disabled(self):
+        self.prepare_agents(10)
+
+        with patch("azurelinuxagent.common.conf.is_present", return_value=False):
+            with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):
+                running_agent_args, _ = self._test_run_latest()
+                running_agent_args = running_agent_args[0]
+                latest_agent = self.update_handler.get_latest_agent_greater_than_daemon()
+                latest_agent_cmds = textutil.safe_shlex_split(latest_agent.get_agent_cmd())
+                if latest_agent_cmds[0].lower() == "python":
+                    latest_agent_cmds[0] = sys.executable
+
+        self.assertNotEqual(running_agent_args, latest_agent_cmds)
+
     def test_run_latest_passes_child_args(self):
         self.prepare_agents()
 
@@ -1131,6 +1166,9 @@ class TestUpdate(UpdateTestCase):
                         # mocking first agent update attempted
                         open(os.path.join(conf.get_lib_dir(), INITIAL_UPDATE_STATE_FILE), "a").close()
 
+                        # mocking rsm update attempted
+                        open(os.path.join(conf.get_lib_dir(), RSM_UPDATE_STATE_FILE), "a").close()
+
                         # Case 1: rsm version missing in GS when vm opt-in for rsm upgrades; report missing rsm version error
                         protocol.mock_wire_data.set_extension_config("wire/ext_conf_version_missing_in_agent_family.xml")
                         update_goal_state_and_run_handler()
@@ -1160,7 +1198,7 @@ class TestUpdate(UpdateTestCase):
                                         "updateStatus should be in status blob. Warns: {0}".format(patch_warn.call_args_list))
                         update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
                         self.assertEqual(VMAgentUpdateStatuses.Error, update_status['status'], "Status should be an error")
-                        self.assertEqual(update_status['expectedVersion'], "9.9.9.999", "incorrect version reported")
+                        self.assertEqual(update_status['expectedVersion'], str(CURRENT_VERSION), "incorrect version reported")
                         self.assertEqual(update_status['code'], 1, "incorrect code reported")
 
     def test_it_should_wait_to_fetch_first_goal_state(self):
@@ -1752,31 +1790,53 @@ class TestAgentUpgrade(UpdateTestCase):
             self.__assert_exit_code_successful(update_handler)
             self.__assert_upgrade_telemetry_emitted(mock_telemetry, version="9.9.9.10")
 
-    @skip_if_predicate_true(lambda: True, "Enable this test when rsm downgrade scenario fixed")
     def test_it_should_mark_current_agent_as_bad_version_on_downgrade(self):
-        # Create Agent directory for current agent
+        no_of_iterations = 100
+        downgrade_version = "2.5.0"
+
         self.prepare_agents(count=1)
         self.assertTrue(os.path.exists(self.agent_dir(CURRENT_VERSION)))
         self.assertFalse(next(agent for agent in self.agents() if agent.version == CURRENT_VERSION).is_blacklisted,
                          "The current agent should not be blacklisted")
-        downgraded_version = "2.5.0"
+
+        def reload_conf(url, protocol):
+            mock_wire_data = protocol.mock_wire_data
+
+            # This function reloads the conf mid-run to mimic an actual customer scenario
+            if HttpRequestPredicates.is_goal_state_request(url) and mock_wire_data.call_counts[
+             "goalstate"] >= 10 and mock_wire_data.call_counts["goalstate"] < 15:
+
+                # Ensure we didn't try to download any agents except during the incarnation change
+                self.__assert_agent_directories_available(versions=[str(CURRENT_VERSION)])
+
+                # mimic the rsm downgrade request
+                mock_wire_data.data_files["ext_conf"] = "wire/ext_conf_downgrade_rsm_version.xml"
+                data_file['ga_manifest'] = "wire/ga_manifest.xml"
+                mock_wire_data.reload()
+                self._add_write_permission_to_goal_state_files()
+                mock_wire_data.set_incarnation(2)
+                mock_wire_data.set_version_in_agent_family(downgrade_version)
+                mock_wire_data.set_from_version_in_agent_family(str(CURRENT_VERSION))
+
+        reload_conf.call_count = 0
 
         data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
-        with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
-            update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgraded_version)
-            update_handler._protocol.mock_wire_data.set_incarnation(2)
+        with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf) as (update_handler, mock_telemetry):
+            # Set to current version to ensure no upgrade happens initially
+            update_handler._protocol.mock_wire_data.set_version_in_agent_family(str(CURRENT_VERSION))
+            update_handler._protocol.mock_wire_data.set_incarnation(20)
             update_handler.run(debug=True)
 
             self.__assert_exit_code_successful(update_handler)
             self.__assert_upgrade_telemetry_emitted(mock_telemetry, upgrade=False,
-                                                                          version=downgraded_version)
+                                                                          version=downgrade_version)
             current_agent = next(agent for agent in self.agents() if agent.version == CURRENT_VERSION)
             self.assertTrue(current_agent.is_blacklisted, "The current agent should be blacklisted")
             self.assertEqual(current_agent.error.reason, "Marking the agent {0} as bad version since a downgrade was requested in the GoalState, "
                                                          "suggesting that we really don't want to execute any extensions using this version".format(CURRENT_VERSION),
                              "Invalid reason specified for blacklisting agent")
-            self.__assert_agent_directories_exist_and_others_dont_exist(versions=[downgraded_version, str(CURRENT_VERSION)])
+            self.__assert_agent_directories_exist_and_others_dont_exist(versions=[downgrade_version, str(CURRENT_VERSION)])
 
     def test_it_should_do_self_update_if_vm_opt_out_rsm_upgrades_later(self):
         no_of_iterations = 100
@@ -2053,53 +2113,6 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             update_handler._try_update_goal_state(protocol)
             self.assertEqual(update_handler._goal_state.incarnation, '6789', "The goal state was not updated (received unexpected incarnation)")
 
-    def test_it_should_retry_fetching_the_goal_state_when_the_tenant_certificate_is_incorrect(self):
-        #
-        # Some scenarios can produce inconsistent goal states. For example, during hibernation/resume, the Fabric goal state changes (the
-        # tenant certificate is re-generated when the VM is restarted) *without* the incarnation changing. If a Fast Track goal state
-        # comes after that, the extensions will need the new certificate. This test simulates that scenario by mocking the certificates
-        # request and returning first a set of certificates (certs-2.xml) that do not match those needed by the extensions, and then a
-        # set (certs.xml) that does match. The test then ensures that the goal state was refreshed and the correct certificates were
-        # fetched.
-        #
-        def http_get_handler(url, *_, **__):
-            if HttpRequestPredicates.is_certificates_request(url):
-                http_get_handler.certificate_requests += 1
-                if http_get_handler.certificate_requests <= 2:  # _try_update_goal_state() tries 3 times; return the wrong certs the first 2 times
-                    data_file = "wire/certs-2.xml"
-                else:
-                    data_file = "wire/certs.xml"
-                return MockHttpResponse(status=200, body=load_data(data_file).encode('utf-8'))
-            return None
-        http_get_handler.certificate_requests = 0
-
-        update_handler = get_update_handler()
-        # Protocol detection fetches the goal state; disable it for the mock protocol
-        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS, detect_protocol=False) as protocol:
-            protocol.set_http_handlers(http_get_handler=http_get_handler)
-
-            with patch.object(protocol.client, "update_goal_state", wraps=protocol.client.update_goal_state) as update_goal_state_patcher:
-                with patch('time.sleep', side_effect=lambda _: mock_sleep()):  # _try_update_goal_state() sleeps before the second retry
-                    update_handler._try_update_goal_state(protocol)
-
-            self.assertEqual(3, http_get_handler.certificate_requests, "There should have been exactly 3 requests for the goal state certificates (original + 2 retries)")
-            self.assertEqual(3, protocol.mock_wire_data.call_counts["extensionsConfig"], "There should have been exactly 3 requests for extensionsConfig (original + 2 retries)")
-            self.assertEqual(3, protocol.mock_wire_data.call_counts["vm_settings"], "There should have been exactly 3 requests for vmSettings (original + 2 retries)")
-            self.assertEqual(3, update_goal_state_patcher.call_count, "There should have been exactly 3 calls to WireClient.update_goal_state (original + 2 retries)")
-            self.assertFalse(update_goal_state_patcher.call_args_list[0][1]["force_update"], "The first call to WireClient.update_goal_state should not refresh (force-update) the goal state ")
-            self.assertTrue(update_goal_state_patcher.call_args_list[1][1]["force_update"], "The second call to WireClient.update_goal_state should refresh (force-update) the goal state ")
-            self.assertTrue(update_goal_state_patcher.call_args_list[2][1]["force_update"], "The third call to WireClient.update_goal_state should refresh (force-update) the goal state ")
-
-            # Double check the certificates are correct
-            goal_state = protocol.get_goal_state()
-
-            thumbprints = [c["thumbprint"] for c in goal_state.certs.summary]
-
-            for extension in goal_state.extensions_goal_state.extensions:
-                for settings in extension.settings:
-                    if settings.protectedSettings is not None:
-                        self.assertIn(settings.certificateThumbprint, thumbprints, "The tenant certificate is missing from the goal state.")
-
     def test_it_should_limit_the_number_of_errors_output_to_the_local_log_and_telemetry(self):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             def http_get_handler(url, *_, **__):
@@ -2371,6 +2384,133 @@ class ProcessGoalStateTestCase(AgentTestCase):
             self.assertEqual(timestamp, timeutil.create_utc_timestamp(datetime_min_utc),
                 "Expected fast track time stamp to be set to {0}, got {1}".format(datetime_min_utc, timestamp))
 
+    def test_it_should_refresh_certificates_on_fast_track_goal_state_after_hibernate_resume_cycle(self):
+        #
+        # A hibernate/resume cycle is a special case in that on resume it produces a new Fabric goal state with incarnation 1. Since the VM is re-allocated,
+        # the goal state will include a new tenant encryption certificate. If the incarnation was also 1 before hibernation, the Agent won't detect this new
+        # goal state and subsequent Fast Track goal states will fail because the Agent has not fetched the new certificate.
+        #
+        # To address this issue, before executing any Fast Track goal state, _try_update_goal_state() checks that the current goal state includes the
+        # certificate used by extensions to decrypt their protected settings and forces a refresh if it does not.
+        #
+        # The test data below uses files captured from an actual scenario (minus edits to remove irrelevant/sensitive data) and consists of 3 goal states:
+        #
+        # * goal_state_1: WireServer + HGAP (Fast Track) goal state before hibernation; incarnation 1.
+        # * goal_state_2: WireServer + HGAP (Fabric) goal state after resume; also incarnation 1, but new certificates.
+        # * goal_state_3: Fast Track goal state (requires new certificates)
+        #
+        update_handler = get_update_handler()
+
+        goal_state_1 = wire_protocol_data.DATA_FILE.copy()
+        goal_state_1.update({
+            "goal_state": "hibernate/goal_state_1/GoalState.xml",
+            "hosting_env": "hibernate/goal_state_1/HostingEnvironmentConfig.xml",
+            "shared_config": "hibernate/goal_state_1/SharedConfig.xml",
+            "certs": "hibernate/goal_state_1/Certificates.xml",
+            "ext_conf": "hibernate/goal_state_1/ExtensionsConfig.xml",
+            "trans_prv": "hibernate/TransportPrivate.pem",
+            "trans_cert": "hibernate/TransportCert.pem",
+            "vm_settings": "hibernate/goal_state_1/VmSettings.json",
+            "ETag": "519198402722078973"
+        })
+        goal_state_1_certificates = [c["thumbprint"] for c in json.loads(load_data("hibernate/goal_state_1/Certificates.json"))]
+
+        goal_state_2 = goal_state_1.copy()
+        goal_state_2.update({
+            "goal_state": "hibernate/goal_state_2/GoalState.xml",
+            "hosting_env": "hibernate/goal_state_2/HostingEnvironmentConfig.xml",
+            "shared_config": "hibernate/goal_state_2/SharedConfig.xml",
+            "certs": "hibernate/goal_state_2/Certificates.xml",
+            "ext_conf": "hibernate/goal_state_2/ExtensionsConfig.xml",
+            "vm_settings": "hibernate/goal_state_2/VmSettings.json",
+            "ETag": "12335680585613334365"
+        })
+        goal_state_2_certificates = [c["thumbprint"] for c in json.loads(load_data("hibernate/goal_state_2/Certificates.json"))]
+
+        goal_state_3 = goal_state_2.copy()
+        goal_state_3.update({
+            "vm_settings": "hibernate/goal_state_3/VmSettings.json",
+            "ETag": "6382954395241675842"
+        })
+
+        #
+        # Mock these to make them no-ops (we do not want extensions, JIT requests, or Agent updates to run as part of this test)
+        #
+        exthandlers_handler, remote_access_handler, agent_update_handler = Mock(), Mock(), Mock()
+
+        with mock_wire_protocol(goal_state_1, detect_protocol=False) as protocol:
+            exthandlers_handler.protocol = protocol
+
+            #
+            # We initialize the mock protocol with goal_state_1 and do some checks to double-check the test is setup correctly
+            #
+            update_handler._process_goal_state(exthandlers_handler, remote_access_handler, agent_update_handler)
+
+            gs = update_handler._goal_state
+            egs = gs.extensions_goal_state
+            egs_1_id = egs.id
+            certificates = [c["thumbprint"] for c in gs.certs.summary]
+
+            if gs.incarnation != '1':
+                raise Exception('Incorrect test initialization. Incarnation should be 1, was {0}'.format(gs.incarnation))
+            if egs.source != GoalStateSource.FastTrack:
+                raise Exception('Incorrect test initialization. Goal state should be FastTrack, was {0}'.format(egs.source))
+            if egs.etag != goal_state_1["ETag"]:
+                raise Exception('Incorrect test initialization. Expected etag {0}, got {1} '.format(goal_state_1["Etag"], egs.etag))
+            if sorted(certificates) != sorted(goal_state_1_certificates):
+                raise Exception('Incorrect test initialization. Expected certificates {0}, got {1} '.format(goal_state_1_certificates, certificates))
+
+            #
+            # On resume, the Agent will receive goal_state_2, but since the incarnation is also 1, it won't detect it as a new goal state and
+            # _try_update_goal_state won't fetch the new data.
+            #
+            # Note that the Agent does detect the new VmSettings, but since they represent a Fabric goal state, it ignores them.
+            #
+            protocol.mock_wire_data = wire_protocol_data.WireProtocolData(goal_state_2)
+
+            with patch('azurelinuxagent.common.protocol.goal_state.add_event') as patch_add_event:
+                update_handler._process_goal_state(exthandlers_handler, remote_access_handler, agent_update_handler)
+
+            gs = update_handler._goal_state
+            egs = gs.extensions_goal_state
+            certificates = [c["thumbprint"] for c in gs.certs.summary]
+            telemetry_events = [kwargs["message"] for _, kwargs in patch_add_event.call_args_list if kwargs['op'] == 'GoalState']
+
+            if gs.incarnation != '1':
+                raise Exception('Unexpected Agent behavior. Incarnation should be 1, was {0}'.format(gs.incarnation))
+            if egs.id != egs_1_id:
+                raise Exception('Unexpected Agent behavior. The ID For the extensions goal state should be {0}; got {1}'.format(egs_1_id, egs.id))
+            if sorted(certificates) != sorted(goal_state_1_certificates):
+                raise Exception('Unexpected Agent behavior. Expected certificates {0}, got {1} '.format(goal_state_1_certificates, certificates))
+            regex = r'Fetched new vmSettings.+eTag: {0}'.format(goal_state_2["ETag"])
+            if not any(re.match(regex, e) is not None for e in telemetry_events):
+                raise Exception('Unexpected Agent behavior. Expected a telemetry event matching {0}; got: {1}'.format(regex, telemetry_events))
+            message = 'The vmSettings originated via Fabric; will ignore them.'
+            if not any(message == e for e in telemetry_events):
+                raise Exception('Unexpected Agent behavior. Expected a telemetry event matching "{0}"; got: {1}'.format(message, telemetry_events))
+
+            #
+            # This is the actual test: when a Fast Track goal state shows up, the Agent should pull the certificates that originated in the previous
+            # Fabric goal state, and the updated goal state should include all the certificates referenced by the extensions in the new goal state.
+            #
+            protocol.mock_wire_data = wire_protocol_data.WireProtocolData(goal_state_3)
+
+            update_handler._process_goal_state(exthandlers_handler, remote_access_handler, agent_update_handler)
+
+            gs = update_handler._goal_state
+            egs = gs.extensions_goal_state
+            certificates = [c["thumbprint"] for c in gs.certs.summary]
+
+            self.assertEqual('1', gs.incarnation, "The incarnation of the latest Goal State should be 1")
+            self.assertEqual(GoalStateSource.FastTrack, egs.source, "The latest Goal State should be Fast Track")
+            self.assertEqual(goal_state_3["ETag"], egs.etag, "The etag of the latest Goal State should be {0}".format(goal_state_3["ETag"]))
+            self.assertEqual(sorted(goal_state_2_certificates), sorted(certificates), "The certificates in the latest Goal State should be {0}".format(goal_state_2_certificates))
+            for e in egs.extensions:
+                for s in e.settings:
+                    if s.protectedSettings is not None:
+                        self.assertIn(s.certificateThumbprint, certificates, "Certificate {0}, needed by {1} is missing from the certificates in the goal state: {2}.".format(s.certificateThumbprint, e.name, certificates))
+
+
 class HeartbeatTestCase(AgentTestCase):
 
     @patch("azurelinuxagent.common.logger.info")
@@ -2476,7 +2616,7 @@ class GoalStateIntervalTestCase(AgentTestCase):
                     update_handler = _create_update_handler()
                     self.assertEqual(initial_goal_state_period, update_handler._goal_state_period, "Expected the initial goal state period")
 
-                    # the extension is transisioning, so we should still be using the initial goal state period
+                    # the extension is transitioning, so we should still be using the initial goal state period
                     update_handler._process_goal_state(exthandlers_handler, remote_access_handler, agent_update_handler)
                     self.assertEqual(initial_goal_state_period, update_handler._goal_state_period, "Expected the initial goal state period when the extension is transitioning")
 

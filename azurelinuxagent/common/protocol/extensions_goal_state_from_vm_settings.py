@@ -27,6 +27,8 @@ from azurelinuxagent.common.protocol.restapi import VMAgentFamily, Extension, Ex
 from azurelinuxagent.common.utils import timeutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
+# The 'encodedSignature' property is only supported on newer versions of HGAP.
+_MIN_HGAP_VERSION_FOR_EXT_SIGNATURE = FlexibleVersion("1.0.8.159")
 
 class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
     def __init__(self, etag, json_text, correlation_id):
@@ -260,6 +262,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #         {
         #             "name": "Prod",
         #             "version": "9.9.9.9",
+        #             "from_version": "9.9.9.9",
         #             "isVersionFromRSM": true,
         #             "isVMEnabledForRSMUpgrades": true,
         #             "uris": [
@@ -286,6 +289,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         for family in families:
             name = family["name"]
             version = family.get("version")
+            from_version = family.get("fromVersion")
             is_version_from_rsm = family.get("isVersionFromRSM")
             is_vm_enabled_for_rsm_upgrades = family.get("isVMEnabledForRSMUpgrades")
             uris = family.get("uris")
@@ -293,6 +297,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                 uris = []
             agent_family = VMAgentFamily(name)
             agent_family.version = version
+            agent_family.from_version = from_version
             agent_family.is_version_from_rsm = is_version_from_rsm
             agent_family.is_vm_enabled_for_rsm_upgrades = is_vm_enabled_for_rsm_upgrades
             for u in uris:
@@ -379,8 +384,11 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                 extension.name = extension_gs['name']
                 extension.version = extension_gs['version']
                 extension.state = extension_gs['state']
-                # extension.encoded_signature should be None if 'encodedSignature' key does not exist for the extension
-                extension.encoded_signature = extension_gs.get('encodedSignature')
+                # The 'encodedSignature' property is optional. If absent, it may mean the VmSettings API does not support
+                # it, or the extension is not signed. In either case, we set extension.encoded_signature to an empty string.
+                encoded_signature = extension_gs.get('encodedSignature')
+                extension.encoded_signature = "" if encoded_signature is None else encoded_signature
+
                 if extension.state not in ExtensionRequestedState.All:
                     raise Exception('Invalid extension state: {0} ({1})'.format(extension.state, extension.name))
                 is_multi_config = extension_gs.get('isMultiConfig')
@@ -553,6 +561,12 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                 if settings is None:
                     raise Exception("Dependency '{0}' does not correspond to any of the settings in the extension (settings: {1})".format(dependency["name"], settings_by_name.keys()))
                 settings.dependencyLevel = dependency["dependencyLevel"]
+
+    def supports_encoded_signature(self):
+        """
+        Returns True if the HGAP version supports the 'encoded_signature' extension property.
+        """
+        return self._host_ga_plugin_version >= _MIN_HGAP_VERSION_FOR_EXT_SIGNATURE
 
 
 #

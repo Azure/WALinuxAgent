@@ -23,7 +23,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses, VMAgentUpdateStatus, VERSION_0
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import get_daemon_version
+from azurelinuxagent.common.version import get_daemon_version, CURRENT_VERSION
 from azurelinuxagent.ga.guestagent import GuestAgentUpdateUtil
 from azurelinuxagent.ga.rsm_version_updater import RSMVersionUpdater
 from azurelinuxagent.ga.self_update_version_updater import SelfUpdateVersionUpdater
@@ -48,6 +48,7 @@ class AgentUpdateHandler(object):
                     version: it will have what version to update
                     isVersionFromRSM: True if the version is from RSM deployment.
                     isVMEnabledForRSMUpgrades: True if the VM is enabled for RSM upgrades.
+                    fromVersion: This property specifies the version to update from. It is populated only for downgrade requests and subsequent goal states thereafter, until an upgrade request.
                     if vm enabled for RSM upgrades, we use RSM update path. But if requested update is not by rsm deployment( if isVersionFromRSM:False)
                     we ignore the update.
         Self update: We fallback to this if above condition not met. This update to the largest version available in the manifest.
@@ -135,6 +136,7 @@ class AgentUpdateHandler(object):
         try:
             # If auto update is disabled, we don't proceed with update
             if not conf.get_auto_update_to_latest_version():
+                self._last_attempted_update_error_msg = "Auto update is disabled, skipping agent update"
                 return
 
             # Update the state only on new goal state
@@ -225,18 +227,17 @@ class AgentUpdateHandler(object):
         """
         This function gets the VMAgent update status as per the last attempted update.
         Returns: None if fail to report or update never attempted with rsm version specified in GS
-        Note: We send the status regardless of updater type. Since we call this main loop, want to avoid fetching agent family to decide and send only if
-        vm enabled for rsm updates.
+        Note: We report the status only when vm enrolled into RSM
         """
         try:
-            if conf.get_enable_ga_versioning():
+            if self.get_current_update_mode() == UpdateMode.RSM:
                 if not self._last_attempted_update_error_msg:
                     status = VMAgentUpdateStatuses.Success
                     code = 0
                 else:
                     status = VMAgentUpdateStatuses.Error
                     code = 1
-                return VMAgentUpdateStatus(expected_version=str(self._updater.version), status=status, code=code, message=self._last_attempted_update_error_msg)
+                return VMAgentUpdateStatus(expected_version=str(CURRENT_VERSION), status=status, code=code, message=self._last_attempted_update_error_msg)
         except Exception as err:
             msg = "Unable to report agent update status: {0}".format(textutil.format_exception(err))
             logger.warn(msg)

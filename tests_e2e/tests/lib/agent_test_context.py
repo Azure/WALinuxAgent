@@ -17,12 +17,25 @@
 import argparse
 import os
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import List
 
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 from tests_e2e.tests.lib.virtual_machine_scale_set_client import VirtualMachineScaleSetClient
 from tests_e2e.tests.lib.ssh_client import SshClient
+
+
+class TestNode(object):
+    """
+    Name and IP address of a test VM
+    """
+    def __init__(self, name: str, ip_address: str):
+        self.name = name
+        self.ip_address = ip_address
+
+    def __str__(self):
+        return f"{self.name}:{self.ip_address}"
 
 
 class AgentTestContext(ABC):
@@ -36,6 +49,18 @@ class AgentTestContext(ABC):
         self.username: str = username
         self.identity_file: Path = identity_file
         self.ssh_port: int = ssh_port
+
+    @abstractmethod
+    def get_test_nodes(self) -> List[TestNode]:
+        """
+        Returns the list of nodes the test is executed on
+        """
+
+    @abstractmethod
+    def refresh_ip_addresses(self) -> None:
+        """
+        Updates the list of test nodes with their current IP addresses
+        """
 
     @staticmethod
     def _create_argument_parser() -> argparse.ArgumentParser:
@@ -65,6 +90,18 @@ class AgentVmTestContext(AgentTestContext):
         super().__init__(working_directory, username, identity_file, ssh_port)
         self.vm: VirtualMachineClient = vm
         self.ip_address: str = ip_address
+
+    def get_test_nodes(self) -> List[TestNode]:
+        """
+        Returns the list of nodes the test is executed on
+        """
+        return [TestNode(name=self.vm.name, ip_address=self.ip_address)]
+
+    def refresh_ip_addresses(self) -> None:
+        """
+        Updates self.ip_address to reflect the current IP address of the VM.
+        """
+        self.ip_address = self.vm.get_ip_address()
 
     def create_ssh_client(self) -> SshClient:
         """
@@ -103,6 +140,21 @@ class AgentVmssTestContext(AgentTestContext):
     def __init__(self, working_directory: Path, vmss: VirtualMachineScaleSetClient, username: str, identity_file: Path, ssh_port: int = AgentTestContext.DEFAULT_SSH_PORT):
         super().__init__(working_directory, username, identity_file, ssh_port)
         self.vmss: VirtualMachineScaleSetClient = vmss
+        self._test_nodes = None  # fetched on demand
+
+    def get_test_nodes(self) -> List[TestNode]:
+        """
+        Returns the list of nodes the test is executed on
+        """
+        if self._test_nodes is None:
+            self.refresh_ip_addresses()
+        return self._test_nodes
+
+    def refresh_ip_addresses(self) -> None:
+        """
+        Updates self.ip_address to reflect the current IP address of the VM.
+        """
+        self._test_nodes = [TestNode(name=i.instance_name, ip_address=i.ip_address) for i in self.vmss.get_instances_ip_address()]
 
     @staticmethod
     def from_args():

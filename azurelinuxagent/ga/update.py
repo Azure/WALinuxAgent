@@ -199,7 +199,22 @@ class UpdateHandler(object):
         if self.signal_handler is None:
             self.signal_handler = signal.signal(signal.SIGTERM, self.forward_signal)
 
-        latest_agent = None if not conf.get_autoupdate_enabled() else self.get_latest_agent_greater_than_daemon(
+        both_auto_updates_used = conf.is_present("AutoUpdate.Enabled") and conf.is_present("AutoUpdate.UpdateToLatestVersion")
+        if both_auto_updates_used:
+            msg = u"The legacy AutoUpdate.Enabled configuration is also used, but it is ignored in favor of the new configuration (AutoUpdate.UpdateToLatestVersion)."
+            logger.warn(msg)
+            add_event(
+                AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.Enable,
+                is_success=False,
+                message=msg,
+                log_event=False)
+
+        # If new flag explicitly set, agent will use latest agent downloaded and will not fall back to installed agent. See the new flag definition in conf.py
+        use_latest_agent = conf.is_present("AutoUpdate.UpdateToLatestVersion") or conf.get_autoupdate_enabled()
+
+        latest_agent = None if not use_latest_agent else self.get_latest_agent_greater_than_daemon(
             daemon_version=CURRENT_VERSION)
         if latest_agent is None:
             logger.info(u"Installed Agent {0} is the most current agent", CURRENT_AGENT)
@@ -531,13 +546,12 @@ class UpdateHandler(object):
             for attempt in range(3):
                 protocol.client.update_goal_state(force_update=attempt > 0, silent=self._update_goal_state_error_count >= max_errors_to_log, save_to_history=True)
 
-                goal_state = protocol.get_goal_state()
-                new_goal_state = self._goal_state is None or self._goal_state.extensions_goal_state.id != goal_state.extensions_goal_state.id
+                self._goal_state = protocol.get_goal_state()
 
-                if not new_goal_state or goal_state.extensions_goal_state.source != GoalStateSource.FastTrack:
+                if not (self._processing_new_extensions_goal_state() and self._goal_state.extensions_goal_state.source == GoalStateSource.FastTrack):
                     break
 
-                if self._check_certificates(goal_state):
+                if self._check_certificates(self._goal_state):
                     if attempt > 0:
                         event.info(WALAEventOperation.FetchGoalState, "The extensions goal state is now in sync with the tenant cert.")
                     break
@@ -550,8 +564,6 @@ class UpdateHandler(object):
                 else:
                     event.warn(WALAEventOperation.FetchGoalState, "The extensions are still out of sync with the tenant cert. Will continue execution, but some extensions may fail.")
                     break
-
-            self._goal_state = protocol.get_goal_state()
 
             if self._update_goal_state_error_count > 0:
                 event.info(

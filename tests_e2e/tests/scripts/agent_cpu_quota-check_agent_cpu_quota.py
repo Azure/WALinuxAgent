@@ -81,6 +81,7 @@ def prepare_agent():
     agent_python = exec_start.split()[0]
     current_directory = os.path.dirname(os.path.abspath(__file__))
     start_service_script = os.path.join(current_directory, "agent_cpu_quota-start_service.py")
+    os.makedirs(systemd.get_agent_drop_in_path(), exist_ok=True)
     drop_in_file = os.path.join(systemd.get_agent_drop_in_path(), "99-ExecStart.conf")
     log.info("Creating %s...", drop_in_file)
     with open(drop_in_file, "w") as file_:

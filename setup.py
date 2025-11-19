@@ -17,7 +17,9 @@
 # limitations under the License.
 #
 
+import gzip
 import os
+import shutil
 import subprocess
 import sys
 
@@ -61,6 +63,10 @@ def set_sysv_files(data_files, dest="/etc/rc.d/init.d", src=None):
         src = ["init/waagent"]
     data_files.append((dest, src))
 
+def set_openrc_files(data_files, dest="/etc/init.d", src=None):
+    if src is None:
+        src = ["init/openrc/waagent"]
+    data_files.append((dest, src))
 
 def set_systemd_files(data_files, dest, src=None):
     if src is None:
@@ -86,6 +92,16 @@ def set_udev_files(data_files, dest="/etc/udev/rules.d/", src=None):
                "config/99-azure-product-uuid.rules"]
     data_files.append((dest, src))
 
+def set_man_files(data_files, dest="/usr/share/man/man1", src=None):
+    if src is None:
+        src = ["doc/man/waagent.1"]
+    src_gz = []
+    for file in src:
+        with open(file, 'rb') as f_in, gzip.open(file+".gz", 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
+        src_gz.append(file+".gz")
+    data_files.append((dest, src_gz))
+
 
 def get_data_files(name, version, fullname):  # pylint: disable=R0912
     """
@@ -97,7 +113,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
     agent_bin_path = osutil.get_agent_bin_path()
 
     if name in ('redhat', 'rhel', 'centos', 'almalinux', 'cloudlinux', 'rocky'):
-        if version.startswith("8") or version.startswith("9"):
+        if version.startswith(("8", "9", "10")):
             # redhat8+ default to py3
             set_bin_files(data_files, dest=agent_bin_path,
                           src=["bin/py3/waagent", "bin/waagent2.0"])
@@ -106,7 +122,8 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_conf_files(data_files)
         set_logrotate_files(data_files)
         set_udev_files(data_files)
-        if version.startswith("8") or version.startswith("9"):
+        set_man_files(data_files)
+        if version.startswith(("8", "9", "10")):
             # redhat 8+ uses systemd and python3
             set_systemd_files(data_files, dest=systemd_dir_path,
                               src=["init/redhat/waagent.service",
@@ -254,6 +271,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_logrotate_files(data_files)
         set_udev_files(data_files)
         set_systemd_files(data_files, dest=systemd_dir_path)
+        set_man_files(data_files)
     elif name == 'chainguard':
         set_bin_files(data_files, dest=agent_bin_path, src=["bin/py3/waagent"])
         set_conf_files(data_files, src=["config/chainguard/waagent.conf"])
@@ -263,6 +281,13 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
                               "init/azure-vmextensions.slice"
                                    ])
         set_udev_files(data_files)
+    elif name in ('alpine', 'alpaquita'):
+        set_bin_files(data_files, dest=agent_bin_path,
+                      src=['bin/waagent'])
+        set_conf_files(data_files, src=["config/alpine/waagent.conf"])
+        set_logrotate_files(data_files)
+        set_udev_files(data_files)
+        set_openrc_files(data_files)
     else:
         # Use default setting
         set_bin_files(data_files, dest=agent_bin_path)

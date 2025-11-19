@@ -1,16 +1,30 @@
 #
-# FIPS should not affect extension processing. The test enables FIPS and then executes an extension.
+# FIPS should not affect extension processing. This test enables FIPS and then executes an extension, the intention being to verify that all the
+# cryptographic algorithms used by the Extensions pipeline (e.g. encryption of protected settings, creation of PFX packages, and communication
+# Agent<->Wireserver) are FIPS approved.
 #
-# NOTE: Enabling FIPS is very specific to the distro. This test is only executed on Mariner 2.
-#
-# TODO: Add other distros.
-#
-# NOTE: FIPS can be enabled on RHEL9 using these instructions: see https://access.redhat.com/solutions/137833#rhel9),
-#       but extensions with protected settings do not work end-to-end, since the Agent can't decrypt the tenant
-#       certificate.
+# This test suite focuses on FIPS 140-3 and uses Ubuntu 22 and RHEL 9 as the representative distros for this feature. Note that Azure Linux 3
+# is also FIPS 140-3 compliant, but, similarly to Windows, it takes a more permissive approach and deprecated cryptographic algorithms can still
+# be used. We do not include Azure Linux 3 in the images here, it is already included in the "endorsed" image set and runs as part of the other
+# test suites.
 #
 name: "FIPS"
 tests:
   - source: "fips/fips.py"
-images: "mariner_2"
+images:
+  - "ubuntu_pro_2204" # Enabling FIPS on Ubuntu requires the "pro" client to be enabled; it is pre-enabled on these "pro" images.
+  - "ubuntu_pro_fips_2204" # FIPS is pre-enabled on these "fips" images.
+  - "rhel_95"
+
+# Support for FIPS 140-3 is currently deployed only to the Canary regions
+locations: "AzureCloud:eastus2euap"
+
+skip_on_clouds:
+  - "AzureChinaCloud"
+  - "AzureUSGovernment"
+
+# The test VM could be shared with other test suites, but we want to ensure there is a mix of FIPS and non-FIPS environments in the test run,
+# so we take ownership of the VM for this test suite.
 owns_vm: true
+
+

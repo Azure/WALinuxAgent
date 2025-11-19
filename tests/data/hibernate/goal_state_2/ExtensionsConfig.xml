@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Extensions version="1.0.0.0" goalStateIncarnation="1"><GuestAgentExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+  <GAFamilies>
+    <GAFamily>
+      <IsVMEnabledForRSMUpgrades>false</IsVMEnabledForRSMUpgrades>
+      <IsVersionFromRSM>false</IsVersionFromRSM>
+      <Name>Prod</Name>
+      <Uris>
+        <Uri>https://umsas3lpnprqfsznclrr.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+      </Uris>
+      <Version>2.13.1.1</Version>
+    </GAFamily>
+  </GAFamilies>
+  <Location>westus2</Location>
+  <ServiceName>CRP</ServiceName>
+</GuestAgentExtension>
+<StatusUploadBlob statusBlobType="PageBlob">https://foo-bar.z6.blob.storage.azure.net/$system/test-vm.aef009a9-f00b-490d-baa5-f9c64baa8be6.status?***REDACTED***</StatusUploadBlob>
+<Plugins>
+  <Plugin name="Microsoft.GuestConfiguration.ConfigurationforLinux" version="1.26.89" location="https://umsavph101h3qhc1pz3t.blob.core.windows.net/a56f582c-8808-3cf4-9fd0-c943fa076e03/a56f582c-8808-3cf4-9fd0-c943fa076e03_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://umsargnfzcnssnpfskrr.blob.core.windows.net/a56f582c-8808-3cf4-9fd0-c943fa076e03/a56f582c-8808-3cf4-9fd0-c943fa076e03_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
+    <additionalLocations>
+      <additionalLocation>https://umsazq0spn4w5z3grwcv.blob.core.windows.net/a56f582c-8808-3cf4-9fd0-c943fa076e03/a56f582c-8808-3cf4-9fd0-c943fa076e03_manifest.xml</additionalLocation>
+    </additionalLocations>
+  </Plugin>
+  <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="2.1.13" location="https://umsalvlwk4lfvxs4w05v.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://umsat3kgcjtz4rzmtdhx.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
+    <additionalLocations>
+      <additionalLocation>https://umsaff4lwzr0mqltcdsj.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml</additionalLocation>
+    </additionalLocations>
+  </Plugin>
+  <Plugin name="Microsoft.CPlat.Core.LinuxHibernateExtension" version="1.0.1" location="https://umsarmtx2bjcqg0cj14s.blob.core.windows.net/ac7acc47-2188-9dae-3527-8acb855e707c/ac7acc47-2188-9dae-3527-8acb855e707c_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://umsaqw3srxc4dmbcfz3q.blob.core.windows.net/ac7acc47-2188-9dae-3527-8acb855e707c/ac7acc47-2188-9dae-3527-8acb855e707c_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
+    <additionalLocations>
+      <additionalLocation>https://umsac5lzx3m5mmb1qsnk.blob.core.windows.net/ac7acc47-2188-9dae-3527-8acb855e707c/ac7acc47-2188-9dae-3527-8acb855e707c_manifest.xml</additionalLocation>
+    </additionalLocations>
+  </Plugin>
+</Plugins>
+<PluginSettings>
+  <Plugin name="Microsoft.GuestConfiguration.ConfigurationforLinux" version="1.26.89">
+    <RuntimeSettings seqNo="0">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "protectedSettingsCertThumbprint": "33BDFEDC3C0E7F57A27C448BC4C4EB3D4D763489",
+        "protectedSettings": "***REDACTED***",
+        "publicSettings": {}
+      }
+    }
+  ]
+}</RuntimeSettings>
+  </Plugin>
+  <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="2.1.13">
+    <RuntimeSettings seqNo="5">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "protectedSettingsCertThumbprint": "33BDFEDC3C0E7F57A27C448BC4C4EB3D4D763489",
+        "protectedSettings": "***REDACTED***"
+      }
+    }
+  ]
+}</RuntimeSettings>
+  </Plugin>
+</PluginSettings>
+<InVMArtifactsProfileBlob>https://foo-bar.z6.blob.storage.azure.net/$system/test-vm.aef009a9-f00b-490d-baa5-f9c64baa8be6.vmSettings?***REDACTED***</InVMArtifactsProfileBlob>
+<InVMGoalStateMetaData inSvdSeqNo="10" createdOnTicks="638852753414265542" activityId="b62f1ce8-4608-45d2-9db9-369936c7b685" correlationId="87b28d71-0ed4-4587-b40b-370581db7ad2" /></Extensions>

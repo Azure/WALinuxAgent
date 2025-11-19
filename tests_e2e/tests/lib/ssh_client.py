@@ -16,9 +16,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import datetime
 import re
 
 from pathlib import Path
+
+from azurelinuxagent.common.future import UTC
 
 from tests_e2e.tests.lib import shell
 from tests_e2e.tests.lib.retry import retry_ssh_run
@@ -55,18 +58,22 @@ class SshClient(object):
         return retry_ssh_run(lambda: shell.run_command(command), attempts, attempt_delay)
 
     @staticmethod
-    def generate_ssh_key(private_key_file: Path):
+    def generate_ssh_key(private_key_file: Path) -> None:
         """
         Generates an SSH key on the given Path
         """
         shell.run_command(
             ["ssh-keygen", "-m", "PEM", "-t", "rsa", "-b", "4096", "-q", "-N", "", "-f", str(private_key_file)])
 
-    def get_architecture(self):
+    def get_architecture(self) -> str:
         return self.run_command("uname -m").rstrip()
 
     def get_distro(self):
         return self.run_command("get_distro.py").rstrip()
+
+    def get_time(self) -> datetime.datetime:
+        time_string = self.run_command("date --utc '+%Y-%m-%dT%T.%6NZ'").rstrip()
+        return datetime.datetime.strptime(time_string, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=UTC)
 
     def copy_to_node(self, local_path: Path, remote_path: Path, recursive: bool = False, attempts: int = ATTEMPTS, attempt_delay: int = ATTEMPT_DELAY) -> None:
         """

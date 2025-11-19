@@ -1,0 +1,7 @@
+#
+#    This test verifies that the agent reports correct status and code when operation fails during the ext update.
+#
+name: "ExtensionUpdate"
+tests:
+  - "ext_update/ext_update_failure.py"
+images: "random(endorsed)"

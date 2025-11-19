@@ -48,6 +48,8 @@ class VMAgentFamily(object):
         self.name = name
         # Two-state: None, string. Set to None if version not specified in the GS
         self.version = None
+        # Two-state: None, string. Set to None if this property not specified in the GS.
+        self.from_version = None
         # Tri-state: None, True, False. Set to None if this property not specified in the GS.
         self.is_version_from_rsm = None
         # Tri-state: None, True, False. Set to None if this property not specified in the GS.
@@ -135,7 +137,8 @@ class Extension(object):
         self.settings = []
         self.manifest_uris = []
         self.supports_multi_config = False
-        self.encoded_signature = None
+        # An empty string for encoded_signature indicates that the extension is not signed, or that the goal state API does not support the signature property.
+        self.encoded_signature = ""
         self.__invalid_handler_setting_reason = None
 
     @property

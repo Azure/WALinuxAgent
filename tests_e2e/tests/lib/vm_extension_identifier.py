@@ -34,9 +34,11 @@ class VmExtensionIdentifier(object):
 
     unsupported_distros: Dict[str, List[str]] = {
         "Microsoft.OSTCExtensions.VMAccessForLinux": ["flatcar"],
-        "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent": ["flatcar", "mariner_1", "ubuntu_2404", "sles_15"],
+        "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent": ["flatcar", "mariner_1", "ubuntu_2404", "sles_15", "rhel_10"],
         "Microsoft.GuestConfiguration.ConfigurationforLinux": ["flatcar"],
-        "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent": ["flatcar"]
+        "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent": ["flatcar"],
+        # TODO: RCv2 currently fails on AzureCloud on the distros below due to GLIBC < 2.34. Once the extension is fixed to support older GLIB versions, remove this entry.
+        "Microsoft.CPlat.Core.RunCommandHandlerLinux": ["almalinux_810", "centos_82", "debian_9", "debian_10", "debian_11", "redhat_810", "ubuntu_1804", "ubuntu_2004"]
     }
 
     def supports_distro(self, system_info: str) -> bool:
@@ -59,14 +61,15 @@ class VmExtensionIds(object):
     Only the major version is specified, and the minor version is set to 0 (set autoUpgradeMinorVersion to True in the call to enable
     to use the latest version)
     """
+    AzureMonitorLinuxAgent: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.Monitor', ext_type='AzureMonitorLinuxAgent', version="1.5")
+    AzureSecurityLinuxAgent: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.Security.Monitoring', ext_type='AzureSecurityLinuxAgent', version="2.0")
     CustomScript: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript', version="2.0")
+    GATestExtension: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions.Edp', ext_type='GATestExtGo', version="1.2")
+    GuestAgentDcrTestExtension: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.TestExtensions.Edp', ext_type='GuestAgentDcrTest', version='1.0')
+    GuestConfig: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.GuestConfiguration', ext_type='ConfigurationforLinux', version="1.0")
+    Hibernate: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.CPlat.Core', ext_type='LinuxHibernateExtension', version="1.0")
     # Older run command extension, still used by the Portal as of Dec 2022
     RunCommand: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.CPlat.Core', ext_type='RunCommandLinux', version="1.0")
     # New run command extension, with support for multi-config
     RunCommandHandler: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.CPlat.Core', ext_type='RunCommandHandlerLinux', version="1.0")
     VmAccess: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.OSTCExtensions', ext_type='VMAccessForLinux', version="1.0")
-    GuestAgentDcrTestExtension: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.TestExtensions.Edp', ext_type='GuestAgentDcrTest', version='1.0')
-    AzureMonitorLinuxAgent: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.Monitor', ext_type='AzureMonitorLinuxAgent', version="1.5")
-    GATestExtension: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions.Edp', ext_type='GATestExtGo', version="1.2")
-    GuestConfig: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.GuestConfiguration', ext_type='ConfigurationforLinux', version="1.0")
-    AzureSecurityLinuxAgent: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.Security.Monitoring', ext_type='AzureSecurityLinuxAgent', version="2.0")

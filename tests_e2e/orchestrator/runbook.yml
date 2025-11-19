@@ -50,13 +50,14 @@ variable:
       - ext_sequencing
       - ext_telemetry_pipeline
       - fips
+      - hibernation
       - keyvault_certificates
       - multi_config_ext
       - no_outbound_connections
       - publish_hostname
       - recover_network_interface
-      - cgroup_v2_enabled
       - log_collector
+      - ext_update
 
   #
   # Additional arguments pass to the test suites
@@ -65,6 +66,7 @@ variable:
     value: ""
     is_case_visible: true
 
+  #
   # Parameters used to create test VMs
   #
   - name: subscription_id
@@ -79,6 +81,8 @@ variable:
     value: ""
   - name: vm_size
     value: ""
+  - name: vm_provisioning_timeout
+    value: 900
 
   #
   # Whether to skip deletion of the test VMs after the test run completes.
@@ -230,6 +234,7 @@ combinator:
   user: $(user)
   vm_name: $(vm_name)
   vm_size: $(vm_size)
+  vm_provisioning_timeout: $(vm_provisioning_timeout)
   vmss_name: $(vmss_name)
 
 concurrency: 32

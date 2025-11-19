@@ -270,7 +270,7 @@ class ExtensionWorkflow(AgentVmTest):
             # logged atleast once in the agent log to ensure that there were no errors when handling special characters
             # in the agent
             dcr_ext.assert_scenario(
-                file_name='agent_ext_workflow-check_data_in_agent_log.py',
+                file_name='check_data_in_agent_log.py',
                 command_args=command_args,
                 assert_status=True,
                 data=test_guid

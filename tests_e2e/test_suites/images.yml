@@ -26,6 +26,7 @@ image-sets:
       - "rhel_79"
       - "rhel_810"
       - "rhel_95"
+      - "rhel_10"
       - "rocky_9"
       - "suse_12"
       - "suse_15"
@@ -49,17 +50,28 @@ image-sets:
 
    # As of today agent only support and enabled resource governance feature on following distros
    cgroups-endorsed:
+      - "azure-linux_3"
       - "centos_82"
       - "rhel_82"
+      - "rhel_95"
+      - "rhel_95_arm64"
       - "ubuntu_1604"
       - "ubuntu_1804"
       - "ubuntu_2004"
+      - "ubuntu_2204"
+      - "ubuntu_2204_arm64"
+      - "ubuntu_2404"
+      - "ubuntu_2404_arm64"
 
    # These distros use Python 2.6. Currently they are not tested on the daily runs; this image set is here just for reference.
    python-26:
       - "centos_610"
       - "oracle_610"
       - "rhel_610"
+
+   # These distros are used by the partner vms, and are not tested on the daily runs. This image set is here just for reference.
+   partner-images:
+      - "databricks_ubuntu"
 
    # These are the distros which have periodic log collector support.
    log-collector-endorsed:
@@ -74,6 +86,32 @@ image-sets:
       - "ubuntu_2204_arm64"
       - "ubuntu_2404"
       - "ubuntu_2404_arm64"
+
+   # These are distros with default OpenSSL version 1.1.0 or later, as required for signature validation.
+   # TODO: Remove this image set once timestamp validation is implemented and the "no_check_time" flag
+   # (which requires OpenSSL 1.1.0) is no longer needed.
+   signature-validation-endorsed:
+      - "alma_8"
+      - "alma_9"
+      - "centos_82"
+      - "debian_9"
+      - "debian_10"
+      - "debian_11"
+      - "flatcar"
+      - "mariner_2"
+      - "azure-linux_3"
+      - "azure-linux_3_fips"
+      - "suse_15"
+      - "rhel_810"
+      - "rhel_95"
+      - "rhel_10"
+      - "rocky_9"
+      - "ubuntu_1804"
+      - "ubuntu_2004"
+      - "ubuntu_2204"
+      - "ubuntu_2204_minimal"
+      - "ubuntu_2404"
+      - "ubuntu_2404_minimal"
 
 #
 # An image can be specified by a string giving its urn, as in
@@ -103,6 +141,12 @@ image-sets:
 # URNs follow the format '<Publisher> <Offer> <Sku> <Version>' or
 # '<Publisher>:<Offer>:<Sku>:<Version>'
 #
+# NOTE ON VM SIZE FOR ARM64 VMs:
+#      The VM size chosen by LISA for ARM64 VMs has recently produced VM that do not start, so we explicitly use
+#      Standard_B2pls_v2 (which was the size LISA was using previously). Consider removing this explicit size
+#      if/when the issue with the size selected by LISA is fixed.
+#
+#
 images:
    alma_8:
       urn: "almalinux almalinux-x86_64 8-gen2 latest"
@@ -122,6 +166,9 @@ images:
          AzureChinaCloud: []
    azure-linux_3_arm64:
       urn: "microsoftcblmariner azure-linux-3 azure-linux-3-arm64 latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
       locations:
          AzureUSGovernment: []
          AzureChinaCloud: []
@@ -133,12 +180,17 @@ images:
       vm_sizes:
          # Since centos derived from redhat, please see the comment for vm size in rhel_82
          - "Standard_B2s"
+   databricks_ubuntu:
+      urn: "AzureDatabricks Databricks DatabricksWorker latest"
    debian_8: "credativ Debian 8 latest"
    debian_9: "credativ Debian 9 latest"
    debian_10: "Debian debian-10 10 latest"
    debian_11: "Debian debian-11 11 latest"
    debian_11_arm64:
       urn: "Debian debian-11 11-backports-arm64 latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
       locations:
          AzureUSGovernment: []
          AzureChinaCloud: []
@@ -149,6 +201,9 @@ images:
          AzureUSGovernment: []
    flatcar_arm64:
       urn: "kinvolk flatcar-container-linux-corevm stable latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
@@ -159,6 +214,9 @@ images:
    mariner_2: "microsoftcblmariner cbl-mariner cbl-mariner-2 latest"
    mariner_2_arm64:
       urn: "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
@@ -211,9 +269,17 @@ images:
          AzureChinaCloud: []
    rhel_95_arm64:
       urn: "RedHat rhel-arm64 9_5-arm64 latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
+   rhel_10:
+      urn: "RedHat RHEL 10_0 latest"
+      locations:
+        # TODO: Remove this once RHEL 10 is available in AzureChinaCloud
+         AzureChinaCloud: []
    rocky_9:
       urn: "resf rockylinux-x86_64 9-base latest"
       locations:
@@ -228,9 +294,13 @@ images:
    ubuntu_1804: "Canonical UbuntuServer 18.04-LTS latest"
    ubuntu_2004: "Canonical 0001-com-ubuntu-server-focal 20_04-lts latest"
    ubuntu_2204: "Canonical 0001-com-ubuntu-server-jammy 22_04-lts latest"
-   ubuntu_2204_pro: "Canonical 0001-com-ubuntu-pro-microsoft pro-22_04 latest"
+   ubuntu_pro_2204: "Canonical 0001-com-ubuntu-pro-microsoft pro-22_04 latest"
+   ubuntu_pro_fips_2204: "Canonical 0001-com-ubuntu-pro-microsoft pro-fips-22_04 latest"
    ubuntu_2204_arm64:
       urn: "Canonical 0001-com-ubuntu-server-jammy 22_04-lts-arm64 latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
@@ -238,6 +308,9 @@ images:
    ubuntu_2404: "Canonical ubuntu-24_04-lts server latest"
    ubuntu_2404_arm64:
       urn: "Canonical ubuntu-24_04-lts server-arm64 latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []

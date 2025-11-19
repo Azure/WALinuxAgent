@@ -1,0 +1,91 @@
+{
+    "hostGAPluginVersion": "1.0.8.175",
+    "activityId": "603670b5-db87-47fd-bfed-56464612ea6b",
+    "correlationId": "2428bb44-f44a-432b-a279-bc1d55b39af9",
+    "inSvdSeqNo": 10,
+    "certificatesRevision": 0,
+    "extensionsLastModifiedTickCount": 638852755619904276,
+    "extensionGoalStatesSource": "FastTrack",
+    "statusUploadBlob": {
+        "statusBlobType": "PageBlob",
+        "value": "https://foo-bar.z6.blob.storage.azure.net/$system/test-vm.aef009a9-f00b-490d-baa5-f9c64baa8be6.status?***REDACTED***"
+    },
+    "gaFamilies": [
+        {
+            "name": "Prod",
+            "version": "2.13.1.1",
+            "isVersionFromRSM": false,
+            "isVMEnabledForRSMUpgrades": false,
+            "uris": [
+                "https://umsaq0ksgznjhnhvqvmj.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsagnbbh4hpglrpgc5t.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsar1tzn12qbbhwwgmw.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsas3lpnprqfsznclrr.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsabj35g0v1lrp2w3qh.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml"
+            ]
+        }
+    ],
+    "extensionGoalStates": [
+        {
+            "name": "Microsoft.GuestConfiguration.ConfigurationforLinux",
+            "version": "1.26.89",
+            "location": "https://umsajcsg1mkf30sqkz4v.blob.core.windows.net/a56f582c-8808-3cf4-9fd0-c943fa076e03/a56f582c-8808-3cf4-9fd0-c943fa076e03_manifest.xml",
+            "failoverLocation": "https://umsavph101h3qhc1pz3t.blob.core.windows.net/a56f582c-8808-3cf4-9fd0-c943fa076e03/a56f582c-8808-3cf4-9fd0-c943fa076e03_manifest.xml",
+            "additionalLocations": [
+                "https://umsargnfzcnssnpfskrr.blob.core.windows.net/a56f582c-8808-3cf4-9fd0-c943fa076e03/a56f582c-8808-3cf4-9fd0-c943fa076e03_manifest.xml"
+            ],
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "isMultiConfig": false,
+            "settings": [
+                {
+                    "protectedSettingsCertThumbprint": "33BDFEDC3C0E7F57A27C448BC4C4EB3D4D763489",
+                    "protectedSettings": "***REDACTED***",
+                    "publicSettings": "{}"
+                }
+            ]
+        },
+        {
+            "name": "Microsoft.Azure.Extensions.CustomScript",
+            "version": "2.1.13",
+            "location": "https://umsat3kgcjtz4rzmtdhx.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml",
+            "failoverLocation": "https://umsalvlwk4lfvxs4w05v.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml",
+            "additionalLocations": [
+                "https://umsalhsl5scrdmt03dql.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml"
+            ],
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 6,
+            "isMultiConfig": false,
+            "settings": [
+                {
+                    "protectedSettingsCertThumbprint": "33BDFEDC3C0E7F57A27C448BC4C4EB3D4D763489",
+                    "protectedSettings": "***REDACTED***"
+                }
+            ]
+        },
+        {
+            "name": "Microsoft.CPlat.Core.LinuxHibernateExtension",
+            "version": "1.0.1",
+            "location": "https://umsarmtx2bjcqg0cj14s.blob.core.windows.net/ac7acc47-2188-9dae-3527-8acb855e707c/ac7acc47-2188-9dae-3527-8acb855e707c_manifest.xml",
+            "failoverLocation": "https://umsan3ktnnkr4k4fpv1x.blob.core.windows.net/ac7acc47-2188-9dae-3527-8acb855e707c/ac7acc47-2188-9dae-3527-8acb855e707c_manifest.xml",
+            "additionalLocations": [
+                "https://umsaqw3srxc4dmbcfz3q.blob.core.windows.net/ac7acc47-2188-9dae-3527-8acb855e707c/ac7acc47-2188-9dae-3527-8acb855e707c_manifest.xml"
+            ],
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "isMultiConfig": false
+        }
+    ]
+}

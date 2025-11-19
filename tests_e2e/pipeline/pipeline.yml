@@ -62,12 +62,17 @@ parameters:
     - failed
     - no
 
+  - name: container_image
+    displayName: Container Image (e.g. foo.azurecr.io/bar:latest)
+    type: string
+    default: "-"
+
 pool:
   name: waagent-pool
 
 jobs:
   - job: "ExecuteTests"
-    timeoutInMinutes: 90
+    timeoutInMinutes: 120
 
     steps:
       # Extract the Azure cloud from the "connection_info" variable. Its value includes one of
@@ -132,6 +137,7 @@ jobs:
           TEST_SUITES: ${{ parameters.test_suites }}
           TEST_ARGS: ${{ parameters.test_args }}
           VM_SIZE: ${{ parameters.vm_size }}
+          CONTAINER_IMAGE: ${{ parameters.container_image }}
 
       - bash: $(Build.SourcesDirectory)/tests_e2e/pipeline/scripts/collect_artifacts.sh
         displayName: "Collect test artifacts"
@@ -150,7 +156,7 @@ jobs:
         condition: always()
         inputs:
           testResultsFormat: 'JUnit'
-          testResultsFiles: 'runbook_logs/agent.junit.xml'
+          testResultsFiles: 'runbook_logs/lisa.junit.xml'
           searchFolder: $(Build.ArtifactStagingDirectory)
           failTaskOnFailedTests: true
 

@@ -61,6 +61,19 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
 
             self.assertEqual(GoalStateChannel.WireServer, extensions_goal_state.channel, "The channel is incorrect")
 
+    def test_it_should_parse_from_version_properly(self):
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            agent_families = protocol.get_goal_state().extensions_goal_state.agent_families
+            for family in agent_families:
+                self.assertIsNone(family.from_version, "from_version should be None")
+
+        data_file = wire_protocol_data.DATA_FILE.copy()
+        data_file["ext_conf"] = "hostgaplugin/ext_conf-agent_family_version.xml"
+        with mock_wire_protocol(data_file) as protocol:
+            agent_families = protocol.get_goal_state().extensions_goal_state.agent_families
+            for family in agent_families:
+                self.assertEqual(family.from_version, "9.9.9.9",  "FromVersion should be 9.9.9.9")
+
     def test_it_should_parse_is_version_from_rsm_properly(self):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             agent_families = protocol.get_goal_state().extensions_goal_state.agent_families
@@ -111,5 +124,5 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
         data_file["ext_conf"] = "wire/ext_conf-no_encoded_signature.xml"
         with mock_wire_protocol(data_file) as protocol:
             extensions = protocol.get_goal_state().extensions_goal_state.extensions
-            # extension.encoded_signature should be None if property is not in the EGS for the extension
-            self.assertIsNone(extensions[0].encoded_signature)
+            # extension.encoded_signature should be an empty string if property is not in the EGS for the extension
+            self.assertEqual(extensions[0].encoded_signature, "")

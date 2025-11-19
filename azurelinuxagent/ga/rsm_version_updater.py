@@ -87,13 +87,22 @@ class RSMVersionUpdater(GAVersionUpdater):
     def is_retrieved_version_allowed_to_update(self, agent_family):
         """
         Once version retrieved from goal state, we check if we allowed to update for that version
-        allow update If new version not same as current version, not below than daemon version and if version is from rsm request
+        allow update If new version not same as current version, not below than daemon version and if version is from rsm request.
 
-        Todo: Downgrade flow has issues, not allowing it until we have a fix
+        Downgrade is allowed only when from_version(updated from) should match the current agent version.
         """
 
-        if not agent_family.is_version_from_rsm or self._version < self._daemon_version or self._version == CURRENT_VERSION or (self._version < CURRENT_VERSION and not conf.get_enable_rsm_downgrade()):
+        if not agent_family.is_version_from_rsm or self._version == CURRENT_VERSION:
             return False
+
+        # If the version is below daemon version or if it is a downgrade and the current agent version is not the one we are downgrading from, we don't allow update
+        elif self._version < self._daemon_version:
+            raise AgentUpdateError("Received invalid update request:{0}, new version {1} is below than daemon version {2}".format(
+                self._gs_id, str(self._version), str(self._daemon_version)))
+
+        elif self._version < CURRENT_VERSION and CURRENT_VERSION != FlexibleVersion(agent_family.from_version):
+            raise AgentUpdateError("Received invalid update request:{0}, downgrade {1} is not allowed to update from {2}. Current agent version running: {3}".format(
+                    self._gs_id, str(self._version), agent_family.from_version, str(CURRENT_VERSION)))
 
         return True
 

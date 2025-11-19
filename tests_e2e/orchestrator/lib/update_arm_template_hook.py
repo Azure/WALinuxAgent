@@ -50,9 +50,6 @@ class UpdateArmTemplateHook:
         #
         allow_ssh: str = vm_tags.get("allow_ssh")
         network_security_rule = NetworkSecurityRule(template, is_lisa_template=True)
-        # Disabling the default outbound access due to security requirement
-        log.info("******** Waagent: Marking subnet to disable default outbound access")
-        network_security_rule.disable_default_outbound_access()
         if allow_ssh is not None:
             log.info("******** Waagent: Adding network security rule to allow SSH connections from %s", allow_ssh)
             network_security_rule.add_allow_ssh_rule(allow_ssh)

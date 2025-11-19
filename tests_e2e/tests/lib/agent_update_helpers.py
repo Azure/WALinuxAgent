@@ -18,11 +18,8 @@ import json
 from assertpy import fail
 
 import requests
-from azure.identity import DefaultAzureCredential
-from msrestazure.azure_cloud import Cloud
 from azure.mgmt.compute.models import VirtualMachine
 
-from tests_e2e.tests.lib.azure_clouds import AZURE_CLOUDS
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
 from tests_e2e.tests.lib.ssh_client import SshClient
@@ -54,7 +51,7 @@ def enable_agent_update_flag(vm: VirtualMachineClient) -> None:
     vm.update(osprofile)
 
 
-def request_rsm_update(requested_version: str, vm: VirtualMachineClient, arch_type: str, is_downgrade: bool) -> None:
+def request_rsm_update(requested_version: str, vm: VirtualMachineClient, arch_type: str, is_downgrade: bool, downgrade_from: str = "9.9.9.9") -> None:
     """
     This method is to simulate the rsm request.
     First we ensure the PlatformUpdates enabled in the vm and then make a request using rest api
@@ -67,16 +64,6 @@ def request_rsm_update(requested_version: str, vm: VirtualMachineClient, arch_ty
     else:
         log.info("Already enableVMAgentPlatformUpdates flag set to True")
 
-    cloud: Cloud = AZURE_CLOUDS[vm.cloud]
-    credential: DefaultAzureCredential = DefaultAzureCredential(authority=cloud.endpoints.active_directory)
-    token = credential.get_token(cloud.endpoints.resource_manager + "/.default")
-    headers = {'Authorization': 'Bearer ' + token.token, 'Content-Type': 'application/json'}
-    # Later this api call will be replaced by azure-python-sdk wrapper
-    base_url = cloud.endpoints.resource_manager
-    url = base_url + "/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Compute/virtualMachines/{2}/" \
-                     "UpgradeVMAgent?api-version=2022-08-01".format(vm.subscription,
-                                                                    vm.resource_group,
-                                                                    vm.name)
     if arch_type == "aarch64":
         data = {
             "target": "Microsoft.OSTCLinuxAgent.ARM64Test",
@@ -90,14 +77,17 @@ def request_rsm_update(requested_version: str, vm: VirtualMachineClient, arch_ty
 
     if is_downgrade:
         data.update({"isEmergencyRollbackRequest": True})
+        data.update({"badVersion": downgrade_from})
 
-    log.info("Attempting rsm upgrade post request to endpoint: {0} with data: {1}".format(url, data))
-    response = requests.post(url, data=json.dumps(data), headers=headers, timeout=300)
+    log.info("Attempting rsm upgrade post request with data: {0}".format(data))
+    request = vm.create_resource_manager_request(requests.post, 'UpgradeVMAgent?api-version=2022-08-01')  # Later this api call will be replaced by azure-python-sdk wrapper
+    response = request(data=json.dumps(data), timeout=300)
     if response.status_code == 202:
         log.info("RSM upgrade request accepted")
     else:
         raise Exception("Error occurred while making RSM upgrade request. Status code : {0} and msg: {1}".format(
             response.status_code, response.content))
+
 
 def verify_current_agent_version(ssh_client: SshClient, requested_version: str) -> None:
     """

@@ -52,6 +52,7 @@ class AgentPublishTest(AgentVmTest):
         # Since we skip install_agent setup, doing it here for the Agent to complete provisioning before starting the test
         wait_for_agent_to_complete_provisioning(self._ssh_client)
         self._get_agent_info()
+        self._enable_agent_auto_update() # some distro like SLES and debian disable auto update by default
         log.info("Verify agent updated to prod latest version: %s", self._latest_version)
         verify_current_agent_version(self._ssh_client, self._latest_version)
 
@@ -77,7 +78,15 @@ class AgentPublishTest(AgentVmTest):
 
     def get_ignore_errors_before_timestamp(self) -> datetime:
         timestamp = self._ssh_client.run_command("agent_publish-get_agent_log_record_timestamp.py")
-        return datetime.strptime(timestamp.strip(), u'%Y-%m-%d %H:%M:%S.%f').replace(tzinfo=UTC)
+        return datetime.strptime(timestamp.strip(), u'%Y-%m-%d %H:%M:%S.%f%z').replace(tzinfo=UTC)
+
+    def _enable_agent_auto_update(self):
+        """
+        Enable agent auto update
+        """
+        log.info("Enabling agent auto update flag")
+        self._ssh_client.run_command("update-waagent-conf AutoUpdate.Enabled=y AutoUpdate.UpdateToLatestVersion=y", use_sudo=True)
+        log.info("Agent auto update flag enabled")
 
     def _get_published_version(self):
         """
@@ -122,14 +131,7 @@ class AgentPublishTest(AgentVmTest):
         """
         This method prepares the agent for the RSM update
         """
-        # First we update the agent to latest version like prod
-        # Next send RSM update request for new published test version
-        log.info(
-            'Updating agent config flags to allow and download test versions')
-        output: str = self._ssh_client.run_command(
-                              "update-waagent-conf AutoUpdate.Enabled=y AutoUpdate.UpdateToLatestVersion=y", use_sudo=True)
-        log.info('Successfully updated agent update config \n %s', output)
-
+        # We send RSM update request for new published test version
         self._verify_agent_reported_supported_feature_flag()
         arch_type = self._ssh_client.get_architecture()
         request_rsm_update(self._published_version, self._context.vm, arch_type, is_downgrade=False)
@@ -147,11 +149,11 @@ class AgentPublishTest(AgentVmTest):
         if clean_all_agents:
             setup_script = ("agent-service stop &&  mv /var/log/waagent.log /var/log/waagent.$(date --iso-8601=seconds).log && "
                             "rm -rfv /var/lib/waagent/WALinuxAgent-* && "
-                            "update-waagent-conf AutoUpdate.UpdateToLatestVersion=y AutoUpdate.GAFamily=Test AutoUpdate.Enabled=y Extensions.Enabled=y Debug.EnableGAVersioning=n")
+                            "update-waagent-conf AutoUpdate.UpdateToLatestVersion=y AutoUpdate.GAFamily=Test AutoUpdate.Enabled=y Extensions.Enabled=y Debug.EnableGAVersioning=n Debug.SelfUpdateHotfixFrequency=90 Debug.SelfUpdateRegularFrequency=90 Autoupdate.Frequency=30")
         else:
             setup_script = ("agent-service stop &&  mv /var/log/waagent.log /var/log/waagent.$(date --iso-8601=seconds).log && "
                             f"rm -rfv /var/lib/waagent/WALinuxAgent-{self._published_version}* && "
-                            "update-waagent-conf AutoUpdate.UpdateToLatestVersion=y AutoUpdate.GAFamily=Test AutoUpdate.Enabled=y Extensions.Enabled=y Debug.EnableGAVersioning=n")
+                            "update-waagent-conf AutoUpdate.UpdateToLatestVersion=y AutoUpdate.GAFamily=Test AutoUpdate.Enabled=y Extensions.Enabled=y Debug.EnableGAVersioning=n Debug.SelfUpdateHotfixFrequency=90 Debug.SelfUpdateRegularFrequency=90 Autoupdate.Frequency=30")
         self._run_remote_test(self._ssh_client, f"sh -c '{setup_script}'", use_sudo=True)
         log.info('Renamed log file and updated self-update config flags')
 
@@ -169,6 +171,7 @@ class AgentPublishTest(AgentVmTest):
         log.info("Installing %s", custom_script_2_1)
         message = f"Hello {uuid.uuid4()}!"
         custom_script_2_1.enable(
+            settings={},
             protected_settings={
                 'commandToExecute': f"echo \'{message}\'"
             },

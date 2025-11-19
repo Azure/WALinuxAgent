@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+import io
 import os
 import re
 
@@ -85,9 +85,17 @@ class AgentLogRecord:
 class AgentLog(object):
     """
     Provides facilities to parse and/or extract errors from the agent's log.
+
+    The contents of the log can be specified by a file ('path' parameter) or a string ('contents' parameter). If no arguments are
+    specified, the contents are read from /var/log/waagent.log.
     """
-    def __init__(self, path: Path = Path('/var/log/waagent.log')):
-        self._path: Path = path
+    def __init__(self, path: Path = None, contents: str = None):
+        if path is not None and contents is not None:
+            raise ValueError("path and contents are mutually exclusive")
+        if path is None and contents is None:
+            path = Path('/var/log/waagent.log')
+
+        self._open_log = path.open if path is not None else lambda: io.StringIO(contents)
         self._counter_table: Dict[str, int] = {}
 
     def get_errors(self) -> List[AgentLogRecord]:
@@ -181,6 +189,14 @@ class AgentLog(object):
                 'if': lambda r: r.level == "WARNING" and r.prefix == "Daemon"
             },
             #
+            # 2025-09-06T08:48:54.929425Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] GET vmSettings [correlation ID: 646b1f58-d57e-4ea1-9fc8-848d5a65fe65 eTag: 2142019640769130536]: [HTTP Failed] [403: Forbidden] b'{  "errorCode": "AccessDenied",  "message": "Error during client validation.",  "details": ""}'
+            #
+            # This can be ignored, if the issue persist the log would include other errors as well.
+            {
+                'message': r"\[ProtocolError\] GET vmSettings.*\[403: Forbidden\].*AccessDenied",
+                'if': lambda r: r.level == "ERROR" and self._increment_counter("ProtocolError-vmSettings-403") < 6 # ignore unless there are 6 or more instances
+            },
+            #
             # 2022-02-09T04:50:37.384810Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] GET vmSettings [correlation ID: 2bed9b62-188e-4668-b1a8-87c35cfa4927 eTag: 7031887032544600793]: [Internal error in HostGAPlugin] [HTTP Failed] [502: Bad Gateway] b'{  "errorCode": "VMArtifactsProfileBlobContentNotFound",  "message": "VM artifacts profile blob has no content in it.",  "details": ""}'
             #
             # Fetching the goal state may catch the HostGAPlugin in the process of computing the vmSettings. This can be ignored, if the issue persist the log would include other errors as well.
@@ -219,10 +235,11 @@ class AgentLog(object):
             },
             #
             # 2022-12-02T05:45:51.771876Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] [Wireserver Exception] [HttpError] [HTTP Failed] GET http://168.63.129.16/machine/ -- IOError [Errno 104] Connection reset by peer -- 6 attempts made
+            # 2025-09-06T08:47:16.941247Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] [Wireserver Exception] [HttpError] [HTTP Failed] GET http://168.63.129.16/machine/ -- IOError timed out -- 6 attempts made
             #
             {
-                'message': r"\[HttpError\] \[HTTP Failed\] GET http://168.63.129.16/machine/ -- IOError \[Errno 104\] Connection reset by peer",
-                'if': lambda r: r.level in ("WARNING", "ERROR")
+                'message': r"\[HttpError\] \[HTTP Failed\] GET http://168.63.129.16/machine/ -- IOError (\[Errno 104\] Connection reset by peer|timed out)",
+                'if': lambda r: r.level in ("WARNING", "ERROR") and self._increment_counter("ProtocolError-Goalstate-IOError") < 6  # ignore unless there are 6 or more instances
             },
             #
             # 2022-03-08T03:03:23.036161Z WARNING ExtHandler ExtHandler Fetch failed from [http://168.63.129.16:32526/extensionArtifact]: [HTTP Failed] [400: Bad Request] b''
@@ -252,6 +269,14 @@ class AgentLog(object):
                 'if': lambda r: r.level == "WARNING"
             },
             #
+            # 2025-09-06T08:47:42.367645Z WARNING MonitorHandler ExtHandler Error in SendHostPluginHeartbeat: [ProtocolError] [Wireserver Exception] [HttpError] [HTTP Failed] GET http://168.63.129.16/machine/ -- IOError timed out -- 6 attempts made --- [NOTE: Will not log the same error for the next hour]
+            #
+            # As part of health check, we refresh goal state to update HGPA with latest containerId. That goal state refresh failures can be ignored as if the issue persist the log would include other errors as well.
+            #
+            {
+                'message': r"SendHostPluginHeartbeat:.*GET http:\/\/168.63.129.16\/machine.*timed out",
+                'if': lambda r: r.level == "WARNING" and self._increment_counter("SendHostPluginHeartbeat-Goalstate-timedout") < 6  # ignore unless there are 6 or more instances
+            },
             # 2022-09-30T03:09:25.013398Z WARNING MonitorHandler ExtHandler Error in SendHostPluginHeartbeat: [ResourceGoneError] [HTTP Failed] [410: Gone]
             #
             # ResourceGone should not happen very often, since the monitor thread already refreshes the goal state before sending the HostGAPlugin heartbeat. Errors can still happen, though, since the goal state
@@ -278,6 +303,13 @@ class AgentLog(object):
                 'if': lambda r: r.thread == 'SendTelemetryHandler' and self._increment_counter("SendTelemetryHandler-telemetrydata-Status Code 410") < 2  # ignore unless there are 2 or more instances
             },
             #
+            # 2025-09-06T08:46:51.298681Z ERROR SendTelemetryHandler ExtHandler Event: name=WALinuxAgent, op=ReportEventErrors, message=DroppedEventsCount: 1
+            # Reasons (first 5 errors): [ProtocolError] [Wireserver Exception] [HttpError] [HTTP Failed] POST http://168.63.129.16/machine -- IOError timed out -- 3 attempts made:
+            #
+            {
+                'message': r"(?s)\[ProtocolError\].*http:\/\/168.63.129.16\/machine.*timed out",
+                'if': lambda r: r.thread == 'SendTelemetryHandler' and self._increment_counter("SendTelemetryHandler-telemetrydata-IOError-timed-out") < 2  # ignore unless there are 2 or more instances
+            },
             # Ignore these errors in flatcar:
             #
             #    1)  2023-03-16T14:30:33.091427Z ERROR Daemon Daemon Failed to mount resource disk [ResourceDiskError] unable to detect disk topology
@@ -427,8 +459,15 @@ class AgentLog(object):
             #
             # [stderr]
             # Failed to start transient scope unit: Transport endpoint is not connected
+            #
+            # 2025-07-06T08:37:30.642513Z INFO ExtHandler ExtHandler [CGW] Disabling resource usage monitoring. Reason: Failed to start Microsoft.CPlat.Core.RunCommandLinux-1.0.5 using systemd-run, will try invoking the extension directly. Error: [SystemdRunError] Systemd process exited with code 1 and output [stdout]
+            #
+            #
+            # [stderr]
+            # Warning! D-Bus connection terminated.
+            # Failed to wait for response: Connection reset by peer
             {
-                'message': r"(?s)Disabling resource usage monitoring. Reason: Failed to start.*using systemd-run, will try invoking the extension directly. Error: \[SystemdRunError\].*Failed to start transient scope unit: (Message recipient disconnected from message bus without replying|Connection reset by peer|Remote peer disconnected|Transport endpoint is not connected)",
+                'message': r"(?s)Disabling resource usage monitoring. Reason: Failed to start.*using systemd-run, will try invoking the extension directly. Error: \[SystemdRunError\].* (Message recipient disconnected from message bus without replying|Connection reset by peer|Remote peer disconnected|Transport endpoint is not connected)",
             },
             #
             # If agent is not mounted at the expected path, we log this message in v2 machines. This is not an error.
@@ -437,6 +476,12 @@ class AgentLog(object):
             #
             {
                 'message': r"(The walinuxagent.service cgroup is not mounted at the expected path|controller is not mounted at the expected path for the walinuxagent.service cgroup); will not track. Actual cgroup path:\[.*\] Expected:\[.*\]",
+            },
+            # Timing issue when the CGroup has been deleted/reset quota by the time we are fetching the values
+            # from it. We would see IOError with file entry not found (ERRNO: 2).
+            # 2025-08-28T18:46:06.813016Z WARNING MonitorHandler ExtHandler [PERIODIC] Could not collect metrics for cgroup azuremonitor-coreagent. Error : [CGroupsException] Failed to read cpu.stat: Cannot find throttled_usec
+            {
+                'message': r"\[PERIODIC\] Could not collect metrics for cgroup .* Failed to read cpu.stat: Cannot find throttled_usec",
             },
         ]
 
@@ -537,9 +582,6 @@ class AgentLog(object):
                  ... do something...
 
         """
-        if not self._path.exists():
-            raise IOError('{0} does not exist'.format(self._path))
-
         def match_record():
             for regex in [self._NEWER_AGENT_RECORD, self._2_2_46_AGENT_RECORD, self._OLDER_AGENT_RECORD, self._OLDEST_AGENT_RECORD]:
                 m = regex.match(line)
@@ -555,11 +597,12 @@ class AgentLog(object):
                 record.message = record.message + "\n" + extra_lines.rstrip()
             return record
 
-        with self._path.open() as file_:
+        log = self._open_log()
+        try:
             record = None
             extra_lines = ""
 
-            line = file_.readline()
+            line = log.readline()
             while line != "":  # while not EOF
                 match = match_record()
                 if match is not None:
@@ -569,7 +612,9 @@ class AgentLog(object):
                     extra_lines = ""
                 else:
                     extra_lines = extra_lines + line
-                line = file_.readline()
+                line = log.readline()
 
             if record is not None:
                 yield complete_record()
+        finally:
+            log.close()
