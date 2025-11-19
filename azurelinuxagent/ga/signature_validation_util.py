@@ -184,7 +184,7 @@ def validate_signature(package_path, signature, package_full_name):
         # as a temporary measure until a robust solution for handling expired/revoked certificates is implemented.
         #
         # TODO: implement timestamp token parsing and validate that certificate was valid at time of signing
-        command = [
+        base_command = [
             conf.get_openssl_cmd(), 'cms', '-verify',
             '-binary', '-inform', 'der',  # Signature input format must be DER (binary encoding)
             '-in', signature_path,  # Path to the CMS signature file to be verified
@@ -194,19 +194,40 @@ def validate_signature(package_path, signature, package_full_name):
             '-no_check_time'  # Skips checking whether the certificate is expired
         ]
 
-        # Signature validation is a CPU-intensive operation. If cgroups are enabled and the agent's CPU quota is set too low,
-        # the validation process may take an excessive amount of time. As a workaround, if cgroups are enabled,
-        # we run extension signature validation in a separate cgroup with its own dedicated CPU quota.
-        if CGroupConfigurator.get_instance().enabled():
+        # If cgroups are enabled, attempt to run the command in a dedicated systemd-run scope with a dedicated CPU quota.
+        # This is because signature validation is CPU-intensive and may take excessive time if the agent's CPU quota is low.
+        # If the systemd-run invocation fails, fall back to running the OpenSSL command directly.
+        use_cgroups = CGroupConfigurator.get_instance().enabled()
+        if use_cgroups:
             systemd_cmd = [
                 'systemd-run',
                 '--unit={0}'.format(EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT),
                 '--slice={0}'.format(EXT_SIGNATURE_VALIDATION_SLICE),
-                '--scope', '--property=CPUAccounting=yes',
+                '--scope',
+                '--property=CPUAccounting=yes',
                 '--property=CPUQuota={0}'.format(EXT_SIGNATURE_VALIDATION_CPU_QUOTA)
-            ]
-            command = systemd_cmd + command
-        run_command(command, encode_output=False)
+            ] + base_command
+            try:
+                run_command(systemd_cmd, encode_output=False)
+            except CommandError as ex:
+                # If the systemd-run invocation itself failed (e.g., systemd not available, access denied, bus errors),
+                # log a warning and fall back to running command directly. If the openssl command failed, re-raise and do not retry.
+                stderr_str = ex.stderr.decode('utf-8') if isinstance(ex.stderr, bytes) else ex.stderr
+                unit_not_found = "Unit {0} not found.".format(EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT)
+                is_systemd_failure = unit_not_found in stderr_str or EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT not in stderr_str
+                
+                if is_systemd_failure:
+                    report_validation_event(op=WALAEventOperation.SignatureValidation, level=logger.LogLevel.WARNING,
+                        message="'systemd-run' invocation failed for signature validation, falling back to direct execution. Error: '{0}'".format(ex.stderr),
+                        name=name, version=version, duration=0)
+                    # Run without systemd
+                    run_command(base_command, encode_output=False)
+                else:
+                    # OpenSSL verification failed, re-raise
+                    raise
+        else:
+            # Run without systemd if cgroups disabled
+            run_command(base_command, encode_output=False)
 
         report_validation_event(op=WALAEventOperation.PackageSignatureResult, level=logger.LogLevel.INFO,
                                 message="Successfully validated signature for package '{0}'".format(package_full_name),
