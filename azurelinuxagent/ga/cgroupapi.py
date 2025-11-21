@@ -42,6 +42,28 @@ CGROUP_FILE_SYSTEM_ROOT = '/sys/fs/cgroup'
 EXTENSION_SLICE_PREFIX = "azure-vmextensions"
 
 
+def is_systemd_failure(unit_name, stderr):
+    """
+    Determines if stderr from a systemd-run command indicates a systemd failure (vs a command failure).
+    Systemd failures include: unit not found, systemd not available, D-bus errors, etc.
+    
+    :param unit_name: The name of the systemd unit/scope
+    :param stderr: Error output as str, bytes, or file-like object
+    :return: True if this is a systemd failure
+    """
+    # Handle different types of stderr input
+    if hasattr(stderr, 'seek') and hasattr(stderr, 'read'):
+        stderr.seek(0)
+        stderr_str = ustr(stderr.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
+    elif isinstance(stderr, bytes):
+        stderr_str = ustr(stderr, encoding='utf-8', errors='backslashreplace')
+    else:
+        stderr_str = str(stderr)
+    
+    unit_not_found = "Unit {0} not found.".format(unit_name)
+    return unit_not_found in stderr_str or unit_name not in stderr_str
+
+
 def log_cgroup_info(formatted_string, op=WALAEventOperation.CGroupsInfo, send_event=True):
     logger.info("[CGI] " + formatted_string)
     if send_event:
@@ -353,7 +375,7 @@ class _SystemdCgroupApi(object):
         except ExtensionError as e:
             # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
             # extension errors.
-            if not self._is_systemd_failure(scope, stderr):
+            if not is_systemd_failure(scope, stderr):
                 # There was an extension error; it either timed out or returned a non-zero exit code. Re-raise the error
                 raise
 
@@ -373,13 +395,6 @@ class _SystemdCgroupApi(object):
         finally:
             with self._systemd_run_commands_lock:
                 self._systemd_run_commands.remove(process.pid)
-
-    @staticmethod
-    def _is_systemd_failure(scope_name, stderr):
-        stderr.seek(0)
-        stderr = ustr(stderr.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
-        unit_not_found = "Unit {0} not found.".format(scope_name)
-        return unit_not_found in stderr or scope_name not in stderr
 
 
 class SystemdCgroupApiv1(_SystemdCgroupApi):
