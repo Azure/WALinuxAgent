@@ -301,29 +301,49 @@ class Agent(object):
                 log_collector_monitor.stop()
 
     @staticmethod
+    def _is_firewalld_enabled():
+        #
+        # Check first whether it's installed
+        #
+        try:
+            run_command(['systemctl', 'list-unit-files', '--type=service', '--no-legend', 'firewalld.service']).rstrip()
+        except CommandError as command_error:
+            if command_error.returncode == 1 and (command_error.stdout, command_error.stderr) == ('', ''):  # exit code 1 with no output means it is not installed
+                return False
+            raise
+        #
+        # Now check it is enabled
+        #
+        try:
+            stdout = run_command(['systemctl', 'is-enabled', '--type=service', 'firewalld.service']).rstrip()
+            logger.info("Firewalld is enabled (state: {0}).", stdout)
+            return True
+        except CommandError as command_error:
+            if command_error.stderr != '':  # If stderr is not empty, the command failed for some other reason (say, for example, failure contacting dbus)
+                raise
+            logger.info("Firewalld is installed, but not enabled (state: {0}).", command_error.stdout)
+            return False
+
+    @staticmethod
     def setup_firewall(endpoint):
         logger.set_prefix("Firewall")
         threading.current_thread().name = "Firewall"
-        event.info(event.WALAEventOperation.Firewall, "Setting up firewall after boot. Endpoint: {0}", ustr(endpoint))
+        logger.info("Setting up firewall during boot. Endpoint: {0}", ustr(endpoint))
+
         try:
-            try:
-                stdout = run_command(['systemctl', 'list-unit-files', '--type=service', '--no-legend', 'firewalld.service']).rstrip()
-                event.info(event.WALAEventOperation.Firewall, "Firewalld is installed (state: {0}). Will not setup the firewall rules.", stdout)
+            if Agent._is_firewalld_enabled():
+                logger.info("Firewalld is enabled. Will not setup the firewall rules.")
                 sys.exit(0)
-            except CommandError as command_error:
-                if command_error.returncode == 1 and (command_error.stdout, command_error.stderr) == ('', ''):
-                    pass  # Not installed, continue
-                else:
-                    raise
         except Exception as error:
-            event.error(event.WALAEventOperation.Firewall, "Unable to determine whether firewalld is installed. Will not setup the firewall rules. Error: {0}", ustr(error))
+            logger.warn("Unable to determine whether firewalld is installed/enabled. Will not setup the firewall rules. Error: {0}", ustr(error))
             sys.exit(1)
+
         try:
             firewall_manager = FirewallManager.create(endpoint)
             firewall_manager.setup()
-            event.info(event.WALAEventOperation.Firewall, "Successfully set up the firewall rules:\n{0}", firewall_manager.get_state())
+            logger.info("Successfully set up the firewall rules:\n{0}", firewall_manager.get_state())
         except Exception as error:
-            event.error(event.WALAEventOperation.Firewall, "Unable to add firewall rules. Error: {0}", ustr(error))
+            logger.warn("Unable to add firewall rules. Error: {0}", ustr(error))
             sys.exit(1)
 
 
