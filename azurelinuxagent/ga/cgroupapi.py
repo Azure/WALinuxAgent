@@ -56,7 +56,7 @@ def is_systemd_failure(unit_name, stderr):
         stderr.seek(0)
         stderr_str = ustr(stderr.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
     elif isinstance(stderr, bytes):
-        stderr_str = stderr.decode('utf-8', errors='backslashreplace')
+        stderr_str = ustr(stderr, encoding='utf-8', errors='backslashreplace')
     else:
         stderr_str = str(stderr)
     
