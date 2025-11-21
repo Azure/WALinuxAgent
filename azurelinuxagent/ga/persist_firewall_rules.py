@@ -296,7 +296,7 @@ if __name__ == '__main__':
         # Log service status and logs if we can fetch them from journalctl and send it to Kusto,
         # else just log the error of the failure of fetching logs
         add_event(
-            op=WALAEventOperation.PersistFirewallRules,
+            op=WALAEventOperation.FirewallBootSetup,
             is_success=(not service_failed),
             message=msg,
             log_event=False)

@@ -301,42 +301,19 @@ class Agent(object):
                 log_collector_monitor.stop()
 
     @staticmethod
-    def _is_firewalld_enabled():
-        #
-        # Check first whether it's installed
-        #
-        try:
-            run_command(['systemctl', 'list-unit-files', '--type=service', '--no-legend', 'firewalld.service']).rstrip()
-        except CommandError as command_error:
-            if command_error.returncode == 1 and (command_error.stdout, command_error.stderr) == ('', ''):  # exit code 1 with no output means it is not installed
-                return False
-            raise
-        #
-        # Now check it is enabled
-        #
-        try:
-            stdout = run_command(['systemctl', 'is-enabled', '--type=service', 'firewalld.service']).rstrip()
-            logger.info("Firewalld is enabled (state: {0}).", stdout)
-            return True
-        except CommandError as command_error:
-            if command_error.stderr != '':  # If stderr is not empty, the command failed for some other reason (say, for example, failure contacting dbus)
-                raise
-            logger.info("Firewalld is installed, but not enabled (state: {0}).", command_error.stdout)
-            return False
-
-    @staticmethod
     def setup_firewall(endpoint):
         logger.set_prefix("Firewall")
         threading.current_thread().name = "Firewall"
         logger.info("Setting up firewall during boot. Endpoint: {0}", ustr(endpoint))
 
         try:
-            if Agent._is_firewalld_enabled():
-                logger.info("Firewalld is enabled. Will not setup the firewall rules.")
-                sys.exit(0)
-        except Exception as error:
-            logger.warn("Unable to determine whether firewalld is installed/enabled. Will not setup the firewall rules. Error: {0}", ustr(error))
-            sys.exit(1)
+            run_command(['systemctl', 'is-enabled', '--type=service', 'firewalld.service']).rstrip()
+            logger.info("Firewalld is enabled. Will not setup the firewall rules to avoid conflicts.")
+            sys.exit(0)
+        except CommandError:
+            # Differences across versions of systemd make hard to determine whether the command failed because firewalld is not installed
+            # or for another reason. Assume it is not installed and continue.
+            pass
 
         try:
             firewall_manager = FirewallManager.create(endpoint)
