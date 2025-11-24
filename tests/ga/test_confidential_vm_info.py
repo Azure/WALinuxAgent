@@ -25,7 +25,6 @@ class TestConfidentialVMInfo(AgentTestCase):
 
     def setUp(self):
         ConfidentialVMInfo._security_type = None
-        ConfidentialVMInfo._is_initialized = False
         AgentTestCase.setUp(self)
 
     @staticmethod
@@ -40,13 +39,15 @@ class TestConfidentialVMInfo(AgentTestCase):
     def test_should_identify_confidential_vm(self):
         with patch('azurelinuxagent.ga.confidential_vm_info.ImdsClient.get_metadata') as mock_get_metadata:
             self._setup_mock_imds_from_file(mock_get_metadata, os.path.join(data_dir, "imds", "cvm_metadata.json"))
-            is_cvm = ConfidentialVMInfo.fetch_is_confidential_vm()
+            ConfidentialVMInfo.fetch_and_initialize_security_type()
+            is_cvm = ConfidentialVMInfo.is_confidential_vm()
             self.assertTrue(is_cvm)
 
     def test_should_identify_non_confidential_vm(self):
         with patch('azurelinuxagent.ga.confidential_vm_info.ImdsClient.get_metadata') as mock_get_metadata:
             self._setup_mock_imds_from_file(mock_get_metadata, os.path.join(data_dir, "imds", "trusted_vm_metadata.json"))
-            is_cvm = ConfidentialVMInfo.fetch_is_confidential_vm()
+            ConfidentialVMInfo.fetch_and_initialize_security_type()
+            is_cvm = ConfidentialVMInfo.is_confidential_vm()
             self.assertFalse(is_cvm)
 
     def test_should_return_false_when_imds_unavailable(self):
@@ -57,7 +58,8 @@ class TestConfidentialVMInfo(AgentTestCase):
             mock_response.response = b"Unable to connect to IMDS"
             mock_get_metadata.return_value = mock_response
 
-            is_cvm = ConfidentialVMInfo.fetch_is_confidential_vm()
+            ConfidentialVMInfo.fetch_and_initialize_security_type()
+            is_cvm = ConfidentialVMInfo.is_confidential_vm()
             self.assertFalse(is_cvm)
 
     def test_should_always_return_false_after_transient_imds_failure(self):
@@ -72,9 +74,10 @@ class TestConfidentialVMInfo(AgentTestCase):
             mock_get_metadata.side_effect = [failure_response, success_response]
 
             # First call should return False due to failure, second call should still return False
-            first_call = ConfidentialVMInfo.fetch_is_confidential_vm()
+            ConfidentialVMInfo.fetch_and_initialize_security_type()
+            first_call = ConfidentialVMInfo.is_confidential_vm()
             self.assertFalse(first_call)
-            second_call = ConfidentialVMInfo.fetch_is_confidential_vm()
+            second_call = ConfidentialVMInfo.is_confidential_vm()
             self.assertFalse(second_call)
 
             # Verify IMDS was only called once

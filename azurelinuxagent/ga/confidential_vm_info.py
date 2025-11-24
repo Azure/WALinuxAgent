@@ -30,10 +30,9 @@ MIN_IMDS_VERSION_WITH_SECURITY_TYPE = '2021-12-13'
 
 
 class SecurityType(object):
-    # These values correspond to the 'securityProfile.securityType' field
+    # Corresponds to the 'securityProfile.securityType' field
     # in the Microsoft.Compute/virtualMachines ARM template schema.
     # See: https://learn.microsoft.com/azure/templates/microsoft.compute/virtualmachines#securityprofile
-    TrustedVM = "TrustedLaunch"
     ConfidentialVM = "ConfidentialVM"
 
 
@@ -45,7 +44,6 @@ class ConfidentialVMInfo(object):
     # TODO: Remove once extension signature validation is supported on all VMs.
 
     _security_type = None
-    _is_initialized = False
 
     @staticmethod
     def _fetch_security_type_from_imds():
@@ -68,19 +66,15 @@ class ConfidentialVMInfo(object):
         return security_type
 
     @staticmethod
-    def fetch_is_confidential_vm():
-        # Get and cache the VM's security type from IMDS if not already done
-        if not ConfidentialVMInfo._is_initialized:
-            try:
-                security_type = ConfidentialVMInfo._fetch_security_type_from_imds()
-                event.info("VM security type: {0}", security_type)
-                ConfidentialVMInfo._security_type = security_type
-            except Exception as ex:
-                event.warn("Failed to get virtual machine security type from IMDS: {0}", ustr(ex))
-            finally:
-                # We set _is_initialized = True even if the IMDS fetch fails. This intentionally records that we've
-                # attempted initialization and prevents repeated IMDS calls on subsequent fetch_is_confidential_vm() calls.
-                # As a result, transient IMDS failures are effectively treated as "not confidential" until the agent restarts.
-                ConfidentialVMInfo._is_initialized = True
+    def fetch_and_initialize_security_type():
+        try:
+            security_type = ConfidentialVMInfo._fetch_security_type_from_imds()
+            event.info(event.WALAEventOperation.SignatureValidation, "VM security type: {0}", security_type)
+            ConfidentialVMInfo._security_type = security_type
+        except Exception as ex:
+            event.warn(event.WALAEventOperation.SignatureValidation, "Failed to get virtual machine security type from IMDS: {0}", ustr(ex))
+            ConfidentialVMInfo._security_type = False
 
+    @staticmethod
+    def is_confidential_vm():
         return ConfidentialVMInfo._security_type == SecurityType.ConfidentialVM
