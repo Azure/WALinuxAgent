@@ -90,6 +90,8 @@ class BootConflicts(AgentVmTest):
 <passthrough ipv="ipv4">-t security -A OUTPUT -d 168.63.129.16 -p tcp -m conntrack --ctstate INVALID,NEW -j DROP</passthrough>
 </direct>"""
         log.info("Creating stale permanent firewall rules in /etc/firewalld/direct.xml...")
+        # create /etc/firewalld if it does not exist and remove any existing direct.xml files
+        self._ssh_client.run_command("mkdir -p /etc/firewalld", use_sudo=True)
         self._ssh_client.run_command("find /etc/firewalld -name 'direct.xml*' -exec rm -f {} \\;", use_sudo=True)
         output = self._ssh_client.run_command(f"echo '{stale_rules}' | sudo tee /etc/firewalld/direct.xml")
         log.info(f"Stale firewall rules created:\n{indent(output)}")
@@ -99,7 +101,7 @@ class BootConflicts(AgentVmTest):
         log.info("Starting waagent service to install waagent-network-setup.service...")
         self._ssh_client.run_command("systemctl start waagent", use_sudo=True)
 
-        waagent_log = self._wait_for_log_message(waagent_log_size, r"firewalld|waagent-network-setup\.service", "Successfully added and enabled the waagent-network-setup.service")
+        waagent_log = self._wait_for_log_message(waagent_log_size, r"waagent-network-setup.service", r"Successfully added and enabled the waagent-network-setup.service|waagent-network-setup.service already enabled. No change needed")
         log.info(f"waagent-network-setup.service was installed:\n{indent(waagent_log)}")
 
         log.info("Re-installing firewalld...")
@@ -117,12 +119,12 @@ class BootConflicts(AgentVmTest):
 
         while True:
             waagent_log = self._ssh_client.run_command(f"tail --bytes=+{offset} /var/log/waagent.log | grep -E -i '{selector_re}' || true")
-            if message in waagent_log:
+            if re.search(message, waagent_log) is not None:
                 return waagent_log
             if datetime.now() > limit - timedelta(seconds=30):
                 break
             log.info(f"Can't find message in Agent's log ('{message}'). Will retry after a short pause.")
-            time.sleep(30)
+            time.sleep(15)
         raise TimeoutError(f"Timed out waiting for waagent message '{message}'")
 
 
