@@ -9,6 +9,12 @@ executes_on_scale_set: true
 owns_vm: false
 # This test is executed in southcentralus as a workaround for recurring fabric "ServiceUnavailableFault" issues observed in westus2.
 locations: "AzureCloud:southcentralus"
+
+# TODO: Currently AlmaLinux is not available for scale sets; enable this image when it is available.
 skip_on_images:
   - "alma_8"
-  - "alma_9"  # TODO: Currently AlmaLinux is not available for scale sets; enable this image when it is available.
+  - "alma_9"
+
+# TODO: The current deployment of VmAccess 1.5.22 prevents the extension from uninstalling; enable this test when the issue is fixed
+skip_on_clouds:
+  - "AzureUSGovernment"
