@@ -118,7 +118,7 @@ class BootConflicts(AgentVmTest):
         limit = datetime.now() + timedelta(minutes=5)
 
         while True:
-            waagent_log = self._ssh_client.run_command(f"tail --bytes=+{offset} /var/log/waagent.log | grep -E -i '{selector_re}' || true")
+            waagent_log = self._ssh_client.run_command(f"tail --bytes=+{offset} /var/log/waagent.log | tr '\0' 0 | grep -E '{selector_re}' || true")  # some tests write NULL characters to the log; we convert them to '0'
             if re.search(message, waagent_log) is not None:
                 return waagent_log
             if datetime.now() > limit - timedelta(seconds=30):
