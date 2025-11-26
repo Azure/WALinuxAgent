@@ -5,5 +5,9 @@ name: "Firewalld"
 tests:
   - "firewalld/boot_conflicts.py"
 images:
+  - "alma_9"
+  - "centos_82"
+  - "oracle_95"
   - "rhel_95"
-owns_vm: true
+  - "rocky_9"
+owns_vm: true  # We cannot share the VM with the Persist Firewall tests, since we change the state of firewalld
