@@ -75,7 +75,7 @@ class BootConflicts(AgentVmTest):
         log.info("Stopping waagent service to prevent it from changing the firewall rules during test setup...")
         self._ssh_client.run_command("systemctl stop waagent", use_sudo=True)
 
-        # Firewalld has been remove from some images in the marketplaces derived from RHEL (these images come with the stale rules, though)
+        # Firewalld has been removed from some images in the marketplaces derived from RHEL (these images come with the stale rules, though)
         # We simulate this setup by uninstalling firewalld.
         log.info("Uninstalling firewalld...")
         output = self._ssh_client.run_command("yum remove -y firewalld", use_sudo=True)
