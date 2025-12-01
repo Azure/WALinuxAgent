@@ -1045,10 +1045,10 @@ class TestExtension_Deprecated(TestExtensionBase):
         exthandlers_handler.report_ext_handlers_status()
 
         def get_update_command_environment():
-            update_command = [i for i in popen_patch.call_args_list if "sample.py -update" in i.args[0]]
-            if len(update_command) != 1:
+            update_command_kwargs = [kwargs for (a, kwargs) in popen_patch.call_args_list if "sample.py -update" in a[0]]
+            if len(update_command_kwargs) != 1:
                 raise Exception("Cannot find the call to the extension's update command. Calls: {0}".format(popen_patch.call_args_list))
-            return update_command[0].kwargs["env"]
+            return update_command_kwargs[0]["env"]
 
         def assert_versions(updating_from, updating_to, greater):
             environment = get_update_command_environment()
