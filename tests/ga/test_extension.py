@@ -1040,9 +1040,23 @@ class TestExtension_Deprecated(TestExtensionBase):
         test_data.set_extensions_config_version("1.1.0")
         protocol.client.update_goal_state()
 
-        exthandlers_handler.run()
+        with patch("subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+            exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
 
+        def get_update_command_environment():
+            update_command = [i for i in popen_patch.call_args_list if "sample.py -update" in i.args[0]]
+            if len(update_command) != 1:
+                raise Exception("Cannot find the call to the extension's update command. Calls: {0}".format(popen_patch.call_args_list))
+            return update_command[0].kwargs["env"]
+
+        def assert_versions(updating_from, updating_to, greater):
+            environment = get_update_command_environment()
+            self.assertEqual(updating_to, environment['VERSION'], "The version updating to (VERSION) should be {0}".format(updating_to))
+            self.assertEqual(updating_from, environment['AZURE_GUEST_AGENT_UPDATING_FROM_VERSION'], "The version updating from (AZURE_GUEST_AGENT_UPDATING_FROM_VERSION) should be {0}".format(updating_from))
+            self.assertEqual(greater, environment['AZURE_GUEST_AGENT_EXTENSION_VERSION'], "The update method of the greater version ({0}) should have been invoked".format(greater))
+
+        assert_versions(updating_from='1.0.0', updating_to='1.1.0', greater='1.1.0')
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
         self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
@@ -1051,9 +1065,11 @@ class TestExtension_Deprecated(TestExtensionBase):
         test_data.set_extensions_config_version("1.1.1")
         protocol.client.update_goal_state()
 
-        exthandlers_handler.run()
+        with patch("subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+            exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
 
+        assert_versions(updating_from='1.1.0', updating_to='1.1.1', greater='1.1.1')
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
         self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
@@ -1102,9 +1118,11 @@ class TestExtension_Deprecated(TestExtensionBase):
         test_data.set_extensions_config_version("1.2.0")
         protocol.client.update_goal_state()
 
-        exthandlers_handler.run()
+        with patch("subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+            exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
 
+        assert_versions(updating_from='1.1.1', updating_to='1.2.0', greater='1.2.0')
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
         self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
@@ -1113,9 +1131,11 @@ class TestExtension_Deprecated(TestExtensionBase):
         test_data.set_extensions_config_version("1.1.0")
         protocol.client.update_goal_state()
 
-        exthandlers_handler.run()
+        with patch("subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+            exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
 
+        assert_versions(updating_from='1.2.0', updating_to='1.1.0', greater='1.2.0')
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
         self._assert_ext_status(protocol.report_vm_status, "success", 0)
 

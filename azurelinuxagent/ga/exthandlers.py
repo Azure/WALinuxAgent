@@ -929,15 +929,19 @@ class ExtHandlersHandler(object):
                     func=partial(old_ext_handler_i.disable, extension=old_ext))
 
         ext_handler_i.copy_status_files(old_ext_handler_i)
+        # Invoke the update method of the greater version, both on upgrades and downgrades
         if ext_handler_i.version_gt(old_ext_handler_i):
-            ext_handler_i.update(disable_exit_codes=disable_exit_codes,
-                                 updating_from_version=old_ext_handler_i.ext_handler.version,
-                                 extension=extension)
+            ext_handler_i.update(
+                updating_from_version=old_ext_handler_i.ext_handler.version,
+                updating_to_version=ext_handler_i.ext_handler.version,
+                extension=extension,
+                disable_exit_codes=disable_exit_codes)
         else:
-            updating_from_version = ext_handler_i.ext_handler.version
-            old_ext_handler_i.update(handler_version=updating_from_version,
-                                     disable_exit_codes=disable_exit_codes, updating_from_version=updating_from_version,
-                                     extension=extension)
+            old_ext_handler_i.update(
+                updating_from_version=old_ext_handler_i.ext_handler.version,
+                updating_to_version=ext_handler_i.ext_handler.version,
+                extension=extension,
+                disable_exit_codes=disable_exit_codes)
         uninstall_exit_code = execute_old_handler_command_and_return_if_succeeds(
             func=partial(old_ext_handler_i.uninstall, extension=extension))
         old_ext_handler_i.remove_ext_handler()
@@ -1791,16 +1795,13 @@ class ExtHandlerInstance(object):
             self.report_event(message=message, is_success=False)
             self.logger.warn(message)
 
-    def update(self, handler_version=None, disable_exit_codes=None, updating_from_version=None, extension=None):
+    def update(self, updating_from_version, updating_to_version, extension=None, disable_exit_codes=None):
         # For Handler level operations, extension just specifies the settings that initiated the update.
         # This is needed to provide the sequence number and extension name in case the extension needs to report
         # failure/status using status file.
-        if handler_version is None:
-            handler_version = self.ext_handler.version
-
         env = {
-            'VERSION': handler_version,
-            ExtCommandEnvVariable.UpdatingFromVersion: updating_from_version
+            'VERSION': updating_to_version,  # Target version to be updated to
+            ExtCommandEnvVariable.UpdatingFromVersion: updating_from_version  # Version upgrading/downgrading from
         }
 
         if not self.supports_multi_config:
