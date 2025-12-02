@@ -1044,19 +1044,14 @@ class TestExtension_Deprecated(TestExtensionBase):
             exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
 
-        def get_update_command_environment():
-            update_command_kwargs = [kwargs for (a, kwargs) in popen_patch.call_args_list if "sample.py -update" in a[0]]
-            if len(update_command_kwargs) != 1:
-                raise Exception("Cannot find the call to the extension's update command. Calls: {0}".format(popen_patch.call_args_list))
-            return update_command_kwargs[0]["env"]
+        def assert_update_versions(popen_patch, updating_from, updating_to, greater):
+            environment = [kwargs["env"] for (a, kwargs) in popen_patch.call_args_list if "sample.py -update" in a[0]]
+            self.assertTrue(len(environment) == 1, "The extension's update command (sample.py -update) was not invoked. Popen calls: {0}".format(popen_patch.call_args_list))
+            self.assertEqual(updating_to, environment[0]['VERSION'], "The version updating to (VERSION) should be {0}".format(updating_to))
+            self.assertEqual(updating_from, environment[0]['AZURE_GUEST_AGENT_UPDATING_FROM_VERSION'], "The version updating from (AZURE_GUEST_AGENT_UPDATING_FROM_VERSION) should be {0}".format(updating_from))
+            self.assertEqual(greater, environment[0]['AZURE_GUEST_AGENT_EXTENSION_VERSION'], "The update method of the greater version ({0}) should have been invoked".format(greater))
 
-        def assert_versions(updating_from, updating_to, greater):
-            environment = get_update_command_environment()
-            self.assertEqual(updating_to, environment['VERSION'], "The version updating to (VERSION) should be {0}".format(updating_to))
-            self.assertEqual(updating_from, environment['AZURE_GUEST_AGENT_UPDATING_FROM_VERSION'], "The version updating from (AZURE_GUEST_AGENT_UPDATING_FROM_VERSION) should be {0}".format(updating_from))
-            self.assertEqual(greater, environment['AZURE_GUEST_AGENT_EXTENSION_VERSION'], "The update method of the greater version ({0}) should have been invoked".format(greater))
-
-        assert_versions(updating_from='1.0.0', updating_to='1.1.0', greater='1.1.0')
+        assert_update_versions(popen_patch, updating_from='1.0.0', updating_to='1.1.0', greater='1.1.0')
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
         self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
@@ -1069,7 +1064,7 @@ class TestExtension_Deprecated(TestExtensionBase):
             exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
 
-        assert_versions(updating_from='1.1.0', updating_to='1.1.1', greater='1.1.1')
+        assert_update_versions(popen_patch, updating_from='1.1.0', updating_to='1.1.1', greater='1.1.1')
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
         self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
@@ -1122,7 +1117,7 @@ class TestExtension_Deprecated(TestExtensionBase):
             exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
 
-        assert_versions(updating_from='1.1.1', updating_to='1.2.0', greater='1.2.0')
+        assert_update_versions(popen_patch, updating_from='1.1.1', updating_to='1.2.0', greater='1.2.0')
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
         self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
@@ -1135,7 +1130,7 @@ class TestExtension_Deprecated(TestExtensionBase):
             exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
 
-        assert_versions(updating_from='1.2.0', updating_to='1.1.0', greater='1.2.0')
+        assert_update_versions(popen_patch, updating_from='1.2.0', updating_to='1.1.0', greater='1.2.0')
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
         self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
