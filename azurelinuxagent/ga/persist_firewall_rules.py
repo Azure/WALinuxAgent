@@ -156,7 +156,10 @@ if __name__ == '__main__':
 
         # Remove custom service if exists to avoid problems with firewalld
         try:
-            fileutil.rm_files(*[self.get_service_file_path(), os.path.join(conf.get_lib_dir(), self.BINARY_FILE_NAME)])
+            for file in [self.get_service_file_path(), os.path.join(conf.get_lib_dir(), self.BINARY_FILE_NAME)]:
+                if os.path.isfile(file):
+                    logger.info("Removing custom firewall service: {0}".format(file))
+                    os.remove(file)
         except Exception as error:
             logger.info("Unable to delete existing service {0}: {1}".format(self._network_setup_service_name, ustr(error)))
 

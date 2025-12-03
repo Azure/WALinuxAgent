@@ -317,10 +317,15 @@ class Agent(object):
 
         try:
             firewall_manager = FirewallManager.create(endpoint)
+        except Exception as error:
+            logger.warn("{0}", ustr(error))
+            sys.exit(1)
+
+        try:
             firewall_manager.setup()
             logger.info("Successfully set up the firewall rules:\n{0}", firewall_manager.get_state())
         except Exception as error:
-            logger.warn("Unable to add firewall rules. Error: {0}", ustr(error))
+            logger.warn("Unable to add firewall rules.\nError: {0}\n\nFirewall state:\n{1}", ustr(error), firewall_manager.get_state())
             sys.exit(1)
 
 

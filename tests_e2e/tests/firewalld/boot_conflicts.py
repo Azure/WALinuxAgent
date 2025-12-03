@@ -57,6 +57,12 @@ class BootConflicts(AgentVmTest):
         waagent_log = self._wait_for_log_message(waagent_log_size, r"legacy firewall rule.+--destination-port., .53.", "Removed legacy firewall rule")
         log.info(f"The Agent removed the legacy firewall rule, as expected:\n{indent(waagent_log)}")
 
+        waagent_log = self._wait_for_log_message(waagent_log_size, "waagent-network-setup.service", r"Removing custom firewall service:")
+        log.info(f"The Agent removed waagent-network-setup.service, as expected:\n{indent(waagent_log)}")
+
+        waagent_log = self._wait_for_log_message(waagent_log_size, "waagent-network-setup.py", r"Removing custom firewall service:")
+        log.info(f"The Agent removed waagent-network-setup.py, as expected:\n{indent(waagent_log)}")
+
         log.info("Checking permanent firewall rules...")
         firewall_rules = self._ssh_client.run_command("firewall-cmd --direct --permanent --get-all-passthroughs", use_sudo=True)
         log.info(f"Permanent firewall rules:\n{indent(firewall_rules)}")
