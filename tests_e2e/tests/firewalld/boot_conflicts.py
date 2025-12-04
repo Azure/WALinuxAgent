@@ -122,15 +122,16 @@ class BootConflicts(AgentVmTest):
         log.info(f"Checking waagent.log starting at offset {offset}")
 
         limit = datetime.now() + timedelta(minutes=5)
+        delay = timedelta(seconds=15)
 
         while True:
             waagent_log = self._ssh_client.run_command(r"tail --bytes=+{0} /var/log/waagent.log | tr -d '\000' | grep -E '{1}' || true".format(offset, selector_re))  # some tests write NULL characters to the log; we delete them
             if re.search(message, waagent_log) is not None:
                 return waagent_log
-            if datetime.now() > limit - timedelta(seconds=30):
+            if datetime.now() > limit - delay:
                 break
             log.info(f"Can't find message in Agent's log ('{message}'). Will retry after a short pause.")
-            time.sleep(15)
+            time.sleep(delay.seconds)
         raise TimeoutError(f"Timed out waiting for waagent message '{message}'")
 
 
