@@ -355,13 +355,13 @@ class UpdateHandler(object):
                 )
             logger.info(os_info_msg)
 
+            ConfidentialVMInfo.fetch_and_initialize_security_type()
+
             #
             # Initialize the goal state; some components depend on information provided by the goal state and this
             # call ensures the required info is initialized (e.g. telemetry depends on the container ID.)
             #
             protocol = self.protocol_util.get_protocol(save_to_history=True)
-
-            ConfidentialVMInfo.fetch_and_initialize_security_type()
 
             self._initialize_goal_state(protocol)
 

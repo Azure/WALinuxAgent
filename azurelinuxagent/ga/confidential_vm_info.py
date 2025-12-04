@@ -43,7 +43,7 @@ class ConfidentialVMInfo(object):
     #
     # TODO: Remove once extension signature validation is supported on all VMs.
 
-    _security_type = None
+    _is_confidential_vm = None  # Boolean value to track whether this is a CVM
 
     @staticmethod
     def _fetch_security_type_from_imds():
@@ -70,11 +70,16 @@ class ConfidentialVMInfo(object):
         try:
             security_type = ConfidentialVMInfo._fetch_security_type_from_imds()
             event.info(event.WALAEventOperation.SignatureValidation, "VM security type: {0}", security_type)
-            ConfidentialVMInfo._security_type = security_type
+            ConfidentialVMInfo._is_confidential_vm = (security_type == SecurityType.ConfidentialVM)
         except Exception as ex:
-            event.warn(event.WALAEventOperation.SignatureValidation, "Failed to get virtual machine security type from IMDS: {0}", ustr(ex))
-            ConfidentialVMInfo._security_type = False
+            # TODO: For now, in the case of IMDS failure, we treat the VM as non-CVM until the next agent service start.
+            # This should be improved to better distinguish IMDS issues from true security type.
+            event.warn(event.WALAEventOperation.SignatureValidation,
+                       "Failed to get virtual machine security type from IMDS, will assume this is not a Confidential Virtual Machine: {0}", ustr(ex))
+            ConfidentialVMInfo._is_confidential_vm = False
 
     @staticmethod
     def is_confidential_vm():
-        return ConfidentialVMInfo._security_type == SecurityType.ConfidentialVM
+        if ConfidentialVMInfo._is_confidential_vm is None:
+            raise RuntimeError("Confidential VM Information is not initialized.")
+        return ConfidentialVMInfo._is_confidential_vm
