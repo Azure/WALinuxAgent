@@ -1,0 +1,10 @@
+#
+# Set of tests around configuration of the firewalld and waagent-network-setup services
+#
+name: "Firewalld"
+tests:
+  - "firewalld/boot_conflicts.py"
+images:
+  - "centos_82"
+  - "oracle_95"
+  - "rhel_95"

@@ -486,8 +486,7 @@ class AgentTestSuitesCombinator(Combinator):
         for image in suite.images:
             match = AgentTestLoader.RANDOM_IMAGES_RE.match(image)
             if match is None:
-                # Added this condition for galley image as they don't have definition in images.yml
-                if CustomImage._is_image_from_gallery(image):
+                if CustomImage._is_image_from_gallery(image) or AgentTestLoader.IMAGE_URN_RE.match(image) is not None:
                     i = VmImageInfo()
                     i.urn = image
                     i.locations = []
