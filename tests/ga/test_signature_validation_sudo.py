@@ -149,10 +149,10 @@ class TestSignatureValidationSudo(AgentTestCase):
         with patch("azurelinuxagent.ga.signature_validation_util.CGroupConfigurator.get_instance") as mock_get_instance:
             mock_instance = mock_get_instance.return_value
             mock_instance.enabled.return_value = True
-            
+
             original_run_command = shellutil.run_command
             calls = []
-            
+
             def run_command_with_systemd_failure(cmd, *args, **kwargs):
                 calls.append((cmd, args, kwargs))
                 # Fail if command contains systemd-run (simulating systemd not available)
@@ -160,12 +160,17 @@ class TestSignatureValidationSudo(AgentTestCase):
                     raise shellutil.CommandError(command=cmd, return_code=1, stdout='',
                                                  stderr='Unit {0} not found.'.format(EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT))
                 return original_run_command(cmd, *args, **kwargs)
-            
+
             with patch("azurelinuxagent.ga.signature_validation_util.run_command", side_effect=run_command_with_systemd_failure):
                 validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
-                
+
                 self.assertEqual(2, len(calls))
                 # First command should be invoked via systemd-run
                 self.assertIn('systemd-run', ' '.join(calls[0][0]))
                 # Second command should be a direct openssl call (no systemd-run)
                 self.assertNotIn('systemd-run', ' '.join(calls[1][0]))
+
+                # Verify that cgroups were disabled
+                mock_instance.disable.assert_called_once()
+                call_kwargs = mock_instance.disable.call_args.kwargs
+                self.assertIn("'systemd-run' invocation failed for signature validation", call_kwargs['reason'])

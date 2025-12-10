@@ -30,7 +30,7 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
-from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, EXT_SIGNATURE_VALIDATION_CPU_QUOTA, EXT_SIGNATURE_VALIDATION_SLICE, EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT
+from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, EXT_SIGNATURE_VALIDATION_CPU_QUOTA, EXT_SIGNATURE_VALIDATION_SLICE, EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT, DisableCgroups
 from azurelinuxagent.ga.cgroupapi import is_systemd_failure
 
 
@@ -197,7 +197,7 @@ def validate_signature(package_path, signature, package_full_name):
 
         # If cgroups are enabled, attempt to run the command in a dedicated systemd-run scope with a dedicated CPU quota.
         # This is because signature validation is CPU-intensive and may take excessive time if the agent's CPU quota is low.
-        # If the systemd-run invocation fails, fall back to running the OpenSSL command directly.
+        # If the systemd-run invocation fails, disable cgroups entirely and fall back to running the OpenSSL command directly.
         use_cgroups = CGroupConfigurator.get_instance().enabled()
         if use_cgroups:
             systemd_cmd = ['systemd-run', '--unit={0}'.format(EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT),
@@ -206,12 +206,14 @@ def validate_signature(package_path, signature, package_full_name):
             try:
                 run_command(systemd_cmd, encode_output=False)
             except CommandError as ex:
-                # If the systemd-run invocation itself failed, log a warning and fall back to running openssl command directly.
+                # If the systemd-run invocation itself failed, disable cgroups entirely and fall back to running openssl command directly.
                 # If the openssl command failed, re-raise and do not retry.
                 if is_systemd_failure(EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT, ex.stderr):
+                    error_msg = "'systemd-run' invocation failed for signature validation, disabling cgroups and falling back to direct execution. Error: '{0}'".format(ex.stderr)
                     report_validation_event(op=WALAEventOperation.SignatureValidation, level=logger.LogLevel.WARNING,
-                        message="'systemd-run' invocation failed for signature validation, falling back to direct execution. Error: '{0}'".format(ex.stderr),
+                        message=error_msg,
                         name=name, version=version, duration=0)
+                    CGroupConfigurator.get_instance().disable(reason=error_msg, disable_cgroups=DisableCgroups.ALL)
                     run_command(base_command, encode_output=False)
                 else:
                     raise
