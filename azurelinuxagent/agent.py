@@ -47,6 +47,7 @@ from azurelinuxagent.ga.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PA
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.utils.shellutil import run_command, CommandError
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, \
     PY_VERSION_MAJOR, PY_VERSION_MINOR, \
@@ -303,13 +304,28 @@ class Agent(object):
     def setup_firewall(endpoint):
         logger.set_prefix("Firewall")
         threading.current_thread().name = "Firewall"
-        event.info(event.WALAEventOperation.Firewall, "Setting up firewall after boot. Endpoint: {0}", ustr(endpoint))
+        logger.info("Setting up firewall during boot. Endpoint: {0}", ustr(endpoint))
+
+        try:
+            run_command(['systemctl', 'is-enabled', '--type=service', 'firewalld.service']).rstrip()
+            logger.info("Firewalld is enabled. Will not setup the firewall rules to avoid conflicts.")
+            sys.exit(0)
+        except CommandError:
+            # Differences across versions of systemd make hard to determine whether the command failed because firewalld is not installed
+            # or for another reason. Assume it is not installed and continue.
+            pass
+
         try:
             firewall_manager = FirewallManager.create(endpoint)
-            firewall_manager.setup()
-            event.info(event.WALAEventOperation.Firewall, "Successfully set the firewall rules")
         except Exception as error:
-            event.error(event.WALAEventOperation.Firewall, "Unable to add firewall rules. Error: {0}", ustr(error))
+            logger.warn("{0}", ustr(error))
+            sys.exit(1)
+
+        try:
+            firewall_manager.setup()
+            logger.info("Successfully set up the firewall rules:\n{0}", firewall_manager.get_state())
+        except Exception as error:
+            logger.warn("Unable to add firewall rules.\nError: {0}\n\nFirewall state:\n{1}", ustr(error), firewall_manager.get_state())
             sys.exit(1)
 
 
