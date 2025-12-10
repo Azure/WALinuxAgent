@@ -161,6 +161,9 @@ fi
 #
 echo "========== Installing Agent =========="
 
+# In some distros, e.g. OracleLinux, stopping the agent service is not enough as it gets restarted automatically.
+# So disabling the service to ensure it does not restart during the installation.
+agent-service disable
 agent-service stop
 
 # Rename the previous log to ensure the new log starts with the agent we just installed
@@ -172,6 +175,7 @@ rm -rfv /var/lib/waagent/WALinuxAgent-*
 echo "Installing $package as version $version..."
 unzip.py "$package" "/var/lib/waagent/WALinuxAgent-$version"
 
+agent-service enable
 agent-service start
 
 #

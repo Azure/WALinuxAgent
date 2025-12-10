@@ -95,6 +95,7 @@ class WALAEventOperation:
     ExtensionTelemetryEventProcessing = "ExtensionTelemetryEventProcessing"
     FetchGoalState = "FetchGoalState"
     Firewall = "Firewall"
+    FirewallBootSetup = "FirewallBootSetup"
     GoalState = "GoalState"
     GoalStateCertificates = "GoalStateCertificates"
     GoalStateUnsupportedFeatures = "GoalStateUnsupportedFeatures"

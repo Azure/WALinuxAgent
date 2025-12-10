@@ -156,7 +156,10 @@ if __name__ == '__main__':
 
         # Remove custom service if exists to avoid problems with firewalld
         try:
-            fileutil.rm_files(*[self.get_service_file_path(), os.path.join(conf.get_lib_dir(), self.BINARY_FILE_NAME)])
+            for file in [self.get_service_file_path(), os.path.join(conf.get_lib_dir(), self.BINARY_FILE_NAME)]:
+                if os.path.isfile(file):
+                    logger.info("Removing custom firewall service: {0}".format(file))
+                    os.remove(file)
         except Exception as error:
             logger.info("Unable to delete existing service {0}: {1}".format(self._network_setup_service_name, ustr(error)))
 
@@ -296,7 +299,7 @@ if __name__ == '__main__':
         # Log service status and logs if we can fetch them from journalctl and send it to Kusto,
         # else just log the error of the failure of fetching logs
         add_event(
-            op=WALAEventOperation.PersistFirewallRules,
+            op=WALAEventOperation.FirewallBootSetup,
             is_success=(not service_failed),
             message=msg,
             log_event=False)

@@ -44,21 +44,22 @@ variable:
       - agent_status
       - agent_update
       - ext_cgroups
-      - extensions_disabled
       - ext_policy
       - ext_policy_with_dependencies
       - ext_sequencing
+      - ext_signature_validation
       - ext_telemetry_pipeline
+      - ext_update
+      - extensions_disabled
       - fips
+      - firewalld
       - hibernation
       - keyvault_certificates
+      - log_collector
       - multi_config_ext
       - no_outbound_connections
       - publish_hostname
       - recover_network_interface
-      - log_collector
-      - ext_signature_validation
-      - ext_update
 
   #
   # Additional arguments pass to the test suites
