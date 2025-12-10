@@ -154,7 +154,7 @@ class TestSignatureValidationSudo(AgentTestCase):
             calls = []
 
             def run_command_with_systemd_failure(cmd, *args, **kwargs):
-                calls.append((cmd, args, kwargs))
+                calls.append(cmd)
                 # Fail if command contains systemd-run (simulating systemd not available)
                 if 'systemd-run' in ' '.join(cmd):
                     raise shellutil.CommandError(command=cmd, return_code=1, stdout='',
@@ -166,11 +166,11 @@ class TestSignatureValidationSudo(AgentTestCase):
 
                 self.assertEqual(2, len(calls))
                 # First command should be invoked via systemd-run
-                self.assertIn('systemd-run', ' '.join(calls[0][0]))
+                self.assertIn('systemd-run', ' '.join(calls[0]))
                 # Second command should be a direct openssl call (no systemd-run)
-                self.assertNotIn('systemd-run', ' '.join(calls[1][0]))
+                self.assertNotIn('systemd-run', ' '.join(calls[1]))
 
                 # Verify that cgroups were disabled
-                mock_instance.disable.assert_called_once()
-                call_kwargs = mock_instance.disable.call_args.kwargs
-                self.assertIn("'systemd-run' invocation failed for signature validation", call_kwargs['reason'])
+                self.assertEqual(1, mock_instance.disable.call_count, "disable() should have been called exactly once")
+                reason = mock_instance.disable.call_args[1]['reason']
+                self.assertIn("'systemd-run' invocation failed for signature validation", reason)
