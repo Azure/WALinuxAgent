@@ -66,17 +66,19 @@ class ConfidentialVMInfo(object):
         return security_type
 
     @staticmethod
-    def fetch_and_initialize_security_type():
+    def fetch_and_initialize_cvm_info():
+        """
+        Fetches the security type from IMDS and initializes the CVM state.
+        Note: This is called before telemetry parameters are initialized, so telemetry should be sent by the caller.
+        """
         try:
             security_type = ConfidentialVMInfo._fetch_security_type_from_imds()
-            event.info(event.WALAEventOperation.SignatureValidation, "VM security type: {0}", security_type)
             ConfidentialVMInfo._is_confidential_vm = (security_type == SecurityType.ConfidentialVM)
         except Exception as ex:
             # TODO: For now, in the case of IMDS failure, we treat the VM as non-CVM until the next agent service start.
             # This should be improved to better distinguish IMDS issues from true security type.
-            event.warn(event.WALAEventOperation.SignatureValidation,
-                       "Failed to get virtual machine security type from IMDS, will assume this is not a Confidential Virtual Machine: {0}", ustr(ex))
             ConfidentialVMInfo._is_confidential_vm = False
+            raise ex
 
     @staticmethod
     def is_confidential_vm():

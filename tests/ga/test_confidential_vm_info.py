@@ -39,14 +39,14 @@ class TestConfidentialVMInfo(AgentTestCase):
     def test_should_identify_confidential_vm(self):
         with patch('azurelinuxagent.ga.confidential_vm_info.ImdsClient.get_metadata') as mock_get_metadata:
             self._setup_mock_imds_from_file(mock_get_metadata, os.path.join(data_dir, "imds", "cvm_metadata.json"))
-            ConfidentialVMInfo.fetch_and_initialize_security_type()
+            ConfidentialVMInfo.fetch_and_initialize_cvm_info()
             is_cvm = ConfidentialVMInfo.is_confidential_vm()
             self.assertTrue(is_cvm)
 
     def test_should_identify_non_confidential_vm(self):
         with patch('azurelinuxagent.ga.confidential_vm_info.ImdsClient.get_metadata') as mock_get_metadata:
             self._setup_mock_imds_from_file(mock_get_metadata, os.path.join(data_dir, "imds", "trusted_vm_metadata.json"))
-            ConfidentialVMInfo.fetch_and_initialize_security_type()
+            ConfidentialVMInfo.fetch_and_initialize_cvm_info()
             is_cvm = ConfidentialVMInfo.is_confidential_vm()
             self.assertFalse(is_cvm)
 
@@ -58,7 +58,10 @@ class TestConfidentialVMInfo(AgentTestCase):
             mock_response.response = b"Unable to connect to IMDS"
             mock_get_metadata.return_value = mock_response
 
-            ConfidentialVMInfo.fetch_and_initialize_security_type()
+            # The method should raise an exception when IMDS is unavailable
+            with self.assertRaises(Exception):
+                ConfidentialVMInfo.fetch_and_initialize_cvm_info()
+            # After exception, is_confidential_vm should be False
             is_cvm = ConfidentialVMInfo.is_confidential_vm()
             self.assertFalse(is_cvm)
 
@@ -73,8 +76,9 @@ class TestConfidentialVMInfo(AgentTestCase):
             success_response.response = b'{"securityProfile": {"securityType": "ConfidentialVM"}}'
             mock_get_metadata.side_effect = [failure_response, success_response]
 
-            # First call should return False due to failure, second call should still return False
-            ConfidentialVMInfo.fetch_and_initialize_security_type()
+            # First call should raise an exception due to failure
+            with self.assertRaises(Exception):
+                ConfidentialVMInfo.fetch_and_initialize_cvm_info()
             first_call = ConfidentialVMInfo.is_confidential_vm()
             self.assertFalse(first_call)
             second_call = ConfidentialVMInfo.is_confidential_vm()
