@@ -161,6 +161,7 @@ class MonitorDhcpClientRestartTestCase(AgentTestCase):
                     monitor_dhcp_client_restart.run()
                     self.assertEqual(mock_conf_routes.call_count, 2)  # count did not change
 
+
 class TestEnableFirewall(AgentTestCase):
     def test_it_should_restore_missing_firewall_rules(self):
         with MockIpTables() as mock_iptables:

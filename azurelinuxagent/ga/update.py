@@ -40,7 +40,7 @@ from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters_and_protocol, \
     WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExitException, AgentUpgradeExitException, AgentMemoryExceededException
-from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError
+from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError, IptablesInconsistencyError
 from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.ga.persist_firewall_rules import PersistFirewallRulesHandler
@@ -1171,6 +1171,8 @@ class UpdateHandler(object):
                 else:
                     firewall_manager.setup()
                     event.info(WALAEventOperation.Firewall, "Created firewall rules for Azure Fabric:\n{0}", firewall_manager.get_state())
+            except IptablesInconsistencyError as e:
+                event.warn(WALAEventOperation.FirewallInconsistency, "{0}", ustr(e))
             except FirewallStateError as e:
                 event.warn(WALAEventOperation.Firewall, "The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): {0}. Current state:\n{1}", ustr(e), firewall_manager.get_state())
 

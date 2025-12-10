@@ -96,6 +96,7 @@ class WALAEventOperation:
     FetchGoalState = "FetchGoalState"
     Firewall = "Firewall"
     FirewallBootSetup = "FirewallBootSetup"
+    FirewallInconsistency = "FirewallInconsistency"
     GoalState = "GoalState"
     GoalStateCertificates = "GoalStateCertificates"
     GoalStateUnsupportedFeatures = "GoalStateUnsupportedFeatures"

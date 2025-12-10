@@ -36,7 +36,7 @@ from azurelinuxagent.ga import logcollector, cgroupconfigurator
 from azurelinuxagent.ga.cgroupcontroller import AGENT_LOG_COLLECTOR
 from azurelinuxagent.ga.cpucontroller import _CpuController
 from azurelinuxagent.ga.cgroupapi import create_cgroup_api, InvalidCgroupMountpointException
-from azurelinuxagent.ga.firewall_manager import FirewallManager
+from azurelinuxagent.ga.firewall_manager import FirewallManager, IpTables
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
@@ -317,6 +317,13 @@ class Agent(object):
 
         try:
             firewall_manager = FirewallManager.create(endpoint)
+            if isinstance(firewall_manager, IpTables):
+                try:
+                    logger.info("Attempting to load the conntrack module (iptables -C should not find any matching rules)...")
+                    logger.info("{0}", firewall_manager.load_conntrack())
+                except Exception as e:
+                    logger.warn("Failed to load the conntrack module: {0}", ustr(e))
+
         except Exception as error:
             logger.warn("{0}", ustr(error))
             sys.exit(1)
