@@ -20,7 +20,6 @@
 import json
 
 from azurelinuxagent.common.protocol.imds import ImdsClient
-from azurelinuxagent.common import event
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.exception import HttpError
 
