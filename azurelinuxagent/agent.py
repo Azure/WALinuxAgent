@@ -319,7 +319,11 @@ class Agent(object):
             firewall_manager = FirewallManager.create(endpoint)
             if isinstance(firewall_manager, IpTables):
                 try:
-                    logger.info("Attempting to load the conntrack module (iptables -C should not find any matching rules)...")
+                    #
+                    # We execute "iptables -C -m conntrack" to force loading of the conntrack module with the intention of avoiding the
+                    # issue described in IpTables.check().
+                    #
+                    logger.info("Attempting to load the conntrack module (iptables -C should not find any matching rules, so that error can be ignored)...")
                     logger.info("{0}", firewall_manager.load_conntrack())
                 except Exception as e:
                     logger.warn("Failed to load the conntrack module: {0}", ustr(e))

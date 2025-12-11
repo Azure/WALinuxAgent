@@ -159,18 +159,18 @@ class FirewallManager(object):
 
 class _FirewallManagerIndividualRules(FirewallManager):
     """
-    Base class for firewall managers (iptables, firewalld) that manipulate the firewall rules individually when checking/adding/removing them.
+    Base class for firewall managers (iptables, firewalld) that manipulate the firewall rules individually when checking/adding/removing them. For contrast, nft manipulated the entire table.
     """
     def __init__(self, wire_server_address):
         super(_FirewallManagerIndividualRules, self).__init__(wire_server_address)
         #
         # We use this array to iterate over all the firewall rules when setting/checking/removing them.
-        # The order of the items is critical since we process each item them sequentially and the firewall rules will follow the order in the array: the first
+        # The order of the items is critical since we process each item sequentially and the firewall rules will follow the order in the array: the first
         # item will be at the top of the chain, etc.
         #
         # Each item in the array is a tuple with the friendly name of the rule and a function that returns the command used to process that rule. This function
-        # takes as argument the option (-A, -C, -D  for iptables and --passthrough, --query-passthrough, --remove-passthrough for firewallcmd) that is passed to
-        # the corresponding command
+        # takes as argument the option that is passed to the corresponding command  (-A, -C, and -D for iptables, and --passthrough, --query-passthrough, and --remove-passthrough
+        # for firewallcmd)
         #
         self._firewall_commands = [
             (FirewallManager.ACCEPT_DNS, self._get_accept_dns_rule_command),
@@ -348,6 +348,16 @@ class IpTables(_FirewallManagerIndividualRules):
         return '-D'
 
     def check(self):
+        # A few users have reported an issue where the Agent creates duplicate DROP rule, with one of them at the top of the OUTPUT chain, that block communication
+        # with the WireServer (see, for example, incident 21000000779819). These VMs are running RedHat/CentOS 7/8.
+        #
+        # Debugging showed that the DROP rule created by waagent-network-setup during boot cannot detected by waagent using "iptables -C" (and "iptables -D" won't delete
+        # the rule either) causing waagent to create duplicate rules. This issue may be related to https://access.redhat.com/solutions/6514071, which has identical
+        # symptoms. Our debugging showed that the first rule created when the conntrack module has not been loaded yet is not visible to "-C" or "-D".
+        #
+        # We work around this issue by checking against the output of "iptables -L" when the check() method reports that some rules do not exist. If any of those rules
+        # shows up in the output of "-L", we do not modify the firewall.
+        #
         try:
             return super(IpTables, self).check()
         except FirewallRulesMissingError as e:
