@@ -35,7 +35,7 @@ def main():
     operation = parser.add_argument_group('Main operation')
     operation_parser = operation.add_mutually_exclusive_group(required=True)
     operation_parser.add_argument('--properties', dest='properties', nargs='+', help='List of property=value to update in the handlerManifest file')
-    operation_parser.add_argument("--reset", dest='reset', help='Reset the handlerManifest file to the default values')
+    operation_parser.add_argument("--reset", dest='reset', action='store_true', help='Reset the handlerManifest file to the default values')
 
     args, _ = parser.parse_known_args()
     extension_name = args.extension_name
@@ -53,7 +53,7 @@ def main():
     manifest_file = matched_files[0]
     log.info("HandlerManifest file found for extension '{0}': {1}".format(extension_name, manifest_file))
 
-    if reset is not None:
+    if reset:
         log.info("Resetting handlerManifest file for extension '{0}' to default values".format(extension_name))
         # Reset the handlerManifest file to the default values
         backup_file = manifest_file + ".bak"
