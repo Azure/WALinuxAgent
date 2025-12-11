@@ -320,7 +320,7 @@ class IpTables(_FirewallManagerIndividualRules):
         #     # iptables -w -t security -L OUTPUT -nvx
         #     Chain OUTPUT (policy ACCEPT 1384 packets, 126406 bytes)
         #         pkts      bytes target     prot opt in     out     source               destination
-        #            0        0 ACCEPT     tcp  --  *      *       0.0.0.0/0            168.63.129.16
+        #            0        0 ACCEPT     tcp  --  *      *       0.0.0.0/0            168.63.129.16        tcp dpt:53
         #            0        0 ACCEPT     tcp  --  *      *       0.0.0.0/0            168.63.129.16        owner UID match 0
         #            0        0 DROP       tcp  --  *      *       0.0.0.0/0            168.63.129.16        ctstate INVALID,NEW
         #
