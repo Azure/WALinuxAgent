@@ -159,7 +159,7 @@ class FirewallManager(object):
 
 class _FirewallManagerIndividualRules(FirewallManager):
     """
-    Base class for firewall managers (iptables, firewalld) that manipulate the firewall rules individually when checking/adding/removing them. For contrast, nft manipulated the entire table.
+    Base class for firewall managers (iptables, firewalld) that manipulate the firewall rules individually when checking/adding/removing them. For contrast, nft manipulates the entire table.
     """
     def __init__(self, wire_server_address):
         super(_FirewallManagerIndividualRules, self).__init__(wire_server_address)
