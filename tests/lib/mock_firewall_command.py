@@ -222,8 +222,10 @@ class MockFirewallCmd(_MockFirewallCommand):
         super(MockFirewallCmd, self).__init__(command_name="firewall-cmd", check_option="--query-passthrough", add_option="--passthrough", delete_option="--remove-passthrough")
 
     def _mock_run_command(self, command, *args, **kwargs):
+        if command[0] == 'firewall-cmd' and command[1] == '--version':
+            return '1.0.0 (mocked)'
         if command[0] == 'firewall-cmd' and command[1] == '--state':
-            return self._original_run_command(['echo', 'running'], *args, **kwargs)
+            return 'running\n'
         return super(MockFirewallCmd, self)._mock_run_command(command, *args, **kwargs)
 
     def _get_return_value(self, command):
@@ -239,18 +241,20 @@ class MockFirewallCmd(_MockFirewallCommand):
         match = re.match(r"firewall-cmd --permanent --direct (?P<option>--passthrough|--query-passthrough|--remove-passthrough) ipv4 -t security (?P<add_option>-[AI]) OUTPUT -d 168.63.129.16 -p tcp (?P<rule>--destination-port 53 -j ACCEPT|-m owner --uid-owner \d+ -j ACCEPT|.+ -j DROP)", command)
         if match is None:
             raise Exception("Unexpected command: {0}".format(command))
+
         option = match.group("option")
         rule = match.group("rule")
         add_option = match.group("add_option")
         if rule == "--destination-port 53 -j ACCEPT":
-            if add_option == "-I":
-                return self._return_values[option]["legacy"]
-            return self._return_values[option]["ACCEPT DNS"]
-        if rule == "-m owner --uid-owner {0} -j ACCEPT".format(os.getuid()):
-            return self._return_values[option]["ACCEPT"]
-        if rule == "-m conntrack --ctstate INVALID,NEW -j DROP":
-            return self._return_values[option]["DROP"]
-        raise Exception("Unexpected rule: {0}".format(rule))
+            exit_code = self._return_values[option]["legacy"] if add_option == "-I" else self._return_values[option]["ACCEPT DNS"]
+        elif rule == "-m owner --uid-owner {0} -j ACCEPT".format(os.getuid()):
+            exit_code = self._return_values[option]["ACCEPT"]
+        elif rule == "-m conntrack --ctstate INVALID,NEW -j DROP":
+            exit_code = self._return_values[option]["DROP"]
+        else:
+            raise Exception("Unexpected rule: {0}".format(rule))
+
+        return exit_code, "Mocked stdout", "Mocked stderr"
 
     @staticmethod
     def get_accept_dns_command(option):
@@ -267,6 +271,10 @@ class MockFirewallCmd(_MockFirewallCommand):
     @staticmethod
     def get_legacy_command(option):
         return "firewall-cmd --permanent --direct {0} ipv4 -t security -I OUTPUT -d 168.63.129.16 -p tcp --destination-port 53 -j ACCEPT".format(option)
+
+    @staticmethod
+    def get_list_command():
+        return "firewall-cmd --permanent --direct --get-all-passthroughs"
 
 
 class MockNft(object):

@@ -1055,6 +1055,7 @@ class TestUpdate(UpdateTestCase):
                                 MockIpTables.get_accept_dns_command("-A"),
                                 MockIpTables.get_accept_command("-A"),
                                 MockIpTables.get_drop_command("-A"),
+                                MockIpTables.get_list_command()
                             ],
                             mock_iptables.call_list,
                             "Expected 2 calls for the legacy rule (-C and -D), followed by 3 sets of calls for the current rules (-C and -A)")
@@ -1074,6 +1075,7 @@ class TestUpdate(UpdateTestCase):
                                 MockFirewallCmd.get_accept_dns_command("--passthrough"),
                                 MockFirewallCmd.get_accept_command("--passthrough"),
                                 MockFirewallCmd.get_drop_command("--passthrough"),
+                                MockFirewallCmd.get_list_command()
                             ],
                             mock_firewall_cmd.call_list,
                             "Expected 2 calls for the legacy rule (-C and -D), followed by 3 sets of calls for the current rules (-C and -A)")
