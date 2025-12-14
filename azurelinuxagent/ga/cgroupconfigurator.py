@@ -187,10 +187,10 @@ class CGroupConfigurator(object):
                     for prop in controller.get_unit_properties():
                         log_cgroup_info('Agent {0} unit property value: {1}'.format(prop, systemd.get_unit_property(systemd.get_agent_unit_name(), prop)))
                     if isinstance(controller, _CpuController) and self._cgroups_api.can_enforce_cpu():
-                        self._set_resource_quota(agent_unit_name, ResourceName.CPU, conf.get_agent_cpu_quota())
+                        self._set_resource_quota(agent_unit_name, {ResourceName.CPU:conf.get_agent_cpu_quota()})
                         controller.track_throttle_time(True)  # CPU controller track the throttle time only when CPU quota is set
                     elif isinstance(controller, _MemoryController) and self._cgroups_api.can_enforce_memory():
-                        self._set_resource_quota(agent_unit_name, ResourceName.MEMORY, conf.get_agent_memory_quota())
+                        self._set_resource_quota(agent_unit_name, {ResourceName.MEMORY:conf.get_agent_memory_quota()})
                         self._agent_memory_metrics = controller
                     CGroupsTelemetry.track_cgroup_controller(controller)
 
@@ -336,7 +336,7 @@ class CGroupConfigurator(object):
 
         def _reset_agent_cgroup_setup(self):
             """
-            This clean up added when cpu support added in distro but later distro removed from the supported list. At that time, memory support not added, so no need to reset quota.
+            This clean up added when cpu support added in distro but later distro removed from the supported list. At that time, memory support was not added, so no need to reset memory quota.
             """
             try:
                 agent_drop_in_path = systemd.get_agent_drop_in_path()
@@ -466,7 +466,9 @@ class CGroupConfigurator(object):
                 elif disable_cgroups == DisableCgroups.AGENT:  # disable agent
                     agent_controllers = self._agent_cgroup.get_controllers()
                     for controller in agent_controllers:
-                        CGroupsTelemetry.stop_tracking(controller)
+                        if isinstance(controller, _CpuController):
+                            CGroupsTelemetry.stop_tracking(controller)
+                            break
                     self._agent_cgroups_enabled = False
 
                 log_cgroup_warning("Disabling resource usage monitoring. Reason: {0}".format(reason), op=WALAEventOperation.CGroupsDisabled)
@@ -495,7 +497,7 @@ class CGroupConfigurator(object):
                 property_names = []
                 values = []
                 for rq in quotas:
-                    if rq.can_enforce():
+                    if rq.can_enforce() and rq.name in new_quotas:
                         q = new_quotas.get(rq.name)
                         value = rq.format(q)
                         current = rq.get_current_quota(unit_name)
@@ -531,8 +533,9 @@ class CGroupConfigurator(object):
                     systemd.set_unit_run_time_properties(unit_name, property_names, values)
 
                     for rq in quotas:
-                        current = rq.get_current_quota(unit_name)
-                        log_cgroup_info('Current {0}: {1}'.format(rq.property, current))
+                        if rq.property in property_names:
+                            current = rq.get_current_quota(unit_name)
+                            log_cgroup_info('Current {0}: {1}'.format(rq.property, current))
 
             except Exception as exception:
                 log_cgroup_warning('Failed to reset resource quota: {0}'.format(ustr(exception)))

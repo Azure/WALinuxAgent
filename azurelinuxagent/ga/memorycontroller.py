@@ -168,8 +168,8 @@ class MemoryControllerV2(_MemoryController):
         We use the share of time in which processes of the cgroup have experienced memory pressure.
         :return: Total time some processes stalled due to memory pressure in last 300 seconds
         :rtype: float
-        Note: we get 0 if process not stalled or we return explict 0 if file is not present as it is not supported in some distros.
-        But we don't consider 0 values in the metrics report as they are not meaningful data, so don't need to worry about false zeros for now.
+        Note: we get 0 if process not stalled or we return explict 0 if file is not present which is expected in some distros.
+        But we don't consider 0 values in the metrics report as they are not meaningful data, so no need to worry about false zeros.
         """
         try:
             with open(os.path.join(self.path, 'memory.pressure')) as memory_pressure:
