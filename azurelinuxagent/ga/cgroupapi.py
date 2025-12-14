@@ -161,7 +161,7 @@ class CGroupUtil(object):
     @staticmethod
     def get_current_memory_quota(unit_name):
         """
-        Returns the memory quota for the given unit in bytes, or 'infinity' or 'unknown' if not set.
+        Returns the memory quota for the given unit in bytes, or 'infinity' if not set, or 'unknown' if an error occurs.
         """
         try:
             mem_quota = systemd.get_unit_property(unit_name, "MemoryHigh").strip().lower()
@@ -180,7 +180,7 @@ class CGroupUtil(object):
 
             return str(mem_quota_bytes)
         except Exception as e:
-            log_cgroup_warning("Error parsing current MemoryHigh: {0}".format(ustr(e)))
+            log_cgroup_warning("Error in getting current MemoryHigh: {0}".format(ustr(e)))
             return "unknown"
 
     @staticmethod

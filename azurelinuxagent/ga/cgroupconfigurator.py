@@ -335,6 +335,9 @@ class CGroupConfigurator(object):
                         return
 
         def _reset_agent_cgroup_setup(self):
+            """
+            This clean up added when cpu support added in distro but later distro removed from the supported list. At that time, memory support not added, so no need to reset quota.
+            """
             try:
                 agent_drop_in_path = systemd.get_agent_drop_in_path()
                 if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path) and len(os.listdir(agent_drop_in_path)) > 0:
@@ -448,9 +451,10 @@ class CGroupConfigurator(object):
             significant delay to the extension execution.
             """
             try:
+                # Reset quotas for agent
+                self._reset_resource_quota(systemd.get_agent_unit_name(), ResourceName.ALL)
                 if disable_cgroups == DisableCgroups.ALL:  # disable all
-                    # Reset quotas
-                    self._reset_resource_quota(systemd.get_agent_unit_name(), ResourceName.ALL)
+                    # Reset quotas for extensions
                     extension_services = self.get_extension_services_list()
                     for extension in extension_services:
                         log_cgroup_info("Resetting extension : {0} and it's services: {1} Quota".format(extension, extension_services[extension]), send_event=False)
@@ -460,90 +464,75 @@ class CGroupConfigurator(object):
                     self._agent_cgroups_enabled = False
                     self._extensions_cgroups_enabled = False
                 elif disable_cgroups == DisableCgroups.AGENT:  # disable agent
-                    self._reset_resource_quota(systemd.get_agent_unit_name(), ResourceName.ALL)
                     agent_controllers = self._agent_cgroup.get_controllers()
                     for controller in agent_controllers:
-                        if isinstance(controller, _CpuController):
-                            CGroupsTelemetry.stop_tracking(controller)
-                            break
+                        CGroupsTelemetry.stop_tracking(controller)
                     self._agent_cgroups_enabled = False
 
                 log_cgroup_warning("Disabling resource usage monitoring. Reason: {0}".format(reason), op=WALAEventOperation.CGroupsDisabled)
             except Exception as exception:
                 log_cgroup_warning("Error disabling cgroups: {0}".format(ustr(exception)))
 
-        def _get_resource_quotas(self):
+        def _get_resource_quotas(self, resource_name):
             if self._cgroups_api is None:
                 return []
-            return [CpuQuota(self._cgroups_api), MemoryQuota(self._cgroups_api)]
+            if resource_name == ResourceName.CPU:
+                return [CpuQuota(self._cgroups_api)]
+            elif resource_name == ResourceName.MEMORY:
+                return [MemoryQuota(self._cgroups_api)]
+            elif resource_name == ResourceName.ALL:
+                return [CpuQuota(self._cgroups_api), MemoryQuota(self._cgroups_api)]
 
-        def _set_resource_quota(self, unit_name, resource_type, quota):
+            return []
+
+        def _set_resource_quota(self, unit_name, new_quotas):
             """
             Sets the quota for the given resource type ('CPU', 'Memory', or 'All').
+            new_quotas is a dictionary with resource names as keys and quota values as values.
             """
             try:
-                quotas = self._get_resource_quotas()
+                quotas = self._get_resource_quotas(ResourceName.ALL)
                 property_names = []
                 values = []
-                if resource_type == ResourceName.ALL:
-                    for rq in quotas:
-                        if rq.can_enforce():
-                            q = quota.get(rq.name) if isinstance(quota, dict) else quota
-                            value = rq.format(q)
-                            current = rq.get_current_quota(unit_name)
-                            if current != value:
-                                property_names.append(rq.property)
-                                values.append(value)
-                    if property_names:
-                        log_cgroup_info("Setting {0} properties: {1}".format(unit_name, dict(zip(property_names, values))))
-                        systemd.set_unit_run_time_properties(unit_name, property_names, values)
-                else:
-                    for rq in quotas:
-                        if rq.name == resource_type and rq.can_enforce():
-                            value = rq.format(quota)
-                            current = rq.get_current_quota(unit_name)
-                            if current != value:
-                                log_cgroup_info("Setting {0}'s {1} to {2}".format(unit_name, rq.property, value))
-                                systemd.set_unit_run_time_property(unit_name, rq.property, value)
-                            break
+                for rq in quotas:
+                    if rq.can_enforce():
+                        q = new_quotas.get(rq.name)
+                        value = rq.format(q)
+                        current = rq.get_current_quota(unit_name)
+                        if current != value:
+                            property_names.append(rq.property)
+                            values.append(value)
+                if property_names:
+                    log_cgroup_info("Setting {0} properties: {1}".format(unit_name, dict(zip(property_names, values))))
+                    systemd.set_unit_run_time_properties(unit_name, property_names, values)
+
             except Exception as exception:
                 log_cgroup_warning('Failed to set resource quota: {0}'.format(ustr(exception)))
 
-        def _reset_resource_quota(self, unit_name, resource_type, ignore_enforce_check=False):
+        def _reset_resource_quota(self, unit_name, resource_name, ignore_enforce_check=False):
             """
             Resets the quota for the given resource type ('CPU', 'Memory', or 'All').
             Only resets if the current value is not already 'infinity'.
+
+            ignore_enforce_check - True In some scenarios(e.g. distro removed from supported list in new agent), we want to reset the quota even if the quota is not enforced.
             """
             try:
-                quotas = self._get_resource_quotas()
-                if resource_type == ResourceName.ALL:
-                    property_names = []
-                    values = []
+                quotas = self._get_resource_quotas(resource_name)
+                property_names = []
+                values = []
+                for rq in quotas:
+                    if ignore_enforce_check or rq.can_enforce():
+                        current = rq.get_current_quota(unit_name)
+                        if current != "infinity":
+                            property_names.append(rq.property)
+                            values.append("")  # systemd convention
+                if property_names:
+                    log_cgroup_info("Resetting {0} properties: {1}".format(unit_name, property_names), send_event=False)
+                    systemd.set_unit_run_time_properties(unit_name, property_names, values)
+
                     for rq in quotas:
-                        if ignore_enforce_check or rq.can_enforce():
-                            current = rq.get_current_quota(unit_name)
-                            if current != "infinity":
-                                property_names.append(rq.property)
-                                values.append("")  # systemd convention
-                    if property_names:
-                        log_cgroup_info("Resetting {0} properties: {1}".format(unit_name, property_names), send_event=False)
-                        systemd.set_unit_run_time_properties(unit_name, property_names, values)
-
-                        for rq in quotas:
-                            current = rq.get_current_quota(unit_name)
-                            log_cgroup_info('Current {0}: {1}'.format(rq.property, current))
-
-                else:
-                    for rq in quotas:
-                        if rq.name == resource_type and (ignore_enforce_check or rq.can_enforce()):
-                            current = rq.get_current_quota(unit_name)
-                            if current != "infinity":
-                                log_cgroup_info("Resetting {0}'s {1}".format(unit_name, rq.property))
-                                systemd.set_unit_run_time_property(unit_name, rq.property, "")
-
-                                current = rq.get_current_quota(unit_name)
-                                log_cgroup_info('Current {0}: {1}'.format(rq.property, current))
-                            break
+                        current = rq.get_current_quota(unit_name)
+                        log_cgroup_info('Current {0}: {1}'.format(rq.property, current))
 
             except Exception as exception:
                 log_cgroup_warning('Failed to reset resource quota: {0}'.format(ustr(exception)))
@@ -781,9 +770,7 @@ class CGroupConfigurator(object):
             limit_in_bytes = conf.get_agent_memory_quota()
             current_usage = 0
             for metric in cgroup_metrics:
-                if metric.counter == MetricsCounter.TOTAL_MEM_USAGE:
-                    current_usage += metric.value
-                elif metric.counter == MetricsCounter.SWAP_MEM_USAGE:
+                if metric.counter == MetricsCounter.TOTAL_MEM_USAGE or metric.counter == MetricsCounter.SWAP_MEM_USAGE:
                     current_usage += metric.value
 
             if current_usage > limit_in_bytes:

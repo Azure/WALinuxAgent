@@ -167,17 +167,19 @@ class MemoryControllerV2(_MemoryController):
         """
         We use the share of time in which processes of the cgroup have experienced memory pressure.
         :return: Total time some processes stalled due to memory pressure in last 300 seconds
-        :rtype: int
+        :rtype: float
+        Note: we get 0 if process not stalled or we return explict 0 if file is not present as it is not supported in some distros.
+        But we don't consider 0 values in the metrics report as they are not meaningful data, so don't need to worry about false zeros for now.
         """
         try:
-            with open(os.path.join(self.path, 'memory.pressure')) as memory_events:
+            with open(os.path.join(self.path, 'memory.pressure')) as memory_pressure:
                 #
                 # Sample file:
                 #   # cat memory.pressure
                 #   some avg10=0.00 avg60=0.00 avg300=0.00 total=0
                 #   full avg10=0.00 avg60=0.00 avg300=0.00 total=0
                 #
-                for line in memory_events:
+                for line in memory_pressure:
                     match = re.search(r'avg300=([0-9.]+)', line)
                     if match is not None:
                         percentage = float(match.group(1))
