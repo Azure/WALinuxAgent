@@ -20,6 +20,7 @@ from typing import Any, Dict, List
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
+from tests_e2e.tests.lib.firewall_utilities import FirewallUtilities
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
 
@@ -34,6 +35,8 @@ class AgentPersistFirewallTest(AgentVmTest):
         self._ssh_client: SshClient = self._context.create_ssh_client()
 
     def run(self):
+        FirewallUtilities.skip_test_if_proxy_agent_is_managing_the_wireserver_endpoint(self._ssh_client)
+
         self._test_setup()
         # Test case 1: After test agent install, verify firewalld or network.setup is running
         self._verify_persist_firewall_service_running()
