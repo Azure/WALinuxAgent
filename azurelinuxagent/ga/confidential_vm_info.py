@@ -42,7 +42,8 @@ class ConfidentialVMInfo(object):
     #
     # TODO: Remove once extension signature validation is supported on all VMs.
 
-    _is_confidential_vm = None  # Boolean value to track whether this is a CVM
+    # Tri-state boolean: True if CVM, False if not a CVM, None if not yet initialized
+    _is_confidential_vm = None
 
     @staticmethod
     def _fetch_security_type_from_imds():
