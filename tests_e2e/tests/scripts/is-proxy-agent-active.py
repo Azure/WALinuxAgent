@@ -53,8 +53,8 @@ try:
         stdout = run_command(['systemctl', 'is-active', 'azure-proxy-agent.service']).rstrip()
         log.info(f"The azure-proxy-agent.service is active. State: {stdout}")
     except CommandError as e:
-        if e.exit_code == 3:
-            log.info("The azure-proxy-agent.service is not active")
+        if e.exit_code in [3, 4]:  # 3 == unit is not active, 4 == no such unit
+            log.info(f"The azure-proxy-agent.service is not {'active' if e.exit_code == 3 else 'installed'}. ")
             sys.exit(1)
         raise
 
