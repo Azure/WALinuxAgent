@@ -42,7 +42,7 @@ class ConfidentialVMInfo(object):
     #
     # TODO: Remove once extension signature validation is supported on all VMs.
 
-    # Tri-state boolean: True if CVM, False if not a CVM, None if not yet initialized
+    # Tri-state boolean: True if CVM, False if not a CVM, None if not yet initialized (fetch_and_initialize_cvm_info has not been called).
     _is_confidential_vm = None
 
     @staticmethod
