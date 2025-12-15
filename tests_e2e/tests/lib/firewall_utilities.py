@@ -36,5 +36,7 @@ class FirewallUtilities:
             log.info(f"Detected the Proxy Agent\n{indent(stdout)}")
             raise TestSkipped("The Proxy Agent is managing the WireServer endpoint so firewall rules are not applicable.")
         except CommandError as e:
-            log.info(f"The Proxy Agent is not managing the WireServer endpoint.\n{indent(str(e))}")
-
+            if e.exit_code == 1:
+                log.info(f"The Proxy Agent is not managing the WireServer endpoint.\n{indent(str(e))}")
+            else:
+                raise

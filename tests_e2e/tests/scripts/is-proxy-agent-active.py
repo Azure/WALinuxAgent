@@ -65,10 +65,11 @@ try:
         if response.status == 403:
             log.info("The azure-proxy-agent.service is managing the WireServer endpoint")
             sys.exit(0)
-        log.error(f"INCORRECT FIREWALL CONFIGURATION. NON-ROOT IS ABLE TO CONNECT TO THE WIRESERVER. User: {pwd.getpwuid(os.geteuid()).pw_name}. Status: {response.status}. Response: {response.read()}")
+        raise Exception(f"Incorrect firewall configuration. Non-root is able to connect to the WireServer. User: {pwd.getpwuid(os.geteuid()).pw_name}. HTTP status: {response.status}. HTTP response: {response.read()}")
     except Exception as e:
         if isinstance(e, socket.timeout):
             log.info("The azure-proxy-agent.service is not managing the WireServer endpoint")
+            sys.exit(1)
         raise
 except Exception as e:
     log.error(f"{str(e)}")
