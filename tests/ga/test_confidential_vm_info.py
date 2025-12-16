@@ -86,3 +86,12 @@ class TestConfidentialVMInfo(AgentTestCase):
 
             # Verify IMDS was only called once
             self.assertEqual(mock_get_metadata.call_count, 1)
+
+    def test_should_raise_error_when_cvm_info_uninitialized(self):
+        # Reset to uninitialized state
+        ConfidentialVMInfo._is_confidential_vm = None
+
+        # Calling is_confidential_vm() before initialization should raise RuntimeError
+        with self.assertRaises(RuntimeError) as context:
+            ConfidentialVMInfo.is_confidential_vm()
+            self.assertIn("not initialized", str(context.exception))
