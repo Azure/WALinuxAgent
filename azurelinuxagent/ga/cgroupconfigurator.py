@@ -504,7 +504,7 @@ class CGroupConfigurator(object):
                         if current != value:
                             property_names.append(rq.property)
                             values.append(value)
-                if property_names:
+                if len(property_names) > 0:
                     log_cgroup_info("Setting {0} properties: {1}".format(unit_name, dict(zip(property_names, values))))
                     systemd.set_unit_run_time_properties(unit_name, property_names, values)
 
@@ -528,7 +528,7 @@ class CGroupConfigurator(object):
                         if current != "infinity":
                             property_names.append(rq.property)
                             values.append("")  # systemd convention
-                if property_names:
+                if len(property_names) > 0:
                     log_cgroup_info("Resetting {0} properties: {1}".format(unit_name, property_names), send_event=False)
                     systemd.set_unit_run_time_properties(unit_name, property_names, values)
 
