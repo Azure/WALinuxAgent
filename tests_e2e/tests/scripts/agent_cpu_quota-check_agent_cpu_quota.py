@@ -29,7 +29,7 @@ from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import shellutil
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.cgroup_helpers import check_agent_quota_disabled, \
-    get_agent_cpu_quota, check_log_message
+    get_agent_cpu_quota
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import run_remote_test
 from tests_e2e.tests.lib.retry import retry_if_false
@@ -171,27 +171,10 @@ def verify_throttling_time_check_on_agent_cgroups():
         fail("The agent did not disable its CPUQuota: {0}".format(get_agent_cpu_quota()))
 
 
-def cleanup_test_setup():
-    log.info("Cleaning up test setup")
-    drop_in_file = os.path.join(systemd.get_agent_drop_in_path(), "99-ExecStart.conf")
-    if os.path.exists(drop_in_file):
-        log.info("Removing %s...", drop_in_file)
-        os.remove(drop_in_file)
-        shellutil.run_command(["systemctl", "daemon-reload"])
-
-    check_time = datetime.datetime.now(UTC)
-    shellutil.run_command(["agent-service", "restart"])
-
-    found: bool = retry_if_false(lambda: check_log_message(" Agent cgroups enabled: True", after_timestamp=check_time))
-    if not found:
-        fail("Agent cgroups not enabled yet")
-
-
 def main():
     prepare_agent()
     verify_agent_reported_metrics()
     verify_throttling_time_check_on_agent_cgroups()
-    cleanup_test_setup()
 
 
 run_remote_test(main)

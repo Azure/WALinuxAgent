@@ -93,10 +93,10 @@ class _TestFirewallCommand(AgentTestCase):
             self.assertEqual(
                 [
                     mock.get_accept_dns_command(mock.check_option),
-                    mock.get_accept_command(mock.check_option),
-                    mock.get_drop_command(mock.check_option),
                     mock.get_accept_dns_command(mock.delete_option),
+                    mock.get_accept_command(mock.check_option),
                     mock.get_accept_command(mock.delete_option),
+                    mock.get_drop_command(mock.check_option),
                     mock.get_drop_command(mock.delete_option)
                 ],
                 mock.call_list,
@@ -112,9 +112,9 @@ class _TestFirewallCommand(AgentTestCase):
             self.assertEqual(
                 [
                     mock.get_accept_dns_command(mock.check_option),
+                    mock.get_accept_dns_command(mock.delete_option),
                     mock.get_accept_command(mock.check_option),
                     mock.get_drop_command(mock.check_option),
-                    mock.get_accept_dns_command(mock.delete_option),
                     mock.get_drop_command(mock.delete_option),
                 ],
                 mock.call_list,
