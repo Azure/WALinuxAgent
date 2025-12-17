@@ -270,7 +270,6 @@ class ExtPolicy(AgentVmTest):
                     "policyVersion": "0.1.0",
                     "extensionPolicies": {
                         "allowListedExtensionsOnly": True,
-                        "signatureRequired": False,
                         "extensions": {
                             "Microsoft.Azure.Extensions.CustomScript": {},
                             # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
@@ -306,7 +305,6 @@ class ExtPolicy(AgentVmTest):
                     "policyVersion": "0.1.0",
                     "extensionPolicies": {
                         "allowListedExtensionsOnly": False,
-                        "signatureRequired": False,
                         "extensions": {}
                     }
                 }
@@ -334,7 +332,6 @@ class ExtPolicy(AgentVmTest):
                     "policyVersion": "0.1.0",
                     "extensionPolicies": {
                         "allowListedExtensionsOnly": True,
-                        "signatureRequired": False,
                         "extensions": {
                             # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
                             "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
@@ -357,7 +354,6 @@ class ExtPolicy(AgentVmTest):
                     "policyVersion": "0.1.0",
                     "extensionPolicies": {
                         "allowListedExtensionsOnly": True,
-                        "signatureRequired": False,
                         "extensions": {
                             "Microsoft.Azure.Extensions.CustomScript": {},
                             "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent": {},
@@ -384,7 +380,6 @@ class ExtPolicy(AgentVmTest):
                     "policyVersion": "0.1.0",
                     "extensionPolicies": {
                         "allowListedExtensionsOnly": True,
-                        "signatureRequired": False,
                         "extensions": {
                             # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
                             "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
@@ -416,7 +411,6 @@ class ExtPolicy(AgentVmTest):
                     "policyVersion": "0.1.0",
                     "extensionPolicies": {
                         "allowListedExtensionsOnly": True,
-                        "signatureRequired": False,
                         "extensions": {
                             "Microsoft.Azure.Extensions.CustomScript": {},
                             # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
@@ -439,7 +433,6 @@ class ExtPolicy(AgentVmTest):
                     "policyVersion": "0.1.0",
                     "extensionPolicies": {
                         "allowListedExtensionsOnly": True,
-                        "signatureRequired": False,
                         "extensions": {
                             # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
                             "Microsoft.GuestConfiguration.ConfigurationforLinux": {}

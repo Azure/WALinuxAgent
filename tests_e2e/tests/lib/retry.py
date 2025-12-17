@@ -110,6 +110,8 @@ def retry(operation: Callable[[], Any], attempts: int = 5, delay: int = 30) -> A
         attempts -= 1
         try:
             return operation()
+        except AssertionError:
+            raise
         except Exception as e:
             if attempts == 0:
                 raise

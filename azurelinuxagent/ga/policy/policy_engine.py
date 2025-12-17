@@ -25,6 +25,8 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
+
 
 # Default policy values to be used when customer does not specify these attributes in the policy file.
 _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY = False
@@ -34,6 +36,11 @@ _DEFAULT_EXTENSIONS = {}
 # Agent supports up to this version of the policy file ("policyVersion" in schema).
 # Increment this number when any new attributes are added to the policy schema.
 _MAX_SUPPORTED_POLICY_VERSION = "0.1.0"
+
+# Extension signature validation is currently only supported on CVMs. If a non-CVM user creates a policy with signature
+# required, we should raise an error indicating that the policy is invalid.
+# TODO: Remove once signature validation is supported on all VMs
+_CVM_ONLY_POLICIES = ["signatureRequired"]
 
 
 class PolicyError(AgentError):
@@ -291,6 +298,9 @@ class _PolicyEngine(object):
         for k in object_.keys():
             if k not in valid_attributes:
                 raise InvalidPolicyError("unrecognized attribute '{0}' in {1}".format(k, object_name))
+
+            if not ConfidentialVMInfo.is_confidential_vm() and k in _CVM_ONLY_POLICIES:
+                raise InvalidPolicyError("attribute '{0}' is only supported on confidential virtual machines (CVMs).".format(k))
 
     @staticmethod
     def _get_dictionary(object_, attribute, name_prefix="", optional=False, default=None):

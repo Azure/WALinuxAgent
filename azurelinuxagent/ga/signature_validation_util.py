@@ -30,6 +30,8 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
+from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
+
 
 # Signature validation requires OpenSSL version 1.1.0 or later. The 'no_check_time' flag used for the 'openssl cms -verify'
 # command is not supported on older versions.
@@ -280,9 +282,12 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
 
 def signature_validation_enabled():
     """
-    Returns True if signature validation is enabled in conf file and OpenSSL version supports all validation parameters.
+    Returns True if signature validation is enabled in conf file, OpenSSL version supports all validation parameters, and agent is running on a Confidential VM.
+
+    Extension signature validation is currently limited to CVMs for telemetry/preview releases. It will be expanded to all VMs after we gain confidence in the feature.
+    TODO: Remove the is_confidential_vm() check once signature validation is supported on all VMs.
     """
-    return conf.get_signature_validation_enabled() and openssl_version_supported_for_signature_validation()
+    return conf.get_signature_validation_enabled() and openssl_version_supported_for_signature_validation() and ConfidentialVMInfo.is_confidential_vm()
 
 
 def cleanup_package_with_invalid_signature(package_file):

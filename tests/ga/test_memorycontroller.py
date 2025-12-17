@@ -87,6 +87,9 @@ class TestMemoryControllerV2(AgentTestCase):
         memory_throttled_events = test_mem_controller.get_memory_throttled_events()
         self.assertEqual(9, memory_throttled_events)
 
+        memory_pressure_events = test_mem_controller.get_memory_pressure_events()
+        self.assertEqual(15.00, memory_pressure_events)
+
     def test_get_metrics_v2_when_files_not_present(self):
         test_mem_controller = MemoryControllerV2("test_extension", os.path.join(data_dir, "cgroups"))
 
@@ -110,7 +113,10 @@ class TestMemoryControllerV2(AgentTestCase):
 
         self.assertEqual(e.exception.errno, errno.ENOENT)
 
-    def test_get_memory_usage_v1_counters_not_found(self):
+        # Not raising IOError for memory pressure events as the file is optional in cgroup v2
+        test_mem_controller.get_memory_pressure_events()
+
+    def test_get_memory_usage_v2_counters_not_found(self):
         test_stat_file = os.path.join(self.tmp_dir, "memory.stat")
         shutil.copyfile(os.path.join(data_dir, "cgroups", "v2", "memory.stat_missing"), test_stat_file)
         test_events_file = os.path.join(self.tmp_dir, "memory.events")
