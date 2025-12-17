@@ -633,91 +633,93 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
     def test_it_should_report_failed_status_for_extensions_disallowed_by_policy(self):
         """If multiconfig extension is disallowed by policy, all instances should be blocked."""
         policy_path = os.path.join(self.tmp_dir, "waagent_policy.json")
-        with patch('azurelinuxagent.common.conf.get_policy_file_path', return_value=str(policy_path)):
-            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                policy = \
-                    {
-                        "policyVersion": "0.0.1",
-                        "extensionPolicies": {
-                            "allowListedExtensionsOnly": True,
-                            "signatureRequired": False,
-                            "extensions": {
-                                "Microsoft.Powershell.ExampleExtension": {}
+        with patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm', return_value=True):
+            with patch('azurelinuxagent.common.conf.get_policy_file_path', return_value=str(policy_path)):
+                with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                    policy = \
+                        {
+                            "policyVersion": "0.0.1",
+                            "extensionPolicies": {
+                                "allowListedExtensionsOnly": True,
+                                "signatureRequired": False,
+                                "extensions": {
+                                    "Microsoft.Powershell.ExampleExtension": {}
+                                }
                             }
                         }
-                    }
-                with open(policy_path, mode='w') as policy_file:
-                    json.dump(policy, policy_file, indent=4)
-                    policy_file.flush()
-                self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
-                                                          "ext_conf_multi_config_no_dependencies.xml")
-                with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):
-                    disallowed_mc_1 = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.firstExtension",
-                                                         supports_multiple_extensions=True)
-                    disallowed_mc_2 = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.secondExtension",
-                                                         supports_multiple_extensions=True)
-                    disallowed_mc_3 = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.thirdExtension",
-                                                         supports_multiple_extensions=True)
-                    allowed_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension")
-                    with enable_invocations(disallowed_mc_1, disallowed_mc_2, disallowed_mc_3,
-                                            allowed_ext) as invocation_record:
-                        exthandlers_handler.run()
-                        exthandlers_handler.report_ext_handlers_status()
-                        self.assertEqual(no_of_extensions,
-                                         len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
-                                         "incorrect extensions reported")
+                    with open(policy_path, mode='w') as policy_file:
+                        json.dump(policy, policy_file, indent=4)
+                        policy_file.flush()
+                    self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
+                                                              "ext_conf_multi_config_no_dependencies.xml")
+                    with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):
+                        disallowed_mc_1 = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.firstExtension",
+                                                             supports_multiple_extensions=True)
+                        disallowed_mc_2 = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.secondExtension",
+                                                             supports_multiple_extensions=True)
+                        disallowed_mc_3 = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.thirdExtension",
+                                                             supports_multiple_extensions=True)
+                        allowed_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension")
+                        with enable_invocations(disallowed_mc_1, disallowed_mc_2, disallowed_mc_3,
+                                                allowed_ext) as invocation_record:
+                            exthandlers_handler.run()
+                            exthandlers_handler.report_ext_handlers_status()
+                            self.assertEqual(no_of_extensions,
+                                             len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
+                                             "incorrect extensions reported")
 
-                        # We should only enable the allowed extension, no instances of the multiconfig extension should be enabled
-                        invocation_record.compare(
-                            (allowed_ext, ExtensionCommandNames.INSTALL),
-                            (allowed_ext, ExtensionCommandNames.ENABLE)
-                        )
+                            # We should only enable the allowed extension, no instances of the multiconfig extension should be enabled
+                            invocation_record.compare(
+                                (allowed_ext, ExtensionCommandNames.INSTALL),
+                                (allowed_ext, ExtensionCommandNames.ENABLE)
+                            )
 
-                        mc_handlers = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                                          handler_name="OSTCExtensions.ExampleHandlerLinux",
-                                                                          expected_count=3, status="NotReady")
-                        msg = "failed to run extension 'OSTCExtensions.ExampleHandlerLinux' because it is not specified as an allowed extension"
-                        expected_extensions = {
-                            "firstExtension": {"status": ExtensionStatusValue.error, "seq_no": 1, "message": msg},
-                            "secondExtension": {"status": ExtensionStatusValue.error, "seq_no": 2, "message": msg},
-                            "thirdExtension": {"status": ExtensionStatusValue.error, "seq_no": 3, "message": msg},
-                        }
-                        self._assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
+                            mc_handlers = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                                              handler_name="OSTCExtensions.ExampleHandlerLinux",
+                                                                              expected_count=3, status="NotReady")
+                            msg = "failed to run extension 'OSTCExtensions.ExampleHandlerLinux' because it is not specified as an allowed extension"
+                            expected_extensions = {
+                                "firstExtension": {"status": ExtensionStatusValue.error, "seq_no": 1, "message": msg},
+                                "secondExtension": {"status": ExtensionStatusValue.error, "seq_no": 2, "message": msg},
+                                "thirdExtension": {"status": ExtensionStatusValue.error, "seq_no": 3, "message": msg},
+                            }
+                            self._assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
 
-                        sc_handler = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                                         handler_name="Microsoft.Powershell.ExampleExtension",
-                                                                         status="Ready", message=None)
-                        expected_extensions = {
-                            "Microsoft.Powershell.ExampleExtension": {"status": ExtensionStatusValue.success, "seq_no": 9,
-                                                                      "message": None}
-                        }
-                        self._assert_extension_status(sc_handler, expected_extensions)
+                            sc_handler = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                                             handler_name="Microsoft.Powershell.ExampleExtension",
+                                                                             status="Ready", message=None)
+                            expected_extensions = {
+                                "Microsoft.Powershell.ExampleExtension": {"status": ExtensionStatusValue.success, "seq_no": 9,
+                                                                          "message": None}
+                            }
+                            self._assert_extension_status(sc_handler, expected_extensions)
 
     def test_it_should_report_successful_status_for_extensions_allowed_by_policy(self):
         """If multiconfig extension is allowed by policy, all instances should be allowed."""
         policy_path = os.path.join(self.tmp_dir, "waagent_policy.json")
-        with patch('azurelinuxagent.common.conf.get_policy_file_path', return_value=str(policy_path)):
-            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                policy = \
-                    {
-                        "policyVersion": "0.0.1",
-                        "extensionPolicies": {
-                            "allowListedExtensionsOnly": True,
-                            "signatureRequired": False,
-                            "extensions": {
-                                "OSTCExtensions.ExampleHandlerLinux": {},
-                                "Microsoft.Powershell.ExampleExtension": {}
+        with patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm', return_value=True):
+            with patch('azurelinuxagent.common.conf.get_policy_file_path', return_value=str(policy_path)):
+                with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                    policy = \
+                        {
+                            "policyVersion": "0.0.1",
+                            "extensionPolicies": {
+                                "allowListedExtensionsOnly": True,
+                                "signatureRequired": False,
+                                "extensions": {
+                                    "OSTCExtensions.ExampleHandlerLinux": {},
+                                    "Microsoft.Powershell.ExampleExtension": {}
+                                }
                             }
                         }
-                    }
-                with open(policy_path, mode='w') as policy_file:
-                    json.dump(policy, policy_file, indent=4)
-                    policy_file.flush()
+                    with open(policy_path, mode='w') as policy_file:
+                        json.dump(policy, policy_file, indent=4)
+                        policy_file.flush()
 
-                self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
-                                                          "ext_conf_multi_config_no_dependencies.xml")
-                with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
-                    self.__run_and_assert_generic_case(exthandlers_handler, protocol, no_of_extensions)
+                    self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
+                                                              "ext_conf_multi_config_no_dependencies.xml")
+                    with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
+                        self.__run_and_assert_generic_case(exthandlers_handler, protocol, no_of_extensions)
 
     def test_it_should_cleanup_extension_state_on_disable(self):
 

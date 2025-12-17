@@ -64,6 +64,7 @@ from azurelinuxagent.ga.guestagent import GuestAgent
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates, get_microsoft_signing_certificate_path
+from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 
 CHILD_HEALTH_INTERVAL = 15 * 60
 CHILD_LAUNCH_INTERVAL = 5 * 60
@@ -354,6 +355,13 @@ class UpdateHandler(object):
                 )
             logger.info(os_info_msg)
 
+            # Initialize Confidential VM info but defer sending telemetry until common parameters are initialized
+            cvm_info_err = None
+            try:
+                ConfidentialVMInfo.fetch_and_initialize_cvm_info()
+            except Exception as ex:
+                cvm_info_err = "Failed to get virtual machine security type from IMDS, will assume this is not a Confidential Virtual Machine: {0}".format(ustr(ex))
+
             #
             # Initialize the goal state; some components depend on information provided by the goal state and this
             # call ensures the required info is initialized (e.g. telemetry depends on the container ID.)
@@ -375,6 +383,15 @@ class UpdateHandler(object):
             # Send telemetry for the OS-specific info.
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
             self._log_openssl_info()
+
+            # Send telemetry for Confidential VM info
+            if cvm_info_err is not None:
+                logger.warn(cvm_info_err)
+                add_event(op=WALAEventOperation.SignatureValidation, message=cvm_info_err, is_success=False, log_event=False)
+            else:
+                cvm_info_msg = "This {0} a confidential virtual machine.".format("is" if ConfidentialVMInfo.is_confidential_vm() else "is not")
+                logger.info(cvm_info_msg)
+                add_event(op=WALAEventOperation.SignatureValidation, message=cvm_info_msg)
 
             #
             # Perform initialization tasks
