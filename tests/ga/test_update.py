@@ -55,6 +55,7 @@ from tests.lib.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_da
     clear_singleton_instances, skip_if_predicate_true, load_data
 from tests.lib import wire_protocol_data
 from tests.lib.http_request_predicates import HttpRequestPredicates
+from azurelinuxagent.ga.confidential_vm_info import SecurityType
 
 
 NO_ERROR = {
@@ -1055,6 +1056,7 @@ class TestUpdate(UpdateTestCase):
                                 MockIpTables.get_accept_dns_command("-A"),
                                 MockIpTables.get_accept_command("-A"),
                                 MockIpTables.get_drop_command("-A"),
+                                MockIpTables.get_list_command()
                             ],
                             mock_iptables.call_list,
                             "Expected 2 calls for the legacy rule (-C and -D), followed by 3 sets of calls for the current rules (-C and -A)")
@@ -1074,6 +1076,7 @@ class TestUpdate(UpdateTestCase):
                                 MockFirewallCmd.get_accept_dns_command("--passthrough"),
                                 MockFirewallCmd.get_accept_command("--passthrough"),
                                 MockFirewallCmd.get_drop_command("--passthrough"),
+                                MockFirewallCmd.get_list_command()
                             ],
                             mock_firewall_cmd.call_list,
                             "Expected 2 calls for the legacy rule (-C and -D), followed by 3 sets of calls for the current rules (-C and -A)")
@@ -1885,12 +1888,18 @@ class MonitorThreadTest(AgentTestCase):
     def setUp(self):
         super(MonitorThreadTest, self).setUp()
         self.event_patch = patch('azurelinuxagent.common.event.add_event')
+        self.security_type_patch = patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo._fetch_security_type_from_imds', return_value=SecurityType.ConfidentialVM)
+        self.security_type_patch.start()
         current_thread().name = "ExtHandler"
         protocol = Mock()
         self.update_handler = get_update_handler()
         self.update_handler.protocol_util = Mock()
         self.update_handler.protocol_util.get_protocol = Mock(return_value=protocol)
         clear_singleton_instances(ProtocolUtil)
+
+    def tearDown(self):
+        self.security_type_patch.stop()
+        super(MonitorThreadTest, self).setUp()
 
     def _test_run(self, invocations=1):
         def iterator(*_, **__):
