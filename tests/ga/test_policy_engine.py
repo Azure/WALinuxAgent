@@ -40,6 +40,9 @@ class _TestPolicyBase(AgentTestCase):
         self.patch_conf_flag = patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled',
                                      return_value=True)
         self.patch_conf_flag.start()
+    
+        self.patch_is_cvm = patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm', return_value=True)
+        self.mock_is_cvm = self.patch_is_cvm.start()
 
         self.goal_state_history = MagicMock()
         self.goal_state_history.save_to_history = MagicMock(return_value=None)
@@ -311,6 +314,30 @@ class TestPolicyEngine(_TestPolicyBase):
             }}
         ]
         self._run_test_cases_should_fail_to_parse(cases, "unrecognized attribute in policy")
+
+    def test_should_raise_error_for_signatureRequired_on_non_cvm(self):
+        self.mock_is_cvm.return_value = False   # Running on a non-CVM
+        cases = [
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": True,
+                    "signatureRequired": True,
+                    "extensions": {}
+                }
+            },
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "extensions": {
+                        TEST_EXTENSION_NAME: {
+                            "signatureRequired": True
+                        }
+                    }
+                }
+            },
+        ]
+        self._run_test_cases_should_fail_to_parse(cases, "'signatureRequired' only supported on confidential virtual machines")
 
 
 class TestExtensionPolicyEngine(_TestPolicyBase):

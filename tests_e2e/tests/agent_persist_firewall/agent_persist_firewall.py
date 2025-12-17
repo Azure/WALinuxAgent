@@ -89,10 +89,9 @@ class AgentPersistFirewallTest(AgentVmTest):
             # 2024-07-30T23:36:35.705717Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['ACCEPT DNS']), will reset them.
             # 2024-07-30T23:37:23.612352Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['ACCEPT']), will reset them.
             # 2024-07-30T23:38:11.083028Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['DROP']), will reset them.
-            # 2024-12-27T19:42:51.531056Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['ACCEPT'] due to: ['']), will reset them
             #
             {
-                'message': r"The permanent firewall rules for Azure Fabric are not setup correctly \(The following rules are missing: \[('ACCEPT DNS'|'ACCEPT'|'DROP'|, )+\] due to.*\), will reset them.",
+                'message': r"The permanent firewall rules for Azure Fabric are not setup correctly \(The following rules are missing: \[('ACCEPT DNS'|'ACCEPT'|'DROP'|, )+\]\), will reset them.",
                 'if': lambda r: r.level == "WARNING"
             }
         ]
