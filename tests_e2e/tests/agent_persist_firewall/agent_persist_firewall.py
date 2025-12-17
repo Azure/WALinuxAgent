@@ -20,6 +20,7 @@ from typing import Any, Dict, List
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
+from tests_e2e.tests.lib.firewall_utilities import FirewallUtilities
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
 
@@ -34,6 +35,8 @@ class AgentPersistFirewallTest(AgentVmTest):
         self._ssh_client: SshClient = self._context.create_ssh_client()
 
     def run(self):
+        FirewallUtilities.skip_test_if_proxy_agent_is_managing_the_wireserver_endpoint(self._ssh_client)
+
         self._test_setup()
         # Test case 1: After test agent install, verify firewalld or network.setup is running
         self._verify_persist_firewall_service_running()
@@ -46,6 +49,10 @@ class AgentPersistFirewallTest(AgentVmTest):
         # Test case 3: Re-enable the agent and do an additional reboot. The intention is to check for conflicts between the agent and the persist firewall service
         self._enable_agent()
         self._context.vm.restart(wait_for_boot=True, ssh_client=self._ssh_client)
+
+        # TODO: for now we need to check again after reboot, since the GPA has a race condition on initialization than makes it take over the WireServer endpoint when it shouldn't.
+        FirewallUtilities.skip_test_if_proxy_agent_is_managing_the_wireserver_endpoint(self._ssh_client)
+
         self._verify_persist_firewall_service_running()
         self._verify_firewall_rules_on_boot("second_boot")
         # Test case 4: perform firewalld rules deletion and ensure deleted rules added back to rule set after agent start

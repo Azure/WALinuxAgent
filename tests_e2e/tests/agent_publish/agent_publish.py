@@ -52,7 +52,7 @@ class AgentPublishTest(AgentVmTest):
         # Since we skip install_agent setup, doing it here for the Agent to complete provisioning before starting the test
         wait_for_agent_to_complete_provisioning(self._ssh_client)
         self._get_agent_info()
-        self._enable_agent_auto_update() # some distro like SLES and debian disable auto update by default
+        self._execute_test_setup() # some distro like SLES and debian disable auto update by default
         log.info("Verify agent updated to prod latest version: %s", self._latest_version)
         verify_current_agent_version(self._ssh_client, self._latest_version)
 
@@ -77,16 +77,20 @@ class AgentPublishTest(AgentVmTest):
         self._check_cse()
 
     def get_ignore_errors_before_timestamp(self) -> datetime:
-        timestamp = self._ssh_client.run_command("agent_publish-get_agent_log_record_timestamp.py")
-        return datetime.strptime(timestamp.strip(), u'%Y-%m-%d %H:%M:%S.%f%z').replace(tzinfo=UTC)
+        try:
+            timestamp = self._ssh_client.run_command("agent_publish-get_agent_log_record_timestamp.py")
+            return datetime.strptime(timestamp.strip(), u'%Y-%m-%d %H:%M:%S.%f%z').replace(tzinfo=UTC)
+        except Exception as e:
+            log.warning("Could not retrieve ignore errors before timestamp: %s", str(e))
+            return super().get_ignore_errors_before_timestamp()
 
-    def _enable_agent_auto_update(self):
+    def _execute_test_setup(self):
         """
-        Enable agent auto update
+        Removing agent update state files if any before enabling auto update
         """
-        log.info("Enabling agent auto update flag")
-        self._ssh_client.run_command("update-waagent-conf AutoUpdate.Enabled=y AutoUpdate.UpdateToLatestVersion=y", use_sudo=True)
-        log.info("Agent auto update flag enabled")
+        log.info("Executing test setup")
+        output = self._ssh_client.run_command("sh -c 'agent-service stop && rm -fv /var/lib/waagent/waagent_*_update && update-waagent-conf AutoUpdate.Enabled=y AutoUpdate.UpdateToLatestVersion=y'", use_sudo=True)
+        log.info("Executed test setup. \n%s", output)
 
     def _get_published_version(self):
         """
@@ -116,7 +120,7 @@ class AgentPublishTest(AgentVmTest):
         """
         log.info(
             "Executing verify_versioning_supported_feature.py remote script to verify agent reported supported feature flag, so that CRP can send RSM update request")
-        self._run_remote_test(self._ssh_client, "agent_update-verify_versioning_supported_feature.py", use_sudo=True)
+        self._run_remote_test(self._ssh_client, "agent_update-verify_versioning_supported_feature.py --supported True", use_sudo=True)
         log.info("Successfully verified that Agent reported VersioningGovernance supported feature flag")
 
     def _check_rsm_gs(self, requested_version: str) -> None:
@@ -148,7 +152,7 @@ class AgentPublishTest(AgentVmTest):
         log.info("Modifying agent update related config flags and renaming the log file")
         if clean_all_agents:
             setup_script = ("agent-service stop &&  mv /var/log/waagent.log /var/log/waagent.$(date --iso-8601=seconds).log && "
-                            "rm -rfv /var/lib/waagent/WALinuxAgent-* && "
+                            "rm -rfv /var/lib/waagent/WALinuxAgent-* && rm -fv /var/lib/waagent/waagent_*_update && "
                             "update-waagent-conf AutoUpdate.UpdateToLatestVersion=y AutoUpdate.GAFamily=Test AutoUpdate.Enabled=y Extensions.Enabled=y Debug.EnableGAVersioning=n Debug.SelfUpdateHotfixFrequency=90 Debug.SelfUpdateRegularFrequency=90 Autoupdate.Frequency=30")
         else:
             setup_script = ("agent-service stop &&  mv /var/log/waagent.log /var/log/waagent.$(date --iso-8601=seconds).log && "

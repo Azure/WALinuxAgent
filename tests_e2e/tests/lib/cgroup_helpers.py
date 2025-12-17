@@ -117,6 +117,20 @@ def verify_agent_cgroup_assigned_correctly():
     log.info("Successfully verified the agent cgroup assigned correctly by systemd\n")
 
 
+def get_agent_memory_quota():
+    """
+    Returns the memory quota for the agent service
+    """
+    output = shellutil.run_command(["systemctl", "show", AGENT_SERVICE_NAME, "--property", "MemoryHigh"])
+    # Output is similar to
+    #   systemctl show walinuxagent --property MemoryLimit
+    #   MemoryLimit=1073741824
+    match = re.match("[^=]+=(?P<value>.+)", output)
+    if match is not None:
+        return match.group('value')
+    return None
+
+
 def get_agent_cpu_quota():
     """
     Returns the cpu quota for the agent service

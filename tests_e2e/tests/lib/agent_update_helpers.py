@@ -104,7 +104,7 @@ def verify_current_agent_version(ssh_client: SshClient, requested_version: str) 
 
     waagent_version: str = ""
     log.info("Verifying agent updated to published version: {0}".format(requested_version))
-    success: bool = retry_if_false(lambda: _check_agent_version(requested_version))
+    success: bool = retry_if_false(lambda: _check_agent_version(requested_version), delay=50)
     if not success:
         fail("Guest agent didn't update to published version {0} but found \n {1}. \n ".format(
             requested_version, waagent_version))
