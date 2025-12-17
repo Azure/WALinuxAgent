@@ -700,32 +700,34 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             goal_state.update()
             assert_fast_track("update")
 
-    def test_it_should_send_telemetry_for_extension_signed_or_unsigned(self):
-        # Should send telemetry for signed extension for extensionsConfig goal state
-        with patch("azurelinuxagent.common.protocol.goal_state.add_event") as add_event:
-            with mock_wire_protocol(wire_protocol_data.DATA_FILE):
-                telemetry = [kw for _, kw in add_event.call_args_list if kw['op'] == WALAEventOperation.ExtensionSigned and kw['is_success']]
-                self.assertEqual(1, len(telemetry), "Should send telemetry for signed extension in extensionsConfig goal state")
+    def test_it_should_send_telemetry_for_extension_signed_or_unsigned_if_validation_enabled(self):
+        with patch("azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm", return_value=True):
+            with patch("azurelinuxagent.common.protocol.goal_state.signature_validation_enabled", return_value=True):
+                # Should send telemetry for signed extension for extensionsConfig goal state
+                with patch("azurelinuxagent.common.protocol.goal_state.add_event") as add_event:
+                    with mock_wire_protocol(wire_protocol_data.DATA_FILE):
+                        telemetry = [kw for _, kw in add_event.call_args_list if kw['op'] == WALAEventOperation.ExtensionSigned and kw['is_success']]
+                        self.assertEqual(1, len(telemetry), "Should send telemetry for signed extension in extensionsConfig goal state")
 
-        # Should send telemetry for unsigned extension in extensionsConfig goal state
-        ext_conf_data_file = wire_protocol_data.DATA_FILE.copy()
-        ext_conf_data_file["ext_conf"] = "wire/ext_conf-no_encoded_signature.xml"
-        with patch("azurelinuxagent.common.protocol.goal_state.add_event") as add_event:
-            with mock_wire_protocol(ext_conf_data_file):
-                telemetry = [kw for _, kw in add_event.call_args_list if kw['op'] == WALAEventOperation.ExtensionSigned and not kw['is_success']]
-                self.assertEqual(1, len(telemetry), "Should send telemetry for unsigned extension in extensionsConfig goal state")
+                # Should send telemetry for unsigned extension in extensionsConfig goal state
+                ext_conf_data_file = wire_protocol_data.DATA_FILE.copy()
+                ext_conf_data_file["ext_conf"] = "wire/ext_conf-no_encoded_signature.xml"
+                with patch("azurelinuxagent.common.protocol.goal_state.add_event") as add_event:
+                    with mock_wire_protocol(ext_conf_data_file):
+                        telemetry = [kw for _, kw in add_event.call_args_list if kw['op'] == WALAEventOperation.ExtensionSigned and not kw['is_success']]
+                        self.assertEqual(1, len(telemetry), "Should send telemetry for unsigned extension in extensionsConfig goal state")
 
-        # Should send telemetry for both signed and unsigned extensions in fast track goal state
-        vm_settings_data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
-        # This vm settings extensions goal state has 1 extension with encodedSignature (AzureMonitorLinuxAgent), and
-        # 1 extension without encodedSignature (AzureSecurityLinuxAgent). The HGAP version supports signature.
-        vm_settings_data_file["vm_settings"] = "hostgaplugin/vm_settings-supported_hgap_version_for_signature.json"
-        with patch("azurelinuxagent.common.protocol.goal_state.add_event") as add_event:
-            with mock_wire_protocol(vm_settings_data_file):
-                signed_telemetry = [kw for _, kw in add_event.call_args_list if kw['op'] == WALAEventOperation.ExtensionSigned and kw['is_success']]
-                self.assertEqual(1, len(signed_telemetry), "Should send telemetry for signed extension in fast track goal state")
-                unsigned_telemetry = [kw for _, kw in add_event.call_args_list if kw['op'] == WALAEventOperation.ExtensionSigned and not kw['is_success']]
-                self.assertEqual(1, len(unsigned_telemetry), "Should send telemetry for unsigned extensions in fast track goal state")
+                # Should send telemetry for both signed and unsigned extensions in fast track goal state
+                vm_settings_data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
+                # This vm settings extensions goal state has 1 extension with encodedSignature (AzureMonitorLinuxAgent), and
+                # 1 extension without encodedSignature (AzureSecurityLinuxAgent). The HGAP version supports signature.
+                vm_settings_data_file["vm_settings"] = "hostgaplugin/vm_settings-supported_hgap_version_for_signature.json"
+                with patch("azurelinuxagent.common.protocol.goal_state.add_event") as add_event:
+                    with mock_wire_protocol(vm_settings_data_file):
+                        signed_telemetry = [kw for _, kw in add_event.call_args_list if kw['op'] == WALAEventOperation.ExtensionSigned and kw['is_success']]
+                        self.assertEqual(1, len(signed_telemetry), "Should send telemetry for signed extension in fast track goal state")
+                        unsigned_telemetry = [kw for _, kw in add_event.call_args_list if kw['op'] == WALAEventOperation.ExtensionSigned and not kw['is_success']]
+                        self.assertEqual(1, len(unsigned_telemetry), "Should send telemetry for unsigned extensions in fast track goal state")
 
     def test_it_should_not_send_telemetry_for_extension_signature_for_uninstall(self):
         data_file = wire_protocol_data.DATA_FILE.copy()
