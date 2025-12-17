@@ -37,7 +37,7 @@ from azurelinuxagent.common.utils import shellutil, fileutil
 from azurelinuxagent.ga.cpucontroller import CpuControllerV1
 from tests.lib.mock_environment import MockCommand
 from tests.lib.mock_cgroup_environment import mock_cgroup_v1_environment, UnitFilePaths, mock_cgroup_v2_environment
-from tests.lib.tools import AgentTestCase, patch, mock_sleep, data_dir
+from tests.lib.tools import AgentTestCase, patch, mock_sleep, data_dir, skip_if_predicate_true
 from tests.lib.miscellaneous_tools import format_processes, wait_for
 
 
@@ -228,8 +228,10 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
 
     def test_agent_enforcement_enabled_in_v2(self):
         with self._get_cgroup_configurator_v2() as configurator:
-            cmd = 'systemctl set-property walinuxagent.service CPUQuota=50% --runtime'
-            self.assertIn(cmd, configurator.mocks.commands_call_list, "The command to set CPU quota was not called")
+            cmd1 = 'systemctl set-property walinuxagent.service CPUQuota=50% --runtime'
+            cmd2 = 'systemctl set-property walinuxagent.service MemoryHigh=314572800 --runtime'
+            self.assertIn(cmd1, configurator.mocks.commands_call_list, "The command to set CPU quota was not called")
+            self.assertIn(cmd2, configurator.mocks.commands_call_list, "The command to set Memory quota was not called")
 
     def test_extension_enforcement_enabled_in_v2(self):
         service_list = [
@@ -638,9 +640,9 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
 
                             self.assertIn("TEST_OUTPUT\n", command_output, "The test output was not captured")
 
-                            failed_systemctl_events = [kwargs for _, kwargs in mock_add_event.call_args_list if kwargs['op'] == WALAEventOperation.CGroupsInfo and "Failed to get current CPUQuotaPerSecUSec" in kwargs['message']]
+                            failed_systemctl_events = [kwargs for _, kwargs in mock_add_event.call_args_list if kwargs['op'] == WALAEventOperation.CGroupsInfo and "Error parsing current CPUQuotaPerSecUSec" in kwargs['message']]
                             # we should have at least 3 telemetry events agent + extension + extension service
-                            self.assertEqual(len(failed_systemctl_events),3, "systemctl error should have been happened: {0}".format(failed_systemctl_events))
+                            self.assertGreater(len(failed_systemctl_events),3, "systemctl error should have been happened: {0}".format(failed_systemctl_events))
                             self.assertIn("Failed to get properties: Access denied", failed_systemctl_events[0]['message'], "The systemctl error was not included in the telemetry message")
 
 
@@ -1138,7 +1140,7 @@ exit 0
                         "Found unexpected processes in the agent cgroup before agent enable cgroups",
                         disable_events[0]["message"],
                         "The error message is not correct when process check failed")
-
+    @skip_if_predicate_true(lambda: True, "Enable/Rewrite this test when self monitoring is enabled")
     def test_check_agent_memory_usage_should_raise_a_cgroups_exception_when_the_limit_is_exceeded(self):
         metrics = [MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, AGENT_NAME_TELEMETRY, conf.get_agent_memory_quota() + 1),
                    MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.SWAP_MEM_USAGE, AGENT_NAME_TELEMETRY, conf.get_agent_memory_quota() + 1)]

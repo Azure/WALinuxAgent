@@ -159,6 +159,31 @@ class CGroupUtil(object):
             return "unknown"
 
     @staticmethod
+    def get_current_memory_quota(unit_name):
+        """
+        Returns the memory quota for the given unit in bytes, or 'infinity' if not set, or 'unknown' if an error occurs.
+        """
+        try:
+            mem_quota = systemd.get_unit_property(unit_name, "MemoryHigh").strip().lower()
+            if mem_quota == "infinity":
+                return mem_quota  # No limit on memory usage
+            elif mem_quota.endswith("k"):
+                mem_quota_bytes = int(mem_quota[:-1]) * 1024
+            elif mem_quota.endswith("m"):
+                mem_quota_bytes = int(mem_quota[:-1]) * 1024 * 1024
+            elif mem_quota.endswith("g"):
+                mem_quota_bytes = int(mem_quota[:-1]) * 1024 * 1024 * 1024
+            elif mem_quota.endswith("t"):
+                mem_quota_bytes = int(mem_quota[:-1]) * 1024 * 1024 * 1024 * 1024
+            else:
+                mem_quota_bytes = mem_quota
+
+            return str(mem_quota_bytes)
+        except Exception as e:
+            log_cgroup_warning("Error in getting current MemoryHigh: {0}".format(ustr(e)))
+            return "unknown"
+
+    @staticmethod
     def has_cpu_quota(unit_name):
         """
         Returns True if quota set for the unit.
@@ -298,6 +323,12 @@ class _SystemdCgroupApi(object):
         raise NotImplementedError()
 
     def can_enforce_cpu(self):
+        """
+        Cgroup version specific. Returns if controller can be used for enforcement
+        """
+        raise NotImplementedError()
+
+    def can_enforce_memory(self):
         """
         Cgroup version specific. Returns if controller can be used for enforcement
         """
@@ -509,6 +540,9 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
     def can_enforce_cpu(self):
         return CgroupV1.CPU_CONTROLLER in self._cgroup_mountpoints
 
+    def can_enforce_memory(self):
+        return False
+
 
 class SystemdCgroupApiv2(_SystemdCgroupApi):
     """
@@ -623,6 +657,9 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
 
     def can_enforce_cpu(self):
         return CgroupV2.CPU_CONTROLLER in self._controllers_enabled_at_root
+
+    def can_enforce_memory(self):
+        return CgroupV2.MEMORY_CONTROLLER in self._controllers_enabled_at_root
 
 
 class Cgroup(object):

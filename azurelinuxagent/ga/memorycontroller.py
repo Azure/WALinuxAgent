@@ -118,7 +118,7 @@ class _MemoryController(_CgroupController):
         ]
 
     def get_unit_properties(self):
-        return["MemoryAccounting"]
+        return ["MemoryAccounting"]
 
     def get_controller_type(self):
         return "memory"
@@ -157,6 +157,41 @@ class MemoryControllerV2(_MemoryController):
     def get_memory_usage(self):
         # In v2, cache memory is reported in the 'file' counter
         return self._get_memory_stat_counter("anon"), self._get_memory_stat_counter("file")
+
+    def get_unit_properties(self):
+        properties = super(MemoryControllerV2, self).get_unit_properties()
+        properties.append("MemoryHigh")
+        return properties
+
+    def get_memory_pressure_events(self):
+        """
+        We use the share of time in which processes of the cgroup have experienced memory pressure.
+        :return: Total time some processes stalled due to memory pressure in last 300 seconds
+        :rtype: float
+        Note: we get 0 if process not stalled or we return explict 0 if file is not present which is expected in some distros.
+        But we don't consider 0 values in the metrics report as they are not meaningful data, so no need to worry about false zeros.
+        """
+        try:
+            with open(os.path.join(self.path, 'memory.pressure')) as memory_pressure:
+                #
+                # Sample file:
+                #   # cat memory.pressure
+                #   some avg10=0.00 avg60=0.00 avg300=0.00 total=0
+                #   full avg10=0.00 avg60=0.00 avg300=0.00 total=0
+                #
+                for line in memory_pressure:
+                    match = re.search(r'avg300=([0-9.]+)', line)
+                    if match is not None:
+                        percentage = float(match.group(1))
+                        time_spent = 300 * (percentage / 100)
+                        return round(time_spent,  2)
+        except (IOError, OSError) as e:
+            if e.errno != errno.ENOENT:  # File is not present in some distros, so we do not raise in that case
+                raise CGroupsException("Failed to read memory.pressure: {0}".format(ustr(e)))
+        except Exception as e:
+            raise CGroupsException("Failed to read memory.pressure: {0}".format(ustr(e)))
+
+        return float(0)
 
     def get_memory_throttled_events(self):
         """
@@ -220,4 +255,7 @@ class MemoryControllerV2(_MemoryController):
         throttled_value = MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MEM_THROTTLED, self.name,
                                       self.get_memory_throttled_events())
         metrics.append(throttled_value)
+        pressure_value = self.get_memory_pressure_events()
+        if pressure_value > float(0):  # Only report if there is any memory pressure
+            metrics.append(MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MEM_PRESSURE, self.name, pressure_value))
         return metrics
