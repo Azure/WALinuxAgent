@@ -28,7 +28,7 @@ from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common import event
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common.future import UTC
-from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError
+from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError, IptablesInconsistencyError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
@@ -116,16 +116,19 @@ class EnableFirewall(PeriodicOperation):
             try:
                 if self._firewall_manager.check():
                     return  # The firewall is configured correctly
-                self._report(event.warn, "The firewall has not been setup. Will set it up.")
+                self._report(event.warn, WALAEventOperation.Firewall, "The firewall has not been setup. Will set it up.")
+            except IptablesInconsistencyError as e:
+                self._report(event.warn, WALAEventOperation.FirewallInconsistency, "The results returned by iptables are inconsistent, will not change the current state of the firewall: {0}", ustr(e))
+                return
             except FirewallStateError as e:
-                self._report(event.warn, "The firewall is not configured correctly. {0}. Will reset it. Current state:\n{1}", ustr(e), self._firewall_manager.get_state())
+                self._report(event.warn, WALAEventOperation.ResetFirewall, "The firewall is not configured correctly. {0}. Will reset it. Current state:\n{1}", ustr(e), self._firewall_manager.get_state())
                 self._firewall_manager.remove()
             self._firewall_manager.setup()
-            self._report(event.info, "The firewall was setup successfully:\n{0}", self._firewall_manager.get_state())
+            self._report(event.info, WALAEventOperation.Firewall, "The firewall was setup successfully:\n{0}", self._firewall_manager.get_state())
         except Exception as e:
-            self._report(event.warn, "An error occurred while setting up the firewall: {0}", ustr(e))
+            self._report(event.warn, WALAEventOperation.Firewall, "An error occurred while setting up the firewall: {0}", ustr(e))
 
-    def _report(self, report_function, message, *args):
+    def _report(self, report_function, operation, message, *args):
         # Report the first 3 messages, then stop reporting for 12 hours
         if datetime.datetime.now(UTC) < self._report_after:
             return
@@ -136,7 +139,7 @@ class EnableFirewall(PeriodicOperation):
             self._message_count = 0
             return
 
-        report_function(WALAEventOperation.ResetFirewall, message, *args)
+        report_function(operation, message, *args)
 
 
 class SetRootDeviceScsiTimeout(PeriodicOperation):
