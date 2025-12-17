@@ -13,6 +13,7 @@ executes_on_scale_set: true
 skip_on_images:
   - "alma_8"
   - "alma_9"
+  - "alma_10"
 
 # TODO: The current deployment of VmAccess 1.5.22 prevents the extension from uninstalling; enable this test when the issue is fixed
 skip_on_clouds:
