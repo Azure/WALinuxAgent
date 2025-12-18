@@ -183,4 +183,5 @@ class TestSignatureValidationSudo(AgentTestCase):
             # Verify that cgroups were disabled
             self.assertEqual(1, mock_instance.disable.call_count, "disable() should have been called exactly once")
             reason = mock_instance.disable.call_args[1]['reason']
-            self.assertTrue(reason.startswith("'systemd-run' invocation failed for signature validation"))
+            self.assertTrue(reason.startswith("'systemd-run' invocation failed for signature validation"),
+                            msg="Expected cgroup disable reason to indicate systemd-run error during signature validation")
