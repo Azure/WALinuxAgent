@@ -31,7 +31,7 @@ from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, EXT_SIGNATURE_VALIDATION_CPU_QUOTA, EXT_SIGNATURE_VALIDATION_SLICE, EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT, DisableCgroups
-from azurelinuxagent.ga.cgroupapi import is_systemd_failure
+from azurelinuxagent.common.osutil.systemd import is_systemd_run_failure
 from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 
 
@@ -205,11 +205,11 @@ def validate_signature(package_path, signature, package_full_name):
                             '--slice={0}'.format(EXT_SIGNATURE_VALIDATION_SLICE), '--scope', '--property=CPUAccounting=yes',
                             '--property=CPUQuota={0}'.format(EXT_SIGNATURE_VALIDATION_CPU_QUOTA)] + base_command
             try:
-                run_command(systemd_cmd, encode_output=False)
+                run_command(systemd_cmd)
             except CommandError as ex:
                 # If the systemd-run invocation itself failed, disable cgroups entirely and fall back to running openssl command directly.
                 # If the openssl command failed, re-raise and do not retry.
-                if is_systemd_failure(EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT, ex.stderr):
+                if is_systemd_run_failure(EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT, ex.stderr):
                     error_msg = "'systemd-run' invocation failed for signature validation, disabling cgroups and falling back to direct execution. Error: '{0}'".format(ex.stderr)
                     report_validation_event(op=WALAEventOperation.SignatureValidation, level=logger.LogLevel.WARNING,
                         message=error_msg,
