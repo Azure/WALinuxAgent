@@ -42,6 +42,25 @@ class FirewallStateError(Exception):
     """
 
 
+class FirewallRulesMissingError(FirewallStateError):
+    """
+    Exception raised when some firewall rules are missing.
+    """
+    def __init__(self, missing_rules):
+        super(FirewallRulesMissingError, self).__init__("The following rules are missing: {0}".format(missing_rules))
+        self.missing_rules = missing_rules
+
+
+class IptablesInconsistencyError(FirewallStateError):
+    """
+    Exception raised when "iptables -C OUTPUT" does not detect a rule, but "iptables -L OUTPUT" reports that it does exist.
+    """
+    def __init__(self, missing_rules, output_chain):
+        super(IptablesInconsistencyError, self).__init__("Inconsistent results from iptables: -C reports that some rules are missing ({0}), but -L shows some of them exist:\n{1}".format(missing_rules, output_chain))
+        self.missing_rules = missing_rules
+        self.output_chain = output_chain
+
+
 class FirewallManager(object):
     """
     FirewallManager abstracts the interface for managing the firewall rules on the WireServer address. Concrete implementations
@@ -138,88 +157,98 @@ class FirewallManager(object):
         raise NotImplementedError()
 
 
-class _FirewallManagerMultipleRules(FirewallManager):
+class _FirewallManagerIndividualRules(FirewallManager):
     """
-    Base class for firewall managers that handle multiple rules, each rule being manipulated with a different command line (e.g. iptables, firewalld)
+    Base class for firewall managers (iptables, firewalld) that manipulate the firewall rules individually when checking/adding/removing them. For contrast, nft manipulates the entire table.
     """
+    def __init__(self, wire_server_address):
+        super(_FirewallManagerIndividualRules, self).__init__(wire_server_address)
+        #
+        # We use this array to iterate over all the firewall rules when setting/checking/removing them.
+        # The order of the items is critical since we process each item sequentially and the firewall rules will follow the order in the array: the first
+        # item will be at the top of the chain, etc.
+        #
+        # Each item in the array is a tuple with the friendly name of the rule and a function that returns the command used to process that rule. This function
+        # takes as argument the option that is passed to the corresponding command  (-A, -C, and -D for iptables, and --passthrough, --query-passthrough, and --remove-passthrough
+        # for firewallcmd)
+        #
+        self._firewall_commands = [
+            (FirewallManager.ACCEPT_DNS, self._get_accept_dns_rule_command),
+            (FirewallManager.ACCEPT, self._get_accept_rule_command),
+            (FirewallManager.DROP, self._get_drop_rule_command)
+        ]
+
+    @property
+    def _append(self):
+        """
+        Command-line option to append a firewall rule.
+        """
+        raise NotImplementedError()
+
+    @property
+    def _check(self):
+        """
+        Command-line option to check for existence of a firewall rule
+        """
+        raise NotImplementedError()
+
+    @property
+    def _delete(self):
+        """
+        Command-line option to delete a firewall rule
+        """
+        raise NotImplementedError()
+
     def setup(self):
-        for command in self._get_commands(self._get_append_command_option()):
-            shellutil.run_command(command[1])
+        for _, get_command in self._firewall_commands:
+            shellutil.run_command(get_command(self._append))
 
     def remove(self):
-        existing_rules = []
-
-        for rule, command in self._get_commands(self._get_check_command_option()):
-            try:
-                shellutil.run_command(command)
-                existing_rules.append(rule)
-            except CommandError as e:
-                if e.returncode == 1:  # rule does not exist
-                    pass
-                else:
-                    raise
-
-        for rule, command in self._get_commands(self._get_delete_command_option()):
-            if rule in existing_rules:
-                self._execute_delete_command(command)
+        for _, get_command in self._firewall_commands:
+            if self._rule_exists(get_command(self._check)):
+                self._delete_rule(get_command(self._delete))
 
     def remove_legacy_rule(self):
-        check_command = self._get_legacy_rule_command(self._get_check_command_option())
-        try:
-            shellutil.run_command(check_command)
-        except CommandError as e:
-            if e.returncode == 1:  # rule does not exist
-                logger.info("Did not find a legacy firewall rule: {0}", check_command)
-                return
-
+        check_command = self._get_legacy_rule_command(self._check)
+        if not self._rule_exists(check_command):
+            logger.info("Did not find a legacy firewall rule: {0}", check_command)
+            return
         logger.info("Found legacy firewall rule: {0}", check_command)
-        delete_command = self._get_legacy_rule_command(self._get_delete_command_option())
-        self._execute_delete_command(delete_command)
-        event.info(WALAEventOperation.Firewall, "Removed legacy firewall rule: {0}", delete_command)
 
-    def _execute_delete_command(self, command):
-        """
-        Executes the delete command; derived classes can customize the behavior if needed (for example, to add retries).
-        """
-        shellutil.run_command(command)
+        delete_command = self._get_legacy_rule_command(self._delete)
+        self._delete_rule(delete_command)
+        event.info(WALAEventOperation.Firewall, "Removed legacy firewall rule: {0}", delete_command)
 
     def check(self):
         missing_rules = []
         existing_rules = []
-        missing_rules_reasons = []
 
-        for rule, command in self._get_commands(self._get_check_command_option()):
-            try:
-                shellutil.run_command(command)
+        for rule, get_command in self._firewall_commands:
+            if self._rule_exists(get_command(self._check)):
                 existing_rules.append(rule)
-            except CommandError as e:
-                if e.returncode == 1:  # rule does not exist
-                    missing_rules.append(rule)
-                    # Issue: Even though the drop rule exists, the agent perceives it as missing when checking all rules.
-                    # This might occur because we mark the rule as missing due to the same error code being returned for other reasons.
-                    # So logging the error message to understand the reason for the rule being marked as missing.
-                    missing_rules_reasons.append(e.stderr)
-                else:
-                    raise
+            else:
+                missing_rules.append(rule)
 
         if len(missing_rules) == 0:  # all rules are present
             return True
 
         if len(existing_rules) > 0:  # some rules are present, but not all
-            raise FirewallStateError("The following rules are missing: {0} due to: {1}".format(missing_rules, missing_rules_reasons))
+            raise FirewallRulesMissingError(missing_rules)
 
         return False
 
-    def _get_commands(self, command_option):
-        """
-        Yields each of the commands needed to set up the firewall rules, using the given command option.
+    @staticmethod
+    def _rule_exists(check_command):
+        try:
+            shellutil.run_command(check_command)
+        except CommandError as e:
+            if e.returncode != 1:  # if 1, the command failed because the rule does not exist
+                raise
+            return False
+        return True
 
-        IMPORTANT: The order in which these rules are returned is critical, since rules are appended sequentially.
-                   The first item in the array will be at the top of the chain, etc.
-        """
-        yield FirewallManager.ACCEPT_DNS, self._get_accept_dns_rule_command(command_option)
-        yield FirewallManager.ACCEPT, self._get_accept_rule_command(command_option)
-        yield FirewallManager.DROP, self._get_drop_rule_command(command_option)
+    def _delete_rule(self, command):
+        raise NotImplementedError()
 
     def _get_accept_dns_rule_command(self, command_option):
         """
@@ -247,34 +276,15 @@ class _FirewallManagerMultipleRules(FirewallManager):
         """
         raise NotImplementedError()
 
-    def _get_append_command_option(self):
-        """
-        Returns the command-line option to append a firewall to the output chain.
-        """
-        raise NotImplementedError()
 
-    def _get_check_command_option(self):
-        """
-        Returns the command-line option to check for existence of rule on the output chain.
-        """
-        raise NotImplementedError()
-
-    def _get_delete_command_option(self):
-        """
-        Returns the command-line option to delete a firewall rule from the output chain.
-        """
-        raise NotImplementedError()
-
-
-class IpTables(_FirewallManagerMultipleRules):
+class IpTables(_FirewallManagerIndividualRules):
     """
     FirewallManager based on the iptables command-line tool.
     """
     def __init__(self, wire_server_address):
         super(IpTables, self).__init__(wire_server_address)
-
         #
-        # The wait option, "-w" was introduced in iptables 1.4.21. Check if we can use it.
+        # Get the version of iptables and check whether we can use the wait option ("-w"), which was introduced in iptables 1.4.21.
         #
         try:
             output = shellutil.run_command(["iptables", "--version"])
@@ -304,11 +314,72 @@ class IpTables(_FirewallManagerMultipleRules):
         else:
             self._base_command = ["iptables", "-t", "security"]
 
+        #
+        # We use these regular expressions to match rules in the output of "iptables -L"
+        #
+        #     # iptables -w -t security -L OUTPUT -nvx
+        #     Chain OUTPUT (policy ACCEPT 1384 packets, 126406 bytes)
+        #         pkts      bytes target     prot opt in     out     source               destination
+        #            0        0 ACCEPT     tcp  --  *      *       0.0.0.0/0            168.63.129.16        tcp dpt:53
+        #            0        0 ACCEPT     tcp  --  *      *       0.0.0.0/0            168.63.129.16        owner UID match 0
+        #            0        0 DROP       tcp  --  *      *       0.0.0.0/0            168.63.129.16        ctstate INVALID,NEW
+        #
+        wire_server_address_regex = wire_server_address.replace('.', r'\.')
+        self._ip_tables_rule_regex = {
+            FirewallManager.ACCEPT_DNS: r'\sACCEPT\s+tcp\s+.+\s{0}\s+tcp dpt:53'.format(wire_server_address_regex),
+            FirewallManager.ACCEPT:     r'\sACCEPT\s+tcp\s+.+\s{0}\s+owner UID match 0'.format(wire_server_address_regex),
+            FirewallManager.DROP:       r'\sDROP\s+tcp\s+.+\s{0}\s+ctstate INVALID,NEW'.format(wire_server_address_regex)
+        }
+
     @property
     def version(self):
         return self._version
 
-    def _execute_delete_command(self, command):
+    @property
+    def _append(self):
+        return '-A'
+
+    @property
+    def _check(self):
+        return '-C'
+
+    @property
+    def _delete(self):
+        return '-D'
+
+    def check(self):
+        # A few users have reported an issue where the Agent creates duplicate DROP rule, with one of them at the top of the OUTPUT chain, that block communication
+        # with the WireServer (see, for example, incident 21000000779819). These VMs are running RedHat/CentOS 7/8.
+        #
+        # Debugging showed that the DROP rule created by waagent-network-setup during boot cannot detected by waagent using "iptables -C" (and "iptables -D" won't delete
+        # the rule either) causing waagent to create duplicate rules. This issue may be related to https://access.redhat.com/solutions/6514071, which has identical
+        # symptoms. Our debugging showed that the first rule created when the conntrack module has not been loaded yet is not visible to "-C" or "-D".
+        #
+        # We work around this issue by checking against the output of "iptables -L" when the check() method reports that some rules do not exist. If any of those rules
+        # shows up in the output of "-L", we do not modify the firewall.
+        #
+        try:
+            return super(IpTables, self).check()
+        except FirewallRulesMissingError as e:
+            output_chain = shellutil.run_command(self._base_command + ["-L", "OUTPUT", "-nxv"])
+            for rule in e.missing_rules:
+                if re.search(self._ip_tables_rule_regex[rule], output_chain) is not None:
+                    raise IptablesInconsistencyError(e.missing_rules, output_chain)
+            raise
+
+    def load_conntrack(self):
+        """
+        Forces the conntrack module to be loaded by executing "iptables -C -m conntrack..."
+
+        Returns a string containing the command that was execute and its output.
+        """
+        try:
+            command = self._get_drop_rule_command(self._check)  # The DROP rule uses conntrack
+            return "{0}: {1}", command, shellutil.run_command(command)
+        except CommandError as e:
+            return ustr(e)
+
+    def _delete_rule(self, command):
         """
         Continually execute the delete operation until the return code is non-zero or the limit has been reached.
         """
@@ -322,7 +393,7 @@ class IpTables(_FirewallManagerMultipleRules):
                     raise Exception("Invalid firewall deletion command '{0}'".format(command))
 
     def _get_state_command(self):
-        return self._base_command + ["-t", "security", "-L", "-nxv"]
+        return self._base_command + ["-L", "-nxv"]
 
     def _get_accept_dns_rule_command(self, command_option):
         return self._base_command + [command_option, "OUTPUT", "-d", self._wire_server_address, "-p", "tcp", "--destination-port", "53", "-j", "ACCEPT"]
@@ -339,17 +410,8 @@ class IpTables(_FirewallManagerMultipleRules):
         # has aged out, keep this cleanup in place.
         return self._base_command + [command_option, "OUTPUT", "-d", self._wire_server_address, "-p", "tcp", "-m", "conntrack", "--ctstate", "INVALID,NEW", "-j", "ACCEPT"]
 
-    def _get_append_command_option(self):
-        return "-A"
 
-    def _get_check_command_option(self):
-        return "-C"
-
-    def _get_delete_command_option(self):
-        return "-D"
-
-
-class FirewallCmd(_FirewallManagerMultipleRules):
+class FirewallCmd(_FirewallManagerIndividualRules):
     """
     FirewallManager based on the firewalld command-line tool.
     """
@@ -367,6 +429,21 @@ class FirewallCmd(_FirewallManagerMultipleRules):
     def version(self):
         return self._version
 
+    @property
+    def _append(self):
+        return '--passthrough'
+
+    @property
+    def _check(self):
+        return '--query-passthrough'
+
+    @property
+    def _delete(self):
+        return '--remove-passthrough'
+
+    def _delete_rule(self, command):
+        shellutil.run_command(command)
+
     def _get_state_command(self):
         return ["firewall-cmd", "--permanent", "--direct", "--get-all-passthroughs"]
 
@@ -383,15 +460,6 @@ class FirewallCmd(_FirewallManagerMultipleRules):
         # Agents <= 2.7.0.6 inserted (-I) the rule to accept DNS traffic; later agents changed that to append (-A) the rule.
         # The insert rule needs to be removed, otherwise there will be duplicate rules for DNS.
         return ["firewall-cmd", "--permanent", "--direct", command_option, "ipv4", "-t", "security", "-I", "OUTPUT", "-d", self._wire_server_address, "-p", "tcp", '--destination-port', '53', '-j', 'ACCEPT']
-
-    def _get_append_command_option(self):
-        return "--passthrough"
-
-    def _get_check_command_option(self):
-        return "--query-passthrough"
-
-    def _get_delete_command_option(self):
-        return "--remove-passthrough"
 
 
 class NfTables(FirewallManager):

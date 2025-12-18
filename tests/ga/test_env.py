@@ -161,6 +161,7 @@ class MonitorDhcpClientRestartTestCase(AgentTestCase):
                     monitor_dhcp_client_restart.run()
                     self.assertEqual(mock_conf_routes.call_count, 2)  # count did not change
 
+
 class TestEnableFirewall(AgentTestCase):
     def test_it_should_restore_missing_firewall_rules(self):
         with MockIpTables() as mock_iptables:
@@ -178,13 +179,39 @@ class TestEnableFirewall(AgentTestCase):
 
                 enable_firewall.run()
 
-                self.assertGreaterEqual(len(mock_iptables.call_list), 3, "Expected at least 3 iptables commands, got {0} (Test case: {1})".format(mock_iptables.call_list, test_case))
-
                 self.assertEqual(
                     [
                         mock_iptables.get_accept_dns_command("-A"),
                         mock_iptables.get_accept_command("-A"),
                         mock_iptables.get_drop_command("-A"),
+                        mock_iptables.get_list_command(),
                     ],
-                    mock_iptables.call_list[-3:],
+                    mock_iptables.call_list[-4:],
                     "Expected the 3 firewall rules to be restored (Test case: {0})".format(test_case))
+
+    def test_it_should_not_modify_the_firewall_rules_when_the_check_command_is_inconsistent_with_the_list_command(self):
+        with MockIpTables(check_matches_list=False) as mock_iptables:
+            enable_firewall = EnableFirewall('168.63.129.16')
+
+            test_cases = [  # Exit codes for the "-C" (check) command
+                {"accept_dns": 1, "accept": 0, "drop": 0, "legacy": 0},
+                {"accept_dns": 0, "accept": 1, "drop": 0, "legacy": 0},
+                {"accept_dns": 0, "accept": 1, "drop": 0, "legacy": 0},
+                {"accept_dns": 1, "accept": 1, "drop": 1, "legacy": 0},
+            ]
+
+            for test_case in test_cases:
+                mock_iptables.set_return_values("-C", **test_case)
+
+                enable_firewall.run()
+
+                self.assertFalse(any("-D" in command or "-A" in command for command in mock_iptables.call_list), "The -D or -A commands should not have been invoked (Test case: {0}). Commands: {1}".format(test_case, mock_iptables.call_list))
+
+                self.assertEqual(
+                    [
+                        mock_iptables.get_accept_dns_command("-C"),
+                        mock_iptables.get_accept_command("-C"),
+                        mock_iptables.get_drop_command("-C"),
+                    ],
+                    mock_iptables.call_list[:3],
+                    "Expected the 3 firewall rules to have been checked (Test case: {0})".format(test_case))

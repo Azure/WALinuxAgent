@@ -289,7 +289,7 @@ class ProvisionHandler(object):
         status = ProvisionStatus(status="NotReady", subStatus=sub_status,
                                  description=description)
         try:
-            protocol = self.protocol_util.get_protocol()
+            protocol = self.protocol_util.get_protocol(init_goal_state=False)
             protocol.report_provision_status(status)
         except ProtocolError as e:
             logger.error("Reporting NotReady failed: {0}", e)
@@ -298,7 +298,7 @@ class ProvisionHandler(object):
     def report_ready(self):
         status = ProvisionStatus(status="Ready")
         try:
-            protocol = self.protocol_util.get_protocol()
+            protocol = self.protocol_util.get_protocol(init_goal_state=False)
             protocol.report_provision_status(status)
         except ProtocolError as e:
             logger.error("Reporting Ready failed: {0}", e)

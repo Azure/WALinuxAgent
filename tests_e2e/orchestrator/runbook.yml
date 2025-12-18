@@ -44,8 +44,11 @@ variable:
       - agent_status
       - agent_update
       - ext_cgroups
-      - ext_policy
-      - ext_policy_with_dependencies
+#
+# TODO: These tests are disabled temporarily since our test account does not have quota to create the Confidential VMs required by the tests.
+#
+#      - ext_policy
+#      - ext_policy_with_dependencies
       - ext_sequencing
       - ext_signature_validation
       - ext_telemetry_pipeline

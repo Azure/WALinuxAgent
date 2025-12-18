@@ -1,0 +1,42 @@
+{
+    "azEnvironment": "AZUREPUBLICCLOUD",
+    "additionalCapabilities": {},
+    "hostGroup": {},
+    "extendedLocation": {},
+    "evictionPolicy": "",
+    "isHostCompatibilityLayerVm": "true",
+    "licenseType": "",
+    "location": "westus",
+    "name": "examplevmname",
+    "offer": "UbuntuServer",
+    "osProfile": {},
+    "osType": "Linux",
+    "placementGroupId": "f67c14ab-e92c-408c-ae2d-da15866ec79a",
+    "plan": {},
+    "platformFaultDomain": "36",
+    "platformSubFaultDomain": "",
+    "platformUpdateDomain": "42",
+    "priority": "Regular",
+    "publicKeys": [],
+    "publisher": "Canonical",
+    "resourceGroupName": "macikgo-test-may-23",
+    "resourceId": "/subscriptions/xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxx/resourceGroups/macikgo-test-may-23/providers/Microsoft.Compute/virtualMachines/examplevmname",
+    "securityProfile": {
+        "secureBootEnabled": "true",
+        "virtualTpmEnabled": "false",
+        "encryptionAtHost": "true",
+        "securityType": "ConfidentialVM"
+    },
+    "sku": "18.04-LTS",
+    "storageProfile": {},
+    "subscriptionId": "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxx",
+    "tags": "baz:bash;foo:bar",
+    "version": "15.05.22",
+    "virtualMachineScaleSet": {
+        "id": "/subscriptions/xxxxxxxx-xxxxx-xxx-xxx-xxxx/resourceGroups/resource-group-name/providers/Microsoft.Compute/virtualMachineScaleSets/virtual-machine-scale-set-name"
+    },
+    "vmId": "02aab8a4-74ef-476e-8182-f6d2ba4166a6",
+    "vmScaleSetName": "crpteste9vflji9",
+    "vmSize": "Standard_A3",
+    "zone": ""
+}

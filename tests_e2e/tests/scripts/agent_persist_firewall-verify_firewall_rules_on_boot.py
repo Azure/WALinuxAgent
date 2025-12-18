@@ -28,7 +28,7 @@ from assertpy import fail
 from azurelinuxagent.common.utils import shellutil
 from tests_e2e.tests.lib.test_result import TestSkipped
 from tests_e2e.tests.lib.firewall_manager import FirewallManager
-from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.logging import log, indent
 from tests_e2e.tests.lib.remote_test import run_remote_test
 from tests_e2e.tests.lib.retry import retry
 
@@ -70,17 +70,21 @@ def verify_data_in_cron_logs(cron_log, verify, err_msg):
         if not os.path.exists(cron_log):
             raise Exception("Cron log file not found: {0}".format(cron_log))
         with open(cron_log) as f:
-            cron_logs_lines = list(map(lambda _: _.strip(), f.readlines()))
-        if not cron_logs_lines:
+            cron_log_content = f.read()
+        if cron_log_content == "":
             raise Exception("Empty cron file, looks like cronjob didnt run")
 
-        if any("Unable to connect to network, exiting now" in line for line in cron_logs_lines):
+        log.info("Cron logs:\n{0}\n".format(indent(cron_log_content)))
+
+        cron_log_lines = cron_log_content.splitlines()
+
+        if any("Unable to connect to network, exiting now" in line for line in cron_log_lines):
             raise TestSkipped("VM was unable to connect to network on startup. Skipping test validation")
 
-        if not any("ExitCode" in line for line in cron_logs_lines):
+        if not any("ExitCode" in line for line in cron_log_lines):
             raise Exception("Cron logs still incomplete, will try again in a minute")
 
-        if not any(verify(line) for line in cron_logs_lines):
+        if not any(verify(line) for line in cron_log_lines):
             fail("Verification failed! (UNEXPECTED): {0}".format(err_msg))
 
         log.info("Verification succeeded. Cron logs as expected")
