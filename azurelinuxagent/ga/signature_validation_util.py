@@ -215,12 +215,12 @@ def validate_signature(package_path, signature, package_full_name):
                         message=error_msg,
                         name=name, version=version, duration=0)
                     CGroupConfigurator.get_instance().disable(reason=error_msg, disable_cgroups=DisableCgroups.ALL)
-                    run_command(base_command, encode_output=False)
+                    run_command(base_command)
                 else:
                     raise
         else:
             # Run without systemd if cgroups disabled
-            run_command(base_command, encode_output=False)
+            run_command(base_command)
 
         report_validation_event(op=WALAEventOperation.PackageSignatureResult, level=logger.LogLevel.INFO,
                                 message="Successfully validated signature for package '{0}'".format(package_full_name),

@@ -34,8 +34,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.osutil.systemd import is_systemd_run_failure
 from azurelinuxagent.common.utils import fileutil, shellutil
-from azurelinuxagent.ga.extensionprocessutil import handle_process_completion, read_output, \
-    TELEMETRY_MESSAGE_MAX_LEN
+from azurelinuxagent.ga.extensionprocessutil import handle_process_completion, read_output
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import get_distro
 

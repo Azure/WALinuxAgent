@@ -42,7 +42,7 @@ class TestSignatureValidationSudo(AgentTestCase):
         self.package_name_and_version = "Microsoft.OSTCExtensions.Edp.VMAccessForLinux-1.5.0"
 
         # Regex for 'openssl cms -verify' for the test zip package
-        self.openssl_cmd_pattern = re.compile(r".*openssl\s+cms\s+-verify.*-content\s+{}\b".format(re.escape(self.vm_access_zip_path)))
+        self.openssl_cmd_pattern = re.compile(r".*openssl\s+cms\s+-verify.*-content\s+{0}\b".format(re.escape(self.vm_access_zip_path)))
 
     def tearDown(self):
         patch.stopall()
