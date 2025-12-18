@@ -295,6 +295,9 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             uris = family.get("uris")
             if uris is None:
                 uris = []
+            ga_signature_mappings = family.get("versionToSignatureMappings")
+            if ga_signature_mappings is None:
+                ga_signature_mappings = []
             agent_family = VMAgentFamily(name)
             agent_family.version = version
             agent_family.from_version = from_version
@@ -302,6 +305,10 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             agent_family.is_vm_enabled_for_rsm_upgrades = is_vm_enabled_for_rsm_upgrades
             for u in uris:
                 agent_family.uris.append(u)
+            for ga_signature_mapping in ga_signature_mappings:
+                ga_signature_version = ga_signature_mapping.get("version")
+                ga_encoded_signature = ga_signature_mapping.get("encodedSignature")
+                agent_family.ga_version_to_signature_mapping[ga_signature_version] = ga_encoded_signature
             self._agent_families.append(agent_family)
 
     def _parse_extensions(self, vm_settings):

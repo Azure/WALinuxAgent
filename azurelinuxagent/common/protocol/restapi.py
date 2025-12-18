@@ -54,6 +54,8 @@ class VMAgentFamily(object):
         self.is_version_from_rsm = None
         # Tri-state: None, True, False. Set to None if this property not specified in the GS.
         self.is_vm_enabled_for_rsm_upgrades = None
+        # One-state: dict. Empty dict if no mapping specified in the GS.
+        self.ga_version_to_signature_mapping = {}
 
         self.uris = []
 
