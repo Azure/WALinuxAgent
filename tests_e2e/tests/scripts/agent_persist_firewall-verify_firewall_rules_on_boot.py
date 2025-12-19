@@ -74,7 +74,7 @@ def verify_data_in_cron_logs(cron_log, verify, err_msg):
         if cron_log_content == "":
             raise Exception("Empty cron file, looks like cronjob didnt run")
 
-        log.info("Cron logs:\n{0}\n".format(indent(cron_log_content)))
+        log.info("Cron log ({0}):\n{1}\n".format(cron_log, indent(cron_log_content)))
 
         cron_log_lines = cron_log_content.splitlines()
 

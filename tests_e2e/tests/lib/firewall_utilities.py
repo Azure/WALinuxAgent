@@ -32,6 +32,7 @@ class FirewallUtilities:
         so the firewall tests are not applicable.
         """
         try:
+            log.info("Checking status of the Proxy Agent...")
             stdout = ssh_client.run_command("is-proxy-agent-active.py")
             log.info(f"Detected the Proxy Agent\n{indent(stdout)}")
             raise TestSkipped("The Proxy Agent is managing the WireServer endpoint so firewall rules are not applicable.")
