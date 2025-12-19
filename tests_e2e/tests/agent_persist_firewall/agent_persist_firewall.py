@@ -44,6 +44,10 @@ class AgentPersistFirewallTest(AgentVmTest):
         # perform reboot and ensure firewall rules added on boot even after agent is disabled
         self._disable_agent()
         self._context.vm.restart(wait_for_boot=True, ssh_client=self._ssh_client)
+
+        # TODO: for now we need to check again after reboot, since the GPA has a race condition on initialization than makes it take over the WireServer endpoint when it shouldn't.
+        FirewallUtilities.skip_test_if_proxy_agent_is_managing_the_wireserver_endpoint(self._ssh_client)
+
         self._verify_persist_firewall_service_running()
         self._verify_firewall_rules_on_boot("first_boot")
         # Test case 3: Re-enable the agent and do an additional reboot. The intention is to check for conflicts between the agent and the persist firewall service
