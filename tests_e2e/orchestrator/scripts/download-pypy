@@ -21,7 +21,7 @@ if [[ ! -f ~/tmp/$pypy_name ]]; then
   if [[ $cloud_name == "AzureChinaCloud" ]]; then
     url="https://dcrdata.blob.core.chinacloudapi.cn/python/$pypy_name"
   else
-    url="https://dcrdata.blob.core.windows.net/python/$pypy_name"
+    url="https://pythonenv.blob.core.windows.net/e2e/$pypy_name"
   fi
   echo "======== Downloading Pypy tarball"
   echo "Downloading from $url to ~/tmp/$pypy_name"
