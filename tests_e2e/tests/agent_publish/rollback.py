@@ -18,7 +18,8 @@ from typing import Any, List, Dict
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
-from tests_e2e.tests.lib.agent_update_helpers import request_rsm_update, verify_current_agent_version
+from tests_e2e.tests.lib.agent_update_helpers import request_rsm_update, verify_current_agent_version, \
+    verify_agent_reported_supported_feature_flag
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
 
@@ -34,6 +35,8 @@ class Rollback(AgentVmTest):
 
     def run(self):
         log.info("Testing rollback update....")
+        self._prepare_agent_for_rollback()
+
         log.info("Retrieving the rollback version(Latest version in Prod)")
         rollback_version = self._get_latest_version()
 
@@ -45,11 +48,6 @@ class Rollback(AgentVmTest):
         request_rsm_update(rollback_version, self._context.vm, arch_type, is_downgrade=True,
                            downgrade_from=self._get_published_version())
         self._check_rsm_gs(rollback_version)
-
-        output: str = self._ssh_client.run_command(
-            "update-waagent-conf Debug.EnableGAVersioning=y Debug.EnableRsmDowngrade=y", use_sudo=True)
-        log.info('Successfully enabled rsm updates \n %s', output)
-
         verify_current_agent_version(self._ssh_client, rollback_version)
 
 
@@ -78,6 +76,18 @@ class Rollback(AgentVmTest):
         if hasattr(self._context, "latest_version"):
             return self._context.latest_version
         return "9.9.9.9"
+
+    def _prepare_agent_for_rollback(self) -> None:
+        """
+        This method prepares the agent for the rollback update
+        """
+        log.info("Preparing the agent for the rollback update")
+        log.info("Modifying agent update related config flags")
+        output: str = self._ssh_client.run_command(
+            "update-waagent-conf Debug.EnableGAVersioning=y AutoUpdate.GAFamily=Test", use_sudo=True)
+        log.info('Successfully enabled rsm updates \n %s', output)
+
+        verify_agent_reported_supported_feature_flag(self._ssh_client)
 
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:

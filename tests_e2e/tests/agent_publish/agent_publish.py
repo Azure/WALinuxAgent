@@ -23,7 +23,8 @@ from azurelinuxagent.common.future import UTC
 from tests_e2e.tests.lib.agent_setup_helpers import wait_for_agent_to_complete_provisioning
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
-from tests_e2e.tests.lib.agent_update_helpers import request_rsm_update, verify_current_agent_version
+from tests_e2e.tests.lib.agent_update_helpers import request_rsm_update, verify_current_agent_version, \
+    verify_agent_reported_supported_feature_flag
 from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds, VmExtensionIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
@@ -114,15 +115,6 @@ class AgentPublishTest(AgentVmTest):
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
         log.info('Agent info \n%s', stdout)
 
-    def _verify_agent_reported_supported_feature_flag(self):
-        """
-        RSM update rely on supported feature flag that agent sends to CRP.So, checking if GA reports feature flag from reported status
-        """
-        log.info(
-            "Executing verify_versioning_supported_feature.py remote script to verify agent reported supported feature flag, so that CRP can send RSM update request")
-        self._run_remote_test(self._ssh_client, "agent_update-verify_versioning_supported_feature.py --supported True", use_sudo=True)
-        log.info("Successfully verified that Agent reported VersioningGovernance supported feature flag")
-
     def _check_rsm_gs(self, requested_version: str) -> None:
         # This checks if RSM GS available to the agent after we send the rsm update request
         log.info(
@@ -136,7 +128,7 @@ class AgentPublishTest(AgentVmTest):
         This method prepares the agent for the RSM update
         """
         # We send RSM update request for new published test version
-        self._verify_agent_reported_supported_feature_flag()
+        verify_agent_reported_supported_feature_flag(self._ssh_client)
         arch_type = self._ssh_client.get_architecture()
         request_rsm_update(self._published_version, self._context.vm, arch_type, is_downgrade=False)
         self._check_rsm_gs(self._published_version)
