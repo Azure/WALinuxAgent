@@ -22,6 +22,7 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil, shellutil
 from azurelinuxagent.ga.env import MonitorDhcpClientRestart, EnableFirewall
 
+from tests.lib.event import get_events_from_mock
 from tests.lib.tools import AgentTestCase, patch, DEFAULT
 from tests.lib.mock_firewall_command import MockIpTables
 
@@ -249,10 +250,10 @@ class TestEnableFirewall(AgentTestCase):
             # The first call to _operation() reports the version of iptables, then there should be only one firewall state report for each of the 2 reporting periods in the test
             self.assertEqual(2, event_count_first_reporting_period, "Expected 2 events to be logged during the first reporting period, got: {0}".format(info.call_args_list[:event_count_first_reporting_period]))
             self.assertEqual(3, len(info.call_args_list), "Expected a total of 3 events to be logged for the two reporting periods, got: {0}".format(info.call_args_list))
-            event_args = [args for args, _ in info.call_args_list]
-            self.assertTrue(event_args[0][0] == "Firewall" and re.match(r'Using iptables \[version .+] to manage firewall rules', event_args[0][1]), "Expected a check for the iptables version in the first reporting period. Got: {0}".format(event_args[0]))
-            self.assertTrue(event_args[1][0] == "Firewall" and event_args[1][1].startswith('The firewall is configured correctly.'), "Expected a firewall status report in the first reporting period. Got: {0}".format(event_args[1]))
-            self.assertTrue(event_args[2][0] == "Firewall" and event_args[1][1].startswith('The firewall is configured correctly.'), "Expected a firewall status report in the second reporting period. Got: {0}".format(event_args[1]))
+            infos = get_events_from_mock(info)
+            self.assertTrue(infos[0][0] == "Firewall" and infos[0][1] == "Using iptables [version 1.4.21] to manage firewall rules", "Expected a check for the iptables version in the first reporting period. Got: {0}".format(infos[0]))
+            self.assertTrue(infos[1][0] == "Firewall" and infos[1][1].startswith('The firewall is configured correctly.'), "Expected a firewall status report in the first reporting period. Got: {0}".format(infos[1]))
+            self.assertTrue(infos[2][0] == "Firewall" and infos[1][1].startswith('The firewall is configured correctly.'), "Expected a firewall status report in the second reporting period. Got: {0}".format(infos[1]))
 
             self.assertEqual(0, warn.call_count, "No warnings should have been reported. Got: {0}". format(warn.call_args_list))
             self.assertEqual(0, error.call_count, "No errors should have been reported. Got: {0}". format(error.call_args_list))
@@ -298,8 +299,8 @@ class TestEnableFirewall(AgentTestCase):
             #
             self.assertEqual(4, warn_count_first_reporting_period, "Expected 4 warnings to be logged during the first reporting period, got: {0}".format(warn.call_args_list[:warn_count_first_reporting_period]))
             self.assertEqual(7, len(warn.call_args_list), "Expected a total of 7 warnings to be logged for the two reporting periods, got: {0}".format(warn.call_args_list))
-            warn_args = [args for args, _ in warn.call_args_list]
-            for w in warn_args:
+            warnings = get_events_from_mock(warn)
+            for w in warnings:
                 self.assertTrue(w[0] == "FirewallInconsistency" and w[1].startswith('The results returned by iptables are inconsistent, will not change the current state of the firewall'), "Expected a warning about the results of iptables being inconsistent. Got: {0}".format(w))
 
             #
@@ -312,16 +313,15 @@ class TestEnableFirewall(AgentTestCase):
             #
             # The firewall manager logs the commands it executes as info. There should be 6 sets of commands, 3 for each of the 2 reporting periods in the test, plus an initial check for the iptables version
             #
-            info_args = [args for args, _ in info.call_args_list]
-            self.assertTrue(info_args[0][0] == "Firewall" and re.match(r'Using iptables \[version .+] to manage firewall rules', info_args[0][1]))
-            self.assertEqual(19, len(info_args), "Expected a total of 19 commands logged as info. Got: {0}".format(info_args))
-            expected_commands = ["dummy command"] + 6 * [
-                mock_iptables.get_accept_dns_command("-C"),
-                mock_iptables.get_accept_command("-C"),
-                mock_iptables.get_drop_command("-C")
-            ]
-            for i in range(1, 18):
-                self.assertTrue(info_args[i][0] == "Firewall" and info_args[i][1].startswith(expected_commands[i]), "Expected command '{0}' logged at position {1}. Got: {2}".format(expected_commands[i], i, info_args[i]))
+            infos = get_events_from_mock(info)
+            expected_commands = ['Using iptables [version 1.4.21] to manage firewall rules'] + \
+                6 * [
+                    mock_iptables.get_accept_dns_command("-C"),
+                    mock_iptables.get_accept_command("-C"),
+                    mock_iptables.get_drop_command("-C")
+                ]
+            for i in range(0, 19):
+                self.assertTrue(infos[i][0] == "Firewall" and infos[i][1].startswith(expected_commands[i]), "Expected command '{0}' logged at position {1}. Got: {2}".format(expected_commands[i], i, infos[i]))
 
             self.assertEqual(0, error.call_count, "No errors should have been reported. Got: {0}". format(error.call_args_list))
     
