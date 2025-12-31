@@ -19,7 +19,7 @@ import os
 import unittest
 
 from azurelinuxagent.common.utils import shellutil
-from azurelinuxagent.ga.firewall_manager import FirewallManager, IpTables, FirewallCmd, NfTables, FirewallStateError, FirewallManagerNotAvailableError
+from azurelinuxagent.ga.firewall_manager import FirewallManager, IpTables, FirewallCmd, NfTables, FirewallStateError, FirewallManagerNotAvailableError, event as firewall_manager_event
 from tests.lib.tools import AgentTestCase, patch
 from tests.lib.mock_firewall_command import MockIpTables, MockFirewallCmd, MockNft
 
@@ -147,6 +147,52 @@ class _TestFirewallCommand(AgentTestCase):
                 mock.call_list,
                 "Expected a check ({0}) for the legacy rule, followed by a delete ({1}) of the rule".format(mock.check_option, mock.delete_option))
 
+    def _test_it_should_not_log_the_commands_it_executes_by_default(self, firewall_cmd_type, mock_firewall_cmd_type, command):
+        with mock_firewall_cmd_type():
+            firewall = firewall_cmd_type('168.63.129.16')
+
+            with patch.object(firewall_manager_event, "info") as info:
+                firewall.check()
+                firewall.setup()
+                firewall.remove()
+
+                # There should be no Firewall events, but if there are any, check that the command does not show up
+                firewall_events = [args[1] for args, _ in info.call_args_list if args[0] == "Firewall"]
+                if len(firewall_events) == 0:
+                    self.assertTrue(True)  # pylint: disable=redundant-unittest-assert
+                else:
+                    for e in firewall_events:
+                        self.assertNotIn(command, e, "Execution of the '{0}' command should not have produced telemetry events, got: {1}".format(command, firewall_events))
+
+    def _test_it_should_log_the_commands_it_executes_when_using_verbose_mode(self, firewall_cmd_type, mock_firewall_cmd_type, add_option, check_option, delete_option):
+        with mock_firewall_cmd_type():
+            firewall = firewall_cmd_type('168.63.129.16')
+            firewall.verbose = True
+
+            def assert_commands_were_logged(commands, call_args_list):
+                firewall_events = [args[1] for args, _ in call_args_list if args[0] == "Firewall"]
+                self.assertEqual(len(commands), len(firewall_events), "Expected {0} Firewall events to be logged, got: {1}".format(len(commands), firewall_events))
+                for i in range(0, len(commands)):
+                    self.assertIn(commands[i], firewall_events[i], "The '{0}' command is missing from the telemetry events: {1}".format(commands[i], firewall_events))
+
+            with patch.object(firewall_manager_event, "info") as info:
+                firewall.check()
+                assert_commands_were_logged([mock_firewall_cmd_type.get_accept_dns_command(check_option), mock_firewall_cmd_type.get_accept_command(check_option), mock_firewall_cmd_type.get_drop_command(check_option)], info.call_args_list)
+
+            with patch.object(firewall_manager_event, "info") as info:
+                firewall.setup()
+                assert_commands_were_logged([mock_firewall_cmd_type.get_accept_dns_command(add_option), mock_firewall_cmd_type.get_accept_command(add_option), mock_firewall_cmd_type.get_drop_command(add_option)], info.call_args_list)
+
+            with patch.object(firewall_manager_event, "info") as info:
+                firewall.remove()
+                assert_commands_were_logged(
+                    [
+                        mock_firewall_cmd_type.get_accept_dns_command(check_option), mock_firewall_cmd_type.get_accept_dns_command(delete_option),
+                        mock_firewall_cmd_type.get_accept_command(check_option), mock_firewall_cmd_type.get_accept_command(delete_option),
+                        mock_firewall_cmd_type.get_drop_command(check_option), mock_firewall_cmd_type.get_drop_command(delete_option)
+                    ],
+                    info.call_args_list)
+
 
 class TestIpTables(_TestFirewallCommand):
     def test_it_should_raise_FirewallManagerNotAvailableError_when_the_command_is_not_available(self):
@@ -183,6 +229,12 @@ class TestIpTables(_TestFirewallCommand):
                 mock_iptables.call_list,
                 "Expected only 3 calls to the -A (append) command without the -w option")
 
+    def test_it_should_not_log_the_commands_it_executes_by_default(self):
+        self._test_it_should_not_log_the_commands_it_executes_by_default(IpTables, MockIpTables, "iptables")
+
+    def test_it_should_log_the_commands_it_executes_when_using_verbose_mode(self):
+        self._test_it_should_log_the_commands_it_executes_when_using_verbose_mode(IpTables, MockIpTables, add_option="-A", check_option="-C", delete_option="-D")
+
 
 class TestFirewallCmd(_TestFirewallCommand):
     def test_it_should_raise_FirewallManagerNotAvailableError_when_the_command_is_not_available(self):
@@ -205,6 +257,12 @@ class TestFirewallCmd(_TestFirewallCommand):
     def test_remove_legacy_rule_should_delete_the_legacy_rule(self):
         self._test_remove_legacy_rule_should_delete_the_legacy_rule(FirewallCmd, MockFirewallCmd)
 
+    def test_it_should_not_log_the_commands_it_executes_by_default(self):
+        self._test_it_should_not_log_the_commands_it_executes_by_default(IpTables, MockIpTables, "firewallcmd")
+
+    def test_it_should_log_the_commands_it_executes_when_using_verbose_mode(self):
+        self._test_it_should_log_the_commands_it_executes_when_using_verbose_mode(FirewallCmd, MockFirewallCmd, add_option="--passthrough", check_option="--query-passthrough", delete_option="--remove-passthrough")
+
 
 class TestNft(AgentTestCase):
     def test_it_should_raise_FirewallManagerNotAvailableError_when_the_command_is_not_available(self):
@@ -223,7 +281,6 @@ class TestNft(AgentTestCase):
             self.assertIn("add table ip walinuxagent", script, "The setup script should to create the walinuxagent table. Script: {0}".format(script))
             self.assertIn("add chain ip walinuxagent output", script, "The setup script should to create the output chain. Script: {0}".format(script))
             self.assertIn("add rule ip walinuxagent output ", script, "The setup script should to create the rule to manage the output chain. Script: {0}".format(script))
-
 
     def test_remove_should_delete_the_walinuxagent_table(self):
         with MockNft() as mock_nft:
@@ -258,6 +315,51 @@ class TestNft(AgentTestCase):
             with self.assertRaises(FirewallStateError) as context:
                 firewall.check()
             self.assertIn("['The drop action is missing']", str(context.exception), "Expected an error message indicating the Agent's UID is not excluded")
+
+    def test_it_should_not_log_the_commands_it_executes_by_default(self):
+        with MockNft():
+            firewall = NfTables('168.63.129.16')
+
+            with patch.object(firewall_manager_event, "info") as info:
+                firewall.check()
+                firewall.setup()
+                firewall.remove()
+
+                firewall_events = [args[1] for args, _ in info.call_args_list if args[0] == "Firewall"]
+                # There should be no Firewall event, but if there are any, check that the command does not show up
+                if len(firewall_events) == 0:
+                    self.assertTrue(True)  # pylint: disable=redundant-unittest-assert
+                else:
+                    for e in firewall_events:
+                        self.assertNotIn("nft", e, "Execution of the 'nft' command should not have produced telemetry events, got: {0}".format(firewall_events))
+
+    def test_it_should_log_the_commands_it_executes_when_using_verbose_mode(self):
+        with MockNft():
+            firewall = NfTables('168.63.129.16')
+            firewall.verbose = True
+
+            def assert_commands_were_logged(commands, call_args_list):
+                firewall_events = [args[1] for args, _ in call_args_list if args[0] == "Firewall"]
+                self.assertEqual(len(commands), len(firewall_events), "Expected {0} Firewall events to be logged, got: {1}".format(len(commands), firewall_events))
+                for i in range(0, len(commands)):
+                    self.assertIn(commands[i], firewall_events[i], "The '{0}' command is missing from the telemetry events: {1}".format(commands[i], firewall_events))
+
+            with patch.object(firewall_manager_event, "info") as info:
+                firewall.check()
+                assert_commands_were_logged(
+                    [
+                        "nft --json list tables",
+                        "nft --json list table walinuxagent"
+                    ],
+                    info.call_args_list)
+
+            with patch.object(firewall_manager_event, "info") as info:
+                firewall.setup()
+                assert_commands_were_logged(["nft -f -"], info.call_args_list)
+
+            with patch.object(firewall_manager_event, "info") as info:
+                firewall.remove()
+                assert_commands_were_logged(["nft delete table walinuxagent"], info.call_args_list)
 
 
 if __name__ == '__main__':

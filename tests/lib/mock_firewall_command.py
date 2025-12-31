@@ -167,7 +167,7 @@ class MockIpTables(_MockFirewallCommand):
                 raise Exception("Unexpected rule: {0}".format(rule))
             return exit_code, "Mocked stdout", "Mocked stderr"
 
-        match = re.match(r"iptables (-w )?-t security -L OUTPUT -nxv", command)
+        match = re.match(r"iptables (-w )?-t security -L (?P<output>OUTPUT )?-nxv", command)
         if match is not None:
             #
             # Create the mock output for iptables -L
@@ -179,10 +179,36 @@ class MockIpTables(_MockFirewallCommand):
             #            0        0 ACCEPT     tcp  --  *      *       0.0.0.0/0            168.63.129.16        owner UID match 0
             #            0        0 DROP       tcp  --  *      *       0.0.0.0/0            168.63.129.16        ctstate INVALID,NEW
             #
-            stdout = [
-                "Chain OUTPUT (policy ACCEPT 1384 packets, 126406 bytes)\n",
-                "    pkts      bytes target     prot opt in     out     source               destination\n"
-            ]
+            #     # iptables -w -t security -L -nvx
+            #     Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+            #         pkts      bytes target     prot opt in     out     source               destination
+            #
+            #     Chain FORWARD (policy ACCEPT 0 packets, 0 bytes)
+            #         pkts      bytes target     prot opt in     out     source               destination
+            #
+            #     Chain OUTPUT (policy ACCEPT 1384 packets, 126406 bytes)
+            #         pkts      bytes target     prot opt in     out     source               destination
+            #            0        0 ACCEPT     tcp  --  *      *       0.0.0.0/0            168.63.129.16        tcp dpt:53
+            #            0        0 ACCEPT     tcp  --  *      *       0.0.0.0/0            168.63.129.16        owner UID match 0
+            #            0        0 DROP       tcp  --  *      *       0.0.0.0/0            168.63.129.16        ctstate INVALID,NEW
+            #
+            #
+            if match.group("output") is not None:
+                stdout = [
+                    "Chain OUTPUT (policy ACCEPT 1384 packets, 126406 bytes)\n",
+                    "    pkts      bytes target     prot opt in     out     source               destination\n"
+                ]
+            else:
+                stdout = [
+                    "Chain INPUT (policy ACCEPT 0 packets, 0 bytes)\n",
+                    "    pkts      bytes target     prot opt in     out     source               destination\n",
+                    "\n",
+                    "Chain FORWARD (policy ACCEPT 0 packets, 0 bytes)\n",
+                    "    pkts      bytes target     prot opt in     out     source               destination\n",
+                    "\n",
+                    "Chain OUTPUT (policy ACCEPT 1384 packets, 126406 bytes)\n",
+                    "    pkts      bytes target     prot opt in     out     source               destination\n"
+                ]
             if (self._return_values["-C"]["ACCEPT DNS"] == 0) == self._check_matches_list:
                 stdout.append("       0        0 ACCEPT     tcp  --  *      *       0.0.0.0/0            168.63.129.16        tcp dpt:53\n")
             if (self._return_values["-C"]["ACCEPT"] == 0) == self._check_matches_list:
