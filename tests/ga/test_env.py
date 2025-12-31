@@ -15,7 +15,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import datetime
-import re
 import time
 
 from azurelinuxagent.common.osutil import get_osutil
