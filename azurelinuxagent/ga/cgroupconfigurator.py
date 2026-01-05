@@ -773,7 +773,7 @@ class CGroupConfigurator(object):
             limit_in_bytes = conf.get_agent_memory_quota()
             current_usage = 0
             for metric in cgroup_metrics:
-                if metric.counter == MetricsCounter.TOTAL_MEM_USAGE or metric.counter == MetricsCounter.SWAP_MEM_USAGE:
+                if metric.instance == AGENT_NAME_TELEMETRY and (metric.counter == MetricsCounter.TOTAL_MEM_USAGE or metric.counter == MetricsCounter.SWAP_MEM_USAGE):
                     current_usage += metric.value
 
             if current_usage > limit_in_bytes:
