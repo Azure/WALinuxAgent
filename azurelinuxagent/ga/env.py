@@ -105,7 +105,7 @@ class FirewallState(object):
     OK = "OK"  # The firewall rules for the WireServer are setup correctly
     NotSet = "NotSet"  # The firewall rules have not been set
     Invalid = "Invalid"  # The state of the firewall rules is not as expected, e.g. because some rules are missing
-    Inconsistent = "Inconsistent"  # The stare of the firewall is reported differently by different tools, e.g. "iptables -C" vs "iptables -L"
+    Inconsistent = "Inconsistent"  # The state of the firewall is reported differently by different tools, e.g. "iptables -C" vs "iptables -L"
     Unknown = "Unknown"  # The state of the firewall has not been checked yet
 
 
