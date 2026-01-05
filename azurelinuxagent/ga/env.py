@@ -116,7 +116,7 @@ class EnableFirewall(PeriodicOperation):
         super(EnableFirewall, self).__init__(conf.get_enable_firewall_period())
         self._wire_server_address = wire_server_address
         self._firewall_manager = None  # initialized on demand in the _operation method
-        self._firewall_state = FirewallState.OK
+        self._firewall_state = FirewallState.OK  # Initialized to OK to prevent turning on verbose mode on the initial invocation of _operation(). It is properly initialized as soon as we do the first check of the firewall.
         self._report_count = 0
         self._next_report_time = datetime.datetime.now(UTC)
         self._should_report = True
