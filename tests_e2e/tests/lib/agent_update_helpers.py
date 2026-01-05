@@ -111,3 +111,11 @@ def verify_current_agent_version(ssh_client: SshClient, requested_version: str) 
     waagent_version: str = ssh_client.run_command("waagent-version", use_sudo=True)
     log.info(
         f"Successfully verified agent updated to published version. Current agent version running:\n {waagent_version}")
+
+def verify_agent_reported_supported_feature_flag(ssh_client: SshClient) -> None:
+    """
+    RSM update relies on the supported feature flag reported by the agent to CRP. This check ensures the Guest Agent correctly reports the feature flag in its status.
+    """
+    log.info("Running remote script agent_update-verify_versioning_supported_feature.py to verify that the agent reports the supported feature flag required for CRP to send RSM update requests")
+    ssh_client.run_command("agent_update-verify_versioning_supported_feature.py --supported True", use_sudo=True)
+    log.info("Successfully verified that Agent reported VersioningGovernance supported feature flag")
