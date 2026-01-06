@@ -11,6 +11,7 @@ image-sets:
 #
       - "alma_8"
       - "alma_9"
+      - "alma_10"
       - "mariner_2" # azure linux 2
       - "azure-linux_3"
       - "azure-linux_3_fips"
@@ -136,8 +137,8 @@ images:
       urn: "almalinux:almalinux-x86_64:8-gen2:latest"
    alma_9:
       urn: "almalinux:almalinux-x86_64:9-gen2:latest"
-      locations:
-         AzureChinaCloud: []
+   alma_10:
+      urn: "almalinux:almalinux-x86_64:10-gen2:latest"
    azure-linux_3:
       urn: "microsoftcblmariner:azure-linux-3:azure-linux-3:latest"
       locations:

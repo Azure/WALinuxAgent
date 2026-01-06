@@ -76,6 +76,7 @@ class FirewallManager(object):
     """
     def __init__(self, wire_server_address):
         self._wire_server_address = wire_server_address
+        self._verbose = False
 
     # Friendly names for the firewall rules
     ACCEPT_DNS = "ACCEPT DNS"
@@ -111,6 +112,14 @@ class FirewallManager(object):
         Returns the version of the underlying command-line tool.
         """
         raise NotImplementedError()
+
+    @property
+    def verbose(self):
+        return self._verbose
+
+    @verbose.setter
+    def verbose(self, value):
+        self._verbose = value
 
     def setup(self):
         """
@@ -155,6 +164,20 @@ class FirewallManager(object):
         Returns the command to list the current state of the firewall.
         """
         raise NotImplementedError()
+
+    def _run_command_verbose(self, command, *args, **kwargs):
+        """
+        Executes the given command, logging the command and its output if verbose mode is enabled.
+        """
+        try:
+            stdout = shellutil.run_command(command, *args, **kwargs)
+            if self.verbose:
+                event.info(WALAEventOperation.Firewall, "{0} [exit code: 0]\n{1}", " ".join(command), stdout)
+            return stdout
+        except CommandError as e:
+            if self.verbose:
+                event.info(WALAEventOperation.Firewall, "{0} [exit code: {1}]\n{2}\n{3}", " ".join(command), e.returncode, e.stdout, e.stderr)
+            raise
 
 
 class _FirewallManagerIndividualRules(FirewallManager):
@@ -201,7 +224,7 @@ class _FirewallManagerIndividualRules(FirewallManager):
 
     def setup(self):
         for _, get_command in self._firewall_commands:
-            shellutil.run_command(get_command(self._append))
+            self._run_command_verbose(get_command(self._append))
 
     def remove(self):
         for _, get_command in self._firewall_commands:
@@ -211,9 +234,9 @@ class _FirewallManagerIndividualRules(FirewallManager):
     def remove_legacy_rule(self):
         check_command = self._get_legacy_rule_command(self._check)
         if not self._rule_exists(check_command):
-            logger.info("Did not find a legacy firewall rule: {0}", check_command)
+            event.info(WALAEventOperation.Firewall,  "Did not find a legacy firewall rule: {0}", check_command)
             return
-        logger.info("Found legacy firewall rule: {0}", check_command)
+        event.info(WALAEventOperation.Firewall, "Found legacy firewall rule: {0}", check_command)
 
         delete_command = self._get_legacy_rule_command(self._delete)
         self._delete_rule(delete_command)
@@ -237,10 +260,9 @@ class _FirewallManagerIndividualRules(FirewallManager):
 
         return False
 
-    @staticmethod
-    def _rule_exists(check_command):
+    def _rule_exists(self, check_command):
         try:
-            shellutil.run_command(check_command)
+            self._run_command_verbose(check_command)
         except CommandError as e:
             if e.returncode != 1:  # if 1, the command failed because the rule does not exist
                 raise
@@ -348,11 +370,11 @@ class IpTables(_FirewallManagerIndividualRules):
         return '-D'
 
     def check(self):
-        # A few users have reported an issue where the Agent creates duplicate DROP rule, with one of them at the top of the OUTPUT chain, that block communication
+        # A few users have reported an issue where waagent creates duplicate DROP rules, with one of them at the top of the OUTPUT chain. This blocks communication
         # with the WireServer (see, for example, incident 21000000779819). These VMs are running RedHat/CentOS 7/8.
         #
-        # Debugging showed that the DROP rule created by waagent-network-setup during boot cannot detected by waagent using "iptables -C" (and "iptables -D" won't delete
-        # the rule either) causing waagent to create duplicate rules. This issue may be related to https://access.redhat.com/solutions/6514071, which has identical
+        # Debugging showed that the DROP rule created by waagent-network-setup during boot cannot be detected by waagent using "iptables -C" (and "iptables -D" won't delete
+        # the rule either) and waagent ends up creating duplicate rules. This issue may be related to https://access.redhat.com/solutions/6514071, which has identical
         # symptoms. Our debugging showed that the first rule created when the conntrack module has not been loaded yet is not visible to "-C" or "-D".
         #
         # We work around this issue by checking against the output of "iptables -L" when the check() method reports that some rules do not exist. If any of those rules
@@ -371,23 +393,29 @@ class IpTables(_FirewallManagerIndividualRules):
         """
         Forces the conntrack module to be loaded by executing "iptables -C -m conntrack..."
 
-        Returns a string containing the command that was execute and its output.
+        Returns a string containing the command that was executed and its output.
         """
         try:
             command = self._get_drop_rule_command(self._check)  # The DROP rule uses conntrack
-            return "{0}: {1}", command, shellutil.run_command(command)
+            return "{0}: {1}".format(command, shellutil.run_command(command))
         except CommandError as e:
             return ustr(e)
 
     def _delete_rule(self, command):
         """
-        Continually execute the delete operation until the return code is non-zero or the limit has been reached.
+        Attempts to delete all the instances of the rule specified for the given command.
         """
-        for _ in range(1, 100):
+        for i in range(1, 100):
+            # When we delete 1 rule, we expect 2 iterations: the first iteration deletes the rule and the second fails to find the rule. More than 2 iterations implies duplicate rules.
             try:
-                shellutil.run_command(command)
+                if i <= 2:
+                    self._run_command_verbose(command)
+                else:
+                    shellutil.run_command(command)
             except CommandError as e:
                 if e.returncode == 1:
+                    if i > 2:
+                        event.info(WALAEventOperation.DuplicateFirewallRules, "Deleted multiple firewall rules. Count: {0}. Command: {1}", i - 1, " ".join(command))
                     return
                 if e.returncode == 2:
                     raise Exception("Invalid firewall deletion command '{0}'".format(command))
@@ -442,7 +470,7 @@ class FirewallCmd(_FirewallManagerIndividualRules):
         return '--remove-passthrough'
 
     def _delete_rule(self, command):
-        shellutil.run_command(command)
+        self._run_command_verbose(command)
 
     def _get_state_command(self):
         return ["firewall-cmd", "--permanent", "--direct", "--get-all-passthroughs"]
@@ -481,14 +509,14 @@ class NfTables(FirewallManager):
         return self._version
 
     def setup(self):
-        shellutil.run_command(["nft", "-f", "-"], input="""
+        self._run_command_verbose(["nft", "-f", "-"], input="""
             add table ip walinuxagent
             add chain ip walinuxagent output {{ type filter hook output priority 0 ; policy accept ; }}
             add rule ip walinuxagent output ip daddr {0} tcp dport != 53 skuid != {1} ct state invalid,new counter drop
         """.format(self._wire_server_address, os.getuid()))
 
     def remove(self):
-        shellutil.run_command(["nft", "delete", "table", "walinuxagent"])
+        self._run_command_verbose(["nft", "delete", "table", "walinuxagent"])
 
     def check(self):
         #
@@ -503,7 +531,7 @@ class NfTables(FirewallManager):
         #     ]
         #   }
         #
-        output_text = shellutil.run_command(["nft", "--json",  "list", "tables"])
+        output_text = self._run_command_verbose(["nft", "--json",  "list", "tables"])
         try:
             output = json.loads(output_text)
             tables = [i["table"] for i in output["nftables"] if i.get("table") is not None]
@@ -557,7 +585,7 @@ class NfTables(FirewallManager):
         #     ]
         #   }
         #
-        output_text = shellutil.run_command(["nft", "--json",  "list", "table", "walinuxagent"])
+        output_text = self._run_command_verbose(["nft", "--json",  "list", "table", "walinuxagent"])
         errors = []
 
         try:

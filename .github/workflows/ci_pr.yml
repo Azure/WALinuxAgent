@@ -66,7 +66,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y curl bzip2 sudo
-        curl -sSf --retry 5 -o /tmp/python-${{ matrix.python-version }}.tar.bz2 https://dcrdata.blob.core.windows.net/python/python-${{ matrix.python-version }}.tar.bz2
+        curl -sSf --retry 5 -o /tmp/python-${{ matrix.python-version }}.tar.bz2 https://pythonenv.blob.core.windows.net/uts/python-${{ matrix.python-version }}.tar.bz2
         sudo tar xjf /tmp/python-${{ matrix.python-version }}.tar.bz2 --directory /
         #
         # The virtual environments have dependencies on old versions of OpenSSL (e.g 1.0/1.1) which are not available on Ubuntu 24. We use this script to patch the environments.
