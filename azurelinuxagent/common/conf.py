@@ -609,6 +609,15 @@ def get_agent_cpu_quota(conf=__conf__):
     return conf.get_int("Debug.AgentCpuQuota", 50)
 
 
+def get_agent_memory_quota(conf=__conf__):
+    """
+    Memory quota for the agent in Bytes defined as soft limit
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.AgentMemoryQuota", 300 * 1024 ** 2)
+
+
 def get_agent_cpu_throttled_time_threshold(conf=__conf__):
     """
     Throttled time threshold for agent cpu in seconds.
@@ -616,15 +625,6 @@ def get_agent_cpu_throttled_time_threshold(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_int("Debug.AgentCpuThrottledTimeThreshold", 120)
-
-
-def get_agent_memory_quota(conf=__conf__):
-    """
-    Memory quota for the agent in bytes.
-
-    NOTE: This option is experimental and may be removed in later versions of the Agent.
-    """
-    return conf.get_int("Debug.AgentMemoryQuota", 30 * 1024 ** 2)
 
 
 def get_enable_agent_memory_usage_check(conf=__conf__):

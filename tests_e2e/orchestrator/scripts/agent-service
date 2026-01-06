@@ -45,6 +45,8 @@ if command -v systemctl &> /dev/null; then
   service-start()  { systemctl start $1; }
   service-enable() { systemctl enable $1; }
   service-disable() { systemctl disable $1; }
+  service-mask()   { systemctl mask $1; }
+  service-unmask() { systemctl unmask $1; }
 else
   service-status() { service $1 status; }
   service-stop()   { service $1 stop; }
@@ -52,6 +54,8 @@ else
   service-start()  { service $1 start; }
   service-enable() { service $1 enable; }
   service-disable() { service $1 disable; }
+  service-mask()  { service $1 disable; } # mask not supported, disable as fallback since mask is stronger version of disable
+  service-unmask() { service $1 enable; } # unmask not supported, enable as fallback
 fi
 
 python=$(get-agent-python)
@@ -96,4 +100,12 @@ fi
 if [[ "$cmd" == "disable" ]]; then
     echo "Disabling service..."
     service-disable $service_name
+fi
+if [[ "$cmd" == "mask" ]]; then
+    echo "Masking service..."
+    service-mask $service_name
+fi
+if [[ "$cmd" == "unmask" ]]; then
+    echo "Unmasking service..."
+    service-unmask $service_name
 fi
