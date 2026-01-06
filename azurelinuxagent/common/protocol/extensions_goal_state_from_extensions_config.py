@@ -82,7 +82,8 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             for ga_signature_mapping in ga_signature_mappings:
                 ga_signature_version = findtext(ga_signature_mapping, "Version")
                 ga_encoded_signature = findtext(ga_signature_mapping, "EncodedSignature")
-                family.ga_version_to_signature_mapping[ga_signature_version] = ga_encoded_signature
+                if ga_signature_version is not None and ga_encoded_signature is not None:
+                    family.ga_version_to_signature_mapping[ga_signature_version] = ga_encoded_signature
             self._agent_families.append(family)
 
         self.__parse_plugins_and_settings_and_populate_ext_handlers(xml_doc)
