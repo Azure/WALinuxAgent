@@ -1175,6 +1175,7 @@ class UpdateHandler(object):
                 return
 
             firewall_manager = FirewallManager.create(wire_server_address)
+            firewall_manager.verbose = True
 
             try:
                 firewall_manager.remove_legacy_rule()
