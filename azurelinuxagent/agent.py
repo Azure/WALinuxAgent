@@ -317,6 +317,7 @@ class Agent(object):
 
         try:
             firewall_manager = FirewallManager.create(endpoint)
+            firewall_manager.verbose = True
             if isinstance(firewall_manager, IpTables):
                 try:
                     #
