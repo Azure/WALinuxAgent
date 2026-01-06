@@ -192,7 +192,7 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
         #     </GAFamily>
         #   </GAFamilies>
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["ext_conf"] = "wire/invalid_config/ext_conf-invalid_ga_signature_mappings.xml"
+        data_file["ext_conf"] = "wire/ext_conf-invalid_ga_signature_mappings.xml"
         with mock_wire_protocol(data_file) as protocol:
             agent_families = protocol.get_goal_state().extensions_goal_state.agent_families
             for family in agent_families:
