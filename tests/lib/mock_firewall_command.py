@@ -248,6 +248,8 @@ class MockFirewallCmd(_MockFirewallCommand):
         super(MockFirewallCmd, self).__init__(command_name="firewall-cmd", check_option="--query-passthrough", add_option="--passthrough", delete_option="--remove-passthrough")
 
     def _mock_run_command(self, command, *args, **kwargs):
+        if command[0] == "iptables" and command[1] == "-L":
+            return ''
         if command[0] == 'firewall-cmd' and command[1] == '--version':
             return '1.0.0 (mocked)'
         if command[0] == 'firewall-cmd' and command[1] == '--state':

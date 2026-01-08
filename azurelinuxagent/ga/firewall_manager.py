@@ -446,6 +446,14 @@ class FirewallCmd(_FirewallManagerIndividualRules):
     def __init__(self, wire_server_address):
         super(FirewallCmd, self).__init__(wire_server_address)
 
+        # firewall-cmd --permanent --direct passthrough uses iptables-style rules; the stack relies on a working
+        # iptables userland, so probe listing rules before we depend on FirewallCmd.
+        try:
+            shellutil.run_command(["iptables", "-L"], log_error=False)
+        except Exception as exception:
+            if isinstance(exception, OSError) and exception.errno == errno.ENOENT:  # pylint: disable=no-member
+                raise FirewallManagerNotAvailableError("iptables is not available")
+
         try:
             self._version = shellutil.run_command(["firewall-cmd", "--version"]).strip()
         except Exception as exception:

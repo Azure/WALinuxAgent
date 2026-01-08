@@ -22,7 +22,7 @@ import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common import event
 from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.ga.firewall_manager import FirewallCmd, FirewallStateError
+from azurelinuxagent.ga.firewall_manager import FirewallCmd, FirewallStateError, FirewallManagerNotAvailableError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.utils import shellutil, fileutil, textutil
@@ -132,7 +132,14 @@ if __name__ == '__main__':
         # In case of a failure, this would throw. In such a case, we don't need to try to setup our custom service
         # because on system reboot, all iptables rules are reset by firewalld.service, so it would be a no-op.
         # setup permanent firewalld rules
-        firewall_manager = FirewallCmd(self._dst_ip)
+        try:
+            firewall_manager = FirewallCmd(self._dst_ip)
+        except FirewallManagerNotAvailableError as e:
+            # e.g. iptables unusable for firewalld --direct; use boot-time setup service.
+            event.warn(WALAEventOperation.PersistFirewallRules, "Cannot use firewall-cmd for persistent rules: {0}. Falling back to custom network-setup service.", ustr(e))
+            self._setup_network_setup_service()
+            return
+
         event.info(WALAEventOperation.Firewall, "Using firewall-cmd [version {0}] to manage the persistent firewall rules", firewall_manager.version)
 
         try:
