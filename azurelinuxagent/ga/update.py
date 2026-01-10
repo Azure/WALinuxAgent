@@ -44,10 +44,11 @@ from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateEr
 from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.ga.persist_firewall_rules import PersistFirewallRulesHandler
-from azurelinuxagent.common.protocol.goal_state import GoalStateSource
+from azurelinuxagent.common.protocol.goal_state import GoalStateSource, TRANSPORT_CERT_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol, VmSettingsNotSupported
 from azurelinuxagent.common.protocol.restapi import VERSION_0
 from azurelinuxagent.common.protocol.util import get_protocol_util
+from azurelinuxagent.common.protocol.wire import TransportCertificateError
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.archive import StateArchiver, AGENT_STATUS_FILE
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -366,7 +367,16 @@ class UpdateHandler(object):
             # Initialize the goal state; some components depend on information provided by the goal state and this
             # call ensures the required info is initialized (e.g. telemetry depends on the container ID.)
             #
+            # Also, refresh the transport certificate each time the Agent starts.
+            #
             protocol = self.protocol_util.get_protocol(save_to_history=True)
+            try:
+                protocol.create_transport_certificate()
+            except TransportCertificateError as e:
+                # Report the error and continue execution; we retry in the main loop
+                message = ustr(e)
+                logger.warn(message)
+                add_event(op=WALAEventOperation.TransportCertificate, message=message, is_success=False, log_event=False)
 
             self._initialize_goal_state(protocol)
 
@@ -547,6 +557,17 @@ class UpdateHandler(object):
         max_errors_to_log = 3
 
         try:
+            #
+            # Ensure the transport certificate exists (in case we could not create it during Agent initialization)
+            #
+            trans_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
+            if not os.path.exists(trans_cert_file):
+                try:
+                    protocol.create_transport_certificate()
+                except TransportCertificateError as e:
+                    add_event(op=WALAEventOperation.TransportCertificate, message=ustr(e), is_success=False, log_event=False)
+                    raise
+
             #
             # For Fast Track goal states we need to ensure that the tenant certificate is in the goal state.
             #

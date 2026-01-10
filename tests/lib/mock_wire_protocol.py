@@ -24,7 +24,7 @@ from tests.lib import wire_protocol_data
 
 
 @contextlib.contextmanager
-def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, do_not_mock=lambda method, url: False, fail_on_unknown_request=True, save_to_history=False, detect_protocol=True):
+def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, do_not_mock=lambda method, url: False, fail_on_unknown_request=True, save_to_history=False, detect_protocol=True, create_transport_certificate=True):
     """
     Creates a WireProtocol object that handles requests to the WireServer, the Host GA Plugin, and some requests to storage (requests that provide mock data
     in wire_protocol_data.py).
@@ -151,11 +151,17 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     # go do it
     try:
         protocol.start()
+
+        if create_transport_certificate:
+            # The mock WireServer response for the Certificates API is encrypted using a specific transport certificate, which is also part of the mock data set. We create the Transport certificate
+            # using that mock data. If, for any reason, a test needs to create its own Transport certificate, it can set the create_transport_certificate parameter to False.
+            private_key = os.path.join(conf.get_lib_dir(), TRANSPORT_PRV_FILE_NAME)
+            certificate = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
+            protocol.mock_wire_data.mock_gen_trans_cert(private_key, certificate)
+
         if detect_protocol:
             protocol.detect(save_to_history=save_to_history)
-        else:
-            # the transport certificate is generated during protocol detection; if we skip detection we still need to generate it
-            protocol.mock_wire_data.mock_gen_trans_cert(os.path.join(conf.get_lib_dir(), TRANSPORT_PRV_FILE_NAME), os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME))
+
         yield protocol
     finally:
         protocol.stop()

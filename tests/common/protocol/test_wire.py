@@ -24,17 +24,15 @@ import time
 import unittest
 import uuid
 
+from azurelinuxagent.common import conf
 from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_crp, _MultiConfigFeature, _GAVersioningGovernanceFeature
 from azurelinuxagent.common.event import WALAEventOperation
-from azurelinuxagent.common.exception import ResourceGoneError, ProtocolError, \
-    ExtensionDownloadError, HttpError
+from azurelinuxagent.common.exception import ResourceGoneError, ProtocolError, ExtensionDownloadError, HttpError
 from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config import ExtensionsGoalStateFromExtensionsConfig
 from azurelinuxagent.common.protocol.goal_state import GoalStateProperties
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
-    StatusBlob, VMStatus
-from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema, \
-    TelemetryEventParam, TelemetryEvent
+from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, StatusBlob, VMStatus, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
+from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema, TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
@@ -84,6 +82,9 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
 
     def _test_getters(self, test_data, certsMustBePresent, __, MockCryptUtil, _):
         MockCryptUtil.side_effect = test_data.mock_crypt_util
+        private_key = os.path.join(conf.get_lib_dir(), TRANSPORT_PRV_FILE_NAME)
+        certificate = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
+        test_data.mock_gen_trans_cert(private_key, certificate)
 
         with patch.object(restutil, 'http_get', test_data.mock_http_get):
             protocol = WireProtocol(WIRESERVER_URL)
