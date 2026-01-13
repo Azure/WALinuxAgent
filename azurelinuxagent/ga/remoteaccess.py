@@ -50,11 +50,11 @@ class RemoteAccessHandler(object):
         self._remote_access = None
         self._check_existing_jit_users = True
 
-    def run(self):
+    def run(self, remote_access):
         try:
             if self._os_util.jit_enabled:
                 # Handle remote access if any.
-                self._remote_access = self._protocol.client.get_goal_state().remote_access
+                self._remote_access = remote_access
                 self._handle_remote_access()
         except Exception as e:
             msg = u"Exception processing goal state for remote access users: {0}".format(textutil.format_exception(e))

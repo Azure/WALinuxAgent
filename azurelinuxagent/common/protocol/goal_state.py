@@ -479,6 +479,7 @@ class GoalState(object):
 
             remote_access = None
             if GoalStateProperties.RemoteAccessInfo & self._goal_state_properties:
+                container = find(xml_doc, "Container")
                 remote_access_uri = findtext(container, "RemoteAccessInfo")
                 if remote_access_uri is not None:
                     xml_text = self._wire_client.fetch_config(remote_access_uri, self._wire_client.get_header_for_remote_access())
