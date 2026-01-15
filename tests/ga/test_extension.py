@@ -46,6 +46,7 @@ from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 
+from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, migrate_handler_state, \
     get_exthandlers_handler, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
     ExtensionStatusValue, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, GoalStateStatus, ExtHandlerState
@@ -3882,6 +3883,8 @@ class _TestSignatureValidationBase(TestExtensionBase):
 
     def tearDown(self):
         patch.stopall()
+        # Reset CVM info to uninitialized state to avoid affecting other tests
+        ConfidentialVMInfo._is_confidential_vm = None
         AgentTestCase.tearDown(self)
 
     @staticmethod
@@ -4369,6 +4372,9 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
 
     def test_should_not_validate_signature_on_non_cvm(self):
         self.patch_is_cvm.stop()
+        # Initialize CVM info to False to simulate a non-CVM
+        ConfidentialVMInfo._is_confidential_vm = False
+        
         data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"

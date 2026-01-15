@@ -27,6 +27,10 @@ class TestConfidentialVMInfo(AgentTestCase):
         ConfidentialVMInfo._security_type = None
         AgentTestCase.setUp(self)
 
+    def tearDown(self):
+        ConfidentialVMInfo._is_confidential_vm = None
+        AgentTestCase.tearDown(self)
+
     @staticmethod
     def _setup_mock_imds_from_file(mock_get_metadata, file_path):
         with open(file_path, "r") as f:
