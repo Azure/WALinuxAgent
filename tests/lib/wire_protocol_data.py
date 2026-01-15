@@ -249,8 +249,12 @@ class WireProtocolData(object):
                 response_headers = [('ETag', self.etag)]
                 self.prev_etag = self.etag
             self.call_counts["vm_settings"] += 1
-        elif '{0}/metadata/compute'.format(IMDS_ENDPOINT) in url:
-            content = json.dumps(self.imds_info.get("compute", "{}"))
+        elif '{0}/metadata/instance/compute'.format(IMDS_ENDPOINT) in url:
+            # Handle standard IMDS '/metadata/instance/compute' endpoint used by agent
+            compute_data = self.imds_info.get("compute", {}).copy()
+            if "securityProfile" not in compute_data:
+                compute_data["securityProfile"] = {"securityType": "ConfidentialVM"}
+            content = json.dumps(compute_data)
 
         else:
             # A stale GoalState results in a 400 from the HostPlugin
