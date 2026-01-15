@@ -567,7 +567,7 @@ class UpdateHandler(object):
             #
             trans_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
             if not os.path.exists(trans_cert_file):
-                protocol.create_transport_certificate()
+                WireProtocol.create_transport_certificate()
 
             #
             # For Fast Track goal states we need to ensure that the tenant certificate is in the goal state.
