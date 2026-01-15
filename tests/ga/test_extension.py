@@ -3883,8 +3883,6 @@ class _TestSignatureValidationBase(TestExtensionBase):
 
     def tearDown(self):
         patch.stopall()
-        # Reset CVM info to uninitialized state to avoid affecting other tests
-        ConfidentialVMInfo._is_confidential_vm = None
         AgentTestCase.tearDown(self)
 
     @staticmethod
