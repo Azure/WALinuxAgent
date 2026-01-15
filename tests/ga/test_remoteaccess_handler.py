@@ -19,7 +19,7 @@ from datetime import timedelta, datetime
 from mock import Mock, MagicMock
 from azurelinuxagent.common.future import UTC
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
-from azurelinuxagent.common.protocol.goal_state import RemoteAccess
+from azurelinuxagent.common.protocol.goal_state import RemoteAccess, GoalState, GoalStateProperties
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.remoteaccess import RemoteAccessHandler
@@ -343,8 +343,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")
     @patch('azurelinuxagent.common.osutil.get_osutil', return_value=MockOSUtil())
     @patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=WireProtocol("12.34.56.78"))
-    @patch('azurelinuxagent.common.protocol.goal_state.GoalState.remote_access', return_value="asdf")
-    def test_remote_access_handler_run_bad_data(self, _1, _2, _3, _4):
+    def test_remote_access_handler_run_bad_data(self, _1, _2, _3):
         with patch("azurelinuxagent.ga.remoteaccess.get_osutil", return_value=MockOSUtil()):
             rah = RemoteAccessHandler(Mock())
             tstpassword = "]aPPEv}uNg1FPnl?"
@@ -354,7 +353,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             rah._add_user(tstuser, pwd, expiration_date)
             users = get_user_dictionary(rah._os_util.get_users())
             self.assertTrue(tstuser in users, "{0} missing from users".format(tstuser))
-            rah.run()
+            rah.run("asdf")
             self.assertTrue(tstuser in users, "{0} missing from users".format(tstuser))
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")
@@ -468,23 +467,23 @@ class TestRemoteAccessHandler(AgentTestCase):
     def test_remote_access_handler_run_error(self, _):
         with patch("azurelinuxagent.ga.remoteaccess.get_osutil", return_value=MockOSUtil()):
             mock_protocol = WireProtocol("foo.bar")
-            mock_protocol.client.get_goal_state = MagicMock(side_effect=Exception("foobar!"))
-
             rah = RemoteAccessHandler(mock_protocol)
-            rah.run()
-            print(TestRemoteAccessHandler.eventing_data)
-            check_message = "foobar!"
-            self.assertTrue(check_message in TestRemoteAccessHandler.eventing_data[4],
-                            "expected message {0} not found in {1}"
-                            .format(check_message, TestRemoteAccessHandler.eventing_data[4]))
-            self.assertEqual(False, TestRemoteAccessHandler.eventing_data[2], "is_success is true")
+            with patch.object(rah, '_handle_remote_access', side_effect=Exception("foobar!")):
+                rah.run("dummy data")
+                print(TestRemoteAccessHandler.eventing_data)
+                check_message = "foobar!"
+                self.assertTrue(check_message in TestRemoteAccessHandler.eventing_data[4],
+                                "expected message {0} not found in {1}"
+                                .format(check_message, TestRemoteAccessHandler.eventing_data[4]))
+                self.assertEqual(False, TestRemoteAccessHandler.eventing_data[2], "is_success is true")
 
     def test_remote_access_handler_should_retrieve_users_when_it_is_invoked_the_first_time(self):
         mock_os_util = MagicMock()
         with patch("azurelinuxagent.ga.remoteaccess.get_osutil", return_value=mock_os_util):
             with mock_wire_protocol(DATA_FILE) as mock_protocol:
+                goal_state = GoalState(mock_protocol.client, goal_state_properties=GoalStateProperties.RemoteAccessInfo)
                 rah = RemoteAccessHandler(mock_protocol)
-                rah.run()
+                rah.run(goal_state.remote_access)
 
                 self.assertTrue(len(mock_os_util.get_users.call_args_list) == 1, "The first invocation of remote access should have retrieved the current users")
 
@@ -492,8 +491,9 @@ class TestRemoteAccessHandler(AgentTestCase):
         mock_os_util = MagicMock()
         with patch("azurelinuxagent.ga.remoteaccess.get_osutil", return_value=mock_os_util):
             with mock_wire_protocol(DATA_FILE_REMOTE_ACCESS) as mock_protocol:
+                goal_state = GoalState(mock_protocol.client, goal_state_properties=GoalStateProperties.RemoteAccessInfo)
                 rah = RemoteAccessHandler(mock_protocol)
-                rah.run()
+                rah.run(goal_state.remote_access)
 
                 self.assertTrue(len(mock_os_util.get_users.call_args_list) > 0, "A goal state with jit users did not retrieve the current users")
 
@@ -501,10 +501,11 @@ class TestRemoteAccessHandler(AgentTestCase):
         mock_os_util = MagicMock()
         with patch("azurelinuxagent.ga.remoteaccess.get_osutil", return_value=mock_os_util):
             with mock_wire_protocol(DATA_FILE) as mock_protocol:
+                goal_state = GoalState(mock_protocol.client, goal_state_properties=GoalStateProperties.RemoteAccessInfo)
                 rah = RemoteAccessHandler(mock_protocol)
-                rah.run()  # this will trigger one call to retrieve the users
+                rah.run(goal_state.remote_access)  # this will trigger one call to retrieve the users
 
                 mock_protocol.mock_wire_data.set_incarnation(123)  # mock a new goal state; the data file does not include any jit users
-                rah.run()
+                rah.run(goal_state.remote_access)
                 self.assertTrue(len(mock_os_util.get_users.call_args_list) == 1, "A goal state without jit users retrieved the current users")
 

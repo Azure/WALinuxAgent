@@ -566,8 +566,6 @@ class CGroupConfigurator(object):
                 if not self.enabled():
                     return
 
-                self._report_agent_cgroups_memory_usage(cgroup_metrics)
-
                 errors = []
 
                 process_check_success = False
@@ -764,21 +762,6 @@ class CGroupConfigurator(object):
                 if 'UNKNOWN' in proc_name:
                     msg = "Agent includes following processes when UNKNOWN process found: {0}".format("\n".join([ustr(proc) for proc in agent_cgroup_proc_names]))
                     add_event(op=WALAEventOperation.CGroupsInfo, message=msg)
-
-        @staticmethod
-        def _report_agent_cgroups_memory_usage(cgroup_metrics):
-            """
-            Reports the agent's current memory usage when it exceeds the configured limit.
-            """
-            limit_in_bytes = conf.get_agent_memory_quota()
-            current_usage = 0
-            for metric in cgroup_metrics:
-                if metric.instance == AGENT_NAME_TELEMETRY and (metric.counter == MetricsCounter.TOTAL_MEM_USAGE or metric.counter == MetricsCounter.SWAP_MEM_USAGE):
-                    current_usage += metric.value
-
-            if current_usage > limit_in_bytes:
-                msg = "Agent memory usage is {0} bytes which is over the configured limit of {1} bytes.".format(current_usage, limit_in_bytes)
-                add_event(op=WALAEventOperation.CGroupsInfo, message=msg)
 
         @staticmethod
         def _check_agent_throttled_time(cgroup_metrics):
