@@ -43,7 +43,8 @@ DATA_FILE = {
         "remote_access": None,
         "in_vm_artifacts_profile": None,
         "vm_settings": None,
-        "ETag": None
+        "ETag": None,
+        "security_type": None
 }
 
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()
@@ -166,6 +167,7 @@ class WireProtocolData(object):
         self.etag = None
         self.prev_etag = None
         self.imds_info = None
+        self.security_type = None
 
         self.reload()
 
@@ -183,6 +185,7 @@ class WireProtocolData(object):
         self.trans_prv = load_data(self.data_files.get("trans_prv"))
         self.trans_cert = load_data(self.data_files.get("trans_cert"))
         self.imds_info = json.loads(load_data(self.data_files.get("imds_info")))
+        self.security_type = self.data_files.get("security_type")
         self.ext = load_bin_data(self.data_files.get("test_ext"))
 
         vm_settings = self.data_files.get("vm_settings")
@@ -253,7 +256,7 @@ class WireProtocolData(object):
             # Handle standard IMDS '/metadata/instance/compute' endpoint used by agent
             compute_data = self.imds_info.get("compute", {}).copy()
             if "securityProfile" not in compute_data:
-                compute_data["securityProfile"] = {"securityType": "ConfidentialVM"}
+                compute_data["securityProfile"] = {"securityType": self.security_type}
             content = json.dumps(compute_data)
 
         else:
@@ -336,7 +339,7 @@ class WireProtocolData(object):
         cryptutil = CryptUtil(*args, **kw)
         cryptutil.gen_transport_cert = Mock(side_effect=self.mock_gen_trans_cert)
         return cryptutil
-    
+
     def mock_gen_trans_cert(self, trans_prv_file, trans_cert_file):
         with open(trans_prv_file, 'w+') as prv_file:
             prv_file.write(self.trans_prv)
