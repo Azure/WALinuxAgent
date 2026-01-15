@@ -1,3 +1,4 @@
+
 # Windows Azure Linux Agent
 #
 # Copyright 2018 Microsoft Corporation
@@ -48,7 +49,7 @@ from azurelinuxagent.common.protocol.goal_state import GoalStateSource, TRANSPOR
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol, VmSettingsNotSupported
 from azurelinuxagent.common.protocol.restapi import VERSION_0
 from azurelinuxagent.common.protocol.util import get_protocol_util
-from azurelinuxagent.common.protocol.wire import TransportCertificateError
+from azurelinuxagent.common.protocol.wire import WireProtocol, TransportCertificateError
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.archive import StateArchiver, AGENT_STATUS_FILE
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -367,17 +368,7 @@ class UpdateHandler(object):
             # Initialize the goal state; some components depend on information provided by the goal state and this
             # call ensures the required info is initialized (e.g. telemetry depends on the container ID.)
             #
-            # Also, refresh the transport certificate each time the Agent starts.
-            #
-            protocol = self.protocol_util.get_protocol(save_to_history=True)
-            try:
-                protocol.create_transport_certificate()
-            except TransportCertificateError as e:
-                # Report the error and continue execution; we retry in the main loop
-                message = ustr(e)
-                logger.warn(message)
-                add_event(op=WALAEventOperation.TransportCertificate, message=message, is_success=False, log_event=False)
-
+            protocol = self.protocol_util.get_protocol(init_goal_state=False)
             self._initialize_goal_state(protocol)
 
             # Initialize the common parameters for telemetry events
@@ -493,11 +484,25 @@ class UpdateHandler(object):
 
     def _initialize_goal_state(self, protocol):
         #
-        # Block until we can fetch the first goal state (self._try_update_goal_state() does its own logging and error handling).
+        # Block until we can fetch the first goal state. Also, refresh the transport certificate.
+        #
+        # Note that all the telemetry emitted by this function (and the functions it calls) is not fully associated with the current VM; the
+        # container ID will be populated only after the goal state is actually fetched, and the Resource Group, VM Name, and VM ID will be
+        # populated only after we initialize telemetry (which happens after this function returns).
+        #
+        # To address issue, we should populate any uninitialized fields before pushing the telemetry events to the WireServer.
         #
         event.info(WALAEventOperation.GoalState, "Initializing the goal state...")
+
+        try:
+            event.info(WALAEventOperation.TransportCertificate, "Refreshing/creating the Transport Certificate.")
+            WireProtocol.create_transport_certificate()
+        except TransportCertificateError as e:
+            event.warn(WALAEventOperation.TransportCertificate, "{0}", ustr(e))
+
         while not self._try_update_goal_state(protocol):
             time.sleep(conf.get_goal_state_period())
+
         event.info(WALAEventOperation.GoalState, "Goal state initialization completed.")
 
         #
@@ -558,15 +563,11 @@ class UpdateHandler(object):
 
         try:
             #
-            # Ensure the transport certificate exists (in case we could not create it during Agent initialization)
+            # Ensure the transport certificate exists
             #
             trans_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
             if not os.path.exists(trans_cert_file):
-                try:
-                    protocol.create_transport_certificate()
-                except TransportCertificateError as e:
-                    add_event(op=WALAEventOperation.TransportCertificate, message=ustr(e), is_success=False, log_event=False)
-                    raise
+                protocol.create_transport_certificate()
 
             #
             # For Fast Track goal states we need to ensure that the tenant certificate is in the goal state.
