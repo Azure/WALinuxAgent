@@ -44,7 +44,7 @@ DATA_FILE = {
         "in_vm_artifacts_profile": None,
         "vm_settings": None,
         "ETag": None,
-        "security_type": None
+        "security_type": ""
 }
 
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()

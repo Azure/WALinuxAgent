@@ -46,7 +46,6 @@ from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 
-from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, migrate_handler_state, \
     get_exthandlers_handler, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
     ExtensionStatusValue, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, GoalStateStatus, ExtHandlerState
