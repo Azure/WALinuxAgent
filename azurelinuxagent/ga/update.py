@@ -667,7 +667,7 @@ class UpdateHandler(object):
             self._report_status(exthandlers_handler, agent_update_handler)
 
             if self._processing_new_incarnation():
-                remote_access_handler.run()
+                remote_access_handler.run(self._goal_state.remote_access)
 
             # lastly, archive the goal state history (but do it only on new goal states - no need to do it on every iteration)
             if self._processing_new_extensions_goal_state():
@@ -1175,6 +1175,7 @@ class UpdateHandler(object):
                 return
 
             firewall_manager = FirewallManager.create(wire_server_address)
+            firewall_manager.verbose = True
 
             try:
                 firewall_manager.remove_legacy_rule()

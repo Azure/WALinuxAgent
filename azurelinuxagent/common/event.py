@@ -85,6 +85,7 @@ class WALAEventOperation:
     Disable = "Disable"
     Downgrade = "Downgrade"
     Download = "Download"
+    DuplicateFirewallRules = "DuplicateFirewallRules"
     Enable = "Enable"
     ExtensionHandlerManifest = "ExtensionHandlerManifest"
     ExtensionPolicy = "ExtensionPolicy"                                 # Event for any extension policy-related operations (e.g., extension not in allowlist).

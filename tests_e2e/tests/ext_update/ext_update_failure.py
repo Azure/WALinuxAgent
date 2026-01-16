@@ -94,7 +94,8 @@ class ExtensionUpdateFailureTest(AgentVmTest):
 
         for ext_name, ext in extensions_to_cleanup.items():
             if ext._resource_name in extension_names_on_vm:
-                self._ssh_client.run_command(f"ext_update-modify_handler_manifest.py --extension-name {ext_name} --reset", use_sudo=True)
+                output = self._ssh_client.run_command(f"ext_update-modify_handler_manifest.py --extension-name {ext_name} --reset", use_sudo=True)
+                log.info("Reset handlerManifest.json:\n%s", output)
                 ext.delete()
                 log.info("Removed extension %s", ext_name)
 

@@ -4368,24 +4368,26 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
                             msg="expected extension version '1.7.0' does not match downloaded package version '1.5.0'")
 
     def test_should_not_validate_signature_on_non_cvm(self):
+        # Simulate a non-CVM
         self.patch_is_cvm.stop()
-        data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
-        data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
-        data_file["manifest"] = "wire/manifest_vm_access.xml"
+        with patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm', return_value=False):
+            data_file = wire_protocol_data.DATA_FILE.copy()
+            data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
+            data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
+            data_file["manifest"] = "wire/manifest_vm_access.xml"
 
-        # Extension should be enabled, but signature should not be validated
-        with patch('azurelinuxagent.ga.signature_validation_util.validate_signature') as mock_validate:
-            self._test_enable_extension(data_file=data_file,
-                                        signature_validation_should_succeed=False,
-                                        expected_status_code=0,
-                                        expected_handler_status='Ready',
-                                        expected_ext_count=1,
-                                        expected_status_msg='Plugin enabled',
-                                        expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
-                                        expected_version="1.7.0")
+            # Extension should be enabled, but signature should not be validated
+            with patch('azurelinuxagent.ga.signature_validation_util.validate_signature') as mock_validate:
+                self._test_enable_extension(data_file=data_file,
+                                            signature_validation_should_succeed=False,
+                                            expected_status_code=0,
+                                            expected_handler_status='Ready',
+                                            expected_ext_count=1,
+                                            expected_status_msg='Plugin enabled',
+                                            expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
+                                            expected_version="1.7.0")
 
-            mock_validate.assert_not_called()
+                mock_validate.assert_not_called()
 
 
 class TestSignatureValidationEnforced(_TestSignatureValidationBase):

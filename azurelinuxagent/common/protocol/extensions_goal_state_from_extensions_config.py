@@ -69,6 +69,8 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             is_vm_enabled_for_rsm_upgrades = findtext(ga_family, "IsVMEnabledForRSMUpgrades")
             uris_list = find(ga_family, "Uris")
             uris = findall(uris_list, "Uri")
+            ga_signatures_list = find(ga_family, "VersionToSignatureMappings")
+            ga_signature_mappings = findall(ga_signatures_list, "GASignature")
             family = VMAgentFamily(name)
             family.version = version
             family.from_version = from_version
@@ -78,6 +80,11 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
                 family.is_vm_enabled_for_rsm_upgrades = is_vm_enabled_for_rsm_upgrades.lower() == "true"
             for uri in uris:
                 family.uris.append(gettext(uri))
+            for ga_signature_mapping in ga_signature_mappings:
+                ga_signature_version = findtext(ga_signature_mapping, "Version")
+                ga_encoded_signature = findtext(ga_signature_mapping, "EncodedSignature")
+                if ga_signature_version is not None and ga_encoded_signature is not None:
+                    family.ga_version_to_signature_mapping[ga_signature_version] = ga_encoded_signature
             self._agent_families.append(family)
 
         self.__parse_plugins_and_settings_and_populate_ext_handlers(xml_doc)

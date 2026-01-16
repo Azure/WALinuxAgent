@@ -21,11 +21,8 @@ from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 from tests.lib.tools import AgentTestCase, MagicMock, patch, data_dir
 
 
+@patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo._is_confidential_vm', None)
 class TestConfidentialVMInfo(AgentTestCase):
-
-    def setUp(self):
-        ConfidentialVMInfo._security_type = None
-        AgentTestCase.setUp(self)
 
     @staticmethod
     def _setup_mock_imds_from_file(mock_get_metadata, file_path):
