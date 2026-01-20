@@ -127,14 +127,14 @@ class TestProtocolUtil(AgentTestCase):
         endpoint_file = protocol_util._get_wireserver_endpoint_file_path()  # pylint: disable=unused-variable
 
         # Test wire protocol when no endpoint file has been written
-        protocol_util._detect_protocol(init_goal_state=True, create_transport_certificate=True, save_to_history=False)
+        protocol_util._detect_protocol(init_goal_state=True, save_to_history=False)
         self.assertEqual(KNOWN_WIRESERVER_IP, protocol_util.get_wireserver_endpoint())
 
         # Test wire protocol on dhcp failure
         protocol_util.osutil.is_dhcp_available.return_value = True
         protocol_util.dhcp_handler.run.side_effect = DhcpError()
 
-        self.assertRaises(ProtocolError, lambda: protocol_util._detect_protocol(init_goal_state=True, create_transport_certificate=True, save_to_history=False))
+        self.assertRaises(ProtocolError, lambda: protocol_util._detect_protocol(init_goal_state=True, save_to_history=False))
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
@@ -151,7 +151,7 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util.dhcp_handler.run = Mock()
 
         # Test wire protocol when no endpoint file has been written, dhcp handler should not be called
-        protocol_util._detect_protocol(init_goal_state=True, create_transport_certificate=True, save_to_history=False)
+        protocol_util._detect_protocol(init_goal_state=True, save_to_history=False)
         self.assertEqual(KNOWN_WIRESERVER_IP, protocol_util.get_wireserver_endpoint())
         self.assertTrue(protocol_util.dhcp_handler.run.call_count == 0)
 
@@ -247,11 +247,6 @@ class TestProtocolUtil(AgentTestCase):
         for mds_cert_path in mds_cert_paths:
             self.assertFalse(os.path.exists(mds_cert_path))
 
-        # Check that WireServer Certs exist
-        ws_cert_paths = [os.path.join(dir, ws_cert) for ws_cert in TestProtocolUtil.WIRESERVER_CERTIFICATES]
-        for ws_cert_path in ws_cert_paths:
-            self.assertTrue(os.path.isfile(ws_cert_path))
-
         # Check firewall rules was reset
         self.assertEqual(1, mock_remove_firewall.call_count, "remove_firewall should be called once")
 
@@ -266,7 +261,7 @@ class TestProtocolUtil(AgentTestCase):
     @patch('azurelinuxagent.common.conf.get_lib_dir')
     @patch('azurelinuxagent.common.conf.enable_firewall')
     @patch('azurelinuxagent.common.protocol.wire.WireClient')
-    def test_get_protocol_new_wireserver_agent_generates_certificates(self, mock_wire_client, mock_enable_firewall, mock_get_lib_dir, _):
+    def test_get_protocol_new_wireserver_agent_initializes_the_protocol_files(self, mock_wire_client, mock_enable_firewall, mock_get_lib_dir, _):
         """
         This is for testing that a new WireServer Linux Agent generates appropriate certificates,
         protocol file, and endpoint file.
@@ -284,11 +279,6 @@ class TestProtocolUtil(AgentTestCase):
         # Run
         with patch("azurelinuxagent.common.protocol.metadata_server_migration_util._remove_firewall") as mock_remove_firewall:
             protocol_util.get_protocol()
-
-        # Check that WireServer Certs exist
-        ws_cert_paths = [os.path.join(dir, ws_cert) for ws_cert in TestProtocolUtil.WIRESERVER_CERTIFICATES]
-        for ws_cert_path in ws_cert_paths:
-            self.assertTrue(os.path.isfile(ws_cert_path))
 
         # Check firewall rules were not reset
         mock_remove_firewall.assert_not_called()

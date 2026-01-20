@@ -137,9 +137,9 @@ class DaemonHandler(object):
         #
         # Initially this was done to detect changes in the protocol used to communicate with the Host. Azure Stack used to have its own protocol (the "Metadata"
         # protocol) and, since VMs can move between Azure Stack and Azure, protocol detection was needed. Currently, both Azure Stack and Azure use the WireServer
-        # protocol, but there are some side effects of protocol detection that are still needed: generating the Transport certificate for communication with the
-        # WireServer, initializing the goal state, and cleaning up the state saved by Azure Stack. That functionality needs be refactored out from protocol
-        # detection, but in the meanwhile we keep the approach of forcing protocol detection during initialization.
+        # protocol, but there are some side effects of protocol detection that are still needed, for example detecting the WireServer address and cleaning up the
+        # state saved by Azure Stack. That functionality needs be refactored out from protocol detection, but in the meanwhile we keep the approach of forcing
+        # detection during initialization.
         #
         protocol_util = get_protocol_util()
         protocol_util.clear_protocol()
