@@ -160,7 +160,7 @@ def is_systemd_run_failure(unit_name, stderr):
     - Command failures should be propagated to the caller for proper error handling
 
     :param unit_name: The name of the systemd unit/scope that was used with systemd-run
-    :param stderr: Error output from the systemd-run command (str, bytes, or file-like object)
+    :param stderr: Error output from the systemd-run command
     :return: True if this is a systemd-run failure, False if it's a command execution failure
     """
     # Handle different types of stderr input

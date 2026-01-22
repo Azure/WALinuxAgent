@@ -34,9 +34,10 @@ from threading import current_thread
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.future import range  # pylint: disable=redefined-builtin
+from azurelinuxagent.common.future import range, ustr  # pylint: disable=redefined-builtin
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
+
 
 import tests
 
@@ -122,6 +123,10 @@ def is_python_version_26():
 
 def is_python_version_34():
     return sys.version_info[0] == 3 and sys.version_info[1] == 4
+
+
+def is_python_version_34_or_earlier():
+    return sys.version_info[0] == 2 or (sys.version_info[0] == 3 and sys.version_info[1] <= 4)
 
 
 class AgentTestCase(unittest.TestCase):
@@ -493,6 +498,25 @@ def open_patch():
 def patch_builtin(target, *args, **kwargs):
     prefix = 'builtins' if PY_VERSION_MAJOR >= 3 else '__builtin__'
     return patch("{0}.{1}".format(prefix, target), *args, **kwargs)
+
+
+def patch_encode_command_output():
+    """
+    Returns a patch for shellutil.__encode_command_output that uses a compatible
+    error handler on Python 3.4 and earlier ('backslashreplace' for decoding was added in Python 3.5).
+
+    Usage:
+        with patch_encode_command_output():
+            # test code that calls run_command()
+
+    TODO: This is a temporary unit-test workaround for a known code issue. Remove after the 'backslashreplace' issue is resolved.
+    """
+    def encode_command_output_compatible(output):
+        # 'backslashreplace' for decoding was added in Python 3.5; use 'ignore' as fallback for older versions.
+        error_handler = 'ignore' if is_python_version_34_or_earlier() else 'backslashreplace'
+        return ustr(output if output is not None else b'', encoding='utf-8', errors=error_handler)
+
+    return patch('azurelinuxagent.common.utils.shellutil.__encode_command_output', side_effect=encode_command_output_compatible)
 
 
 def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):

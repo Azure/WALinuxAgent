@@ -19,7 +19,7 @@
 import os
 import sys
 
-from tests.lib.tools import AgentTestCase, data_dir, patch, skip_if_predicate_true
+from tests.lib.tools import AgentTestCase, data_dir, patch, skip_if_predicate_true, patch_encode_command_output
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 from azurelinuxagent.ga.signature_validation_util import validate_signature, SignatureValidationError, validate_handler_manifest_signing_info, \
     ManifestValidationError, _get_openssl_version, openssl_version_supported_for_signature_validation
@@ -38,6 +38,8 @@ class TestSignatureValidation(AgentTestCase):
         with open(vm_access_signature_path, 'r') as f:
             self.vm_access_signature = f.read()
         self.package_name_and_version = "Microsoft.OSTCExtensions.Edp.VMAccessForLinux-1.5.0"
+        self.patch_encode_output = patch_encode_command_output()
+        self.patch_encode_output.start()
 
     def tearDown(self):
         patch.stopall()

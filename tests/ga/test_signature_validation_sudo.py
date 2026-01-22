@@ -20,7 +20,7 @@ import os
 import subprocess
 import re
 
-from tests.lib.tools import AgentTestCase, data_dir, patch, i_am_root, MagicMock
+from tests.lib.tools import AgentTestCase, data_dir, patch, i_am_root, MagicMock, patch_encode_command_output
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 from azurelinuxagent.ga.signature_validation_util import validate_signature, SignatureValidationError
 from azurelinuxagent.common.utils import shellutil
@@ -43,6 +43,9 @@ class TestSignatureValidationSudo(AgentTestCase):
 
         # Regex for 'openssl cms -verify' for the test zip package
         self.openssl_cmd_pattern = re.compile(r".*openssl\s+cms\s+-verify.*-content\s+{0}\b".format(re.escape(self.vm_access_zip_path)))
+
+        self.patch_encode_output = patch_encode_command_output()
+        self.patch_encode_output.start()
 
     def tearDown(self):
         patch.stopall()
