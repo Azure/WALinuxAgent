@@ -38,6 +38,7 @@ image-sets:
       - "ubuntu_2204_minimal"
       - "ubuntu_2404"
       - "ubuntu_2404_minimal"
+      - "ubuntu_2510"
 
    # Endorsed distros (ARM64) that are tested on the daily runs
    endorsed-arm64:
