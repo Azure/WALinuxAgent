@@ -37,6 +37,11 @@ from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 # command is not supported on older versions.
 _MIN_OPENSSL_VERSION_FOR_SIG_VALIDATION = FlexibleVersion("1.1.0")
 
+# In order to avoid impacting TDPR, we skip extension signature validation for the first 10 minutes after the agent starts.
+# TODO: This delay is a temporary workaround for telemetry collection without impacting customers. Remove for production release.
+_SIGNATURE_VALIDATION_DELAY_SECONDS = 600
+_agent_start_time = datetime.datetime.now(UTC)
+
 
 class PackageValidationError(AgentError):
     """
@@ -287,6 +292,12 @@ def signature_validation_enabled():
     Extension signature validation is currently limited to CVMs for telemetry/preview releases. It will be expanded to all VMs after we gain confidence in the feature.
     TODO: Remove the is_confidential_vm() check once signature validation is supported on all VMs.
     """
+    # Skip signature validation during the grace period after service start
+    # TODO: Remove this temporary telemetry release workaround before production release.
+    elapsed = (datetime.datetime.now(UTC) - _agent_start_time).total_seconds()
+    if elapsed < _SIGNATURE_VALIDATION_DELAY_SECONDS:
+        return False
+
     return conf.get_signature_validation_enabled() and openssl_version_supported_for_signature_validation() and ConfidentialVMInfo.is_confidential_vm()
 
 
