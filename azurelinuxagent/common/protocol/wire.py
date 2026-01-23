@@ -69,22 +69,27 @@ class UploadError(HttpError):
     pass
 
 
+class TransportCertificateError(ProtocolError):
+    pass
+
+
 class WireProtocol(DataContract):
     def __init__(self, endpoint):
         if endpoint is None:
             raise ProtocolError("WireProtocol endpoint is None")
         self.client = WireClient(endpoint)
 
-    def detect(self, init_goal_state=True, create_transport_certificate=True, save_to_history=False):
-        self.client.check_wire_protocol_version()
+    @staticmethod
+    def create_transport_certificate():
+        try:
+            trans_prv_file = os.path.join(conf.get_lib_dir(), TRANSPORT_PRV_FILE_NAME)
+            trans_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
+            CryptUtil(conf.get_openssl_cmd()).gen_transport_cert(trans_prv_file, trans_cert_file)
+        except Exception as e:
+            raise TransportCertificateError("Cannot create the Transport certificate: {0}".format(ustr(e)))
 
-        if create_transport_certificate:
-            trans_prv_file = os.path.join(conf.get_lib_dir(),
-                                          TRANSPORT_PRV_FILE_NAME)
-            trans_cert_file = os.path.join(conf.get_lib_dir(),
-                                           TRANSPORT_CERT_FILE_NAME)
-            cryptutil = CryptUtil(conf.get_openssl_cmd())
-            cryptutil.gen_transport_cert(trans_prv_file, trans_cert_file)
+    def detect(self, init_goal_state=True, save_to_history=False):
+        self.client.check_wire_protocol_version()
 
         # Initialize the goal state, including all the inner properties
         if init_goal_state:

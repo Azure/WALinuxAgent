@@ -4,6 +4,7 @@
 import json
 
 from azurelinuxagent.common.protocol.restapi import VMStatus, ExtHandlerStatus, ExtensionStatus
+from azurelinuxagent.common.protocol.wire import GoalState, GoalStateProperties
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.ga.agent_update_handler import get_agent_update_handler
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler
@@ -81,7 +82,7 @@ class ReportStatusTestCase(AgentTestCase):
                 with patch("azurelinuxagent.ga.update.logger.warn") as logger_warn:
                     with patch("azurelinuxagent.common.version.get_daemon_version", return_value=FlexibleVersion("2.2.53")):
                         update_handler = get_update_handler()
-                        update_handler._goal_state = protocol.get_goal_state()  # these tests skip the initialization of the goal state. so do that here
+                        update_handler._goal_state = GoalState(protocol.client, GoalStateProperties.ExtensionsGoalState)  # these tests skip the initialization of the goal state. so do that here
                         exthandlers_handler = ExtHandlersHandler(protocol)
                         agent_update_handler = get_agent_update_handler(protocol)
                         update_handler._report_status(exthandlers_handler, agent_update_handler)

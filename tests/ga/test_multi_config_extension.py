@@ -10,6 +10,7 @@ from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import GoalStateAggregateStatusCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import ExtensionRequestedState, ExtensionState
+from azurelinuxagent.common.protocol.wire import GoalState, GoalStateProperties
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, ExtensionStatusValue, ExtCommandEnvVariable, \
     GoalStateStatus, ExtHandlerInstance
@@ -52,7 +53,7 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
 
     def _mock_and_assert_ext_handlers(self, expected_handlers):
         with mock_wire_protocol(self.test_data) as protocol:
-            ext_handlers = protocol.get_goal_state().extensions_goal_state.extensions
+            ext_handlers = GoalState(protocol.client, GoalStateProperties.ExtensionsGoalState).extensions_goal_state.extensions
             for ext_handler in ext_handlers:
                 if ext_handler.name not in expected_handlers:
                     continue

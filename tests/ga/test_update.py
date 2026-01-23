@@ -2058,9 +2058,6 @@ class ProtocolMock(object):
     def get_protocol(self):
         return self
 
-    def get_goal_state(self):
-        return self._goal_state
-
     def update_goal_state(self):
         self.call_counts["update_goal_state"] += 1
 
@@ -2285,7 +2282,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
 
             update_handler._process_goal_state(exthandlers_handler, remote_access_handler, agent_update_handler)
 
-            incarnation = exthandlers_handler.protocol.get_goal_state().incarnation
+            incarnation = update_handler._goal_state.incarnation
             matches = glob.glob(os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "*_{0}".format(incarnation)))
             self.assertTrue(len(matches) == 1, "Could not find the history directory for the goal state. Got: {0}".format(matches))
 
@@ -2313,7 +2310,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
                 with mock_update_handler(protocol) as update_handler:
                     update_handler.run()
 
-                    self.assertTrue(protocol.client.get_goal_state().extensions_goal_state.is_outdated)
+                    self.assertTrue(update_handler._goal_state.extensions_goal_state.is_outdated)
 
     @staticmethod
     def _http_get_vm_settings_handler_not_found(url, *_, **__):
@@ -2328,7 +2325,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
             with mock_update_handler(protocol) as update_handler:
                 update_handler.run()
 
-                self.assertTrue(protocol.client.get_goal_state().extensions_goal_state.is_outdated)
+                self.assertTrue(update_handler._goal_state.extensions_goal_state.is_outdated)
 
     def test_it_should_clear_the_timestamp_for_the_most_recent_fast_track_goal_state(self):
         data_file = self._prepare_fast_track_goal_state()
