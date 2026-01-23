@@ -134,6 +134,7 @@ def is_unit_loaded(unit_name):
     except shellutil.CommandError:
         return False
 
+
 def is_systemd_run_failure(unit_name, stderr):
     """
     Determines if stderr from a systemd-run command indicates a systemd-run infrastructure failure
@@ -160,15 +161,14 @@ def is_systemd_run_failure(unit_name, stderr):
     - Command failures should be propagated to the caller for proper error handling
 
     :param unit_name: The name of the systemd unit/scope that was used with systemd-run
-    :param stderr: Error output from the systemd-run command
+    :param stderr: Error output from the systemd-run command, expected to be a file-like object or a string.
     :return: True if this is a systemd-run failure, False if it's a command execution failure
     """
-    # Handle different types of stderr input
     if hasattr(stderr, 'seek') and hasattr(stderr, 'read'):
         stderr.seek(0)
         stderr_str = ustr(stderr.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
     else:
-        stderr_str = str(stderr)
+        stderr_str = stderr
 
     unit_not_found = "Unit {0} not found.".format(unit_name)
     return unit_not_found in stderr_str or unit_name not in stderr_str

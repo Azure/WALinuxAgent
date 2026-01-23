@@ -167,7 +167,7 @@ class TestSignatureValidationSudo(AgentTestCase):
                 validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
 
 
-            # Check that first openssl call used systemd-run, and second called openssl directly
+            # Check that first openssl cms verify call used systemd-run, and second called openssl directly
             openssl_calls = [
                 ' '.join(args[0])
                 for (args, _) in popen_patch.call_args_list
