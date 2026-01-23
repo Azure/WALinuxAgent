@@ -1,0 +1,6 @@
+name: "AgentCreateUser"
+tests:
+  - "agent_create_user/agent_create_user.py"
+images:
+  - "endorsed"
+  - "endorsed-arm64"
