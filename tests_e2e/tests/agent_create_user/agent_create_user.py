@@ -50,14 +50,6 @@ class AgentCreateUser(AgentVmTest):
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         return [
-            #
-            # TODO: The cgroup configuration code needs to be update for Ubuntu 25; remove this exception once the code is updated
-            #
-            # 2026-01-26T18:05:56.782979Z INFO ExtHandler ExtHandler [CGW] Unable to determine which cgroup version to use: [CGroupsException] /sys/fs/cgroup has an unexpected file type: UNKNOWN (0x63677270)
-            #
-            {
-                'message': r"[CGW] Unable to determine which cgroup version to use: [CGroupsException] /sys/fs/cgroup has an unexpected file type"
-            }
         ]
 
 
