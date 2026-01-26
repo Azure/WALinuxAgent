@@ -24,7 +24,10 @@
 #
 # Creates a user with a random username and password and outputs the username.
 #
-
+# Use the --delete option to remove the user from the system.
+#
+import argparse
+import os
 import random
 import string
 
@@ -33,14 +36,26 @@ from azurelinuxagent.common.osutil.factory import get_osutil
 
 
 def main():
-    username = 'test_user_' + ''.join(random.choice(string.digits) for _ in range(10))
-    password = ''.join(random.choice(string.ascii_letters + string.digits + string.punctuation) for _ in range(32))
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--delete', dest="delete", required=False)
+    args = parser.parse_args()
+
+    # The useradd/userdel commands are not on the default path on some distros; add /usr/sbin.
+    os.environ["PATH"] = os.environ["PATH"] + ":/usr/sbin"
 
     osutil = get_osutil()
-    osutil.useradd(username)
-    osutil.chpasswd(username, password, conf.get_password_cryptid(), conf.get_password_crypt_salt_len())
 
-    print(username)
+    if args.delete is not None:
+        osutil.del_account(args.delete)
+    else:
+        username = 'test_user_' + ''.join(random.choice(string.digits) for _ in range(10))
+        password = ''.join(random.choice(string.ascii_letters + string.digits + string.punctuation) for _ in range(32))
+
+        osutil.useradd(username)
+        osutil.chpasswd(username, password, conf.get_password_cryptid(), conf.get_password_crypt_salt_len())
+
+        print(username)
+
 
 
 if __name__ == "__main__":

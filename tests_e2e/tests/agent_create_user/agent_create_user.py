@@ -40,12 +40,11 @@ class AgentCreateUser(AgentVmTest):
 
         # A simple check in case there is a bug in create_test_user.py
         log.info("Looking for test user in /etc/passwd...")
-        result = ssh_client.run_command(f"grep {test_user} /etc/passwd")
+        result = ssh_client.run_command(f"grep {test_user} /etc/passwd").rstrip()
         log.info(f"Found test user: {result}")
 
-        # VM clean up; not relevant to the intention of this test, though we would still like to know when it fails so no exception handling
         log.info("Removing test user...")
-        ssh_client.run_command(f"pypy3 -c \"from azurelinuxagent.common.osutil.factory import get_osutil; get_osutil().del_account('{test_user}')\"", use_sudo=True)
+        ssh_client.run_command(f"create_test_user.py --delete {test_user}", use_sudo=True)
         log.info("The test user was removed successfully")
 
 
