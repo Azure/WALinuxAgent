@@ -16,7 +16,7 @@
 #
 import xml
 
-from azurelinuxagent.common.protocol.goal_state import GoalState, RemoteAccess  # pylint: disable=unused-import
+from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateProperties, RemoteAccess  # pylint: disable=unused-import
 from tests.lib.tools import AgentTestCase, load_data, patch, Mock  # pylint: disable=unused-import
 from tests.lib import wire_protocol_data
 from tests.lib.mock_wire_protocol import mock_wire_protocol
@@ -35,7 +35,7 @@ class TestRemoteAccess(AgentTestCase):
 
     def test_goal_state_with_no_remote_access(self):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
-            self.assertIsNone(protocol.client.get_goal_state().remote_access)
+            self.assertIsNone(GoalState(protocol.client, GoalStateProperties.RemoteAccessInfo).remote_access)
 
     def test_parse_two_remote_access_accounts(self):
         data_str = load_data('wire/remote_access_two_accounts.xml')
@@ -76,7 +76,7 @@ class TestRemoteAccess(AgentTestCase):
 
     def test_update_remote_access_conf_remote_access(self):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE_REMOTE_ACCESS) as protocol:
-            remote_access = protocol.client.get_goal_state().remote_access
+            remote_access = GoalState(protocol.client, GoalStateProperties.RemoteAccessInfo).remote_access
             self.assertIsNotNone(remote_access)
             self.assertEqual(1, len(remote_access.user_list.users))
             self.assertEqual('testAccount', remote_access.user_list.users[0].name)

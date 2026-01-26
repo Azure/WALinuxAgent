@@ -29,7 +29,7 @@ from azurelinuxagent.common.agent_supported_feature import get_agent_supported_f
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import ResourceGoneError, ProtocolError, ExtensionDownloadError, HttpError
 from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config import ExtensionsGoalStateFromExtensionsConfig
-from azurelinuxagent.common.protocol.goal_state import GoalStateProperties
+from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateProperties
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, StatusBlob, VMStatus, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema, TelemetryEventParam, TelemetryEvent
@@ -90,9 +90,10 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
             protocol = WireProtocol(WIRESERVER_URL)
             protocol.detect()
             protocol.get_vminfo()
-            ext_handlers = protocol.get_goal_state().extensions_goal_state.extensions
+            goal_state = GoalState(protocol.client, GoalStateProperties.ExtensionsGoalState)
+            ext_handlers = goal_state.extensions_goal_state.extensions
             for ext_handler in ext_handlers:
-                protocol.get_goal_state().fetch_extension_manifest(ext_handler.name, ext_handler.manifest_uris)
+                goal_state.fetch_extension_manifest(ext_handler.name, ext_handler.manifest_uris)
 
             crt1 = os.path.join(self.tmp_dir,
                                 '8979F1AC8C4215827BF3B5A403E6137B504D02A4.crt')
@@ -204,18 +205,18 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
 
     def test_status_blob_parsing(self, *args):  # pylint: disable=unused-argument
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
-            extensions_goal_state = protocol.get_goal_state().extensions_goal_state
+            extensions_goal_state = GoalState(protocol.client, GoalStateProperties.ExtensionsGoalState).extensions_goal_state
             self.assertIsInstance(extensions_goal_state, ExtensionsGoalStateFromExtensionsConfig)
             self.assertEqual(extensions_goal_state.status_upload_blob,
                              'https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?'
                              'sr=b&sp=rw&se=9999-01-01&sk=key1&sv=2014-02-14&'
                              'sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo')
-            self.assertEqual(protocol.get_goal_state().extensions_goal_state.status_upload_blob_type, u'BlockBlob')
+            self.assertEqual(extensions_goal_state.status_upload_blob_type, u'BlockBlob')
 
     def test_get_host_ga_plugin(self, *args):  # pylint: disable=unused-argument
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             host_plugin = protocol.client.get_host_plugin()
-            goal_state = protocol.client.get_goal_state()
+            goal_state = GoalState(protocol.client, GoalStateProperties.RoleConfig)
             self.assertEqual(goal_state.container_id, host_plugin.container_id)
             self.assertEqual(goal_state.role_config_name, host_plugin.role_config_name)
 
@@ -259,11 +260,11 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
         data_file["ext_conf"] = "wire/ext_conf_in_vm_empty_artifacts_profile.xml"
 
         with mock_wire_protocol(data_file) as protocol:
-            self.assertFalse(protocol.get_goal_state().extensions_goal_state.on_hold)
+            self.assertFalse(GoalState(protocol.client, GoalStateProperties.ExtensionsGoalState).extensions_goal_state.on_hold)
 
     def test_it_should_set_on_hold_to_false_when_the_in_vm_artifacts_profile_is_not_valid(self, *_):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
-            extensions_on_hold = protocol.get_goal_state().extensions_goal_state.on_hold
+            extensions_on_hold = GoalState(protocol.client, GoalStateProperties.ExtensionsGoalState).extensions_goal_state.on_hold
             self.assertTrue(extensions_on_hold, "Extensions should be on hold in the test data")
 
             def http_get_handler(url, *_, **kwargs):
@@ -273,25 +274,21 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
             mock_response = MockHttpResponse(200, body=None)
-            protocol.client.reset_goal_state()
-            extensions_on_hold = protocol.get_goal_state().extensions_goal_state.on_hold
+            extensions_on_hold = GoalState(protocol.client, GoalStateProperties.ExtensionsGoalState).extensions_goal_state.on_hold
             self.assertFalse(extensions_on_hold, "Extensions should not be on hold when the in-vm artifacts profile response body is None")
 
             mock_response = MockHttpResponse(200, '   '.encode('utf-8'))
-            protocol.client.reset_goal_state()
-            extensions_on_hold = protocol.get_goal_state().extensions_goal_state.on_hold
+            extensions_on_hold = GoalState(protocol.client, GoalStateProperties.ExtensionsGoalState).extensions_goal_state.on_hold
             self.assertFalse(extensions_on_hold, "Extensions should not be on hold when the in-vm artifacts profile response is an empty string")
 
             mock_response = MockHttpResponse(200, '{ }'.encode('utf-8'))
-            protocol.client.reset_goal_state()
-            extensions_on_hold = protocol.get_goal_state().extensions_goal_state.on_hold
+            extensions_on_hold = GoalState(protocol.client, GoalStateProperties.ExtensionsGoalState).extensions_goal_state.on_hold
             self.assertFalse(extensions_on_hold, "Extensions should not be on hold when the in-vm artifacts profile response is an empty json object")
 
             with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.add_event") as add_event:
                 mock_response = MockHttpResponse(200, 'invalid json'.encode('utf-8'))
-                protocol.client.reset_goal_state()
 
-                extensions_on_hold = protocol.get_goal_state().extensions_goal_state.on_hold
+                extensions_on_hold = GoalState(protocol.client, GoalStateProperties.ExtensionsGoalState).extensions_goal_state.on_hold
                 self.assertFalse(extensions_on_hold, "Extensions should not be on hold when the in-vm artifacts profile response is not valid json")
 
                 events = [kwargs for _, kwargs in add_event.call_args_list if kwargs['op'] == WALAEventOperation.ArtifactsProfileBlob]
@@ -513,7 +510,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         # extensions_goal_state fetches the correct data by comparing the returned data with the test data provided the
         # mock_wire_protocol.
         with mock_wire_protocol(wire_protocol_data.DATA_FILE_NO_EXT) as protocol:
-            extensions_goal_state = protocol.get_goal_state().extensions_goal_state
+            extensions_goal_state = GoalState(protocol.client, GoalStateProperties.ExtensionsGoalState).extensions_goal_state
 
             ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.extensions]
             self.assertEqual(0, len(extensions_goal_state.extensions),
@@ -528,7 +525,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         # Basic test for extensions_goal_state when extensions are present in the config. The test verifies that extensions_goal_state
         # fetches the correct data by comparing the returned data with the test data provided the mock_wire_protocol.
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
-            extensions_goal_state = protocol.get_goal_state().extensions_goal_state
+            extensions_goal_state = GoalState(protocol.client, GoalStateProperties.ExtensionsGoalState).extensions_goal_state
 
             ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.extensions]
             self.assertEqual(1, len(extensions_goal_state.extensions),

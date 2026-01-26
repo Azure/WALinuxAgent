@@ -512,7 +512,7 @@ class UpdateHandler(object):
         if not conf.get_enable_fast_track():
             last_fast_track_timestamp = HostPluginProtocol.get_fast_track_timestamp()
             if last_fast_track_timestamp is not None:
-                egs = protocol.client.get_goal_state().extensions_goal_state
+                egs = self._goal_state.extensions_goal_state
                 if egs.created_on_timestamp < last_fast_track_timestamp:
                     egs.is_outdated = True
                     event.info(
