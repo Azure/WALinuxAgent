@@ -25,6 +25,7 @@
 # Our current test infrastructure cannot automate scenarios to exercise the Provisioning Agent, not JIT. In lieu of
 # end-to-end tests for those features, we use this test to exercise the code affected by those changes in Python.
 #
+from typing import Any, Dict, List
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
@@ -46,6 +47,18 @@ class AgentCreateUser(AgentVmTest):
         log.info("Removing test user...")
         ssh_client.run_command(f"create_test_user.py --delete {test_user}", use_sudo=True)
         log.info("The test user was removed successfully")
+
+    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
+        return [
+            #
+            # TODO: The cgroup configuration code needs to be update for Ubuntu 25; remove this exception once the code is updated
+            #
+            # 2026-01-26T18:05:56.782979Z INFO ExtHandler ExtHandler [CGW] Unable to determine which cgroup version to use: [CGroupsException] /sys/fs/cgroup has an unexpected file type: UNKNOWN (0x63677270)
+            #
+            {
+                'message': r"[CGW] Unable to determine which cgroup version to use: [CGroupsException] /sys/fs/cgroup has an unexpected file type"
+            }
+        ]
 
 
 if __name__ == "__main__":
