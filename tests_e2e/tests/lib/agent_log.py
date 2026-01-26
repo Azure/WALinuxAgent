@@ -484,7 +484,7 @@ class AgentLog(object):
             #
             {
                 'message': r"/sys/fs/cgroup has an unexpected file type",
-                # 'if': lambda r: DISTRO_NAME == "ubuntu" and DISTRO_VERSION == "25.04"
+                'if': lambda r: DISTRO_NAME == "ubuntu" and DISTRO_VERSION == "25.10"
             },
         ]
 
