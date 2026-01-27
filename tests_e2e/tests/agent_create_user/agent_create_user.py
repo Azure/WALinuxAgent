@@ -19,13 +19,12 @@
 
 #
 # The provisioning Agent and Just In Time Access can create user accounts. The underlying code has dependencies on the
-# Python version installed on the VM; in particular, the crypt module, used by the Agent to hash passwords, was removed
-# on Python 3.13 and the Agent uses the passlib module instead.
+# Python version installed on the VM; in particular, the crypt module, which is used by the Agent to hash passwords, was
+# removed on Python 3.13. On Python >= 3.13, the Agent uses the passlib module instead.
 #
-# Our current test infrastructure cannot automate scenarios to exercise the Provisioning Agent, not JIT. In lieu of
+# Our current test infrastructure cannot automate scenarios to exercise the Provisioning Agent, nor JIT. In lieu of
 # end-to-end tests for those features, we use this test to exercise the code affected by those changes in Python.
 #
-from typing import Any, Dict, List
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
@@ -47,10 +46,6 @@ class AgentCreateUser(AgentVmTest):
         log.info("Removing test user...")
         ssh_client.run_command(f"create_test_user.py --delete {test_user}", use_sudo=True)
         log.info("The test user was removed successfully")
-
-    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
-        return [
-        ]
 
 
 if __name__ == "__main__":
