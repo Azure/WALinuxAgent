@@ -242,6 +242,7 @@ images:
       urn: "Oracle:Oracle-Linux:ol10-arm64-lvm-gen2:latest"
       locations:
          AzureChinaCloud: []
+         AzureUSGovernment: [] # TODO: Our test subscription does not have quota to create VMs with this image. Remove once we update our subscription.
    rhel_610: "RedHat:RHEL:6.10:latest"
    rhel_75:
       urn: "RedHat:RHEL:7.5:latest"
