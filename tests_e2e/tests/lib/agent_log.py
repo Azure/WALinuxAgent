@@ -199,6 +199,22 @@ class AgentLog(object):
                 'if': lambda r: r.level == "ERROR"
             },
             #
+            # 2026-01-24T09:36:22.820919Z WARNING ExtHandler ExtHandler Can't download the artifacts profile blob; will assume the VM is not on hold. [ExtensionDownloadError] Failed to download artifacts profile blob from all URIs. Last error: [HttpError] Download failed both on the primary and fallback channels. Primary: [[HttpError] [HTTP Failed] GET https://md-hdd-cq0dd5h1sm10.z45.blob.storage.azure.net/$system/*.vmSettings -- IOError timed out -- 6 attempts made] Fallback: [[HttpError] [HTTP Retry] GET http://168.63.129.16:32526/extensionArtifact -- Status Code 403 -- 25 attempts made]
+            #
+            # Individual(hgap, direct) artifact download failures are logged separately; this warning can be ignored.
+            {
+                'message': r"Can't download the artifacts profile blob; will assume the VM is not on hold",
+                'if': lambda r: r.level == "WARNING"
+            },
+            #
+            # 2026-01-24T09:35:58.630432Z WARNING ExtHandler ExtHandler HealthService: could not report observations: [HttpError] [HTTP Failed] POST http://168.63.129.16:80/HealthService -- IOError timed out -- 6 attempts made
+            #
+            # Warnings reporting to HealthService while fetch failures happening can be ignored, if the issue persist the log would include other errors as well.
+            {
+                'message': r"HealthService: could not report observations: \[HttpError\] \[HTTP Failed\] POST .*/HealthService -- IOError timed out",
+                'if': lambda r: r.level == "WARNING" and r.prefix == "ExtHandler"
+            },
+            #
             # 2022-11-01T02:45:55.513692Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] GET vmSettings [correlation ID: 616873cc-be87-41b6-83b7-ef3a76370628 eTag: 3693655388249891516]: [Internal error in HostGAPlugin] [HTTP Failed] [502: Bad Gateway] {  "errorCode": "InternalError",  "message": "The server encountered an internal error. Please retry the request.",  "details": ""}
             #
             # Fetching the goal state may catch the HostGAPlugin in the process of computing the vmSettings. This can be ignored, if the issue persist the log would include other errors as well.

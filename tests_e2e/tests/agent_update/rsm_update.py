@@ -196,7 +196,7 @@ class RsmUpdateBvt(AgentVmTest):
         """
 
         log.info("Executing verify_versioning_supported_feature.py remote script to verify agent reported supported feature flag")
-        self._run_remote_test(self._ssh_client, f"agent_update-verify_versioning_supported_feature.py --supported {supported}", use_sudo=True)
+        self._run_remote_test(self._ssh_client, f"agent_update-verify_versioning_supported_feature.py --supported {supported}", attempts=5, attempt_delay=60, use_sudo=True)
         if supported:
             log.info("Successfully verified that Agent reported VersioningGovernance supported feature flag")
         else:
