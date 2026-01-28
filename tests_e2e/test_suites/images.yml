@@ -46,7 +46,6 @@ image-sets:
       - "flatcar_arm64"
       - "mariner_2_arm64"
       - "azure-linux_3_arm64"
-      - "oracle_10_arm64"
       - "rhel_95_arm64"
       - "ubuntu_2204_arm64"
       - "ubuntu_2404_arm64"
@@ -238,7 +237,7 @@ images:
       urn: "Oracle:Oracle-Linux:ol10-lvm-gen2:latest"
       locations:
          AzureChinaCloud: []
-   oracle_10_arm64:
+   oracle_10_arm64: # TODO: Oracle 10 ARM64 is failing to deploy; add to 'endorsed-arm64' once it is fixed.
       urn: "Oracle:Oracle-Linux:ol10-arm64-lvm-gen2:latest"
       locations:
          AzureChinaCloud: []
