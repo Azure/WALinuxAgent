@@ -500,25 +500,6 @@ def patch_builtin(target, *args, **kwargs):
     return patch("{0}.{1}".format(prefix, target), *args, **kwargs)
 
 
-def patch_encode_command_output():
-    """
-    Returns a patch for shellutil.__encode_command_output that uses a compatible
-    error handler on Python 3.4 and earlier ('backslashreplace' for decoding was added in Python 3.5).
-
-    Usage:
-        with patch_encode_command_output():
-            # test code that calls run_command()
-
-    TODO: This is a temporary unit-test workaround for a known code issue. Remove after the 'backslashreplace' issue is resolved.
-    """
-    def encode_command_output_compatible(output):
-        # 'backslashreplace' for decoding was added in Python 3.5; use 'ignore' as fallback for older versions.
-        error_handler = 'ignore' if is_python_version_34_or_earlier() else 'backslashreplace'
-        return ustr(output if output is not None else b'', encoding='utf-8', errors=error_handler)
-
-    return patch('azurelinuxagent.common.utils.shellutil.__encode_command_output', side_effect=encode_command_output_compatible)
-
-
 def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
     """Run test on multiple distros"""
     def decorator(test_method):
@@ -549,3 +530,13 @@ def clear_singleton_instances(cls):
         obj_name = "%s__%s" % (cls.__name__, current_thread().name)  # Object Name = className__threadName
         if obj_name in cls._instances:
             del cls._instances[obj_name]
+
+
+def get_decode_error_handler():
+    """
+    Returns a Python version-compatible error handler for decoding bytes.
+    'backslashreplace' for decoding was added in Python 3.5; use 'ignore' as fallback for older versions.
+
+    TODO: This is a temporary unit-test workaround for a known code issue. Remove after the 'backslashreplace' issue is resolved.
+    """
+    return 'ignore' if is_python_version_34_or_earlier() else 'backslashreplace'

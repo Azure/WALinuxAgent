@@ -164,11 +164,11 @@ def is_systemd_run_failure(unit_name, stderr):
     :param stderr: Error output from the systemd-run command, expected to be a file-like object or a string.
     :return: True if this is a systemd-run failure, False if it's a command execution failure
     """
-    if hasattr(stderr, 'seek') and hasattr(stderr, 'read'):
+    if isinstance(stderr, ustr):
+        stderr_str = stderr
+    else:
         stderr.seek(0)
         stderr_str = ustr(stderr.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
-    else:
-        stderr_str = stderr
 
     unit_not_found = "Unit {0} not found.".format(unit_name)
     return unit_not_found in stderr_str or unit_name not in stderr_str
