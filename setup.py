@@ -352,13 +352,13 @@ class install(_install):  # pylint: disable=C0103
 #   module was deprecated. Depending on the Linux distribution the
 #   implementation may be broken prior to Python 3.8 where the functionality
 #   will be removed from Python 3.
-# * In version 3.13 of Python, the crypt module was removed and crypt-r is
+# * In version 3.13 of Python, the crypt module was removed and passlib is
 #   required instead.
 requires = []
 if sys.version_info[0] >= 3 and sys.version_info[1] >= 8:
     requires.append('distro')
 if sys.version_info[0] >= 3 and sys.version_info[1] >= 13:
-    requires.append('crypt-r')
+    requires.append('passlib')
 
 modules = []  # pylint: disable=invalid-name
 

@@ -37,6 +37,7 @@ variable:
     value:
       - agent_bvt
       - agent_cgroups
+      - agent_create_user
       - agent_ext_workflow
       - agent_firewall
       - agent_not_provisioned
