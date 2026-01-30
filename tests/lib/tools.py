@@ -38,7 +38,6 @@ from azurelinuxagent.common.future import range  # pylint: disable=redefined-bui
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
-
 import tests
 
 try:

@@ -3960,7 +3960,6 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
     TODO: Remove after telemetry release, when signature validation errors are enforced by default (when default value for
     'Debug.IgnoreSignatureValidationErrors' is changed from True to False).
     """
-
     def test_enable_should_succeed_and_send_telemetry_if_signature_validation_fails(self):
         # Signature validation fails, handler manifest validation succeeds -> enable, send telemetry, state should not be set
         data_file = wire_protocol_data.DATA_FILE.copy()
