@@ -193,7 +193,8 @@ def validate_signature(package_path, signature, package_full_name):
             '-content', package_path,  # Path to the original package that was signed
             '-purpose', 'any',  # Allows verification for any purpose, not restricted to specific uses
             '-CAfile', microsoft_root_cert_file,  # Path to the trusted root certificate file used for verification
-            '-no_check_time'  # Skips checking whether the certificate is expired
+            '-no_check_time',  # Skips checking whether the certificate is expired
+            '-out', os.devnull  # Command outputs the signed data, we don't need it so we suppress it
         ]
 
         # If cgroups are enabled, attempt to run the command in a dedicated systemd-run scope with a dedicated CPU quota.

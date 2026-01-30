@@ -20,12 +20,11 @@ import os
 import subprocess
 import re
 
-from tests.lib.tools import AgentTestCase, data_dir, patch, i_am_root, MagicMock, get_decode_error_handler
+from tests.lib.tools import AgentTestCase, data_dir, patch, i_am_root, MagicMock
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 from azurelinuxagent.ga.signature_validation_util import validate_signature, SignatureValidationError
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.ga.cgroupconfigurator import EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME
-from azurelinuxagent.common.future import ustr
 
 
 class TestSignatureValidationSudo(AgentTestCase):
@@ -50,20 +49,6 @@ class TestSignatureValidationSudo(AgentTestCase):
         AgentTestCase.tearDown(self)
 
     @staticmethod
-    def patch_encode_command_output():
-        """
-        Returns a patch for shellutil.__encode_command_output that uses a Python-version compatible
-        error handler on Python 3.4 and earlier ('backslashreplace' for decoding was added in Python 3.5).
-
-        TODO: This is a temporary unit-test workaround for a known code issue. Remove after the 'backslashreplace' issue is resolved.
-        """
-        def encode_command_output_compatible(output):
-            return ustr(output if output is not None else b'', encoding='utf-8', errors=get_decode_error_handler())
-
-        return patch('azurelinuxagent.common.utils.shellutil.__encode_command_output',
-                     side_effect=encode_command_output_compatible)
-
-    @staticmethod
     def _validate_signature_in_another_year(target_year, package_path, signature, package_name_and_version):
         original_system_year = None
         try:
@@ -71,8 +56,7 @@ class TestSignatureValidationSudo(AgentTestCase):
             delta = target_year - int(original_system_year)
             if delta > 0:
                 shellutil.run_command(["sudo", "date", "-s", "{0} years".format(delta)])
-            with TestSignatureValidationSudo.patch_encode_command_output():
-                validate_signature(package_path, signature, package_name_and_version)
+            validate_signature(package_path, signature, package_name_and_version)
         except shellutil.CommandError as ex:
             raise Exception("Failed to retrieve or update system time.\nExit code: {0}\nError details: {1}".format(ex.returncode, ex.stderr))
         finally:
@@ -106,8 +90,7 @@ class TestSignatureValidationSudo(AgentTestCase):
             mock_instance = mock_get_instance.return_value
             mock_instance.enabled.return_value = True
             with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
-                with TestSignatureValidationSudo.patch_encode_command_output():
-                    validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
+                validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
 
             # Check if 'openssl cms -verify' was called with systemd-run for the specified extension
             systemd_run_called = any(
@@ -126,8 +109,7 @@ class TestSignatureValidationSudo(AgentTestCase):
             mock_instance.enabled.return_value = False
 
             with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
-                with TestSignatureValidationSudo.patch_encode_command_output():
-                    validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
+                validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
 
                 # Verify openssl was called directly (not through systemd-run) for the specified extension
                 # Find all openssl calls that match the pattern
@@ -158,8 +140,7 @@ class TestSignatureValidationSudo(AgentTestCase):
 
             with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=mock_openssl_failure):
                 with self.assertRaises(SignatureValidationError, msg="Expected signature validation to raise due to OpenSSL error"):
-                    with TestSignatureValidationSudo.patch_encode_command_output():
-                        validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
+                    validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
 
     def test_validate_signature_should_retry_on_systemd_error(self):
         with patch("azurelinuxagent.ga.signature_validation_util.CGroupConfigurator.get_instance") as mock_get_instance:
@@ -180,8 +161,7 @@ class TestSignatureValidationSudo(AgentTestCase):
                 return original_popen(*args, **kwargs)
 
             with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=popen_side_effect) as popen_patch:
-                with TestSignatureValidationSudo.patch_encode_command_output():
-                    validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
+                validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
 
 
             # Check that first openssl cms verify call used systemd-run, and second called openssl directly

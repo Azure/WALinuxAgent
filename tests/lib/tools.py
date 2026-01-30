@@ -125,10 +125,6 @@ def is_python_version_34():
     return sys.version_info[0] == 3 and sys.version_info[1] == 4
 
 
-def is_python_version_34_or_earlier():
-    return sys.version_info[0] == 2 or (sys.version_info[0] == 3 and sys.version_info[1] <= 4)
-
-
 class AgentTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -530,13 +526,3 @@ def clear_singleton_instances(cls):
         obj_name = "%s__%s" % (cls.__name__, current_thread().name)  # Object Name = className__threadName
         if obj_name in cls._instances:
             del cls._instances[obj_name]
-
-
-def get_decode_error_handler():
-    """
-    Returns a Python version-compatible error handler for decoding bytes.
-    'backslashreplace' for decoding was added in Python 3.5; use 'ignore' as fallback for older versions.
-
-    TODO: This is a temporary unit-test workaround for a known code issue. Remove after the 'backslashreplace' issue is resolved.
-    """
-    return 'ignore' if is_python_version_34_or_earlier() else 'backslashreplace'

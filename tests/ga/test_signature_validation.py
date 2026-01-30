@@ -19,7 +19,7 @@
 import os
 import sys
 
-from tests.lib.tools import AgentTestCase, data_dir, patch, skip_if_predicate_true, get_decode_error_handler
+from tests.lib.tools import AgentTestCase, data_dir, patch, skip_if_predicate_true
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 from azurelinuxagent.ga.signature_validation_util import validate_signature, SignatureValidationError, validate_handler_manifest_signing_info, \
     ManifestValidationError, _get_openssl_version, openssl_version_supported_for_signature_validation
@@ -27,7 +27,6 @@ from azurelinuxagent.ga.exthandlers import HandlerManifest
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.protocol.restapi import Extension
 from azurelinuxagent.common.utils.shellutil import CommandError
-from azurelinuxagent.common.future import ustr
 
 
 class TestSignatureValidation(AgentTestCase):
@@ -44,19 +43,6 @@ class TestSignatureValidation(AgentTestCase):
         patch.stopall()
         AgentTestCase.tearDown(self)
 
-    @staticmethod
-    def patch_encode_command_output():
-        """
-        Returns a patch for shellutil.__encode_command_output that uses a compatible decode error handler on Python 3.4 and earlier
-        ('backslashreplace' is not supported on Python 3.4 and earlier).
-
-        TODO: This is a temporary unit-test workaround for a known code issue. Remove after the 'backslashreplace' issue is resolved.
-        """
-        def encode_command_output_compatible(output):
-            return ustr(output if output is not None else b'', encoding='utf-8', errors=get_decode_error_handler())
-
-        return patch('azurelinuxagent.common.utils.shellutil.__encode_command_output', side_effect=encode_command_output_compatible)
-
     def test_should_validate_signature_successfully(self):
         """
         Test that the signature can be validated successfully without raising an exception.
@@ -66,43 +52,38 @@ class TestSignatureValidation(AgentTestCase):
         could request newly signed versions, leaf certs expire fairly quickly (within a year) and we would
         need to frequently update the test with a new signature and package.
         """
-        with TestSignatureValidation.patch_encode_command_output():
-            validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
+        validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
 
     def test_should_raise_error_if_signature_does_not_match_package(self):
         # This signature is correctly formatted but belongs to a different extension (CSE),
         # signature validation should fail for VMAccess
         with open(os.path.join(data_dir, "signing/invalid_signature.txt"), 'r') as f:
             invalid_signature = f.read()
-            with TestSignatureValidation.patch_encode_command_output():
-                with self.assertRaises(SignatureValidationError, msg="Signature is invalid, should have raised error"):
-                    validate_signature(self.vm_access_zip_path, invalid_signature, self.package_name_and_version)
+            with self.assertRaises(SignatureValidationError, msg="Signature is invalid, should have raised error"):
+                validate_signature(self.vm_access_zip_path, invalid_signature, self.package_name_and_version)
 
     def test_should_raise_error_if_package_is_tampered_with(self):
         # This is the VMAccess test extension zip package with one byte modified, signature validation should fail
         modified_ext = os.path.join(data_dir, "signing/Modified_Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip")
-        with TestSignatureValidation.patch_encode_command_output():
-            with self.assertRaises(SignatureValidationError, msg="Zip package does not match signature, should have raised error"):
-                validate_signature(modified_ext, self.vm_access_signature, self.package_name_and_version)
+        with self.assertRaises(SignatureValidationError, msg="Zip package does not match signature, should have raised error"):
+            validate_signature(modified_ext, self.vm_access_signature, self.package_name_and_version)
 
     def test_should_raise_error_on_incorrect_signing_certificate(self):
         # The root certificate used here is valid (unexpired) and issued by the Microsoft CA, but it does not match the
         # one that signed the package - signature validation should fail.
         incorrect_root_cert_path = os.path.join(data_dir, "signing/incorrect_microsoft_root_cert.pem")
-        with TestSignatureValidation.patch_encode_command_output():
-            with patch("azurelinuxagent.ga.signature_validation_util.get_microsoft_signing_certificate_path", return_value=incorrect_root_cert_path):
-                with self.assertRaises(SignatureValidationError, msg="Signing certificate does not match, should have raised error") as ex:
-                    validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
-                expected_error_regex = r"Verify\s*error\s*:\s*unable\s*to\s*get\s*local\s*issuer\s*certificate"
-                self.assertRegex(ex.exception.args[0], expected_error_regex, msg="Raised SignatureValidationError but error did not indicate certificate failure")
+        with patch("azurelinuxagent.ga.signature_validation_util.get_microsoft_signing_certificate_path", return_value=incorrect_root_cert_path):
+            with self.assertRaises(SignatureValidationError, msg="Signing certificate does not match, should have raised error") as ex:
+                validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
+            expected_error_regex = r"Verify\s*error\s*:\s*unable\s*to\s*get\s*local\s*issuer\s*certificate"
+            self.assertRegex(ex.exception.args[0], expected_error_regex, msg="Raised SignatureValidationError but error did not indicate certificate failure")
 
     def test_should_raise_error_on_missing_signing_certificate(self):
         root_cert_path = os.path.join(self.tmp_dir, "missing_root_cert.pem")
-        with TestSignatureValidation.patch_encode_command_output():
-            with patch("azurelinuxagent.ga.signature_validation_util.get_microsoft_signing_certificate_path", return_value=root_cert_path):
-                with self.assertRaises(SignatureValidationError, msg="Signing certificate missing, should have raised error") as ex:
-                    validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
-                self.assertIn("signing certificate was not found", ex.exception.args[0], msg="Error message did not indicate that certificate is missing.")
+        with patch("azurelinuxagent.ga.signature_validation_util.get_microsoft_signing_certificate_path", return_value=root_cert_path):
+            with self.assertRaises(SignatureValidationError, msg="Signing certificate missing, should have raised error") as ex:
+                validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
+            self.assertIn("signing certificate was not found", ex.exception.args[0], msg="Error message did not indicate that certificate is missing.")
 
     def test_should_handle_and_report_error_raised_when_writing_signing_certificate(self):
         # If an error is raised when writing signing certificates, the error should be handled/swallowed but reported
