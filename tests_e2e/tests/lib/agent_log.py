@@ -477,6 +477,15 @@ class AgentLog(object):
             {
                 'message': r"\[PERIODIC\] Could not collect metrics for cgroup .* Failed to read cpu.stat: Cannot find throttled_usec",
             },
+            #
+            # TODO: The cgroup configuration code needs to be updated for Ubuntu 25; remove this exception once the code is updated
+            #
+            # 2026-01-26T18:05:56.782979Z INFO ExtHandler ExtHandler [CGW] Unable to determine which cgroup version to use: [CGroupsException] /sys/fs/cgroup has an unexpected file type: UNKNOWN (0x63677270)
+            #
+            {
+                'message': r"/sys/fs/cgroup has an unexpected file type",
+                'if': lambda r: DISTRO_NAME == "ubuntu" and DISTRO_VERSION == "25.10"
+            },
         ]
 
         def is_error(r: AgentLogRecord) -> bool:

@@ -336,3 +336,4 @@ images:
       urn: "Canonical ubuntu-24_04-lts cvm latest"
       vm_sizes:
          - "Standard_DC2ads_v5" # CVM v5 SKU
+   ubuntu_2510: "Canonical:ubuntu-25_10:server:latest"
