@@ -51,13 +51,19 @@ def main():
     args = parser.parse_args()
 
     log.info("checking agent status file for VersioningGovernance supported feature flag")
+    # In these test VMs, direct artifact blob downloads are failing, and our retry
+    # logic takes a long time to exhaust all attempts. As a result, the agent is
+    # blocked from continuing execution and cannot report status to CRP quickly.
+    #
+    # Increasing the number of attempts and the delay is added here as a temporary
+    # workaround while we investigate the root cause of the blob download failures.
     if args.supported == "True":
-        found: bool = retry_if_false(check_agent_supports_versioning)
+        found: bool = retry_if_false(check_agent_supports_versioning, attempts=10, delay=60)
         if not found:
             raise Exception("Agent failed to report supported feature flag. So, skipping agent update validations "
                             "since CRP will not send RSM requested version in GS if feature flag not found in status")
     else:
-        found: bool = retry_if_true(check_agent_supports_versioning)
+        found: bool = retry_if_true(check_agent_supports_versioning, attempts=10, delay=60)
         if found:
             raise Exception("Agent should not report supported feature flag while agent updates disabled in the vm.")
 
