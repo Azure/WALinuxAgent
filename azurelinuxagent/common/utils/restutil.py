@@ -27,7 +27,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 
-from azurelinuxagent.common.exception import HttpError, ResourceGoneError, InvalidContainerError
+from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient, urlparse, ustr
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, AGENT_NAME, GOAL_STATE_AGENT_VERSION
 
@@ -482,13 +482,6 @@ def http_request(method,
                 response_error = read_response_error(resp)
                 raise ResourceGoneError(response_error)
 
-            # If we got a 400 (bad request) because the container id is invalid, it could indicate a stale goal
-            # state. The caller will handle this exception by forcing a goal state refresh and retrying the call.
-            if resp.status == httpclient.BAD_REQUEST:
-                response_error = read_response_error(resp)
-                if INVALID_CONTAINER_CONFIGURATION in response_error:
-                    raise InvalidContainerError(response_error)
-
             return resp
 
         except httpclient.HTTPException as e:
@@ -662,7 +655,7 @@ def read_response_error(resp):
             result = "[HTTP Failed] [{0}: {1}] {2}".format(
                         resp.status, 
                         resp.reason, 
-                        resp.read()) 
+                        resp.read())
 
             # this result string is passed upstream to several methods
             # which do a raise HttpError() or a format() of some kind;

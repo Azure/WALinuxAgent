@@ -44,7 +44,7 @@ from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchem
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.restutil import TELEMETRY_THROTTLE_DELAY_IN_SECONDS, \
-    TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS, TELEMETRY_DATA
+    TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS, TELEMETRY_DATA, read_response_error, INVALID_CONTAINER_CONFIGURATION
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, gettext, remove_bom, get_bytes_from_pem, parse_json, redact_sas_token
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
@@ -783,8 +783,17 @@ class WireClient(object):
 
             host_plugin = self.get_host_plugin()
 
+            response_error = None
+
+            # If we got a 400 (bad request) because the container id is invalid, it could indicate a stale goal
+            # state. The caller will handle this exception by forcing a goal state refresh and retrying the call.
+            if resp.status == httpclient.BAD_REQUEST:
+                response_error = read_response_error(resp)
+                if INVALID_CONTAINER_CONFIGURATION in response_error:
+                    raise InvalidContainerError(response_error)
+
             if restutil.request_failed(resp, ok_codes=ok_codes):
-                error_response = restutil.read_response_error(resp)
+                error_response = response_error if response_error is not None else restutil.read_response_error(resp)
                 msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
 
@@ -941,6 +950,11 @@ class WireClient(object):
 
         try:
             return_value = secondary_channel()
+
+            # Send telemetry for primary channel failure
+            message = "Download failed on the primary channel: [{0}]".format(ustr(primary_channel_error))
+            logger.warn(message)
+            add_event(AGENT_NAME, op=WALAEventOperation.HttpGet, version=CURRENT_VERSION, is_success=False, message=message, log_event=False)
 
             # Since the secondary channel succeeded, flip the default channel
             HostPluginProtocol.is_default_channel = not HostPluginProtocol.is_default_channel
