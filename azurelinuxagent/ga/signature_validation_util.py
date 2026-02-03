@@ -292,8 +292,8 @@ def _should_delay_signature_validation():
     In order to avoid impacting TDPR, we skip extension signature validation for a specified delay period after the agent starts.
     TODO: This delay is a temporary workaround for telemetry collection without impacting customers. Remove for production release.
     """
-    elapsed = (datetime.datetime.now(UTC) - _agent_start_time).total_seconds()
-    return elapsed < _SIGNATURE_VALIDATION_DELAY_SECONDS
+    elapsed = datetime.datetime.now(UTC) - _agent_start_time
+    return elapsed < datetime.timedelta(seconds=_SIGNATURE_VALIDATION_DELAY_SECONDS)
 
 
 def signature_validation_enabled():
