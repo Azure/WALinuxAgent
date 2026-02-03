@@ -139,8 +139,9 @@ class AgentLog(object):
             #     2021-03-31T03:48:35.216494Z WARNING ExtHandler ExtHandler Fetch failed: [HttpError] [HTTP Failed] GET https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml -- IOError ('The read operation timed out',) -- 1 attempts made
             #     2021-03-31T06:54:29.655861Z WARNING ExtHandler ExtHandler Fetch failed: [HttpError] [HTTP Retry] GET http://168.63.129.16:32526/extensionArtifact -- Status Code 502 -- 1 attempts made
             #     2021-03-31T06:43:17.806663Z WARNING ExtHandler ExtHandler Download failed, switching to host plugin
+            #     2026-02-03T18:43:51.712681Z WARNING ExtHandler ExtHandler Download failed on the primary channel: [[HttpError] [HTTP Failed] GET https://md-hdd-lqpq0wgmfsfd.z10.blob.storage.azure.net/$system/lisa-WALinuxAgent-20260203-181013-068-e134-n0.54f00e63-6d36-4921-b958-e5b2624e5eb7.vmSettings -- IOError timed out -- 6 attempts made]
             {
-                'message': r"(Fetch failed: \[HttpError\] .+ GET .+ -- [0-9]+ attempts made)|(Download failed, switching to host plugin)",
+                'message': r"((Fetch failed|Download failed on the primary channel): \[HttpError\] .+ GET .+ -- [0-9]+ attempts made)|(Download failed, switching to host plugin)",
                 'if': lambda r: r.level == "WARNING" and r.prefix == "ExtHandler" and r.thread == "ExtHandler"
             },
             # 2021-07-09T01:46:53.307959Z INFO MonitorHandler ExtHandler [CGW] Disabling resource usage monitoring. Reason: Check on cgroups failed:

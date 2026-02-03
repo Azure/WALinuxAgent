@@ -952,7 +952,7 @@ class WireClient(object):
             return_value = secondary_channel()
 
             # Send telemetry for primary channel failure
-            message = "Download failed on the primary channel: [{0}]".format(ustr(primary_channel_error))
+            message = "Download failed on the primary channel: {0}".format(ustr(primary_channel_error))
             logger.warn(message)
             add_event(AGENT_NAME, op=WALAEventOperation.HttpGet, version=CURRENT_VERSION, is_success=False, message=message, log_event=False)
 
