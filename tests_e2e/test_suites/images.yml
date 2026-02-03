@@ -24,6 +24,7 @@ image-sets:
       - "oracle_79"
       - "oracle_810"
       - "oracle_95"
+      - "oracle_10"
       - "rhel_79"
       - "rhel_810"
       - "rhel_95"
@@ -209,29 +210,38 @@ images:
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
-   oracle_610: "Oracle:Oracle-Linux:6.10:latest"
-   oracle_75:
+   oracle_610: "Oracle:Oracle-Linux:6.10:latest" # Python 2.6.6; not in test run
+   oracle_75: # Python: 2.7.5; used for the recover_network_interface test
       urn: "Oracle:Oracle-Linux:7.5:latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
-   oracle_79:
+   oracle_79: # Python: 2.7.5
       urn: "Oracle:Oracle-Linux:ol79-gen2:latest"
       locations:
          AzureChinaCloud: []
-   oracle_82:
+   oracle_82: # Python: 3.6.8; used for the recover_network_interface test
       urn: "Oracle:Oracle-Linux:ol82-gen2:latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
-   oracle_810:
+   oracle_810: # Python: 3.6.8
       urn: "Oracle:Oracle-Linux:ol810-lvm-gen2:latest"
       locations:
          AzureChinaCloud: []
-   oracle_95:
+   oracle_95: # Python: 3.9.21
       urn: "Oracle:Oracle-Linux:ol95-lvm-gen2:latest"
       locations:
          AzureChinaCloud: []
+   oracle_10:
+      urn: "Oracle:Oracle-Linux:ol10-lvm-gen2:latest"
+      locations:
+         AzureChinaCloud: []
+   oracle_10_arm64: # TODO: Oracle 10 ARM64 is failing to deploy; add to 'endorsed-arm64' once it is fixed.
+      urn: "Oracle:Oracle-Linux:ol10-arm64-lvm-gen2:latest"
+      locations:
+         AzureChinaCloud: []
+         AzureUSGovernment: [] # TODO: Our test subscription does not have quota to create VMs with this image. Remove once we update our subscription.
    rhel_610: "RedHat:RHEL:6.10:latest"
    rhel_75:
       urn: "RedHat:RHEL:7.5:latest"
