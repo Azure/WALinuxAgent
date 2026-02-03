@@ -285,6 +285,17 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
                                       operation=WALAEventOperation.SignatureValidation, duration=0)
 
 
+def _should_delay_signature_validation():
+    """
+    Returns True if the agent is still within the signature validation delay period after startup.
+
+    In order to avoid impacting TDPR, we skip extension signature validation for a specified delay period after the agent starts.
+    TODO: This delay is a temporary workaround for telemetry collection without impacting customers. Remove for production release.
+    """
+    elapsed = (datetime.datetime.now(UTC) - _agent_start_time).total_seconds()
+    return elapsed < _SIGNATURE_VALIDATION_DELAY_SECONDS
+
+
 def signature_validation_enabled():
     """
     Returns True if signature validation is enabled in conf file, OpenSSL version supports all validation parameters, and agent is running on a Confidential VM.
@@ -292,13 +303,10 @@ def signature_validation_enabled():
     Extension signature validation is currently limited to CVMs for telemetry/preview releases. It will be expanded to all VMs after we gain confidence in the feature.
     TODO: Remove the is_confidential_vm() check once signature validation is supported on all VMs.
     """
-    # Skip signature validation during the grace period after service start
-    # TODO: Remove this temporary telemetry release workaround before production release.
-    elapsed = (datetime.datetime.now(UTC) - _agent_start_time).total_seconds()
-    if elapsed < _SIGNATURE_VALIDATION_DELAY_SECONDS:
-        return False
-
-    return conf.get_signature_validation_enabled() and openssl_version_supported_for_signature_validation() and ConfidentialVMInfo.is_confidential_vm()
+    return conf.get_signature_validation_enabled() and \
+        not _should_delay_signature_validation() and \
+        openssl_version_supported_for_signature_validation() and \
+        ConfidentialVMInfo.is_confidential_vm()
 
 
 def cleanup_package_with_invalid_signature(package_file):

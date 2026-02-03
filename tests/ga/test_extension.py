@@ -3878,6 +3878,8 @@ class _TestSignatureValidationBase(TestExtensionBase):
         self.patch_conf_flag.start()
         self.patch_is_cvm = patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm', return_value=True)
         self.patch_is_cvm.start()
+        self.patch_should_delay = patch('azurelinuxagent.ga.signature_validation_util._should_delay_signature_validation', return_value=False)
+        self.patch_should_delay.start()
         write_signing_certificates()
 
     def tearDown(self):
@@ -4146,6 +4148,24 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
         data_file["manifest"] = "wire/manifest_vm_access.xml"
 
         with patch('azurelinuxagent.ga.exthandlers.conf.get_signature_validation_enabled', return_value=False):
+            self._test_enable_extension(data_file=data_file,
+                                        signature_validation_should_succeed=False,
+                                        expected_status_code=0,
+                                        expected_handler_status='Ready',
+                                        expected_ext_count=1,
+                                        expected_status_msg='Plugin enabled',
+                                        expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
+                                        expected_version="1.7.0")
+
+    def test_enable_should_succeed_and_not_validate_during_delay_period(self):
+        # During the signature validation delay period, enable should succeed but signature validation state should not be set.
+        self.patch_should_delay.stop()
+        data_file = wire_protocol_data.DATA_FILE.copy()
+        data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
+        data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
+        data_file["manifest"] = "wire/manifest_vm_access.xml"
+
+        with patch('azurelinuxagent.ga.signature_validation_util._should_delay_signature_validation', return_value=True):
             self._test_enable_extension(data_file=data_file,
                                         signature_validation_should_succeed=False,
                                         expected_status_code=0,
