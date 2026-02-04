@@ -24,6 +24,7 @@ from azurelinuxagent.ga.signing_certificate_util import write_signing_certificat
 from azurelinuxagent.ga.signature_validation_util import validate_signature, SignatureValidationError
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.ga.cgroupconfigurator import EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME
+from azurelinuxagent.common.future import ustr
 
 
 class TestSignatureValidationSudo(AgentTestCase):
@@ -152,7 +153,7 @@ class TestSignatureValidationSudo(AgentTestCase):
                     run_command_calls.append(cmd)
                     if cmd.startswith('systemd-run'):
                         error_msg = 'Unit {0} not found.'.format(EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME)
-                        raise shellutil.CommandError(command=cmd, return_code=1, stdout="", stderr=error_msg)
+                        raise shellutil.CommandError(command=cmd, return_code=1, stdout=ustr(""), stderr=ustr(error_msg))
                     return original_run_command(command, *args, **kwargs)
 
                 with patch("azurelinuxagent.ga.signature_validation_util.run_command", side_effect=mock_run_command):
