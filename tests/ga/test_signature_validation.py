@@ -21,10 +21,10 @@ import os
 import sys
 
 from tests.lib.tools import AgentTestCase, data_dir, patch, skip_if_predicate_true
+from azurelinuxagent.common import conf
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 from azurelinuxagent.ga.signature_validation_util import validate_signature, SignatureValidationError, validate_handler_manifest_signing_info, \
-    ManifestValidationError, _get_openssl_version, openssl_version_supported_for_signature_validation, signature_validation_enabled, \
-    _SIGNATURE_VALIDATION_DELAY_SECONDS
+    ManifestValidationError, _get_openssl_version, openssl_version_supported_for_signature_validation, signature_validation_enabled
 from azurelinuxagent.ga.exthandlers import HandlerManifest
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.future import UTC
@@ -155,8 +155,8 @@ class TestSignatureValidation(AgentTestCase):
                                          "Signature validation should be disabled during grace period")
 
                     # Test 2: After grace period - validation should be enabled
-                    # Set agent start time to more than _SIGNATURE_VALIDATION_DELAY_SECONDS ago
-                    past_time = now - datetime.timedelta(seconds=_SIGNATURE_VALIDATION_DELAY_SECONDS + 1)
+                    # Set agent start time to more than signature validation delay seconds ago
+                    past_time = now - datetime.timedelta(seconds=conf.get_signature_validation_initial_delay() + 1)
                     with patch("azurelinuxagent.ga.signature_validation_util._agent_start_time", past_time):
                         self.assertTrue(signature_validation_enabled(),
                                         "Signature validation should be enabled after grace period")
