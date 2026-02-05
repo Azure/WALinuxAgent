@@ -200,6 +200,12 @@ class ExtSignatureValidation(AgentVmTest):
         # Setup test
         log.info("*** Begin test setup")
         log.info("")
+
+        # By default, signature validation is delayed for 10 minutes after agent start. To reduce overall test
+        # runtime, we reduce signature validation delay to 0 so that signatures are validated immediately.
+        log.info(" - Set signature validation delay to 0 seconds")
+        self._ssh_client.run_command("update-waagent-conf Debug.SignatureValidationInitialDelay=0", use_sudo=True)
+
         log.info(" - Get VM distro")
         distro = self._ssh_client.get_distro()
         log.info("VM distro: '{0}'".format(distro))

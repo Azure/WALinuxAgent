@@ -37,9 +37,10 @@ from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 # command is not supported on older versions.
 _MIN_OPENSSL_VERSION_FOR_SIG_VALIDATION = FlexibleVersion("1.1.0")
 
-# In order to avoid impacting TDPR, we skip extension signature validation for the first 10 minutes after the agent starts.
+# Track the time when the agent module is first loaded. This is used to implement an initial delay period before
+# signature validation is enabled, allowing us to collect telemetry without impacting TDPR (Time to Detect and Prevent Risk)
+# during the telemetry release phase. The delay duration is configurable via Debug.SignatureValidationInitialDelay.
 # TODO: This delay is a temporary workaround for telemetry collection without impacting customers. Remove for production release.
-_SIGNATURE_VALIDATION_DELAY_SECONDS = 600
 _agent_start_time = datetime.datetime.now(UTC)
 
 
@@ -292,8 +293,11 @@ def _should_delay_signature_validation():
     In order to avoid impacting TDPR, we skip extension signature validation for a specified delay period after the agent starts.
     TODO: This delay is a temporary workaround for telemetry collection without impacting customers. Remove for production release.
     """
+    delay_seconds = conf.get_signature_validation_initial_delay()
+    if delay_seconds <= 0:
+        return False
     elapsed = datetime.datetime.now(UTC) - _agent_start_time
-    return elapsed < datetime.timedelta(seconds=_SIGNATURE_VALIDATION_DELAY_SECONDS)
+    return elapsed < datetime.timedelta(seconds=delay_seconds)
 
 
 def signature_validation_enabled():
