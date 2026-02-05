@@ -21,6 +21,7 @@
 import argparse
 import glob
 import json
+import os
 
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import run_remote_test
@@ -30,14 +31,17 @@ from tests_e2e.tests.lib.retry import retry_if_false, retry_if_true
 def check_agent_supports_versioning() -> bool:
     agent_status_file = "/var/lib/waagent/history/*/waagent_status.json"
     file_paths = glob.glob(agent_status_file, recursive=True)
-    for file in file_paths:
-        with open(file, 'r') as f:
-            data = json.load(f)
-            log.info("Agent status file is %s and it's content %s", file, data)
-            supported_features = data["supportedFeatures"]
-            for supported_feature in supported_features:
-                if supported_feature["Key"] == "VersioningGovernance":
-                    return True
+    if not file_paths:
+        return False
+
+    latest_file = max(file_paths, key=os.path.getmtime)
+    with open(latest_file, 'r') as f:
+        data = json.load(f)
+        log.info("Agent status file is %s and it's content %s", latest_file, data)
+        supported_features = data["supportedFeatures"]
+        for supported_feature in supported_features:
+            if supported_feature["Key"] == "VersioningGovernance":
+                return True
     return False
 
 
@@ -47,13 +51,19 @@ def main():
     args = parser.parse_args()
 
     log.info("checking agent status file for VersioningGovernance supported feature flag")
+    # In these test VMs, direct artifact blob downloads are failing, and our retry
+    # logic takes a long time to exhaust all attempts. As a result, the agent is
+    # blocked from continuing execution and cannot report status to CRP quickly.
+    #
+    # Increasing the number of attempts and the delay is added here as a temporary
+    # workaround while we investigate the root cause of the blob download failures.
     if args.supported == "True":
-        found: bool = retry_if_false(check_agent_supports_versioning)
+        found: bool = retry_if_false(check_agent_supports_versioning, attempts=10, delay=60)
         if not found:
             raise Exception("Agent failed to report supported feature flag. So, skipping agent update validations "
                             "since CRP will not send RSM requested version in GS if feature flag not found in status")
     else:
-        found: bool = retry_if_true(check_agent_supports_versioning)
+        found: bool = retry_if_true(check_agent_supports_versioning, attempts=10, delay=60)
         if found:
             raise Exception("Agent should not report supported feature flag while agent updates disabled in the vm.")
 

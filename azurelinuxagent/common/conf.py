@@ -732,9 +732,7 @@ def get_ignore_signature_validation_errors(conf=__conf__):
 
 def get_signature_validation_initial_delay(conf=__conf__):
     """
-    Returns the initial delay (in seconds) before signature validation is enabled after agent startup.
-    During this delay period, signature validation is skipped to avoid impacting TDPR during telemetry release.
-    Set to 0 to disable the delay (e.g., for testing).
+    Get initial delay period (in seconds) after service start before extension signature validation is enabled.
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_int("Debug.SignatureValidationInitialDelay", 10 * 60)

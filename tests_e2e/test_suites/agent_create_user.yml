@@ -1,0 +1,10 @@
+name: "AgentCreateUser"
+tests:
+  - "agent_create_user/agent_create_user.py"
+images:
+  - "endorsed"
+  - "endorsed-arm64"
+  # TODO 1: Using 25_10 to test the Agent under Python 3.13; change to 26_04 once it is officially released
+  # TODO 2: Currently some extensions, and the cgroups configuration code in the Agent, do not support 25_10. Move this image to the "endorsed" image set once those issues have been fixed.
+  - "ubuntu_2510"
+

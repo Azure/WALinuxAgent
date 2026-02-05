@@ -139,27 +139,24 @@ class TestSignatureValidation(AgentTestCase):
         # timestamp validation has been implemented.
         self.fail()
 
-    def test_signature_validation_should_be_disabled_during_grace_period(self):
+    def test_signature_validation_should_be_disabled_during_delay_period(self):
         """
-        Test that signature validation is disabled during the grace period after service start, and enabled after.
+        Test that signature validation is disabled during the delay period after service start, and enabled after.
         """
-        # Mock all other conditions to return True so we isolate the grace period logic
         with patch("azurelinuxagent.ga.signature_validation_util.conf.get_signature_validation_enabled", return_value=True):
             with patch("azurelinuxagent.ga.signature_validation_util.openssl_version_supported_for_signature_validation", return_value=True):
                 with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=True):
-                    # Test 1: Within grace period - validation should be disabled
-                    # Set agent start time to now (within grace period)
+
+                    # Test 1: Within delay period - validation should be disabled
                     now = datetime.datetime.now(UTC)
                     with patch("azurelinuxagent.ga.signature_validation_util._agent_start_time", now):
                         self.assertFalse(signature_validation_enabled(),
-                                         "Signature validation should be disabled during grace period")
+                                         "Signature validation should be disabled during delay period")
 
-                    # Test 2: After grace period - validation should be enabled
-                    # Set agent start time to more than signature validation delay seconds ago
+                    # Test 2: After delay period - validation should be enabled
                     past_time = now - datetime.timedelta(seconds=conf.get_signature_validation_initial_delay() + 1)
                     with patch("azurelinuxagent.ga.signature_validation_util._agent_start_time", past_time):
-                        self.assertTrue(signature_validation_enabled(),
-                                        "Signature validation should be enabled after grace period")
+                        self.assertTrue(signature_validation_enabled(), "Signature validation should be enabled after delay period")
 
 
 class TestHandlerManifestValidation(AgentTestCase):

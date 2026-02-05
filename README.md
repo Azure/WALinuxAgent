@@ -444,7 +444,7 @@ If set, waagent will execute CustomData after provisioning.
 _Type: String_  
 _Default: 6_
 
-Algorithm used by crypt when generating password hash.  
+Algorithm used by crypt when generating password hash. This parameter, as well as PasswordCryptSaltLength, is used only on Python versions previous to 3.13, and SHA-512 is the default for most distros. From Python 3.13 onwards, SHA-512 is always used, regardless of the value of this parameter.    
 
 * 1 - MD5
 * 2a - Blowfish
@@ -456,7 +456,7 @@ Algorithm used by crypt when generating password hash.
 _Type: String_  
 _Default: 10_
 
-Length of random salt used when generating password hash.
+Length of random salt used when generating password hash. See note on PasswordCryptId above.
 
 #### __ResourceDisk.Format__
 

@@ -158,7 +158,7 @@ class PublishHostname(AgentVmTest):
                     hostname_detected = ""
                     for retry in range(4, -1, -1):
                         try:
-                            hostname_detected = self.retry_ssh_if_connection_reset("grep -n 'Detected hostname change:.*-> {0}' /var/log/waagent.log".format(hostname), use_sudo=True)
+                            hostname_detected = self.retry_ssh_if_connection_reset("grep -a -n 'Detected hostname change:.*-> {0}' /var/log/waagent.log".format(hostname), use_sudo=True)
                             if hostname_detected:
                                 log.info("Agent detected hostname change: {0}".format(hostname_detected))
                                 break
