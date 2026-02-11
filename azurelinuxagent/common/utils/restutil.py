@@ -16,7 +16,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+import json
 import os
 import threading
 import time
@@ -110,6 +110,10 @@ KNOWN_WIRESERVER_IP = '168.63.129.16'
 HOST_PLUGIN_PORT = 32526
 
 TELEMETRY_DATA = "telemetrydata"
+
+# The URI for HGAP /extensionArtifact requests does not include the requested artifact. Include these headers in the
+# failure message if they exist for any failed request to improve the error reporting
+HEADERS_TO_INCLUDE_IN_FAILURE_MSG = ["x-ms-artifact-location", "x-ms-artifact-manifest-location"]
 
 class IOErrorCounter(object):
     _lock = threading.RLock()
@@ -417,6 +421,9 @@ def http_request(method,
             logger.warn("Python does not support HTTPS tunnelling")
             SECURE_WARNING_EMITTED = True
 
+    # Get the headers to include in messages for failed requests to improve error reporting
+    headers_for_failure_msg = {k: v for k, v in headers.items() if k in HEADERS_TO_INCLUDE_IN_FAILURE_MSG} if headers is not None else {}
+
     msg = ''
     attempt = 0
     delay = 0
@@ -465,7 +472,10 @@ def http_request(method,
 
             if request_failed(resp):
                 if _is_retry_status(resp.status, retry_codes=retry_codes):
-                    msg = '[HTTP Retry] {0} {1} -- Status Code {2}'.format(method, url, resp.status)
+                    if len(headers_for_failure_msg) > 0:
+                        msg = '[HTTP Retry] {0} {1} {2} -- {3}'.format(method, url, json.dumps(headers_for_failure_msg), read_response_error(resp))
+                    else:
+                        msg = '[HTTP Retry] {0} {1} -- {2}'.format(method, url, read_response_error(resp))
                     # Note if throttled and ensure a safe, minimum number of
                     # retry attempts
                     if _is_throttle_status(resp.status):
@@ -488,7 +498,10 @@ def http_request(method,
             if return_raw_response:  # skip all error handling
                 raise
             clean_url = _trim_url_parameters(url)
-            msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(method, clean_url, e)
+            if len(headers_for_failure_msg) > 0:
+                msg = '[HTTP Failed] {0} {1} {2} -- HttpException {3}'.format(method, clean_url, json.dumps(headers_for_failure_msg), e)
+            else:
+                msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(method, clean_url, e)
             if _is_retry_exception(e):
                 continue
             break
@@ -498,7 +511,10 @@ def http_request(method,
                 raise
             IOErrorCounter.increment(host=host, port=port)
             clean_url = _trim_url_parameters(url)
-            msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(method, clean_url, e)
+            if len(headers_for_failure_msg) > 0:
+                msg = '[HTTP Failed] {0} {1} {2} -- IOError {3}'.format(method, clean_url, json.dumps(headers_for_failure_msg), e)
+            else:
+                msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(method, clean_url, e)
             continue
 
     raise HttpError("{0} -- {1} attempts made".format(msg, attempt))
