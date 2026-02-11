@@ -423,7 +423,11 @@ def http_request(method,
             SECURE_WARNING_EMITTED = True
 
     # Get the headers to include in messages for failed requests to improve error reporting
-    headers_for_failure_msg = {k: v for k, v in headers.items() if k in HEADERS_TO_INCLUDE_IN_FAILURE_MSG} if headers is not None else {}
+    headers_for_failure_msg = {}
+    if headers is not None:
+        for k, v in headers.items():
+            if k in HEADERS_TO_INCLUDE_IN_FAILURE_MSG:
+                headers_for_failure_msg[k] = v
 
     msg = ''
     attempt = 0
@@ -672,7 +676,7 @@ def read_response_error(resp):
             result = "[HTTP Failed] [{0}: {1}] {2}".format(
                         resp.status, 
                         resp.reason, 
-                        resp.read()) 
+                        resp.read())
 
             # this result string is passed upstream to several methods
             # which do a raise HttpError() or a format() of some kind;

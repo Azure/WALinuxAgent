@@ -774,7 +774,11 @@ class WireClient(object):
 
     def _fetch_response(self, uri, headers=None, use_proxy=None, retry_codes=None, ok_codes=None):
         resp = None
-        headers_for_failure_msg = {k: v for k, v in headers.items() if k in HEADERS_TO_INCLUDE_IN_FAILURE_MSG} if headers is not None else {}
+        headers_for_failure_msg = {}
+        if headers is not None:
+            for k, v in headers.items():
+                if k in HEADERS_TO_INCLUDE_IN_FAILURE_MSG:
+                    headers_for_failure_msg[k] = v
         try:
             # TODO: This method was originally meant to be used for calls to storage, but at some point during
             #   refactoring it ended up being used for calls to HGAP /extensionArtifact. Calls to HGAP should follow a
