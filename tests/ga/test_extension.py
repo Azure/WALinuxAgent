@@ -3550,6 +3550,11 @@ class TestExtensionPolicy(TestExtensionBase):
         self.patch_is_cvm.start()
         self.maxDiff = None     # When long error messages don't match, display the entire diff.
 
+        test_ext = Extension(name='OSTCExtensions.ExampleHandlerLinux')
+        test_ext.version = "1.0.0"
+        ext_handler_i = ExtHandlerInstance(ext_handler=test_ext, protocol=WireProtocol("1.2.3.4"))
+        self.runtime_policy_path = ext_handler_i.get_runtime_policy_file()
+
     def tearDown(self):
         patch.stopall()
         AgentTestCase.tearDown(self)
@@ -3867,6 +3872,87 @@ class TestExtensionPolicy(TestExtensionBase):
             self.assertTrue(os.path.exists(file_path), "Policy file was not copied to history folder")
             with open(file_path, mode='r') as f:
                 self.assertEqual(policy, json.load(f))
+
+    def test_should_create_runtime_policy_file_before_enabling(self):
+        # If "runtimePolicy" is specified in policy file, and "supportsPolicy" is true in handler manifest, create runtime policy file.
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    "OSTCExtensions.ExampleHandlerLinux": {
+                        "runtimePolicy": {
+                            "allowDirectScripts": False
+                        }
+                    }
+                }
+            }
+        }
+
+        with patch("azurelinuxagent.ga.exthandlers.HandlerManifest.supports_policy", return_value=True):
+            self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=0,
+                                   expected_handler_status='Ready', expected_ext_count=1)
+            self.assertTrue(os.path.exists(self.runtime_policy_path), "Runtime policy file was not created")
+            with open(self.runtime_policy_path, mode='r') as f:
+                expected_policy = {
+                    "allowDirectScripts": False
+                }
+                self.assertEqual(expected_policy, json.load(f))
+
+    def test_should_create_empty_runtime_policy_file_if_not_specified(self):
+        # If "runtimePolicy" is not specified in policy file, and "supportsPolicy" is true in handler manifest, create empty runtime policy file.
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    "OSTCExtensions.ExampleHandlerLinux": {}
+                }
+            }
+        }
+
+        with patch("azurelinuxagent.ga.exthandlers.HandlerManifest.supports_policy", return_value=True):
+            self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=0,
+                                   expected_handler_status='Ready', expected_ext_count=1)
+            self.assertTrue(os.path.exists(self.runtime_policy_path), "Runtime policy file was not created")
+            with open(self.runtime_policy_path, mode='r') as f:
+                expected_policy = {}
+                self.assertEqual(expected_policy, json.load(f))
+
+    def test_enable_should_fail_if_supportsPolicy_false_but_runtime_policy_specified(self):
+        # If "runtimePolicy" is specified in policy file, and "supportsPolicy" is false in handler manifest, fail extension.
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    "OSTCExtensions.ExampleHandlerLinux": {
+                        "runtimePolicy": {
+                            "allowDirectScripts": False
+                        }
+                    }
+                }
+            }
+        }
+
+        with patch("azurelinuxagent.ga.exthandlers.HandlerManifest.supports_policy", return_value=False):
+            self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled,
+                                   expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
+                                   expected_handler_status='NotReady', expected_ext_count=1)
+            self.assertFalse(os.path.exists(self.runtime_policy_path), "Runtime policy file should not have been created")
+
+    def test_should_not_create_runtime_policy_file(self):
+        # If "runtimePolicy" is not specified in policy file, and "supportsPolicy" is false in handler manifest, do not create runtime policy file.
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    "OSTCExtensions.ExampleHandlerLinux": {}
+                }
+            }
+        }
+
+        with patch("azurelinuxagent.ga.exthandlers.HandlerManifest.supports_policy", return_value=False):
+            self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=0,
+                                   expected_handler_status='Ready', expected_ext_count=1)
+            self.assertFalse(os.path.exists(self.runtime_policy_path), "Runtime policy file should not have been created")
 
 
 class _TestSignatureValidationBase(TestExtensionBase):

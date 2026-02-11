@@ -26,6 +26,7 @@ from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
+from azurelinuxagent.common.utils import fileutil
 
 
 # Default policy values to be used when customer does not specify these attributes in the policy file.
@@ -76,6 +77,12 @@ class ExtensionDisallowedError(PolicyError):
     """
     def __init__(self):
         super(ExtensionDisallowedError, self).__init__()
+
+
+class ExtensionRuntimePolicyError(PolicyError):
+    """
+    Any error related to extension-specific runtime policy.
+    """
 
 
 class _PolicyEngine(object):
@@ -407,3 +414,38 @@ class ExtensionPolicyEngine(_PolicyEngine):
         enforce_signature = self.should_enforce_signature_validation(extension_name)
         if enforce_signature and not extension_is_signed:
             raise ExtensionSignaturePolicyError() # Caller sets message and error code, based on requested extension operation
+
+    def get_runtime_policy(self, extension_name):
+        """
+        Return runtime policy for the extension if specified. If not, return None.
+        """
+        individual_policy = self._policy.get("extensionPolicies").get("extensions").get(extension_name)
+        return individual_policy.get("runtimePolicy") if individual_policy is not None else None
+
+    def create_runtime_policy_file(self, ext_handler_i):
+        """
+        Create the runtime policy file for the extension. The extension manifest includes a "supportsPolicy" attribute
+        indicating whether the extension supports runtime policy enforcement.
+
+        - If supportsPolicy is True: write the extension's runtime policy if present, otherwise write an empty JSON object.
+        - If supportsPolicy is False or missing but runtime policy is specified for the extension, raise an error.
+        - if supportsPolicy is False and runtime policy is not specified, do not create a file.
+        """
+        if not self._policy_enforcement_enabled:
+            return
+
+        runtime_policy_file_path = ext_handler_i.get_runtime_policy_file()
+        supports_policy = ext_handler_i.load_manifest().supports_policy()
+        runtime_policy = self.get_runtime_policy(ext_handler_i.ext_handler.name)
+
+        if supports_policy:
+            data_to_write = runtime_policy if runtime_policy is not None else {}
+            try:
+                fileutil.write_file(runtime_policy_file_path, json.dumps(data_to_write))
+            except IOError as e:
+                raise ExtensionRuntimePolicyError("Failed to save runtime policy file: {0}. Error: {1}".format(runtime_policy_file_path, e))
+        elif not supports_policy and runtime_policy is not None:
+            raise ExtensionRuntimePolicyError(
+                "Runtime policy is specified for extension '{0}', but this extension does not support policy enforcement."
+                "To continue, remove the entry '{0}.runtimePolicy' from the policy file ({1}).".format(ext_handler_i.ext_handler.name, conf.get_policy_file_path())
+            )

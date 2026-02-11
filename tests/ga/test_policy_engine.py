@@ -19,7 +19,7 @@ import json
 import os
 
 from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, InvalidPolicyError, \
-    _PolicyEngine, _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY, _DEFAULT_SIGNATURE_REQUIRED
+    _PolicyEngine, _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY, _DEFAULT_SIGNATURE_REQUIRED, ExtensionRuntimePolicyError
 from tests.lib.tools import AgentTestCase, MagicMock, patch
 
 TEST_EXTENSION_NAME = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
@@ -577,3 +577,213 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
                             msg="Extension should have been found in allowlist regardless of extension name case.")
             self.assertTrue(should_enforce_signature,
                             msg="Individual signatureRequired policy should have been found and used, regardless of extension name case.")
+
+    def test_get_runtime_policy_should_return_policy_if_specified(self):
+        """
+        If runtimePolicy is specified for the extension, get_runtime_policy() should return it.
+        """
+        runtime_policy = {"allowDirectScripts": False}
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    TEST_EXTENSION_NAME: {
+                        "runtimePolicy": runtime_policy
+                    }
+                }
+            }
+        }
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine()
+        engine.update_policy(self.goal_state_history)
+        result = engine.get_runtime_policy(TEST_EXTENSION_NAME)
+        self.assertEqual(runtime_policy, result, msg="get_runtime_policy() should return the runtimePolicy dict.")
+
+    def test_get_runtime_policy_should_return_none_if_not_specified(self):
+        """
+        If runtimePolicy is not specified for the extension, get_runtime_policy() should return None.
+        """
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    TEST_EXTENSION_NAME: {}
+                }
+            }
+        }
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine()
+        engine.update_policy(self.goal_state_history)
+        result = engine.get_runtime_policy(TEST_EXTENSION_NAME)
+        self.assertIsNone(result, msg="get_runtime_policy() should return None when runtimePolicy not specified.")
+
+    def test_get_runtime_policy_should_return_none_if_extension_not_in_policy(self):
+        """
+        If extension is not in policy at all, get_runtime_policy() should return None.
+        """
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {}
+            }
+        }
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine()
+        engine.update_policy(self.goal_state_history)
+        result = engine.get_runtime_policy(TEST_EXTENSION_NAME)
+        self.assertIsNone(result, msg="get_runtime_policy() should return None when extension not in policy.")
+
+    def test_create_runtime_policy_file_should_do_nothing_if_policy_enforcement_disabled(self):
+        """
+        If policy enforcement is disabled, create_runtime_policy_file() should do nothing.
+        """
+        # No policy file - enforcement is disabled
+        engine = ExtensionPolicyEngine()
+        mock_ext_handler_i = MagicMock()
+        # Should not raise, should not call any methods on ext_handler_i
+        engine.create_runtime_policy_file(mock_ext_handler_i)
+        mock_ext_handler_i.get_runtime_policy_file.assert_not_called()
+
+    def test_create_runtime_policy_file_should_write_policy_if_supports_policy_true_and_runtime_policy_specified(self):
+        """
+        If supportsPolicy is true and runtimePolicy is specified, create_runtime_policy_file() should write the policy to file.
+        """
+        runtime_policy = {"allowDirectScripts": False}
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    TEST_EXTENSION_NAME: {
+                        "runtimePolicy": runtime_policy
+                    }
+                }
+            }
+        }
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine()
+        engine.update_policy(self.goal_state_history)
+
+        runtime_policy_path = os.path.join(self.tmp_dir, "waagent_runtime_policy.json")
+        mock_ext_handler_i = MagicMock()
+        mock_ext_handler_i.get_runtime_policy_file.return_value = runtime_policy_path
+        mock_ext_handler_i.load_manifest.return_value.supports_policy.return_value = True
+        mock_ext_handler_i.ext_handler.name = TEST_EXTENSION_NAME
+
+        engine.create_runtime_policy_file(mock_ext_handler_i)
+
+        self.assertTrue(os.path.exists(runtime_policy_path), "Runtime policy file should have been created.")
+        with open(runtime_policy_path, 'r') as f:
+            written_policy = json.load(f)
+        self.assertEqual(runtime_policy, written_policy, "Written policy should match the runtimePolicy.")
+
+    def test_create_runtime_policy_file_should_write_empty_json_if_supports_policy_true_and_runtime_policy_not_specified(self):
+        """
+        If supportsPolicy is true but runtimePolicy is not specified, create_runtime_policy_file() should write {} to file.
+        """
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    TEST_EXTENSION_NAME: {}
+                }
+            }
+        }
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine()
+        engine.update_policy(self.goal_state_history)
+
+        runtime_policy_path = os.path.join(self.tmp_dir, "waagent_runtime_policy.json")
+        mock_ext_handler_i = MagicMock()
+        mock_ext_handler_i.get_runtime_policy_file.return_value = runtime_policy_path
+        mock_ext_handler_i.load_manifest.return_value.supports_policy.return_value = True
+        mock_ext_handler_i.ext_handler.name = TEST_EXTENSION_NAME
+
+        engine.create_runtime_policy_file(mock_ext_handler_i)
+
+        self.assertTrue(os.path.exists(runtime_policy_path), "Runtime policy file should have been created.")
+        with open(runtime_policy_path, 'r') as f:
+            written_policy = json.load(f)
+        self.assertEqual({}, written_policy, "Written policy should be empty JSON object.")
+
+    def test_create_runtime_policy_file_should_raise_error_if_supports_policy_false_and_runtime_policy_specified(self):
+        """
+        If supportsPolicy is false but runtimePolicy is specified, create_runtime_policy_file() should raise ExtensionRuntimePolicyError.
+        """
+        runtime_policy = {"allowDirectScripts": False}
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    TEST_EXTENSION_NAME: {
+                        "runtimePolicy": runtime_policy
+                    }
+                }
+            }
+        }
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine()
+        engine.update_policy(self.goal_state_history)
+
+        runtime_policy_path = os.path.join(self.tmp_dir, "waagent_runtime_policy.json")
+        mock_ext_handler_i = MagicMock()
+        mock_ext_handler_i.get_runtime_policy_file.return_value = runtime_policy_path
+        mock_ext_handler_i.load_manifest.return_value.supports_policy.return_value = False
+        mock_ext_handler_i.ext_handler.name = TEST_EXTENSION_NAME
+
+        with self.assertRaises(ExtensionRuntimePolicyError):
+            engine.create_runtime_policy_file(mock_ext_handler_i)
+
+        self.assertFalse(os.path.exists(runtime_policy_path), "Runtime policy file should not have been created.")
+
+    def test_create_runtime_policy_file_should_not_create_file_if_supports_policy_false_and_runtime_policy_not_specified(self):
+        """
+        If supportsPolicy is false and runtimePolicy is not specified, create_runtime_policy_file() should do nothing.
+        """
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    TEST_EXTENSION_NAME: {}
+                }
+            }
+        }
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine()
+        engine.update_policy(self.goal_state_history)
+
+        runtime_policy_path = os.path.join(self.tmp_dir, "waagent_runtime_policy.json")
+        mock_ext_handler_i = MagicMock()
+        mock_ext_handler_i.get_runtime_policy_file.return_value = runtime_policy_path
+        mock_ext_handler_i.load_manifest.return_value.supports_policy.return_value = False
+        mock_ext_handler_i.ext_handler.name = TEST_EXTENSION_NAME
+
+        engine.create_runtime_policy_file(mock_ext_handler_i)
+
+        self.assertFalse(os.path.exists(runtime_policy_path), "Runtime policy file should not have been created.")
+
+    def test_create_runtime_policy_file_should_raise_error_on_ioerror(self):
+        """
+        If writing the runtime policy file fails with IOError, create_runtime_policy_file() should raise ExtensionRuntimePolicyError.
+        """
+        runtime_policy = {"allowDirectScripts": False}
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    TEST_EXTENSION_NAME: {
+                        "runtimePolicy": runtime_policy
+                    }
+                }
+            }
+        }
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine()
+        engine.update_policy(self.goal_state_history)
+
+        mock_ext_handler_i = MagicMock()
+        mock_ext_handler_i.get_runtime_policy_file.return_value = "/nonexistent/path/waagent_runtime_policy.json"
+        mock_ext_handler_i.load_manifest.return_value.supports_policy.return_value = True
+        mock_ext_handler_i.ext_handler.name = TEST_EXTENSION_NAME
+
+        with self.assertRaises(ExtensionRuntimePolicyError):
+            engine.create_runtime_policy_file(mock_ext_handler_i)

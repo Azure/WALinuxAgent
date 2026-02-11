@@ -42,7 +42,7 @@ from azurelinuxagent.common.agent_supported_feature import get_agent_supported_f
 from azurelinuxagent.common.utils.textutil import redact_sas_token
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, ExtensionDisallowedError, \
-    ExtensionSignaturePolicyError
+    ExtensionSignaturePolicyError, ExtensionRuntimePolicyError
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEventOperation, \
@@ -730,6 +730,13 @@ class ExtHandlersHandler(object):
             ).format(operation, ext_handler_i.ext_handler.name, conf.get_policy_file_path())
             self.__handle_ext_disallowed_error(ext_handler_i, error_code, report_op=WALAEventOperation.ExtensionSignaturePolicy, message=msg,
                                                extension=extension)
+        except ExtensionRuntimePolicyError as error:
+            operation, error_code = _EXT_DISALLOWED_ERROR_MAP.get(ext_handler_i.ext_handler.state)
+            msg = (
+                "Extension will not be processed: {0}"
+            ).format(ustr(error))
+            self.__handle_ext_disallowed_error(ext_handler_i, error_code, report_op=WALAEventOperation.ExtensionPolicy, message=msg,
+                                               extension=extension)
         except PackageValidationError as error:
             code = ExtensionErrorCodes.PluginInstallProcessingFailed   # Signature validation is only done during extension install
             self.__handle_ext_disallowed_error(ext_handler_i, code, report_op=error.operation,
@@ -828,6 +835,9 @@ class ExtHandlersHandler(object):
             self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
 
             self.__setup_new_handler(ext_handler_i, extension, self.__should_ignore_signature_validation_errors(ext_handler_i))
+
+            # Create runtime policy file for extension before enabling
+            self._policy_engine.create_runtime_policy_file(ext_handler_i)
 
             if old_ext_handler_i is None:
                 ext_handler_i.install(extension=extension)
@@ -2439,6 +2449,9 @@ class ExtHandlerInstance(object):
     def get_log_dir(self):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
 
+    def get_runtime_policy_file(self):
+        return os.path.join(self.get_conf_dir(), 'waagent_runtime_policy.json')
+
     @staticmethod
     def _read_status_file(ext_status_file):
         err_count = 0
@@ -2555,6 +2568,10 @@ class HandlerManifest(object):
 
     def supports_multiple_extensions(self):
         value = self.data['handlerManifest'].get('supportsMultipleExtensions', False)
+        return self._parse_boolean_value(value, default_val=False)
+    
+    def supports_policy(self):
+        value = self.data['handlerManifest'].get('supportsPolicy', False)
         return self._parse_boolean_value(value, default_val=False)
 
     def get_resource_limits(self):
