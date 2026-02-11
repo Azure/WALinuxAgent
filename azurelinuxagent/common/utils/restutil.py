@@ -672,7 +672,7 @@ def read_response_error(resp):
             result = "[HTTP Failed] [{0}: {1}] {2}".format(
                         resp.status, 
                         resp.reason, 
-                        resp.read())
+                        resp.read()) 
 
             # this result string is passed upstream to several methods
             # which do a raise HttpError() or a format() of some kind;
