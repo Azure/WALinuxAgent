@@ -852,6 +852,9 @@ class ExtHandlersHandler(object):
             extension_is_signed = ext_handler_i.signature_validated
             self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
 
+            # Create runtime policy file for extension before enabling
+            self._policy_engine.create_runtime_policy_file(ext_handler_i)
+
             ext_handler_i.ensure_consistent_data_for_mc()
             ext_handler_i.update_settings(extension)
 

@@ -427,9 +427,12 @@ class ExtensionPolicyEngine(_PolicyEngine):
         Create the runtime policy file for the extension. The extension manifest includes a "supportsPolicy" attribute
         indicating whether the extension supports runtime policy enforcement.
 
-        - If supportsPolicy is True: write the extension's runtime policy if present, otherwise write an empty JSON object.
-        - If supportsPolicy is False or missing but runtime policy is specified for the extension, raise an error.
-        - if supportsPolicy is False and runtime policy is not specified, do not create a file.
+        | supportsPolicy | runtimePolicy specified | Result                              |
+        |----------------|-------------------------|-------------------------------------|
+        | True           | Yes                     | Write runtimePolicy to file         |
+        | True           | No                      | Write {} to file                    |
+        | False          | Yes                     | Raise ExtensionRuntimePolicyError   |
+        | False          | No                      | Do nothing                          |
         """
         if not self._policy_enforcement_enabled:
             return

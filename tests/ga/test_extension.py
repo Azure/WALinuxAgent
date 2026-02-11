@@ -3954,6 +3954,60 @@ class TestExtensionPolicy(TestExtensionBase):
                                    expected_handler_status='Ready', expected_ext_count=1)
             self.assertFalse(os.path.exists(self.runtime_policy_path), "Runtime policy file should not have been created")
 
+    def test_should_create_runtime_policy_file_on_each_enable(self):
+        # Runtime policy file should be created fresh on each enable, not just the first one.
+        # This ensures that if the policy changes between enables, the extension gets the updated policy.
+        initial_policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    "OSTCExtensions.ExampleHandlerLinux": {
+                        "runtimePolicy": {
+                            "allowDirectScripts": False
+                        }
+                    }
+                }
+            }
+        }
+
+        updated_policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    "OSTCExtensions.ExampleHandlerLinux": {
+                        "runtimePolicy": {
+                            "allowDirectScripts": True,
+                            "maxExecutionTime": 300
+                        }
+                    }
+                }
+            }
+        }
+
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            protocol.aggregate_status = None
+            protocol.report_vm_status = MagicMock()
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            with patch("azurelinuxagent.ga.exthandlers.HandlerManifest.supports_policy", return_value=True):
+                # First enable - initial policy
+                self._create_policy_file(initial_policy)
+                exthandlers_handler.run()
+
+                self.assertTrue(os.path.exists(self.runtime_policy_path), "Runtime policy file was not created on first enable")
+                with open(self.runtime_policy_path, mode='r') as f:
+                    self.assertEqual({"allowDirectScripts": False}, json.load(f), "Runtime policy file content does not match initial policy")
+
+                # Second enable - updated policy (extension already installed)
+                self._create_policy_file(updated_policy)
+                protocol.mock_wire_data.set_incarnation(2)
+                protocol.client.update_goal_state()
+                exthandlers_handler.run()
+
+                self.assertTrue(os.path.exists(self.runtime_policy_path), "Runtime policy file was not created on second enable")
+                with open(self.runtime_policy_path, mode='r') as f:
+                    self.assertEqual({"allowDirectScripts": True, "maxExecutionTime": 300}, json.load(f), "Runtime policy file was not updated on second enable")
+
 
 class _TestSignatureValidationBase(TestExtensionBase):
     def setUp(self):
