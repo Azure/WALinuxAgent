@@ -841,7 +841,7 @@ class WireClient(object):
             logger.warn(msg)
             report_event(op=WALAEventOperation.HttpGet, is_success=False, message=msg, log_event=False)
             # Re-raise any unexpected exception as ProtocolError
-            raise ProtocolError(msg)
+            raise ProtocolError(error_msg)
 
         return resp
 
