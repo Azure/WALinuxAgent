@@ -69,6 +69,35 @@ elif sys.version_info[0] == 2:
 else:
     raise ImportError("Unknown python version: {0}".format(sys.version_info))
 
+#
+# Python <= 3.4 doesn't have a 'backslashreplace' error handler for encoding/decoding strings; for those versions, we register
+# a custom implementation as 'waagent_backslashreplace'.
+#
+# BACKSLASH_REPLACE points to the name of this custom implementation; on Python versions where this is not needed, BACKSLASH_REPLACE
+# points to the standard implementation in Python.
+#
+if not (sys.version_info[0] == 2 or sys.version_info[0] == 3 and sys.version_info[1] <= 4):
+    BACKSLASH_REPLACE = 'backslashreplace'
+else:
+    import codecs
+
+    def __waagent_backslashreplace__(unicode_error):
+        obj, start, end = unicode_error.object, unicode_error.start, unicode_error.end
+        replacement = ustr('')
+        if isinstance(unicode_error, UnicodeDecodeError):
+            for c in obj[start:end]:
+                if not isinstance(c, int):
+                    c = ord(c)  # obj is str in Python 2, bytes in Python 3
+                replacement += ustr('\\x{0:02x}'.format(c))
+        else:  # Encoding error
+            for c in obj[start:end]:
+                c = ord(c)
+                replacement += ustr('\\U{0:08x}'.format(c)) if c >= 0x10000 else ustr('\\u{0:04x}'.format(c))
+        return replacement, end
+
+    BACKSLASH_REPLACE = 'waagent_backslashreplace'
+
+    codecs.register_error(BACKSLASH_REPLACE, __waagent_backslashreplace__)
 
 #
 # datetime.utcnow triggers a DeprecationWarning on 3.12 and will be removed in a future version.
