@@ -19,25 +19,25 @@ jobs:
           # Some of the Python versions we test are not supported by the setup-python Github Action. For those versions, we use a
           # pre-built virtual environment.
           #
-#          - python-version: "2.6"
-#            use_virtual_environment: true
-#          - python-version: "2.7"
-#            use_virtual_environment: true
-#          - python-version: "3.4"
-#            use_virtual_environment: true
-#          - python-version: "3.5"
-#            use_virtual_environment: true
-#          - python-version: "3.6"
-#            use_virtual_environment: true
-#          - python-version: "3.7"
-#            use_virtual_environment: true
-#          - python-version: "3.8"
-#          - python-version: "3.9"
-#            additional-nose-opts: "--with-coverage --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
-#          - python-version: "3.10"
-#          - python-version: "3.11"
-#          - python-version: "3.12"
-#          - python-version: "3.13"
+          - python-version: "2.6"
+            use_virtual_environment: true
+          - python-version: "2.7"
+            use_virtual_environment: true
+          - python-version: "3.4"
+            use_virtual_environment: true
+          - python-version: "3.5"
+            use_virtual_environment: true
+          - python-version: "3.6"
+            use_virtual_environment: true
+          - python-version: "3.7"
+            use_virtual_environment: true
+          - python-version: "3.8"
+          - python-version: "3.9"
+            additional-nose-opts: "--with-coverage --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
+          - python-version: "3.10"
+          - python-version: "3.11"
+          - python-version: "3.12"
+          - python-version: "3.13"
           - python-version: "3.14"
 
     steps:
@@ -159,7 +159,7 @@ jobs:
         echo "PYLINT_OPTIONS: $PYLINT_OPTIONS"
         echo "PYLINT_FILES: $PYLINT_FILES"
 
-        pylint $PYLINT_OPTIONS tests/pa/test_provision.py # $PYLINT_FILES 
+        pylint $PYLINT_OPTIONS $PYLINT_FILES 
 
     #
     # Lastly, compile code coverage
