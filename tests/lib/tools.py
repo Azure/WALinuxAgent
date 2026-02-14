@@ -19,6 +19,7 @@
 Define util functions for unit test
 """
 import difflib
+import multiprocessing
 import os
 import pprint
 import re
@@ -29,7 +30,6 @@ import tempfile
 import time
 import unittest
 from functools import wraps
-from multiprocessing import Process
 from threading import current_thread
 
 import azurelinuxagent.common.conf as conf
@@ -77,8 +77,6 @@ _SLEEP = time.sleep
 #       cannot be passed to processes started using the spawn or forkserver start methods.
 #
 if sys.version_info[0] == 3 and sys.version_info[1] >= 14:
-    import multiprocessing
-
     class ProcessFork:
         @staticmethod
         def create(*args, **kwargs):
@@ -87,7 +85,7 @@ else:
     class ProcessFork:
         @staticmethod
         def create(*args, **kwargs):
-            return Process(*args, **kwargs)
+            return multiprocessing.Process(*args, **kwargs)
 
 
 def mock_sleep(sec=0.01):
