@@ -76,18 +76,18 @@ _SLEEP = time.sleep
 #       Note that objects related to one context may not be compatible with processes for a different context. In particular, locks created using the fork context
 #       cannot be passed to processes started using the spawn or forkserver start methods.
 #
-if not (sys.version_info[0] == 3 and sys.version_info[1] >= 14):
-    class ProcessFork:
-        @staticmethod
-        def create(*args, **kwargs):
-            return Process(*args, **kwargs)
-else:
+if sys.version_info[0] == 3 and sys.version_info[1] >= 14:
     import multiprocessing
 
     class ProcessFork:
         @staticmethod
         def create(*args, **kwargs):
             return multiprocessing.get_context('fork').Process(*args, **kwargs)
+else:
+    class ProcessFork:
+        @staticmethod
+        def create(*args, **kwargs):
+            return Process(*args, **kwargs)
 
 
 def mock_sleep(sec=0.01):

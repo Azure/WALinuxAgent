@@ -159,7 +159,7 @@ jobs:
         echo "PYLINT_OPTIONS: $PYLINT_OPTIONS"
         echo "PYLINT_FILES: $PYLINT_FILES"
 
-        pylint $PYLINT_OPTIONS $PYLINT_FILES 
+        pylint $PYLINT_OPTIONS $PYLINT_FILES
 
     #
     # Lastly, compile code coverage
