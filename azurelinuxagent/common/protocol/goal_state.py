@@ -292,7 +292,7 @@ class GoalState(object):
                     if ext.state == "uninstall":
                         continue
                     msg = "Goal state {0} signature for extension package".format("contains" if ext.encoded_signature else "does not contain")
-                    self.logger.info(msg)
+                    self.logger.info("{0} {1} (version: {2})".format(msg, ext.name, ext.version))
                     add_event(op=WALAEventOperation.ExtensionSigned, message=msg, name=ext.name, version=ext.version, is_success=ext.encoded_signature != "", log_event=False)
 
             # Ensure all certificates are downloaded on Fast Track goal states in order to maintain backwards compatibility with previous
