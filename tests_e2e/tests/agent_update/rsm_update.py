@@ -196,13 +196,7 @@ class RsmUpdateBvt(AgentVmTest):
         """
 
         log.info("Executing verify_versioning_supported_feature.py remote script to verify agent reported supported feature flag")
-        # In these test VMs, direct artifact blob downloads are failing, and our retry
-        # logic takes a long time to exhaust all attempts. As a result, the agent is
-        # blocked from continuing execution and cannot report status to CRP quickly.
-        #
-        # Increasing the number of attempts and the delay is added here as a temporary
-        # workaround while we investigate the root cause of the blob download failures.
-        self._run_remote_test(self._ssh_client, f"agent_update-verify_versioning_supported_feature.py --supported {supported}", attempts=10, attempt_delay=60, use_sudo=True)
+        self._run_remote_test(self._ssh_client, f"agent_update-verify_versioning_supported_feature.py --supported {supported}", use_sudo=True)
         if supported:
             log.info("Successfully verified that Agent reported VersioningGovernance supported feature flag")
         else:

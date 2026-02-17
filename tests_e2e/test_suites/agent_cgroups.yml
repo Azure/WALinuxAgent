@@ -8,7 +8,10 @@ tests:
   - "agent_cgroups/agent_cpu_quota.py"
   - "agent_cgroups/agent_memory_quota.py"
   - "agent_cgroups/agent_cgroups_process_check.py"
-images: "cgroups-endorsed"
+images:
+  - "cgroups-endorsed"
+  # TODO : Currently some extensions(AMA, VMAccess) do not support 25_10. Move this image to the "cgroups-endorsed" image set once those issues have been fixed.
+  - "ubuntu_2510"
 owns_vm: true
 skip_on_images: # AMA extension used in agent_cgroups_process_check, and it is not supported on these images
   - "rhel_95_arm64"

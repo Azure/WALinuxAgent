@@ -42,6 +42,9 @@ class AgentCgroupsProcessCheck(AgentVmTest):
         3. Restart the ext_handler process to re-initialize the cgroups setup
         4. Verify that agent detects extension processes and will not enable the cgroups
         """
+        if self._ssh_client.get_distro() == "ubuntu_2510":
+            log.info("Skipping test on ubuntu_2510 as AMA extension is not supported to test this scenario")
+            return
 
         log.info("=====Validating agent cgroups process check")
         self._run_remote_test(self._ssh_client, "agent_cgroups_process_check-unknown_process_check.py", use_sudo=True)

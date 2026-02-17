@@ -30,6 +30,8 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
+from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, EXT_SIGNATURE_VALIDATION_CPU_QUOTA, EXT_SIGNATURE_VALIDATION_SLICE_NAME, EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME, DisableCgroups
+from azurelinuxagent.common.osutil.systemd import is_systemd_run_failure
 from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 
 
@@ -168,9 +170,9 @@ def validate_signature(package_path, signature, package_full_name):
         report_validation_event(op=WALAEventOperation.SignatureValidation, level=logger.LogLevel.INFO,
                                 message="Validating signature for package '{0}'".format(package_full_name), name=name, version=version, duration=0)
 
+        # Write signature to file and get signing certificate path
         _write_signature_to_file(signature, signature_path)
         microsoft_root_cert_file = get_microsoft_signing_certificate_path()
-
         if not os.path.isfile(microsoft_root_cert_file):
             msg = ("signing certificate was not found at expected location ('{0}'). Try restarting the agent, "
                    "or see log ('{1}') for additional details.").format(microsoft_root_cert_file, conf.get_agent_log_file())
@@ -184,16 +186,43 @@ def validate_signature(package_path, signature, package_full_name):
         # as a temporary measure until a robust solution for handling expired/revoked certificates is implemented.
         #
         # TODO: implement timestamp token parsing and validate that certificate was valid at time of signing
-        command = [
+        base_command = [
             conf.get_openssl_cmd(), 'cms', '-verify',
             '-binary', '-inform', 'der',  # Signature input format must be DER (binary encoding)
             '-in', signature_path,  # Path to the CMS signature file to be verified
             '-content', package_path,  # Path to the original package that was signed
             '-purpose', 'any',  # Allows verification for any purpose, not restricted to specific uses
             '-CAfile', microsoft_root_cert_file,  # Path to the trusted root certificate file used for verification
-            '-no_check_time'  # Skips checking whether the certificate is expired
+            '-no_check_time',  # Skips checking whether the certificate is expired
+            '-out', os.devnull  # Command outputs the signed data, we don't need it so we suppress it
         ]
-        run_command(command, encode_output=False)
+
+        # If cgroups are enabled, attempt to run the command in a dedicated systemd-run scope with a dedicated CPU quota.
+        # This is because signature validation is CPU-intensive and may take excessive time if the agent's CPU quota is low.
+        # If the systemd-run invocation fails, disable cgroups entirely and fall back to running the OpenSSL command directly.
+        use_cgroups = CGroupConfigurator.get_instance().enabled()
+        if use_cgroups:
+            slice_name = EXT_SIGNATURE_VALIDATION_SLICE_NAME + ".slice"
+            scope_name = EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME + ".scope"
+            systemd_cmd = ['systemd-run', '--unit={0}'.format(scope_name), '--slice={0}'.format(slice_name), '--scope', '--property=CPUAccounting=yes',
+                           '--property=CPUQuota={0}'.format(EXT_SIGNATURE_VALIDATION_CPU_QUOTA)] + base_command
+            try:
+                run_command(systemd_cmd)
+            except CommandError as ex:
+                # If the systemd-run invocation itself failed, disable cgroups entirely and fall back to running openssl command directly.
+                # If the openssl command failed, re-raise and do not retry.
+                if is_systemd_run_failure(EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME, ex.stderr):
+                    error_msg = "'systemd-run' invocation failed for signature validation, disabling cgroups and falling back to direct execution. Error: '{0}'".format(ex.stderr)
+                    report_validation_event(op=WALAEventOperation.SignatureValidation, level=logger.LogLevel.WARNING,
+                        message=error_msg,
+                        name=name, version=version, duration=0)
+                    CGroupConfigurator.get_instance().disable(reason=error_msg, disable_cgroups=DisableCgroups.ALL)
+                    run_command(base_command)
+                else:
+                    raise
+        else:
+            # Run without systemd if cgroups disabled
+            run_command(base_command)
 
         report_validation_event(op=WALAEventOperation.PackageSignatureResult, level=logger.LogLevel.INFO,
                                 message="Successfully validated signature for package '{0}'".format(package_full_name),

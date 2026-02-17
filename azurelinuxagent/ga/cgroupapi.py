@@ -32,9 +32,9 @@ from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCod
     ExtensionOperationError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import systemd
+from azurelinuxagent.common.osutil.systemd import is_systemd_run_failure
 from azurelinuxagent.common.utils import fileutil, shellutil
-from azurelinuxagent.ga.extensionprocessutil import handle_process_completion, read_output, \
-    TELEMETRY_MESSAGE_MAX_LEN
+from azurelinuxagent.ga.extensionprocessutil import handle_process_completion, read_output
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import get_distro
 
@@ -243,19 +243,27 @@ def create_cgroup_api():
 
     root_hierarchy_mode = shellutil.run_command(["stat", "-f", "--format=%T", CGROUP_FILE_SYSTEM_ROOT]).rstrip()
 
-    if root_hierarchy_mode == "cgroup2fs":
+    # Distro Ubuntu 25.10 ship Rust-based coreutils. Its 'stat' lacks a human-readable mapping for the cgroup v2 (cgroup2fs) magic number, so it prints
+    # UNKNOWN with that magic value 0x63677270. Add an explicit check for this hex to detect cgroup v2
+    # #stat -f --format=%T /sys/fs/cgroup/
+    # UNKNOWN (0x63677270)
+    #
+
+    if root_hierarchy_mode == "cgroup2fs" or (root_hierarchy_mode.startswith("UNKNOWN") and "0x63677270" in root_hierarchy_mode):
         return SystemdCgroupApiv2()
 
     elif root_hierarchy_mode == "tmpfs":
         # Check if a hybrid mode is being used
         unified_hierarchy_path = os.path.join(CGROUP_FILE_SYSTEM_ROOT, "unified")
-        if os.path.exists(unified_hierarchy_path) and shellutil.run_command(["stat", "-f", "--format=%T", unified_hierarchy_path]).rstrip() == "cgroup2fs":
-            # Hybrid mode is being used. Check if any controllers are available to be enabled in the unified hierarchy.
-            available_unified_controllers_file = os.path.join(unified_hierarchy_path, "cgroup.controllers")
-            if os.path.exists(available_unified_controllers_file):
-                available_unified_controllers = fileutil.read_file(available_unified_controllers_file).rstrip()
-                if available_unified_controllers != "":
-                    raise CGroupsException("Detected hybrid cgroup mode, but there are controllers available to be enabled in unified hierarchy: {0}".format(available_unified_controllers))
+        if os.path.exists(unified_hierarchy_path):
+            unified_hierarchy_mode = shellutil.run_command( ["stat", "-f", "--format=%T", unified_hierarchy_path]).rstrip()
+            if unified_hierarchy_mode == "cgroup2fs" or (unified_hierarchy_mode.startswith("UNKNOWN") and "0x63677270" in unified_hierarchy_mode):
+                # Hybrid mode is being used. Check if any controllers are available to be enabled in the unified hierarchy.
+                available_unified_controllers_file = os.path.join(unified_hierarchy_path, "cgroup.controllers")
+                if os.path.exists(available_unified_controllers_file):
+                    available_unified_controllers = fileutil.read_file(available_unified_controllers_file).rstrip()
+                    if available_unified_controllers != "":
+                        raise CGroupsException("Detected hybrid cgroup mode, but there are controllers available to be enabled in unified hierarchy: {0}".format(available_unified_controllers))
 
         cgroup_api_v1 = SystemdCgroupApiv1()
         # Previously the agent supported users mounting cgroup v1 controllers in locations other than the systemd
@@ -384,7 +392,7 @@ class _SystemdCgroupApi(object):
         except ExtensionError as e:
             # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
             # extension errors.
-            if not self._is_systemd_failure(scope, stderr):
+            if not is_systemd_run_failure(scope, stderr):
                 # There was an extension error; it either timed out or returned a non-zero exit code. Re-raise the error
                 raise
 
@@ -404,13 +412,6 @@ class _SystemdCgroupApi(object):
         finally:
             with self._systemd_run_commands_lock:
                 self._systemd_run_commands.remove(process.pid)
-
-    @staticmethod
-    def _is_systemd_failure(scope_name, stderr):
-        stderr.seek(0)
-        stderr = ustr(stderr.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
-        unit_not_found = "Unit {0} not found.".format(scope_name)
-        return unit_not_found in stderr or scope_name not in stderr
 
 
 class SystemdCgroupApiv1(_SystemdCgroupApi):
