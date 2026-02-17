@@ -19,6 +19,7 @@
 Define util functions for unit test
 """
 import difflib
+import multiprocessing
 import os
 import pprint
 import re
@@ -63,6 +64,28 @@ _MAX_LENGTH_SAFE_REPR = 80
 
 # Mock sleep to reduce test execution time
 _SLEEP = time.sleep
+
+#
+# Python 3.14 changed the default start method of multiprocessing.Process (see https://docs.python.org/3/library/multiprocessing.html#multiprocessing-start-methods).
+#
+# 'fork' is needed when the parent process sets mocks (or other environment changes) that the child process needs to inherit. For those cases, use
+# tests.lib.tools.ProcessFork instead of multiprocessing.Process.
+#
+# See the notes on get_context() in the same documentation, in particular:
+#
+#       Note that objects related to one context may not be compatible with processes for a different context. In particular, locks created using the fork context
+#       cannot be passed to processes started using the spawn or forkserver start methods.
+#
+if sys.version_info[0] == 3 and sys.version_info[1] >= 14:
+    class ProcessFork:
+        @staticmethod
+        def create(*args, **kwargs):
+            return multiprocessing.get_context('fork').Process(*args, **kwargs)
+else:
+    class ProcessFork:
+        @staticmethod
+        def create(*args, **kwargs):
+            return multiprocessing.Process(*args, **kwargs)
 
 
 def mock_sleep(sec=0.01):
