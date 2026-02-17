@@ -1033,7 +1033,6 @@ class WireClient(object):
             return
         except ResourceGoneError:
             # refresh the host plugin client and try again on the next iteration of the main loop
-            # TODO: Check if we should also be handling the InvalidContainerConfiguration scenario with a goal state refresh
             self.update_host_plugin_from_goal_state()
             return
         except Exception as e:
