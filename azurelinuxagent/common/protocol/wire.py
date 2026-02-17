@@ -802,6 +802,8 @@ class WireClient(object):
             # state. The caller will handle this exception by forcing a goal state refresh, which in turn updates the
             # container-id header passed to HostGAPlugin, and retrying the call.
             # See Issue #1294, PR #1299.
+            # TODO: This behavior is specific to HGAP requests. It should be moved to a different method which is
+            #  exclusively used for HGAP requests
             if resp.status == httpclient.BAD_REQUEST:
                 response_error = read_response_error(resp)
                 if INVALID_CONTAINER_CONFIGURATION in response_error:
@@ -816,7 +818,8 @@ class WireClient(object):
                 logger.warn(msg)
 
                 # TODO: The call to report_fetch_health should be limited to HGAP requests. That method should only
-                #  be used to report failures in HGAP's artifact downloads API
+                #  be used to report failures in HGAP's artifact downloads API. This logic should be moved to a
+                #  different method which is exclusively used for HGAP requests.
                 if host_plugin is not None:
                     host_plugin.report_fetch_health(uri,
                                                     is_healthy=not restutil.request_failed_at_hostplugin(resp),
