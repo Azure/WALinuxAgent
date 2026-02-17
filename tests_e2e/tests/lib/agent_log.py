@@ -240,7 +240,7 @@ class AgentLog(object):
             #
             # Warning downloading extension manifest. If the issue persists, this would cause errors elsewhere so safe to ignore
             {
-                'message': r"\[http://168.63.129.16:32526/extensionArtifact\]: \[HTTP Failed\] \[400: Bad Request\]",
+                'message': r"\[http://168.63.129.16:32526/extensionArtifact\]( with headers \[\{.+\}\])?: \[HTTP Failed\] \[400: Bad Request\]",
                 'if': lambda r: r.level == "WARNING"
             },
             #
