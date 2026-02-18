@@ -17,11 +17,14 @@ images:
   - "rhel_95"
 
 #
-# Support for FIPS 140-3 is currently deployed only to a few regions on AzureCloud, and deployment has not started on AzureChinaCloud.
+# The test uses a keyvault located on westus2.
 #
 locations:
-  - "AzureCloud:eastus2euap"
+  - "AzureCloud:westus2"
 
+#
+# Support for FIPS 140-3 has not been deployed AzureChinaCloud.
+#
 skip_on_clouds:
   - "AzureChinaCloud"
 

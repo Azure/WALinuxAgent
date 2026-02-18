@@ -17,14 +17,13 @@
 
 import os
 import unittest
-from multiprocessing import Process
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.daemon.main import OPENSSL_FIPS_ENVIRONMENT, get_daemon_handler
 from azurelinuxagent.pa.provision.default import ProvisionHandler
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
-from tests.lib.tools import AgentTestCase, Mock, patch
+from tests.lib.tools import AgentTestCase, Mock, patch, ProcessFork
 
 
 class MockDaemonCall(object):
@@ -129,7 +128,7 @@ class TestDaemon(AgentTestCase):
                     daemon_handler = get_daemon_handler()
 
                     # we need to assert this thread will sleep forever, so fork it
-                    daemon = Process(target=daemon_handler.run)
+                    daemon = ProcessFork.create(target=daemon_handler.run)
                     daemon.start()
                     daemon.join(timeout=5)
 

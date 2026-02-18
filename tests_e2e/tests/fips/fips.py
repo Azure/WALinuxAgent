@@ -188,8 +188,8 @@ class Fips(AgentVmTest):
 
             certificates_by_cloud = {
                 'AzureCloud': {
-                    'source_vault': f"/subscriptions/{self._context.vm.subscription}/resourceGroups/waagent-tests/providers/Microsoft.KeyVault/vaults/waagenttests-canary",
-                    'certificate_url': 'https://waagenttests-canary.vault.azure.net/secrets/rsa/85d92c80443e44058cb034b2008e1e75'
+                    'source_vault': f"/subscriptions/{self._context.vm.subscription}/resourceGroups/waagent-tests/providers/Microsoft.KeyVault/vaults/waagenttests-westus2",
+                    'certificate_url': 'https://waagenttests-westus2.vault.azure.net/secrets/rsa/b46881d1dd73496fb98b2d008e9d471a'
                 },
                 'AzureUSGovernment': {
                     'source_vault': f"/subscriptions/{self._context.vm.subscription}/resourceGroups/waagent-tests/providers/Microsoft.KeyVault/vaults/waagenttests",
