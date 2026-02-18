@@ -227,22 +227,6 @@ class Fips(AgentVmTest):
                 }
             })
         else:
-            # if Fips._is_red_hat_distro(self._distro):
-            #     #
-            #     # TODO: Remove this workaround once the pre-installed Agent RHEL/Oracle 9.5 is updated to support FIPS 140-3.
-            #     #
-            #     # The current Daemon on RHEL/Oracle 95 (2.7.0.6) has not been updated to support FIPS 140-3 and goes into an infinite loop while trying to fetch the certificates in the goal
-            #     # state. The reason is that, even if it cannot decrypt the response from the WireServer, 2.7.0.6 assumes that Certificates.pem always exists; if it does not, it goes
-            #     # into an infinite retry loop. To prevent this, before deallocating and reallocating, ensure that there is a Certificates.pem file, even if it is empty.
-            #     #
-            #     # The agent may remove the new file if it fetches the goal state certificate (after the VM restart in the previous step) and fails to decrypt it while we create the file below.
-            #     # Therefore, stop the agent service to prevent it from removing the file.
-            #     output = self._ssh_client.run_command('agent-service stop', use_sudo=True)
-            #     log.info(output)
-            #     pem_file = '/var/lib/waagent/Certificates.pem'
-            #     log.info("Ensuring that %s exists...", pem_file)
-            #     self._ssh_client.run_command(f"touch {pem_file}", use_sudo=True)
-
             log.info("Deallocating and re-allocating %s to force a new tenant certificate in order to create a new PFX...", self._context.vm)
             log.info("Deallocating %s...", self._context.vm)
             self._context.vm.deallocate()
@@ -276,7 +260,7 @@ class Fips(AgentVmTest):
                 'if': lambda r: r.level == "ERROR"
             },
             #
-            # The current Daemon on RHEL_95 tries to fetch the certificates during initialization and has not been updated to support FIPS 140-3
+            # The current Daemon on RHEL/Oracle 9.5 tries to fetch the certificates during initialization and has not been updated to support FIPS 140-3
             #
             #		2025-07-31T19:06:59.878313Z ERROR Daemon Daemon Failed to decrypt /var/lib/waagent/Certificates.p7m (return code: 1)
             #
@@ -291,7 +275,7 @@ class Fips(AgentVmTest):
             #
             {
                 'message': 'Failed to decrypt /var/lib/waagent/Certificates.p7m',
-                'if': lambda r: self._distro == 'rhel_95' and r.prefix == "Daemon"
+                'if': lambda r: self._distro in ['rhel_95', 'oracle_95'] and r.prefix == "Daemon"
             },
             #
             # There are several extensions that are installed by policy, which is executed asynchronously to the test. If these extensions are installed before a new PFX has been generated, the Agent may issue those warnings, and the extensions may fail.
