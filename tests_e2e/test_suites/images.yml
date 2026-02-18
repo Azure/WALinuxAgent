@@ -97,7 +97,9 @@ image-sets:
       - "ubuntu_2004_cvm"
       - "ubuntu_2204_cvm"
       - "ubuntu_2404_cvm"
-      - "rocky_9_cvm"
+# Rocky Linux 9 CVM cannot currently be deployed in the internal testing subscription. Skipping this image in e2e tests.
+# TODO: Re-enable this image in e2e tests once deployment issue is resolved.
+#      - "rocky_9_cvm"
 
 #
 # An image can be specified by a string giving its urn, as in

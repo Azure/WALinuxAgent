@@ -44,7 +44,8 @@ from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchem
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.restutil import TELEMETRY_THROTTLE_DELAY_IN_SECONDS, \
-    TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS, TELEMETRY_DATA
+    TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS, TELEMETRY_DATA, read_response_error, INVALID_CONTAINER_CONFIGURATION, \
+    HEADERS_TO_INCLUDE_IN_FAILURE_MSG
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, gettext, remove_bom, get_bytes_from_pem, parse_json, redact_sas_token
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
@@ -773,7 +774,19 @@ class WireClient(object):
 
     def _fetch_response(self, uri, headers=None, use_proxy=None, retry_codes=None, ok_codes=None):
         resp = None
+        headers_for_failure_msg = {}
+        if headers is not None:
+            for k, v in headers.items():
+                if k in HEADERS_TO_INCLUDE_IN_FAILURE_MSG:
+                    headers_for_failure_msg[k] = v
         try:
+            # TODO: This method was originally meant to be used for calls to storage, but at some point during
+            #   refactoring it ended up being used for calls to HGAP /extensionArtifact. Calls to HGAP should follow a
+            #   similar pattern to fetch_config, which goes through call_wireserver. Those methods enforce certain
+            #   behavior, such as never using a proxy, which is critical on calls to WireServer. Similarly, calls to
+            #   HGAP should never use a proxy, but that is not being enforced in this method. It would be better to
+            #   follow a similar pattern to fetch_config than depend on developers passing in the correct value for
+            #   use_proxy.
             resp = self.call_storage_service(
                 restutil.http_get,
                 uri,
@@ -783,11 +796,30 @@ class WireClient(object):
 
             host_plugin = self.get_host_plugin()
 
+            response_error = None
+
+            # If we got a 400 (bad request) because the container id is invalid, it could indicate a stale goal
+            # state. The caller will handle this exception by forcing a goal state refresh, which in turn updates the
+            # container-id header passed to HostGAPlugin, and retrying the call.
+            # See Issue #1294, PR #1299.
+            # TODO: This behavior is specific to HGAP requests. It should be moved to a different method which is
+            #  exclusively used for HGAP requests
+            if resp.status == httpclient.BAD_REQUEST:
+                response_error = read_response_error(resp)
+                if INVALID_CONTAINER_CONFIGURATION in response_error:
+                    raise InvalidContainerError(response_error)
+
             if restutil.request_failed(resp, ok_codes=ok_codes):
-                error_response = restutil.read_response_error(resp)
-                msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
+                error_response = response_error if response_error is not None else restutil.read_response_error(resp)
+                if len(headers_for_failure_msg) > 0:
+                    msg = "Fetch failed from [{0}] with headers [{1}]: {2}".format(uri, json.dumps(headers_for_failure_msg), error_response)
+                else:
+                    msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
 
+                # TODO: The call to report_fetch_health should be limited to HGAP requests. That method should only
+                #  be used to report failures in HGAP's artifact downloads API. This logic should be moved to a
+                #  different method which is exclusively used for HGAP requests.
                 if host_plugin is not None:
                     host_plugin.report_fetch_health(uri,
                                                     is_healthy=not restutil.request_failed_at_hostplugin(resp),
@@ -799,10 +831,24 @@ class WireClient(object):
                     host_plugin.report_fetch_health(uri, source='WireClient')
 
         except (HttpError, ProtocolError, IOError) as error:
+            # These exception types already have URI and headers in their message, so we don't need to add it to the
+            # telemetry event message here
             msg = "Fetch failed: {0}".format(error)
             logger.warn(msg)
             report_event(op=WALAEventOperation.HttpGet, is_success=False, message=msg, log_event=False)
             raise
+
+        except Exception as error:
+            # Add the URI and relevant request headers to the telemetry event for any unexpected exceptions
+            if len(headers_for_failure_msg) > 0:
+                error_msg = "Fetch failed with exception from [{0}] with headers [{1}]: {2}".format(uri, json.dumps(headers_for_failure_msg), error)
+            else:
+                error_msg = "Fetch failed with exception from [{0}]: {1}".format(uri, error)
+            msg = "Fetch failed: {0}".format(error_msg)
+            logger.warn(msg)
+            report_event(op=WALAEventOperation.HttpGet, is_success=False, message=msg, log_event=False)
+            # Re-raise any unexpected exception as ProtocolError
+            raise ProtocolError(error_msg)
 
         return resp
 
