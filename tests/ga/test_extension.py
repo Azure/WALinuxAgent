@@ -32,6 +32,7 @@ from azurelinuxagent.common.agent_supported_feature import get_agent_supported_f
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import WALAEventOperation
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.fileutil import read_file
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -3878,6 +3879,13 @@ class _TestSignatureValidationBase(TestExtensionBase):
         self.patch_conf_flag.start()
         self.patch_is_cvm = patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm', return_value=True)
         self.patch_is_cvm.start()
+        # Mock Popen to avoid executing the extension being tested
+        original_popen = subprocess.Popen
+        def mock_popen(command, *args, **kwargs):
+            if isinstance(command, ustr) and 'extension_shim.sh -c ./vmaccess.py' in command:
+                command = 'exit 0'
+            return original_popen(command, *args, **kwargs)
+        patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", mock_popen).start()
         write_signing_certificates()
 
     def tearDown(self):
