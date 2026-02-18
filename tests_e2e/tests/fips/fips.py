@@ -197,7 +197,7 @@ class Fips(AgentVmTest):
         #
         random.seed()
 
-        if False:  # random.choice([1, 2]) == 1:
+        if random.choice([1, 2]) == 1:
             log.info("Adding a keyvault certificate to the osProfile to force a new PFX...")
 
             certificates_by_cloud = {
