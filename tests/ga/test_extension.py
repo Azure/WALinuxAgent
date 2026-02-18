@@ -3551,7 +3551,10 @@ class TestExtensionPolicy(TestExtensionBase):
         self.maxDiff = None     # When long error messages don't match, display the entire diff.
 
     def tearDown(self):
-        patch.stopall()
+        self.mock_sleep.stop()
+        self.patch_policy_path.stop()
+        self.patch_conf_flag.stop()
+        self.patch_is_cvm.stop()
         AgentTestCase.tearDown(self)
 
     def _create_policy_file(self, policy):
@@ -3883,7 +3886,10 @@ class _TestSignatureValidationBase(TestExtensionBase):
         write_signing_certificates()
 
     def tearDown(self):
-        patch.stopall()
+        self.mock_sleep.stop()
+        self.patch_conf_flag.stop()
+        self.patch_is_cvm.stop()
+        self.patch_should_delay.stop()
         AgentTestCase.tearDown(self)
 
     @staticmethod

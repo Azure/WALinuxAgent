@@ -48,7 +48,9 @@ class _TestPolicyBase(AgentTestCase):
         self.goal_state_history.save_to_history = MagicMock(return_value=None)
 
     def tearDown(self):
-        patch.stopall()
+        self.patch_policy_path.stop()
+        self.patch_conf_flag.stop()
+        self.patch_is_cvm.stop()
         AgentTestCase.tearDown(self)
 
     def _create_policy_file(self, policy):

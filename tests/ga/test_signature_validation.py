@@ -42,10 +42,6 @@ class TestSignatureValidation(AgentTestCase):
             self.vm_access_signature = f.read()
         self.package_name_and_version = "Microsoft.OSTCExtensions.Edp.VMAccessForLinux-1.5.0"
 
-    def tearDown(self):
-        patch.stopall()
-        AgentTestCase.tearDown(self)
-
     def test_should_validate_signature_successfully(self):
         """
         Test that the signature can be validated successfully without raising an exception.
