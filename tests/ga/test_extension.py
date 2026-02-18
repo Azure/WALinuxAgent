@@ -3883,6 +3883,14 @@ class _TestSignatureValidationBase(TestExtensionBase):
         self.patch_is_cvm.start()
         self.patch_should_delay = patch('azurelinuxagent.ga.signature_validation_util._should_delay_signature_validation', return_value=False)
         self.patch_should_delay.start()
+        # Mock Popen to avoid executing the extension being tested
+        original_popen = subprocess.Popen
+        def mock_popen(command, *args, **kwargs):
+            if isinstance(command, ustr) and 'extension_shim.sh -c ./vmaccess.py' in command:
+                command = 'exit 0'
+            return original_popen(command, *args, **kwargs)
+        self.patch_popen = patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", mock_popen)
+        self.patch_popen.start()
         write_signing_certificates()
 
     def tearDown(self):
@@ -3890,6 +3898,7 @@ class _TestSignatureValidationBase(TestExtensionBase):
         self.patch_conf_flag.stop()
         self.patch_is_cvm.stop()
         self.patch_should_delay.stop()
+        self.patch_popen.stop()
         AgentTestCase.tearDown(self)
 
     @staticmethod
