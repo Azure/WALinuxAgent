@@ -39,6 +39,10 @@ from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 # command is not supported on older versions.
 _MIN_OPENSSL_VERSION_FOR_SIG_VALIDATION = FlexibleVersion("1.1.0")
 
+# Track the time when the agent module is first loaded. This is used to implement an initial delay period before validating signature.
+# TODO: This is a temporary performance workaround for telemetry release; remove for production release.
+_agent_start_time = datetime.datetime.now(UTC)
+
 
 class PackageValidationError(AgentError):
     """
@@ -309,6 +313,25 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
                                       operation=WALAEventOperation.SignatureValidation, duration=0)
 
 
+def _should_delay_signature_validation():
+    """
+    Extension signature validation is a CPU-intensive operation that may impact VM provisioning time. To avoid affecting TDPR
+    for performance-sensitive users, we implement an initial delay period after agent startup (set via conf flag
+    Debug.SignatureValidationInitialDelay), during which signature validation is skipped. This allows us to gather telemetry
+    without impacting TDPR.
+
+    This function returns True if we are still within the delay period, False otherwise.
+
+    TODO: This delay is a temporary workaround for telemetry release; remove for production release.
+    """
+    delay_seconds = conf.get_signature_validation_initial_delay()
+    if delay_seconds <= 0:
+        return False
+
+    elapsed = datetime.datetime.now(UTC) - _agent_start_time
+    return elapsed < datetime.timedelta(seconds=delay_seconds)
+
+
 def signature_validation_enabled():
     """
     Returns True if signature validation is enabled in conf file, OpenSSL version supports all validation parameters, and agent is running on a Confidential VM.
@@ -316,7 +339,10 @@ def signature_validation_enabled():
     Extension signature validation is currently limited to CVMs for telemetry/preview releases. It will be expanded to all VMs after we gain confidence in the feature.
     TODO: Remove the is_confidential_vm() check once signature validation is supported on all VMs.
     """
-    return conf.get_signature_validation_enabled() and openssl_version_supported_for_signature_validation() and ConfidentialVMInfo.is_confidential_vm()
+    return conf.get_signature_validation_enabled() and \
+        not _should_delay_signature_validation() and \
+        openssl_version_supported_for_signature_validation() and \
+        ConfidentialVMInfo.is_confidential_vm()
 
 
 def cleanup_package_with_invalid_signature(package_file):
