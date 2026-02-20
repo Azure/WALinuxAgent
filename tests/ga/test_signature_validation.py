@@ -16,15 +16,18 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import datetime
 import os
 import sys
 
 from tests.lib.tools import AgentTestCase, data_dir, patch, skip_if_predicate_true
+from azurelinuxagent.common import conf
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 from azurelinuxagent.ga.signature_validation_util import validate_signature, SignatureValidationError, validate_handler_manifest_signing_info, \
-    ManifestValidationError, _get_openssl_version, openssl_version_supported_for_signature_validation
+    ManifestValidationError, _get_openssl_version, openssl_version_supported_for_signature_validation, signature_validation_enabled
 from azurelinuxagent.ga.exthandlers import HandlerManifest
 from azurelinuxagent.common.event import WALAEventOperation
+from azurelinuxagent.common.future import UTC
 from azurelinuxagent.common.protocol.restapi import Extension
 from azurelinuxagent.common.utils.shellutil import CommandError
 
@@ -38,10 +41,6 @@ class TestSignatureValidation(AgentTestCase):
         with open(vm_access_signature_path, 'r') as f:
             self.vm_access_signature = f.read()
         self.package_name_and_version = "Microsoft.OSTCExtensions.Edp.VMAccessForLinux-1.5.0"
-
-    def tearDown(self):
-        patch.stopall()
-        AgentTestCase.tearDown(self)
 
     def test_should_validate_signature_successfully(self):
         """
@@ -135,6 +134,25 @@ class TestSignatureValidation(AgentTestCase):
         # TODO: Test is skipped because it requires timestamp validation implementation. Write this test after
         # timestamp validation has been implemented.
         self.fail()
+
+    def test_signature_validation_should_be_disabled_during_delay_period(self):
+        """
+        Test that signature validation is disabled during the delay period after service start, and enabled after.
+        """
+        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_signature_validation_enabled", return_value=True):
+            with patch("azurelinuxagent.ga.signature_validation_util.openssl_version_supported_for_signature_validation", return_value=True):
+                with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=True):
+
+                    # Test 1: Within delay period - validation should be disabled
+                    now = datetime.datetime.now(UTC)
+                    with patch("azurelinuxagent.ga.signature_validation_util._agent_start_time", now):
+                        self.assertFalse(signature_validation_enabled(),
+                                         "Signature validation should be disabled during delay period")
+
+                    # Test 2: After delay period - validation should be enabled
+                    past_time = now - datetime.timedelta(seconds=conf.get_signature_validation_initial_delay() + 1)
+                    with patch("azurelinuxagent.ga.signature_validation_util._agent_start_time", past_time):
+                        self.assertTrue(signature_validation_enabled(), "Signature validation should be enabled after delay period")
 
 
 class TestHandlerManifestValidation(AgentTestCase):

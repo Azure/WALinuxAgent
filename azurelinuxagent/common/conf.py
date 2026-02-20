@@ -205,7 +205,8 @@ __INTEGER_OPTIONS__ = {
     "Debug.AutoUpdateHotfixFrequency": 14400,
     "Debug.AutoUpdateNormalFrequency": 86400,
     "Debug.FirewallRulesLogPeriod": 86400,
-    "Debug.LogCollectorInitialDelay": 5 * 60
+    "Debug.LogCollectorInitialDelay": 5 * 60,
+    "Debug.SignatureValidationInitialDelay": 10 * 60
 }
 
 
@@ -727,6 +728,14 @@ def get_ignore_signature_validation_errors(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_switch("Debug.IgnoreSignatureValidationErrors", True)
+
+
+def get_signature_validation_initial_delay(conf=__conf__):
+    """
+    Get initial delay period (in seconds) after service start before extension signature validation is enabled.
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.SignatureValidationInitialDelay", 10 * 60)
 
   
 def get_enable_rsm_downgrade(conf=__conf__):

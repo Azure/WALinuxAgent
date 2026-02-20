@@ -44,10 +44,6 @@ class TestSignatureValidationSudo(AgentTestCase):
         # Regex for 'openssl cms -verify' for the test zip package
         self.openssl_cmd_pattern = re.compile(r".*openssl\s+cms\s+-verify.*-content\s+{0}\b".format(re.escape(self.vm_access_zip_path)))
 
-    def tearDown(self):
-        patch.stopall()
-        AgentTestCase.tearDown(self)
-
     @staticmethod
     def _validate_signature_in_another_year(target_year, package_path, signature, package_name_and_version):
         original_system_year = None

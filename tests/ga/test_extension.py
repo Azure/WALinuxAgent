@@ -3552,7 +3552,10 @@ class TestExtensionPolicy(TestExtensionBase):
         self.maxDiff = None     # When long error messages don't match, display the entire diff.
 
     def tearDown(self):
-        patch.stopall()
+        self.mock_sleep.stop()
+        self.patch_policy_path.stop()
+        self.patch_conf_flag.stop()
+        self.patch_is_cvm.stop()
         AgentTestCase.tearDown(self)
 
     def _create_policy_file(self, policy):
@@ -3879,17 +3882,24 @@ class _TestSignatureValidationBase(TestExtensionBase):
         self.patch_conf_flag.start()
         self.patch_is_cvm = patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm', return_value=True)
         self.patch_is_cvm.start()
+        self.patch_should_delay = patch('azurelinuxagent.ga.signature_validation_util._should_delay_signature_validation', return_value=False)
+        self.patch_should_delay.start()
         # Mock Popen to avoid executing the extension being tested
         original_popen = subprocess.Popen
         def mock_popen(command, *args, **kwargs):
             if isinstance(command, ustr) and 'extension_shim.sh -c ./vmaccess.py' in command:
                 command = 'exit 0'
             return original_popen(command, *args, **kwargs)
-        patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", mock_popen).start()
+        self.patch_popen = patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", mock_popen)
+        self.patch_popen.start()
         write_signing_certificates()
 
     def tearDown(self):
-        patch.stopall()
+        self.mock_sleep.stop()
+        self.patch_conf_flag.stop()
+        self.patch_is_cvm.stop()
+        self.patch_should_delay.stop()
+        self.patch_popen.stop()
         AgentTestCase.tearDown(self)
 
     @staticmethod
@@ -4147,13 +4157,29 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
 
     def test_enable_should_succeed_and_not_validate_signature_if_conf_flag_disabled(self):
         # If conf flag is set to false, enable should succeed but signature validation state should not be set.
-        self.patch_conf_flag.stop()
         data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
         data_file["manifest"] = "wire/manifest_vm_access.xml"
 
         with patch('azurelinuxagent.ga.exthandlers.conf.get_signature_validation_enabled', return_value=False):
+            self._test_enable_extension(data_file=data_file,
+                                        signature_validation_should_succeed=False,
+                                        expected_status_code=0,
+                                        expected_handler_status='Ready',
+                                        expected_ext_count=1,
+                                        expected_status_msg='Plugin enabled',
+                                        expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
+                                        expected_version="1.7.0")
+
+    def test_enable_should_succeed_and_not_validate_during_delay_period(self):
+        # During the signature validation delay period, enable should succeed but signature validation state should not be set.
+        data_file = wire_protocol_data.DATA_FILE.copy()
+        data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
+        data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
+        data_file["manifest"] = "wire/manifest_vm_access.xml"
+
+        with patch('azurelinuxagent.ga.signature_validation_util._should_delay_signature_validation', return_value=True):
             self._test_enable_extension(data_file=data_file,
                                         signature_validation_should_succeed=False,
                                         expected_status_code=0,
@@ -4377,7 +4403,6 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
 
     def test_should_not_validate_signature_on_non_cvm(self):
         # Simulate a non-CVM
-        self.patch_is_cvm.stop()
         with patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm', return_value=False):
             data_file = wire_protocol_data.DATA_FILE.copy()
             data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
@@ -4518,20 +4543,20 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
     def test_enable_should_succeed_for_extension_with_invalid_signature_if_conf_flag_disabled(self):
         # If 'Debug.EnableSignatureValidation' flag is set to false, enable should succeed for an extension with
         # invalid signature, even with enforcement enabled.
-        self.patch_conf_flag.stop()
         data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_invalid_signature.xml"
         data_file["manifest"] = "wire/manifest_vm_access.xml"
 
-        self._test_enable_extension(data_file=data_file,
-                                    signature_validation_should_succeed=False,
-                                    expected_status_code=0,
-                                    expected_handler_status='Ready',
-                                    expected_ext_count=1,
-                                    expected_status_msg='Plugin enabled',
-                                    expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
-                                    expected_version="1.7.0")
+        with patch('azurelinuxagent.ga.exthandlers.conf.get_signature_validation_enabled', return_value=False):
+            self._test_enable_extension(data_file=data_file,
+                                        signature_validation_should_succeed=False,
+                                        expected_status_code=0,
+                                        expected_handler_status='Ready',
+                                        expected_ext_count=1,
+                                        expected_status_msg='Plugin enabled',
+                                        expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
+                                        expected_version="1.7.0")
 
     def test_enable_should_fail_for_existing_zip_package_if_signature_validation_fails(self):
         # Signature validation fails for existing zip package -> block extension
