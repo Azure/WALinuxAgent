@@ -208,8 +208,15 @@ def validate_signature(package_path, signature, package_full_name):
         if use_cgroups:
             slice_name = EXT_SIGNATURE_VALIDATION_SLICE_NAME + ".slice"
             scope_name = EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME + ".scope"
-            systemd_cmd = ['systemd-run', '--unit={0}'.format(scope_name), '--slice={0}'.format(slice_name), '--scope', '--property=CPUAccounting=yes',
-                           '--property=CPUQuota={0}'.format(EXT_SIGNATURE_VALIDATION_CPU_QUOTA)] + base_command
+            systemd_cmd = ['systemd-run', '--unit={0}'.format(scope_name), '--slice={0}'.format(slice_name), '--scope',
+                           '--property=CPUQuota={0}'.format(EXT_SIGNATURE_VALIDATION_CPU_QUOTA)]
+
+            # Add accounting properties based on cgroup version
+            accounting_props, accounting_vals = CGroupConfigurator.get_instance().get_cgroups_api().get_accounting_properties()
+            for prop, val in zip(accounting_props, accounting_vals):
+                systemd_cmd.append('--property={0}={1}'.format(prop, val))
+
+            systemd_cmd.extend(base_command)
             try:
                 run_command(systemd_cmd)
             except CommandError as ex:
