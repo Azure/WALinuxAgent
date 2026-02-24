@@ -608,7 +608,8 @@ class WireClient(object):
         host_ga_plugin = self.get_host_plugin()
 
         # Fail fast on request timeouts when doing direct downloads, as these may indicate no outbound connection on
-        # the VM and should fall back quickly to the host channel.
+        # the VM and should fall back quickly to the host channel. Reconsider this strategy if we switch the primary
+        # download channel to HGAP.
         direct_download = lambda uri: self.fetch(uri, fail_fast_on_timeout=True)[0]
 
         def hgap_download(uri):
@@ -638,7 +639,8 @@ class WireClient(object):
         host_ga_plugin = self.get_host_plugin()
 
         # Fail fast on request timeouts when doing direct downloads, as these may indicate no outbound connection on
-        # the VM and should fall back quickly to the host channel.
+        # the VM and should fall back quickly to the host channel. Reconsider this strategy if we switch the primary
+        # download channel to HGAP.
         direct_download = lambda uri: self.stream(uri, target_file, headers=None, use_proxy=True, fail_fast_on_timeout=True)
 
         def hgap_download(uri):
