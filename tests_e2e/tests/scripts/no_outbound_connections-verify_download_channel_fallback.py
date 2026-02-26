@@ -33,7 +33,7 @@ def main():
     # 2026-02-20T22:39:30.733714Z INFO ExtHandler ExtHandler ProcessExtensionsGoalState started [incarnation_1 channel: WireServer source: Fabric activity: 1082ed79-bbc7-4925-a932-aefe84bca6e9 correlation 2ad608f9-327b-4b2a-8673-6b40ca7ee6e7 created: 2026-02-20T22:33:22.800011Z]
     # Patterns to match
     downloading_vmap = re.compile(r"Downloading artifacts profile blob")                        # This is the artifact download we expect to see the channel change happen on
-    fetch_failed_on_direct_pattern = re.compile(r"Fetch failed:.*1 attempts made")              # There should only be one attempt on the Direct channel before falling back to HostGAPlugin
+    fetch_failed_on_direct_pattern = re.compile(r"Fetch failed:.* 1 attempts made")              # There should only be one attempt on the Direct channel before falling back to HostGAPlugin
     default_channel_pattern = re.compile(r"Default channel changed to HostGAPlugin channel")    # The agent should log that it is changing the default channel to HostGAPlugin
     process_extensions_pattern = re.compile(r"ProcessExtensionsGoalState started")              # The agent should switch channels before executing any extensions
 

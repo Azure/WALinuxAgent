@@ -37,6 +37,8 @@ SECURE_WARNING_EMITTED = False
 DEFAULT_RETRIES = 6
 DELAY_IN_SECONDS = 1
 
+FAIL_FAST_REQUEST_TIMEOUT = 5
+
 THROTTLE_RETRIES = 25
 THROTTLE_DELAY_IN_SECONDS = 1
 # Reducing next attempt calls when throttled since telemetrydata endpoint has a limit 15 calls per 15 secs,
@@ -461,7 +463,7 @@ def http_request(method,
         try:
             # If fail_fast_on_timeout is True, use a shorter timeout for the first attempt to fail fast in the case of
             # no outbound connection on the VM.
-            req_timeout = timeout if not fail_fast_on_timeout or attempt > 1 else min(timeout, 5)
+            req_timeout = timeout if not fail_fast_on_timeout or attempt > 1 else min(timeout, FAIL_FAST_REQUEST_TIMEOUT)
             resp = _http_request(method,
                                  host,
                                  rel_uri,
