@@ -99,6 +99,10 @@ _MOCKED_COMMANDS_V2 = [
 
     MockCommand(r"^stat -f --format=%T /sys/fs/cgroup$", 'cgroup2fs'),
 
+    MockCommand(r"^systemctl show (.+) --property MemoryHigh$",
+'''MemoryHigh=infinity
+'''),
+
 ]
 
 _MOCKED_COMMANDS_HYBRID = [
