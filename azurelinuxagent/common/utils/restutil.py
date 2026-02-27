@@ -37,6 +37,8 @@ SECURE_WARNING_EMITTED = False
 DEFAULT_RETRIES = 6
 DELAY_IN_SECONDS = 1
 
+FAIL_FAST_REQUEST_TIMEOUT = 5
+
 THROTTLE_RETRIES = 25
 THROTTLE_DELAY_IN_SECONDS = 1
 # Reducing next attempt calls when throttled since telemetrydata endpoint has a limit 15 calls per 15 secs,
@@ -372,7 +374,8 @@ def http_request(method,
                  retry_delay=DELAY_IN_SECONDS,
                  throttle_delay=THROTTLE_DELAY_IN_SECONDS,
                  redact_data=False,
-                 return_raw_response=False):
+                 return_raw_response=False,
+                 fail_fast_on_timeout=False):
     """
     NOTE: This method provides some logic to handle errors in the HTTP request, including checking the HTTP status of the response
           and handling some exceptions. If return_raw_response is set to True all the error handling will be skipped and the
@@ -458,10 +461,13 @@ def http_request(method,
         attempt += 1
 
         try:
+            # If fail_fast_on_timeout is True, use a shorter timeout for the first attempt to fail fast in the case of
+            # no outbound connection on the VM.
+            req_timeout = timeout if not fail_fast_on_timeout or attempt > 1 else min(timeout, FAIL_FAST_REQUEST_TIMEOUT)
             resp = _http_request(method,
                                  host,
                                  rel_uri,
-                                 timeout,
+                                 req_timeout,
                                  port=port,
                                  data=data,
                                  secure=secure,
@@ -520,6 +526,11 @@ def http_request(method,
                 msg = '[HTTP Failed] {0} {1} {2} -- IOError {3}'.format(method, clean_url, json.dumps(headers_for_failure_msg), e)
             else:
                 msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(method, clean_url, e)
+            # If the error was an IOError and fail_fast_on_timeout is True, check if the error message contains
+            # "timed out" or "timeout" and break the loop to fail fast in the case of no outbound connection on the VM.
+            # Otherwise, continue with the retries.
+            if fail_fast_on_timeout and "timed out" in ustr(e) or "timeout" in ustr(e):
+                break
             continue
 
     raise HttpError("{0} -- {1} attempts made".format(msg, attempt))
@@ -532,7 +543,8 @@ def http_get(url,
              retry_codes=None,
              retry_delay=DELAY_IN_SECONDS,
              return_raw_response=False,
-             timeout=10):
+             timeout=10,
+             fail_fast_on_timeout=False):
     """
     NOTE: This method provides some logic to handle errors in the HTTP request, including checking the HTTP status of the response
           and handling some exceptions. If return_raw_response is set to True all the error handling will be skipped and the
@@ -551,7 +563,8 @@ def http_get(url,
                         max_retry=max_retry,
                         retry_codes=retry_codes,
                         retry_delay=retry_delay,
-                        return_raw_response=return_raw_response)
+                        return_raw_response=return_raw_response,
+                        fail_fast_on_timeout=fail_fast_on_timeout)
 
 
 def http_head(url,
