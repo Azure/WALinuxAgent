@@ -290,12 +290,12 @@ images:
       vm_sizes:
          - "Standard_DC2ads_v5" # CVM v5 SKU
    rocky_9:
-      urn: "resf:rockylinux-x86_64:9-base:latest"
+      urn: "ciq:rocky-community-editions:rocky-community-9:latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
    rocky_9_cvm:
-      urn: "ciq rocky-lts ciqrl94lts-cvm latest"
+      urn: "ciq:rocky-lts:ciqrl94lts-cvm:latest"
       vm_sizes:
          - "Standard_DC2ads_v5" # CVM v5 SKU
    suse_12:
