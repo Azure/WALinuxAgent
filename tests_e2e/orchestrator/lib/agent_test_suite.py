@@ -885,7 +885,7 @@ class AgentTestSuite(LisaTestSuite):
         template: Dict[str, Any] = json.loads(read_file(str(self._test_source_directory/"orchestrator"/"templates/vmss.json")))
 
         # Scale sets for some images need to be deployed with 'plan' property
-        plan_required_images = ["almalinux", "kinvolk", "resf"]
+        plan_required_images = ["almalinux", "kinvolk", "ciq"]
         if publisher in plan_required_images:
             resources: List[Dict[str, Any]] = template.get('resources')
             for resource in resources:
