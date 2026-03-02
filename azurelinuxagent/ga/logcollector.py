@@ -28,7 +28,7 @@ from heapq import heappush, heappop
 
 from azurelinuxagent.common.conf import get_lib_dir, get_ext_log_dir, get_agent_log_file
 from azurelinuxagent.common.event import initialize_event_logger_vminfo_common_parameters_and_protocol, add_event, WALAEventOperation
-from azurelinuxagent.common.future import ustr, UTC
+from azurelinuxagent.common.future import ustr, UTC, BACKSLASH_REPLACE
 from azurelinuxagent.ga.logcollector_manifests import MANIFEST_NORMAL, MANIFEST_FULL
 
 # Please note: be careful when adding agent dependencies in this module.
@@ -128,7 +128,7 @@ class LogCollector(object):
             return " ".join(cmd) if isinstance(cmd, list) else command
 
         def _encode_command_output(output):
-            return ustr(output, encoding="utf-8", errors="backslashreplace")
+            return ustr(output, encoding="utf-8", errors=BACKSLASH_REPLACE)
 
         try:
             process = subprocess.Popen(command, stdout=stdout, stderr=subprocess.PIPE, shell=False)
