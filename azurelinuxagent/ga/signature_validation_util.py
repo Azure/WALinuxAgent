@@ -44,6 +44,24 @@ _MIN_OPENSSL_VERSION_FOR_SIG_VALIDATION = FlexibleVersion("1.1.0")
 _agent_start_time = datetime.datetime.now(UTC)
 
 
+class SignatureValidationTimeout(object):
+    """
+    If any signature validation operation exceeds the configured timeout threshold (Debug.SignatureValidationTimeout),
+    we mark that signature validation has "timed out" and signature validation will be disabled until
+    agent restart.
+    TODO: This is a temporary workaround to prevent performance impact during telemetry release; remove for production release.
+    """
+    _exceeded = False
+
+    @staticmethod
+    def exceeded():
+        return SignatureValidationTimeout._exceeded
+
+    @staticmethod
+    def mark_exceeded():
+        SignatureValidationTimeout._exceeded = True
+
+
 class PackageValidationError(AgentError):
     """
     Error raised when validation fails for a package.
@@ -64,6 +82,12 @@ class SignatureValidationError(PackageValidationError):
 class ManifestValidationError(PackageValidationError):
     """
     Error raised when handler manifest 'signingInfo' validation fails for a package.
+    """
+
+
+class SignatureValidationTimeoutError(SignatureValidationError):
+    """
+    Error raised when signature validation times out.
     """
 
 
@@ -211,7 +235,7 @@ def validate_signature(package_path, signature, package_full_name):
             systemd_cmd = ['systemd-run', '--unit={0}'.format(scope_name), '--slice={0}'.format(slice_name), '--scope', '--property=CPUAccounting=yes',
                            '--property=CPUQuota={0}'.format(EXT_SIGNATURE_VALIDATION_CPU_QUOTA)] + base_command
             try:
-                run_command(systemd_cmd)
+                run_command(systemd_cmd, timeout=conf.get_signature_validation_timeout())
             except CommandError as ex:
                 # If the systemd-run invocation itself failed, disable cgroups entirely and fall back to running openssl command directly.
                 # If the openssl command failed, re-raise and do not retry.
@@ -221,18 +245,25 @@ def validate_signature(package_path, signature, package_full_name):
                         message=error_msg,
                         name=name, version=version, duration=0)
                     CGroupConfigurator.get_instance().disable(reason=error_msg, disable_cgroups=DisableCgroups.ALL)
-                    run_command(base_command)
+                    run_command(base_command, timeout=conf.get_signature_validation_timeout())
                 else:
                     raise
         else:
             # Run without systemd if cgroups disabled
-            run_command(base_command)
+            run_command(base_command, timeout=conf.get_signature_validation_timeout())
 
         report_validation_event(op=WALAEventOperation.PackageSignatureResult, level=logger.LogLevel.INFO,
                                 message="Successfully validated signature for package '{0}'".format(package_full_name),
                                 name=name, version=version, duration=elapsed_milliseconds(start_time))
 
     except CommandError as ex:
+        # Handle command timeout - raise specific timeout error so caller can decide whether to disable future validations
+        if "command timeout" in ex.stderr:
+            msg = "Signature validation timed out after {0} seconds for package '{1}'.".format(
+                conf.get_signature_validation_timeout(), package_full_name)
+            raise SignatureValidationTimeoutError(msg=msg, operation=WALAEventOperation.PackageSignatureResult,
+                                                  duration=elapsed_milliseconds(start_time))
+
         # For validation-related errors only, send the full signature string in telemetry for debugging purposes.
         add_event(op=WALAEventOperation.SignatureValidation, message="Package encoded signature: '{0}'".format(signature),
                   name=name, version=version, log_event=False)
@@ -334,12 +365,15 @@ def _should_delay_signature_validation():
 
 def signature_validation_enabled():
     """
-    Returns True if signature validation is enabled in conf file, OpenSSL version supports all validation parameters, and agent is running on a Confidential VM.
-
-    Extension signature validation is currently limited to CVMs for telemetry/preview releases. It will be expanded to all VMs after we gain confidence in the feature.
-    TODO: Remove the is_confidential_vm() check once signature validation is supported on all VMs.
+    Returns True if all conditions for signature validation are met:
+    - Conf flag 'EnableSignatureValidation' is True
+    - Validation timeout has not been exceeded (TODO: remove after telemetry release)
+    - Initial delay period after agent start has passed (TODO: remove after telemetry release)
+    - OpenSSL version supports required validation parameters (TODO: remove after timestamp validation implemented)
+    - Agent is running on a Confidential VM (TODO: remove when all VMs are supported)
     """
     return conf.get_signature_validation_enabled() and \
+        not SignatureValidationTimeout.exceeded() and \
         not _should_delay_signature_validation() and \
         openssl_version_supported_for_signature_validation() and \
         ConfidentialVMInfo.is_confidential_vm()

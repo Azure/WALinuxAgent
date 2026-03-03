@@ -60,7 +60,7 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.signature_validation_util import validate_handler_manifest_signing_info, SignatureValidationError, \
     PackageValidationError, ManifestValidationError, signature_validation_enabled, validate_signature, \
-    cleanup_package_with_invalid_signature, report_validation_event
+    cleanup_package_with_invalid_signature, report_validation_event, SignatureValidationTimeoutError, SignatureValidationTimeout
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
 _HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
@@ -1467,10 +1467,12 @@ class ExtHandlerInstance(object):
                     validate_signature(package_file, self.ext_handler.encoded_signature, package_full_name=self.get_full_name())
                     signature_validation_succeeded = True
                 except SignatureValidationError as ex:
-                    # validate_signature() only raises SignatureValidationError.
+                    # validate_signature() only raises SignatureValidationError (and subclasses).
                     if not ignore_signature_validation_errors:
                         cleanup_package_with_invalid_signature(package_file)
                         raise
+                    if isinstance(ex, SignatureValidationTimeoutError):
+                        SignatureValidationTimeout.mark_exceeded()
                     report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING, message=ustr(ex),
                                             name=self.ext_handler.name, version=self.ext_handler.version, duration=ex.duration)
 
@@ -1512,6 +1514,8 @@ class ExtHandlerInstance(object):
                 # validation errors should not be ignored, otherwise report the error and continue.
                 if not ignore_signature_validation_errors:
                     raise   # Package has already been cleaned up
+                if isinstance(ex, SignatureValidationTimeoutError):
+                    SignatureValidationTimeout.mark_exceeded()
                 report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING, message=ustr(ex), name=self.ext_handler.name,
                                         version=self.ext_handler.version, duration=ex.duration)
 
