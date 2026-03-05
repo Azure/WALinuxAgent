@@ -607,7 +607,10 @@ class WireClient(object):
         """
         host_ga_plugin = self.get_host_plugin()
 
-        direct_download = lambda uri: self.fetch(uri)[0]
+        # Fail fast on request timeouts when doing direct downloads, as these may indicate no outbound connection on
+        # the VM and should fall back quickly to the host channel. Reconsider this strategy if we switch the primary
+        # download channel to HGAP.
+        direct_download = lambda uri: self.fetch(uri, fail_fast_on_timeout=True)[0]
 
         def hgap_download(uri):
             request_uri, request_headers = host_ga_plugin.get_artifact_request(uri, use_verify_header=use_verify_header)
@@ -635,11 +638,14 @@ class WireClient(object):
         """
         host_ga_plugin = self.get_host_plugin()
 
-        direct_download = lambda uri: self.stream(uri, target_file, headers=None, use_proxy=True)
+        # Fail fast on request timeouts when doing direct downloads, as these may indicate no outbound connection on
+        # the VM and should fall back quickly to the host channel. Reconsider this strategy if we switch the primary
+        # download channel to HGAP.
+        direct_download = lambda uri: self.stream(uri, target_file, headers=None, use_proxy=True, fail_fast_on_timeout=True)
 
         def hgap_download(uri):
             request_uri, request_headers = host_ga_plugin.get_artifact_request(uri, use_verify_header=use_verify_header, artifact_manifest_url=host_ga_plugin.manifest_uri)
-            return self.stream(request_uri, target_file, headers=request_headers, use_proxy=False)
+            return self.stream(request_uri, target_file, headers=request_headers, use_proxy=False, retry_codes=restutil.HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES)
 
         def on_downloaded():
             # If the 'signature' parameter is not an empty string, validate the zip package signature immediately after download.
@@ -733,14 +739,14 @@ class WireClient(object):
             except Exception as exception:
                 logger.warn("Cannot delete {0}: {1}", target_file, ustr(exception))
 
-    def stream(self, uri, destination, headers=None, use_proxy=None):
+    def stream(self, uri, destination, headers=None, use_proxy=None, retry_codes=None, fail_fast_on_timeout=False):
         """
         Downloads the content of the given 'uri' and saves it to the 'destination' file.
         """
         try:
             logger.verbose("Fetch [{0}] with headers [{1}] to file [{2}]", uri, headers, destination)
 
-            response = self._fetch_response(uri, headers, use_proxy)
+            response = self._fetch_response(uri, headers, use_proxy, retry_codes, fail_fast_on_timeout=fail_fast_on_timeout)
             if response is not None and not restutil.request_failed(response):
                 chunk_size = 1024 * 1024  # 1MB buffer
                 with open(destination, 'wb', chunk_size) as destination_fh:
@@ -758,21 +764,21 @@ class WireClient(object):
                     logger.warn("Can't delete {0}: {1}", destination, ustr(exception))
             raise
 
-    def fetch(self, uri, headers=None, use_proxy=None, decode=True, retry_codes=None, ok_codes=None):
+    def fetch(self, uri, headers=None, use_proxy=None, decode=True, retry_codes=None, ok_codes=None, fail_fast_on_timeout=False):
         """
         Returns a tuple with the content and headers of the response. The headers are a list of (name, value) tuples.
         """
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
         response_headers = None
-        response = self._fetch_response(uri, headers, use_proxy, retry_codes=retry_codes, ok_codes=ok_codes)
+        response = self._fetch_response(uri, headers, use_proxy, retry_codes=retry_codes, ok_codes=ok_codes, fail_fast_on_timeout=fail_fast_on_timeout)
         if response is not None and not restutil.request_failed(response, ok_codes=ok_codes):
             response_content = response.read()
             content = self.decode_config(response_content) if decode else response_content
             response_headers = response.getheaders()
         return content, response_headers
 
-    def _fetch_response(self, uri, headers=None, use_proxy=None, retry_codes=None, ok_codes=None):
+    def _fetch_response(self, uri, headers=None, use_proxy=None, retry_codes=None, ok_codes=None, fail_fast_on_timeout=False):
         resp = None
         headers_for_failure_msg = {}
         if headers is not None:
@@ -792,7 +798,8 @@ class WireClient(object):
                 uri,
                 headers=headers,
                 use_proxy=use_proxy,
-                retry_codes=retry_codes)
+                retry_codes=retry_codes,
+                fail_fast_on_timeout=fail_fast_on_timeout)
 
             host_plugin = self.get_host_plugin()
 
