@@ -308,7 +308,8 @@ class CGroupConfigurator(object):
                 files_to_create.append((azure_slice, _AZURE_SLICE_CONTENTS))
 
             # Slice has only accounting properties, so no need explicit set in cgroupv2
-            if not os.path.exists(vmextensions_slice) and not self.using_cgroup_v2():
+            accounting_props, _ = self._cgroups_api.get_accounting_properties()
+            if not os.path.exists(vmextensions_slice) and len(accounting_props) > 0:
                 files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
 
             if fileutil.findre_in_file(agent_unit_file, r"Slice=") is not None:

@@ -237,6 +237,9 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         with self._get_cgroup_configurator_v2() as configurator:
             cmd = 'systemctl set-property walinuxagent.service CPUAccounting=yes MemoryAccounting=yes --runtime'
             self.assertNotIn(cmd, configurator.mocks.commands_call_list, "The command to set CPU and Memory accounting was called")
+            for cmd in configurator.mocks.commands_call_list:
+                self.assertNotIn("CPUAccounting=yes", cmd, "CPUAccounting was set explicitly in cgroup v2")
+                self.assertNotIn("MemoryAccounting=yes", cmd, "MemoryAccounting was set explicitly in cgroup v2")
 
     def test_extension_enforcement_enabled_in_v2(self):
         service_list = [
