@@ -476,7 +476,7 @@ class EventLogger(object):
             keyword_name_str = parameters[CommonTelemetryEventSchema.KeywordName].value                 # Get the current value of keywordName
             keyword_name_json = json.loads(keyword_name_str)                                            # Convert the string to JSON
             try:
-                keyword_name_json["IsCVM"] = ConfidentialVMInfo.is_confidential_vm()                    # Add the security type to the JSON
+                keyword_name_json["IsCVM"] = ConfidentialVMInfo.is_confidential_vm()                    # Update the security type in the JSON
             except RuntimeError:
                 # ConfidentialVMInfo.is_confidential_vm() raises RuntimeError if the security type has not been fetched
                 # and initialized yet. Initializing the CVM info here as a fallback in case it unexpectedly has not
@@ -486,7 +486,7 @@ class EventLogger(object):
                     ConfidentialVMInfo.fetch_and_initialize_cvm_info()
                 except Exception as e:
                     logger.warn("Failed to get virtual machine security type from IMDS, will assume this is not a Confidential Virtual Machine: {0}", ustr(e))
-                keyword_name_json["IsCVM"] = ConfidentialVMInfo.is_confidential_vm()                    # Add the security type to the JSON
+                keyword_name_json["IsCVM"] = ConfidentialVMInfo.is_confidential_vm()                    # Update the security type in the JSON
             parameters[CommonTelemetryEventSchema.KeywordName].value = json.dumps(keyword_name_json)    # Convert the JSON back to string and update the value of keywordName
         except Exception as e:
             logger.warn("Failed to update the KeywordName column with IsCVM; will be missing from telemetry: {0}", ustr(e))
