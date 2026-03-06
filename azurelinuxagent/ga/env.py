@@ -118,7 +118,7 @@ class EnableFirewall(PeriodicOperation):
         self._firewall_manager = None  # initialized on demand in the _operation method
         self._firewall_state = FirewallState.OK  # Initialized to OK to prevent turning on verbose mode on the initial invocation of _operation(). It is properly initialized as soon as we do the first check of the firewall.
         #
-        # We use the below members to limit the number of reports we emit during a reporting period (a report consist of all the telemetry events/logging emmited during 1 execution of the _operation() method).
+        # We use the below members to limit the number of reports we emit during a reporting period (a report consist of all the telemetry events/logging emitted during 1 execution of the _operation() method).
         # When the firewall state is OK we emit 1 single report per period, otherwise we emit up to 3 reports per period. The self._report_count member is used to set this limit.
         # However, if the state of the firewall changes after the limit has been exceeded, we want to know immediately, not until the full reporting period has elapsed. So, when the state changes, we reset self._report_count.
         # Now, if the state of the firewall changes multiple times during the same reporting period, the above strategy can produce to many reports, so we set an absolute limit per period. The self_period_report_count member
