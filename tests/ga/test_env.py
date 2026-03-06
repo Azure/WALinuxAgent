@@ -342,10 +342,10 @@ class TestEnableFirewall(AgentTestCase):
         get_firewall_events = lambda: [(kwargs["is_success"], kwargs['message']) for _, kwargs in add_event_patch.call_args_list if 'Firewall' in kwargs["op"]]  # pylint: disable=E0601
 
         # We expect a maximum of 8 reports per reporting period.
-        # The check() mock flips between False and True; the former produces a report with a WARNING (is_success == False), and the latter produces 2 INFOs (is_success == True).
+        # The mock for check() flips between False and True; the former produces a report with a WARNING (is_success == False) and an INFO (is_success == True); the latter produces 1 INFO
         expected = 4 * [
-            (False, '[WARNING] The firewall has not been setup. Will set it up.'),
-            (True, 'The firewall was setup successfully:\n*** mock state***'), (True, 'The firewall is configured correctly. Current state:\n*** mock state***')
+            (False, '[WARNING] The firewall has not been setup. Will set it up.'), (True, 'The firewall was setup successfully:\n*** mock state***'),
+            (True, 'The firewall is configured correctly. Current state:\n*** mock state***')
         ]
 
         # First reporting period
@@ -355,7 +355,7 @@ class TestEnableFirewall(AgentTestCase):
 
         self.assertEqual(12, call_count[0], "Expected 12 calls to FirewallManager.check() during the first reporting period")
         firewall_events = get_firewall_events()
-        self.assertEqual(expected, firewall_events, "First reporting period: Expected 1 WARNING (is_success == False), and 2 INFOs (is_success == True) repeated 4 times")
+        self.assertEqual(expected, firewall_events, "First reporting period: Expected 1 WARNING (is_success == False) and 1 INFOs (is_success == True), then 1 more INFO, repeated 4 times")
 
         time.sleep(0.5)
 
@@ -366,4 +366,4 @@ class TestEnableFirewall(AgentTestCase):
 
         self.assertEqual(22, call_count[0], "Expected a total of 22 calls to FirewallManager.check() after the second reporting period")
         firewall_events = get_firewall_events()
-        self.assertEqual(expected, firewall_events, "Second reporting period: Expected 1 WARNING (is_success == False), and 2 INFOs (is_success == True) repeated 4 times")
+        self.assertEqual(expected, firewall_events, "Second reporting period: Expected 1 WARNING (is_success == False) and 1 INFOs (is_success == True), then 1 more INFO, repeated 4 times")
