@@ -395,8 +395,10 @@ class EventLogger(object):
 
         # Parameters from OS
         osutil = get_osutil()
+        # Determining IsCVM requires a network call. Set as uninitialized for now until common parameters are initialized with real values in initialize_vminfo_common_parameters()
         keyword_name = {
-            "CpuArchitecture": osutil.get_vm_arch()
+            "CpuArchitecture": osutil.get_vm_arch(),
+            "IsCVM": "IsCVM_UNINITIALIZED"
         }
         self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.OSVersion, EventLogger._get_os_version()))
         self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.ExecutionMode, AGENT_EXECUTION_MODE))
@@ -473,13 +475,21 @@ class EventLogger(object):
         try:
             keyword_name_str = parameters[CommonTelemetryEventSchema.KeywordName].value                 # Get the current value of keywordName
             keyword_name_json = json.loads(keyword_name_str)                                            # Convert the string to JSON
-            # ConfidentialVMInfo.fetch_and_initialize_cvm_info() is called in the main loop before this method is
-            # called, so the CVM state should already be initialized by the time we get here. If it's not,
-            # ConfidentialVMInfo.is_confidential_vm() will raise and we won't add the IsCVM field to the KeywordName.
-            keyword_name_json["IsCVM"] = ConfidentialVMInfo.is_confidential_vm()                        # Add the security type to the JSON
+            try:
+                keyword_name_json["IsCVM"] = ConfidentialVMInfo.is_confidential_vm()                    # Add the security type to the JSON
+            except RuntimeError:
+                # ConfidentialVMInfo.is_confidential_vm() raises RuntimeError if the security type has not been fetched
+                # and initialized yet. Initializing the CVM info here as a fallback in case it unexpectedly has not
+                # been initialized yet.
+                try:
+                    logger.warn("ConfidentialVMInfo has not been initialized yet; attempting to fetch and initialize CVM info now.")
+                    ConfidentialVMInfo.fetch_and_initialize_cvm_info()
+                except Exception as e:
+                    logger.warn("Failed to get virtual machine security type from IMDS, will assume this is not a Confidential Virtual Machine: {0}", ustr(e))
+                keyword_name_json["IsCVM"] = ConfidentialVMInfo.is_confidential_vm()                    # Add the security type to the JSON
             parameters[CommonTelemetryEventSchema.KeywordName].value = json.dumps(keyword_name_json)    # Convert the JSON back to string and update the value of keywordName
         except Exception as e:
-            logger.warn("Failed to update the KeywordName column with IsCVM: {0}", ustr(e))
+            logger.warn("Failed to update the KeywordName column with IsCVM; will be missing from telemetry: {0}", ustr(e))
 
     def save_event(self, data):
         if self.event_dir is None:
