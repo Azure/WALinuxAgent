@@ -22,7 +22,7 @@ from azurelinuxagent.common.osutil.default import DefaultOSUtil, shellutil
 from azurelinuxagent.ga.env import MonitorDhcpClientRestart, EnableFirewall
 
 from tests.lib.event import get_events_from_mock
-from tests.lib.tools import AgentTestCase, patch, DEFAULT
+from tests.lib.tools import AgentTestCase, patch, DEFAULT, Mock
 from tests.lib.mock_firewall_command import MockIpTables
 
 
@@ -220,8 +220,8 @@ class TestEnableFirewall(AgentTestCase):
 
     def test_it_should_log_the_state_of_the_firewall_once_per_reporting_period(self):
         with MockIpTables() as mock_iptables:
+            EnableFirewall._REPORTING_PERIOD = datetime.timedelta(milliseconds=500)
             enable_firewall = EnableFirewall('168.63.129.16')
-            enable_firewall._REPORTING_PERIOD = datetime.timedelta(milliseconds=500)
 
             with patch.multiple("azurelinuxagent.ga.firewall_manager.event", info=DEFAULT, warn=DEFAULT, error=DEFAULT) as patches:
                 info = patches["info"]
@@ -262,8 +262,8 @@ class TestEnableFirewall(AgentTestCase):
         with MockIpTables(check_matches_list=False) as mock_iptables:
             mock_iptables.set_return_values("-C", accept_dns=0, accept=0, drop=1, legacy=0)
 
+            EnableFirewall._REPORTING_PERIOD = datetime.timedelta(milliseconds=500)
             enable_firewall = EnableFirewall('168.63.129.16')
-            enable_firewall._REPORTING_PERIOD = datetime.timedelta(milliseconds=500)
 
             firewall_manager_in_verbose_mode = []
 
@@ -324,3 +324,46 @@ class TestEnableFirewall(AgentTestCase):
 
             self.assertEqual(0, error.call_count, "No errors should have been reported. Got: {0}". format(error.call_args_list))
     
+    def test_it_should_set_a_limit_on_the_number_of_reports_when_the_firewall_state_changes(self):
+        EnableFirewall._REPORTING_PERIOD = datetime.timedelta(milliseconds=500)
+        enable_firewall = EnableFirewall('168.63.129.16')
+
+        call_count = [0]
+
+        def mock_check(*_, **__):
+            call_count[0] += 1
+            return call_count[0] % 2 == 0  # flip between False (the firewall has not been set up) and True (the firewall is OK) and  on each call
+
+        enable_firewall._firewall_manager = Mock()
+        enable_firewall._firewall_manager.check = Mock(side_effect=mock_check)
+        enable_firewall._firewall_manager.get_state = Mock(return_value='*** mock state***')
+
+        # E0601: Using variable 'add_event_patch' before assignment (used-before-assignment)
+        get_firewall_events = lambda: [(kwargs["is_success"], kwargs['message']) for _, kwargs in add_event_patch.call_args_list if 'Firewall' in kwargs["op"]]  # pylint: disable=E0601
+
+        # We expect a maximum of 8 reports per reporting period.
+        # The check() mock flips between False and True; the former produces a report with a WARNING (is_success == False), and the latter produces 2 INFOs (is_success == True).
+        expected = 4 * [
+            (False, '[WARNING] The firewall has not been setup. Will set it up.'),
+            (True, 'The firewall was setup successfully:\n*** mock state***'), (True, 'The firewall is configured correctly. Current state:\n*** mock state***')
+        ]
+
+        # First reporting period
+        with patch("azurelinuxagent.common.event.add_event") as add_event_patch:
+            for _ in range(0, 12):
+                enable_firewall._operation()
+
+        self.assertEqual(12, call_count[0], "Expected 12 calls to FirewallManager.check() during the first reporting period")
+        firewall_events = get_firewall_events()
+        self.assertEqual(expected, firewall_events, "First reporting period: Expected 1 WARNING (is_success == False), and 2 INFOs (is_success == True) repeated 4 times")
+
+        time.sleep(0.5)
+
+        # Second reporting period
+        with patch("azurelinuxagent.common.event.add_event") as add_event_patch:
+            for _ in range(0, 10):
+                enable_firewall._operation()
+
+        self.assertEqual(22, call_count[0], "Expected a total of 22 calls to FirewallManager.check() after the second reporting period")
+        firewall_events = get_firewall_events()
+        self.assertEqual(expected, firewall_events, "Second reporting period: Expected 1 WARNING (is_success == False), and 2 INFOs (is_success == True) repeated 4 times")

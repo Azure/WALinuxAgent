@@ -110,15 +110,16 @@ class FirewallState(object):
 
 
 class EnableFirewall(PeriodicOperation):
-    _REPORTING_PERIOD = datetime.timedelta(hours=24)  # we set a limit on the number of messages logged within this period
+    _REPORTING_PERIOD = datetime.timedelta(hours=24)  # We set limits on the number of reports for this period. Limits are reset after the period elapses.
 
     def __init__(self, wire_server_address):
         super(EnableFirewall, self).__init__(conf.get_enable_firewall_period())
         self._wire_server_address = wire_server_address
         self._firewall_manager = None  # initialized on demand in the _operation method
         self._firewall_state = FirewallState.OK  # Initialized to OK to prevent turning on verbose mode on the initial invocation of _operation(). It is properly initialized as soon as we do the first check of the firewall.
-        self._report_count = 0
-        self._next_report_time = datetime.datetime.now(UTC)
+        self._report_count = 0   # we can reset this count more than once per period depending on the state of the firewall
+        self._period_report_count = 0  # this count is reset only once per period
+        self._reporting_period_end = datetime.datetime.now(UTC) + EnableFirewall._REPORTING_PERIOD
         self._should_report = True
 
     def _operation(self):
@@ -165,24 +166,24 @@ class EnableFirewall(PeriodicOperation):
             report_function(operation, message, *args)
 
     def _update_reporting_state(self):
-        if self._next_report_time > datetime.datetime.now(UTC):
-            self._should_report = False
-            return
-
-        self._report_count += 1
-        max_reports = 1 if self._firewall_state == FirewallState.OK else 3
-        if self._report_count <= max_reports:
-            self._should_report = True
-        else:
+        if datetime.datetime.now(UTC) >= self._reporting_period_end:  # Reset the report counts every time a reporting period has elapsed
             self._report_count = 0
-            self._next_report_time = datetime.datetime.now(UTC) + self._REPORTING_PERIOD
-            self._should_report = False
+            self._period_report_count = 0
+            self._reporting_period_end = datetime.datetime.now(UTC) + EnableFirewall._REPORTING_PERIOD
+
+        # if the state of the firewall does not change within a reporting period, we report only once when the state is OK and max 3 times when it is not.
+        # if the state changes, we report at most 8 times total.
+        self._report_count += 1
+        self._period_report_count += 1
+        max_reports = 1 if self._firewall_state == FirewallState.OK else 3
+        self._should_report = self._report_count <= max_reports
 
     def _update_firewall_state(self, firewall_state):
-        if (self._firewall_state == FirewallState.OK) != (firewall_state == FirewallState.OK):  # reset the reporting limits if the firewall state goes from OK to not-OK or vice versa
-            self._report_count = 0
-            self._next_report_time = datetime.datetime.now(UTC)
-            self._should_report = True
+        if (self._firewall_state == FirewallState.OK) != (firewall_state == FirewallState.OK):
+            # reset the report count if the firewall state goes from OK to not-OK or vice versa, but set an absolute limit per reporting period
+            if self._period_report_count <= 8:
+                self._report_count = 0
+                self._should_report = True
         self._firewall_state = firewall_state
 
 
