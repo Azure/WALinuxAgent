@@ -118,7 +118,7 @@ class _MemoryController(_CgroupController):
         ]
 
     def get_unit_properties(self):
-        return ["MemoryAccounting"]
+        raise NotImplementedError()
 
     def get_controller_type(self):
         return "memory"
@@ -128,6 +128,9 @@ class MemoryControllerV1(_MemoryController):
     def get_memory_usage(self):
         # In v1, anon memory is reported in the 'rss' counter
         return self._get_memory_stat_counter("rss"), self._get_memory_stat_counter("cache")
+
+    def get_unit_properties(self):
+        return ["MemoryAccounting"]
 
     def try_swap_memory_usage(self):
         # In v1, swap memory should be collected from memory.stat, because memory.memsw.usage_in_bytes reports total Memory+SWAP.
@@ -159,9 +162,7 @@ class MemoryControllerV2(_MemoryController):
         return self._get_memory_stat_counter("anon"), self._get_memory_stat_counter("file")
 
     def get_unit_properties(self):
-        properties = super(MemoryControllerV2, self).get_unit_properties()
-        properties.append("MemoryHigh")
-        return properties
+        return ["MemoryHigh"]
 
     def get_memory_pressure_events(self):
         """
