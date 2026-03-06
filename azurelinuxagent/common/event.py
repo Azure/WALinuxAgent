@@ -39,6 +39,7 @@ from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, geta
     redact_sas_token
 from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, AGENT_NAME, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
 from azurelinuxagent.common.protocol.imds import get_imds_client
+from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 
 EVENTS_DIRECTORY = "events"
 
@@ -462,6 +463,23 @@ class EventLogger(object):
             parameters[CommonTelemetryEventSchema.ImageOrigin].value = int(imds_info.image_origin)
         except Exception as e:
             logger.warn("Failed to get IMDS info; will be missing from telemetry: {0}", ustr(e))
+
+        # The KeywordName column is initialized with the CPUArch in EventLogger.__init__(). The security type is
+        # not yet discovered at that time because it requires a network call, so we update KeywordName here with the
+        # IsCVM value.
+        # We get the security type from the ConfidentialVMInfo class because it fetches metadata from IMDS with the
+        # minimum version that supports the security type field. We do not use that minimum version in the IMDS request
+        # in this method due to inadequate saturation of that version in the fleet.
+        try:
+            keyword_name_str = parameters[CommonTelemetryEventSchema.KeywordName].value                 # Get the current value of keywordName
+            keyword_name_json = json.loads(keyword_name_str)                                            # Convert the string to JSON
+            # ConfidentialVMInfo.fetch_and_initialize_cvm_info() is called in the main loop before this method is
+            # called, so the CVM state should already be initialized by the time we get here. If it's not,
+            # ConfidentialVMInfo.is_confidential_vm() will raise and we won't add the IsCVM field to the KeywordName.
+            keyword_name_json["IsCVM"] = ConfidentialVMInfo.is_confidential_vm()                        # Add the security type to the JSON
+            parameters[CommonTelemetryEventSchema.KeywordName].value = json.dumps(keyword_name_json)    # Convert the JSON back to string and update the value of keywordName
+        except Exception as e:
+            logger.warn("Failed to update the KeywordName column with IsCVM: {0}", ustr(e))
 
     def save_event(self, data):
         if self.event_dir is None:
