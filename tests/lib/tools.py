@@ -469,6 +469,7 @@ supported_distro = [
 
     ["coreos", "", ""],
     ["flatcar", "", ""],
+    ["acl", "", ""],
 
     ["suse", "12", "SUSE Linux Enterprise Server"],
     ["suse", "13.2", "openSUSE"],
