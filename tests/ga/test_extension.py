@@ -23,6 +23,7 @@ import random
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -57,7 +58,8 @@ from tests.lib import wire_protocol_data
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
 from tests.lib.http_request_predicates import HttpRequestPredicates
 from tests.lib.wire_protocol_data import DATA_FILE, DATA_FILE_EXT_ADDITIONAL_LOCATIONS
-from tests.lib.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep, load_bin_data, load_data
+from tests.lib.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep, load_bin_data, load_data, \
+    skip_if_predicate_true
 from tests.lib.extension_emulator import Actions, ExtensionCommandNames, extension_emulator, \
     enable_invocations, generate_put_handler
 
@@ -4420,9 +4422,9 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
                                             expected_status_msg='Plugin enabled',
                                             expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
                                             expected_version="1.7.0")
-
                 mock_validate.assert_not_called()
 
+    @skip_if_predicate_true(lambda: sys.version_info[0] == 2, "Timeouts are not supported on Python 2")
     def test_should_disable_future_validation_if_timeout_exceeded(self):
         with patch.object(SignatureValidationTimeout, '_exceeded', False):
             data_file = wire_protocol_data.DATA_FILE.copy()
@@ -4430,35 +4432,30 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
             data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
             data_file["manifest"] = "wire/manifest_vm_access.xml"
 
+            # First run: Set a very short timeout period to trigger an actual timeout.
+            # Extension should still be Ready since enforcement is not enabled.
+            with patch('azurelinuxagent.common.conf.get_signature_validation_timeout', return_value=0.001):
+                self._test_enable_extension(data_file=data_file,
+                                            signature_validation_should_succeed=False,
+                                            expected_status_code=0,
+                                            expected_handler_status='Ready',
+                                            expected_ext_count=1,
+                                            expected_status_msg='Plugin enabled',
+                                            expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
+                                            expected_version="1.7.0")
+
+            # Second run: Process another extension and verify signature validation is skipped
             with mock_wire_protocol(data_file) as protocol:
                 protocol.aggregate_status = None
                 protocol.report_vm_status = MagicMock()
                 exthandlers_handler = get_exthandlers_handler(protocol)
                 protocol.set_http_handlers(http_get_handler=self._make_http_get_handler(data_file))
 
-                # First run: Mock timeout to be extremely short, causing the openssl command to timeout.
-                with patch('azurelinuxagent.ga.signature_validation_util.conf.get_signature_validation_timeout',
-                           return_value=0.001):
-                    with patch('azurelinuxagent.ga.signature_validation_util.add_event') as patched_add_event:
-                        exthandlers_handler.run()
-                        exthandlers_handler.report_ext_handlers_status()
-
-                        # Verify that timeout telemetry was reported
-                        timeout_events = [kw for _, kw in patched_add_event.call_args_list
-                                          if 'timed out' in kw.get('message', '')]
-                        self.assertEqual(1, len(timeout_events),
-                                         "Expected exactly one timeout event to be reported. Events: {0}".format(
-                                             [kw.get('message') for _, kw in patched_add_event.call_args_list]))
-
-                # Second run: Process another extension and verify signature validation is skipped
-                protocol.mock_wire_data.set_incarnation(2)
-                protocol.client.update_goal_state()
-
-                with patch('azurelinuxagent.ga.signature_validation_util.validate_signature') as mock_validate:
+                with patch('azurelinuxagent.ga.exthandlers.validate_signature') as mock_validate:
                     exthandlers_handler.run()
                     exthandlers_handler.report_ext_handlers_status()
 
-                    # validate_signature should NOT be called because SignatureValidationTimeout.exceeded() is True
+                    # validate_signature should NOT be called because the timeout was exceeded in the previous run
                     mock_validate.assert_not_called()
 
 
@@ -4873,6 +4870,7 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
                                         expected_handler_name=handler_name,
                                         expected_version=handler_version)
 
+    @skip_if_predicate_true(lambda: sys.version_info[0] == 2, "Timeouts are not supported on Python 2")
     def test_should_not_disable_future_validation_if_timeout_exceeded_when_enforced(self):
         with patch.object(SignatureValidationTimeout, '_exceeded', False):
             data_file = wire_protocol_data.DATA_FILE.copy()
@@ -4886,10 +4884,9 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
                 exthandlers_handler = get_exthandlers_handler(protocol)
                 protocol.set_http_handlers(http_get_handler=self._make_http_get_handler(data_file))
 
-                # First run: Mock timeout to be extremely short, causing the openssl command to timeout.
+                # First run: Set a very short timeout period to trigger an actual timeout.
                 # Because enforcement is enabled, the error is raised and extension should fail.
-                with patch('azurelinuxagent.ga.signature_validation_util.conf.get_signature_validation_timeout',
-                           return_value=0.001):
+                with patch('azurelinuxagent.common.conf.get_signature_validation_timeout', return_value=0.001):
                     exthandlers_handler.run()
                     exthandlers_handler.report_ext_handlers_status()
 

@@ -235,6 +235,8 @@ def validate_signature(package_path, signature, package_full_name):
             systemd_cmd = ['systemd-run', '--unit={0}'.format(scope_name), '--slice={0}'.format(slice_name), '--scope', '--property=CPUAccounting=yes',
                            '--property=CPUQuota={0}'.format(EXT_SIGNATURE_VALIDATION_CPU_QUOTA)] + base_command
             try:
+                # NOTE: The timeout parameter is ignored on Python 2, but this is acceptable because signature validation
+                # is currently only performed on CVMs which should not be running Python 2, and the timeout is a temporary performance workaround.
                 run_command(systemd_cmd, timeout=conf.get_signature_validation_timeout())
             except CommandError as ex:
                 # If the systemd-run invocation itself failed, disable cgroups entirely and fall back to running openssl command directly.
