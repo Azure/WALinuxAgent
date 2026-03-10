@@ -342,16 +342,31 @@ class _SystemdCgroupApi(object):
         """
         raise NotImplementedError()
 
+    def get_accounting_properties(self):
+        """
+        Returns the accounting properties to set for a unit.
+        Override in subclasses for version-specific behavior.
+        """
+        raise NotImplementedError()
+
     def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr,
                                 error_code=ExtensionErrorCodes.PluginUnknownFailure):
         scope = "{0}_{1}".format(cmd_name, uuid.uuid4())
         extension_slice_name = CGroupUtil.get_extension_slice_name(extension_name)
+
+        # For v1: Disable accounting to prevent nested cgroups (slice already has accounting enabled), so that all the counters will be present in extension Cgroup
+        # For v2: No accounting properties needed as they are enabled by default.
+        accounting_props, accounting_vals = self.get_accounting_properties()
+        accounting_args = ""
+        for prop, _ in zip(accounting_props, accounting_vals):
+            # Set accounting to 'no' to prevent nested cgroups under the extension slice
+            accounting_args += " --property={0}=no".format(prop)
+
         with self._systemd_run_commands_lock:
+            systemd_run_cmd = "systemd-run{0} --unit={1} --scope --slice={2} {3}".format(
+                accounting_args, scope, extension_slice_name, command)
             process = subprocess.Popen(  # pylint: disable=W1509
-                # Some distros like ubuntu20 by default cpu and memory accounting enabled. Thus create nested cgroups under the extension slice
-                # So disabling CPU and Memory accounting prevents from creating nested cgroups, so that all the counters will be present in extension Cgroup
-                # since slice unit file configured with accounting enabled.
-                "systemd-run --property=CPUAccounting=no --property=MemoryAccounting=no --unit={0} --scope --slice={1} {2}".format(scope, extension_slice_name, command),
+                systemd_run_cmd,
                 shell=shell,
                 cwd=cwd,
                 stdout=stdout,
@@ -544,6 +559,12 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
     def can_enforce_memory(self):
         return False
 
+    def get_accounting_properties(self):
+        """
+        For cgroup v1, explicit accounting must be enabled.
+        """
+        return ("CPUAccounting", "MemoryAccounting"), ("yes", "yes")
+
 
 class SystemdCgroupApiv2(_SystemdCgroupApi):
     """
@@ -661,6 +682,13 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
 
     def can_enforce_memory(self):
         return CgroupV2.MEMORY_CONTROLLER in self._controllers_enabled_at_root
+
+    def get_accounting_properties(self):
+        """
+        For cgroup v2, accounting is enabled by default in the unified hierarchy. No explicit setting needed.
+         and also, systemd 258+ deprecated CPUAccounting property
+        """
+        return (), ()
 
 
 class Cgroup(object):

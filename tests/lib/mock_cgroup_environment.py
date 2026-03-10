@@ -43,13 +43,6 @@ _MOCKED_COMMANDS_COMMON = [
 '''CPUQuotaPerSecUSec=infinity
 '''),
 
-    MockCommand(r"^systemctl show (.+) --property CPUAccounting$",
-'''CPUAccounting=no
-'''),
-
-    MockCommand(r"^systemctl show (.+) --property MemoryAccounting$",
-'''MemoryAccounting=no
-'''),
 
     MockCommand(r"^systemctl show (.+) --property LoadState$",
 '''LoadState=loaded
@@ -58,12 +51,6 @@ _MOCKED_COMMANDS_COMMON = [
     MockCommand(r"^systemctl set-property (.+) --runtime", ""),
 
     MockCommand(r"^systemctl stop ([^\s]+)"),
-
-    MockCommand(r"^systemd-run (.+) --unit=([^\s]+) --scope ([^\s]+)",
-''' 
-Running scope as unit: TEST_UNIT.scope
-Thu 28 May 2020 07:25:55 AM PDT
-'''),
 
 ]
 
@@ -88,6 +75,20 @@ _MOCKED_COMMANDS_V1 = [
 
     MockCommand(r"^stat -f --format=%T /sys/fs/cgroup$", 'tmpfs'),
 
+    MockCommand(r"^systemd-run (.+) --unit=([^\s]+) --scope ([^\s]+)",
+''' 
+Running scope as unit: TEST_UNIT.scope
+Thu 28 May 2020 07:25:55 AM PDT
+'''),
+
+    MockCommand(r"^systemctl show (.+) --property CPUAccounting$",
+'''CPUAccounting=no
+'''),
+
+    MockCommand(r"^systemctl show (.+) --property MemoryAccounting$",
+'''MemoryAccounting=no
+'''),
+
 ]
 
 _MOCKED_COMMANDS_V2 = [
@@ -101,6 +102,11 @@ _MOCKED_COMMANDS_V2 = [
 
     MockCommand(r"^systemctl show (.+) --property MemoryHigh$",
 '''MemoryHigh=infinity
+'''),
+    MockCommand(r"^systemd-run --unit=([^\s]+) --scope ([^\s]+)",
+''' 
+Running scope as unit: TEST_UNIT.scope
+Thu 28 May 2020 07:25:55 AM PDT
 '''),
 
 ]

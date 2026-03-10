@@ -16,10 +16,11 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import contextlib
 import os
 import re
 
-from tests.lib.tools import AgentTestCase, data_dir, patch, i_am_root
+from tests.lib.tools import AgentTestCase, data_dir, patch, i_am_root, MagicMock
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 from azurelinuxagent.ga.signature_validation_util import validate_signature, SignatureValidationError
 from azurelinuxagent.common.utils import shellutil
@@ -80,9 +81,22 @@ class TestSignatureValidationSudo(AgentTestCase):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
         TestSignatureValidationSudo._validate_signature_in_another_year(2026, self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
 
+
+    @contextlib.contextmanager
+    def _create_cgroupconfigurator_mock(self, cgroups_enabled):
+        with patch("azurelinuxagent.ga.signature_validation_util.CGroupConfigurator.get_instance") as mock_get_instance:
+            mock_cgroups_api = MagicMock()
+            mock_cgroups_api.get_accounting_properties.return_value = ((), ())
+            mock_instance = MagicMock()
+            mock_instance.get_cgroups_api.return_value = mock_cgroups_api
+            mock_instance.enabled.return_value = cgroups_enabled
+            mock_instance.disable = MagicMock()
+            mock_get_instance.return_value = mock_instance
+            yield mock_instance
+
     def test_validate_signature_should_use_systemd_run(self):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
-        with patch("azurelinuxagent.ga.signature_validation_util.CGroupConfigurator._Impl.enabled", return_value=True):
+        with self._create_cgroupconfigurator_mock(cgroups_enabled=True):
             original_run_command = shellutil.run_command
             run_command_calls = []
 
@@ -105,7 +119,7 @@ class TestSignatureValidationSudo(AgentTestCase):
             )
 
     def test_validate_signature_should_not_use_systemd_run_when_cgroups_disabled(self):
-        with patch("azurelinuxagent.ga.signature_validation_util.CGroupConfigurator._Impl.enabled", return_value=False):
+        with self._create_cgroupconfigurator_mock(cgroups_enabled=False):
             original_run_command = shellutil.run_command
             run_command_calls = []
 
@@ -124,7 +138,7 @@ class TestSignatureValidationSudo(AgentTestCase):
                            msg="Openssl cms -verify command should not have been called with systemd-run when cgroups disabled")
 
     def test_validate_signature_should_raise_error_on_openssl_failure(self):
-        with patch("azurelinuxagent.ga.signature_validation_util.CGroupConfigurator._Impl.enabled", return_value=True):
+        with self._create_cgroupconfigurator_mock(cgroups_enabled=True):
             original_run_command = shellutil.run_command
 
             def mock_run_command(command, *args, **kwargs):
@@ -139,36 +153,35 @@ class TestSignatureValidationSudo(AgentTestCase):
                     validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
 
     def test_validate_signature_should_retry_on_systemd_error(self):
-        with patch("azurelinuxagent.ga.signature_validation_util.CGroupConfigurator._Impl.enabled", return_value=True):
-            with patch("azurelinuxagent.ga.signature_validation_util.CGroupConfigurator._Impl.disable") as mock_disable:
-                original_run_command = shellutil.run_command
-                run_command_calls = []
+        with self._create_cgroupconfigurator_mock(cgroups_enabled=True) as mock_cgroup:
+            original_run_command = shellutil.run_command
+            run_command_calls = []
 
-                def mock_run_command(command, *args, **kwargs):
-                    cmd = ' '.join(command)
-                    run_command_calls.append(cmd)
-                    if cmd.startswith('systemd-run'):
-                        error_msg = 'Unit {0} not found.'.format(EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME)
-                        raise shellutil.CommandError(command=cmd, return_code=1, stdout=ustr(""), stderr=ustr(error_msg))
-                    return original_run_command(command, *args, **kwargs)
+            def mock_run_command(command, *args, **kwargs):
+                cmd = ' '.join(command)
+                run_command_calls.append(cmd)
+                if cmd.startswith('systemd-run'):
+                    error_msg = 'Unit {0} not found.'.format(EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME)
+                    raise shellutil.CommandError(command=cmd, return_code=1, stdout=ustr(""), stderr=ustr(error_msg))
+                return original_run_command(command, *args, **kwargs)
 
-                with patch("azurelinuxagent.ga.signature_validation_util.run_command", side_effect=mock_run_command):
-                    validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
+            with patch("azurelinuxagent.ga.signature_validation_util.run_command", side_effect=mock_run_command):
+                validate_signature(self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
 
-                # Find all openssl cms -verify calls
-                openssl_calls = [cmd for cmd in run_command_calls if self.openssl_cmd_pattern.search(cmd)]
+            # Find all openssl cms -verify calls
+            openssl_calls = [cmd for cmd in run_command_calls if self.openssl_cmd_pattern.search(cmd)]
 
-                self.assertEqual(2, len(openssl_calls), msg="Expected exactly 2 openssl calls (first with systemd-run, second direct)")
+            self.assertEqual(2, len(openssl_calls), msg="Expected exactly 2 openssl calls (first with systemd-run, second direct)")
 
-                # First openssl cms verify call should use systemd-run
-                self.assertTrue(openssl_calls[0].startswith('systemd-run'), msg="First openssl call should have used systemd-run, got: {0}".format(openssl_calls[0]))
+            # First openssl cms verify call should use systemd-run
+            self.assertTrue(openssl_calls[0].startswith('systemd-run'), msg="First openssl call should have used systemd-run, got: {0}".format(openssl_calls[0]))
 
-                # Second openssl cms verify call should be direct (not using systemd-run)
-                self.assertFalse(openssl_calls[1].startswith('systemd-run'),
-                               msg="Second openssl call should be direct (without systemd-run), got: {0}".format(openssl_calls[1]))
+            # Second openssl cms verify call should be direct (not using systemd-run)
+            self.assertFalse(openssl_calls[1].startswith('systemd-run'),
+                           msg="Second openssl call should be direct (without systemd-run), got: {0}".format(openssl_calls[1]))
 
-                # Verify that cgroups were disabled
-                self.assertEqual(1, mock_disable.call_count, "disable() should have been called exactly once")
-                reason = mock_disable.call_args[1]['reason']
-                self.assertTrue(reason.startswith("'systemd-run' invocation failed for signature validation"),
-                                msg="Expected cgroup disable reason to indicate systemd-run error during signature validation")
+            # Verify that cgroups were disabled
+            self.assertEqual(1, mock_cgroup.disable.call_count, "disable() should have been called exactly once")
+            reason = mock_cgroup.disable.call_args[1]['reason']
+            self.assertTrue(reason.startswith("'systemd-run' invocation failed for signature validation"),
+                            msg="Expected cgroup disable reason to indicate systemd-run error during signature validation")
