@@ -334,13 +334,18 @@ def _should_delay_signature_validation():
 
 def signature_validation_enabled():
     """
-    Returns True if signature validation is enabled in conf file, OpenSSL version supports all validation parameters, and agent is running on a Confidential VM.
+    Returns True if signature validation is enabled in conf file, OpenSSL version supports all validation parameters,
+    agent is running on a Confidential VM, and feature has not expired.
 
     Extension signature validation is currently limited to CVMs for telemetry/preview releases. It will be expanded to all VMs after we gain confidence in the feature.
     TODO: Remove the is_confidential_vm() check once signature validation is supported on all VMs.
+    TODO: Remove the expiry check once signature validation is ready for production release.
     """
+    expiry_date = datetime.datetime.strptime(conf.get_signature_validation_expiry_time(), "%Y-%m-%d").replace(tzinfo=UTC)
+
     return conf.get_signature_validation_enabled() and \
         not _should_delay_signature_validation() and \
+        datetime.datetime.now(UTC) < expiry_date and \
         openssl_version_supported_for_signature_validation() and \
         ConfidentialVMInfo.is_confidential_vm()
 
