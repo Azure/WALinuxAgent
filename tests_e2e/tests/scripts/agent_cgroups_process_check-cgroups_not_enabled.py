@@ -29,7 +29,7 @@ from tests_e2e.tests.lib.retry import retry_if_false
 
 def restart_ext_handler():
     log.info("Restarting the extension handler")
-    shellutil.run_command(["pkill", "-f", "WALinuxAgent.*run-exthandler"])
+    shellutil.run_command(["pkill", "-f", "(WALinuxAgent|waagent).*run-exthandler"])
 
 
 def verify_agent_cgroups_not_enabled():
