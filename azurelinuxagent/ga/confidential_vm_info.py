@@ -19,6 +19,7 @@
 
 import json
 
+from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.protocol.imds import ImdsClient
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.exception import HttpError
@@ -77,10 +78,12 @@ class ConfidentialVMInfo(object):
         try:
             security_type = ConfidentialVMInfo._fetch_security_type_from_imds()
             ConfidentialVMInfo._is_confidential_vm = (security_type == SecurityType.ConfidentialVM)
+            AgentGlobals.update_is_cvm(ConfidentialVMInfo._is_confidential_vm)
         except Exception as ex:
             # TODO: For now, in the case of IMDS failure, we treat the VM as non-CVM until the next agent service start.
             # This should be improved to better distinguish IMDS issues from true security type.
             ConfidentialVMInfo._is_confidential_vm = False
+            AgentGlobals.update_is_cvm(False)
             raise ex
 
     @staticmethod

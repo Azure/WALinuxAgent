@@ -39,7 +39,6 @@ from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, geta
     redact_sas_token
 from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, AGENT_NAME, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
 from azurelinuxagent.common.protocol.imds import get_imds_client
-from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 
 EVENTS_DIRECTORY = "events"
 
@@ -469,25 +468,21 @@ class EventLogger(object):
         # The KeywordName column is initialized with the CPUArch in EventLogger.__init__(). The security type is
         # not yet discovered at that time because it requires a network call, so we update KeywordName here with the
         # IsCVM value.
-        # We get the security type from the ConfidentialVMInfo class because it fetches metadata from IMDS with the
-        # minimum version that supports the security type field. We do not use that minimum version in the IMDS request
-        # in this method due to inadequate saturation of that version in the fleet.
+        # The security type is initialized by the ConfidentialVMInfo class because it fetches metadata from IMDS with
+        # the minimum version that supports the security type field. We do not use that minimum version in the IMDS
+        # request in this method due to inadequate saturation of that version in the fleet. When the ConfidentialVMInfo
+        # class attributes are initialized, AgentGlobals is also updated with the security type, so we can get the
+        # security type in this module without introducing dependencies on the ConfidentialVMInfo class.
         try:
-            keyword_name_str = parameters[CommonTelemetryEventSchema.KeywordName].value                 # Get the current value of keywordName
-            keyword_name_json = json.loads(keyword_name_str)                                            # Convert the string to JSON
-            try:
-                keyword_name_json["IsCVM"] = ConfidentialVMInfo.is_confidential_vm()                    # Update the security type in the JSON
-            except RuntimeError:
-                # ConfidentialVMInfo.is_confidential_vm() raises RuntimeError if the security type has not been fetched
-                # and initialized yet. Initializing the CVM info here as a fallback in case it unexpectedly has not
-                # been initialized yet.
-                try:
-                    logger.warn("ConfidentialVMInfo has not been initialized yet; attempting to fetch and initialize CVM info now.")
-                    ConfidentialVMInfo.fetch_and_initialize_cvm_info()
-                except Exception as e:
-                    logger.warn("Failed to get virtual machine security type from IMDS, will assume this is not a Confidential Virtual Machine: {0}", ustr(e))
-                keyword_name_json["IsCVM"] = ConfidentialVMInfo.is_confidential_vm()                    # Update the security type in the JSON
-            parameters[CommonTelemetryEventSchema.KeywordName].value = json.dumps(keyword_name_json)    # Convert the JSON back to string and update the value of keywordName
+            keyword_name_str = parameters[CommonTelemetryEventSchema.KeywordName].value                     # Get the current value of keywordName
+            keyword_name_json = json.loads(keyword_name_str)                                                # Convert the string to JSON
+            is_cvm = AgentGlobals.get_is_cvm()                                                              # Get the CVM state from AgentGlobals
+            if is_cvm is None:
+                # The CVM state should have been initialized. If not, log a warning.
+                logger.warn("CVM state is not yet initialized; IsCVM will be missing from telemetry.")
+            else:
+                keyword_name_json["IsCVM"] = is_cvm                                                         # Update the security type in the JSON
+                parameters[CommonTelemetryEventSchema.KeywordName].value = json.dumps(keyword_name_json)    # Convert the JSON back to string and update the value of keywordName
         except Exception as e:
             logger.warn("Failed to update the KeywordName column with IsCVM; will be missing from telemetry: {0}", ustr(e))
 
