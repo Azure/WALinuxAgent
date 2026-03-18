@@ -176,12 +176,11 @@ class AgentUpdateHandler(object):
             if not self._updater.is_update_allowed_this_time(ext_gs_updated):
                 return
 
-            self._updater.retrieve_agent_version(agent_family, goal_state)
-
-            if not self._updater.is_retrieved_version_allowed_to_update(agent_family):
+            # Retrieve the target version, validate update eligibility of the version, and download.
+            # Each updater controls the full retrieve-validate-download flow and returns None if the update should not be attempted.
+            agent = self._updater.retrieve_and_download_agent(self._protocol, agent_family, goal_state)
+            if agent is None:
                 return
-            self._updater.log_new_agent_update_message()
-            agent = self._updater.download_and_get_new_agent(self._protocol, agent_family, goal_state)
 
             # Below condition is to break the update loop if new agent is in bad state in previous attempts
             # If the bad agent update already attempted 3 times, we don't want to continue with update anymore.
@@ -213,7 +212,7 @@ class AgentUpdateHandler(object):
             else:
                 error_msg = "Unable to update Agent: {0}".format(textutil.format_exception(err))
             if log_error:
-                error_msg = "[{0}]{1}".format(self.get_current_update_mode(), error_msg)
+                error_msg = "[{0}] {1}".format(self.get_current_update_mode(), error_msg)
                 logger.warn(error_msg)
                 add_event(op=WALAEventOperation.AgentUpgrade, is_success=False, message=error_msg, log_event=False)
             self._last_attempted_update_error_msg = error_msg
