@@ -50,6 +50,8 @@ class AgentGlobals(object):
 
     @staticmethod
     def get_is_cvm():
+        if AgentGlobals._is_cvm is None:
+            raise Exception("CVM info has not been initialized yet")
         return AgentGlobals._is_cvm
 
     @staticmethod
