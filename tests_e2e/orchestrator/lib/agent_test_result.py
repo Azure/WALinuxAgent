@@ -25,10 +25,18 @@ from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
 
 from azurelinuxagent.common.future import UTC
 
+
 class AgentTestResultMessage(TestResultMessage):
-    def __init__(self):
+    def __init__(self, suite_name: str, test_name: str, status: TestStatus):
         super().__init__()
         self.type = "AgentTestResultMessage"
+        self.id_ = str(uuid.uuid4())
+        self.status = status
+        self.suite_full_name = suite_name
+        self.suite_name = suite_name
+        self.full_name = test_name
+        self.name = test_name
+        self.elapsed = 0
 
 
 class AgentTestResult:
@@ -45,14 +53,7 @@ class AgentTestResult:
         Reports a test result to the junit notifier
         """
         # The junit notifier requires an initial RUNNING message in order to register the test in its internal cache.
-        msg: AgentTestResultMessage = AgentTestResultMessage()
-        msg.id_ = str(uuid.uuid4())
-        msg.status = TestStatus.RUNNING
-        msg.suite_full_name = suite_name
-        msg.suite_name = msg.suite_full_name
-        msg.full_name = test_name
-        msg.name = msg.full_name
-        msg.elapsed = 0
+        msg: AgentTestResultMessage = AgentTestResultMessage(suite_name, test_name, TestStatus.RUNNING)
 
         notifier.notify(msg)
 
