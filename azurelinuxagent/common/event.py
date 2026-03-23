@@ -394,8 +394,11 @@ class EventLogger(object):
 
         # Parameters from OS
         osutil = get_osutil()
+        # Determining IsCVM requires a network call. Set as uninitialized for now until common parameters are
+        # initialized with real values in initialize_vminfo_common_parameters()
         keyword_name = {
-            "CpuArchitecture": osutil.get_vm_arch()
+            "CpuArchitecture": osutil.get_vm_arch(),
+            "IsCVM": "IsCVM_UNINITIALIZED"
         }
         self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.OSVersion, EventLogger._get_os_version()))
         self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.ExecutionMode, AGENT_EXECUTION_MODE))
@@ -462,6 +465,25 @@ class EventLogger(object):
             parameters[CommonTelemetryEventSchema.ImageOrigin].value = int(imds_info.image_origin)
         except Exception as e:
             logger.warn("Failed to get IMDS info; will be missing from telemetry: {0}", ustr(e))
+
+        # The KeywordName column is initialized with the CPUArch in EventLogger.__init__(). The security type is
+        # not yet discovered at that time because it requires a network call, so we update KeywordName here with the
+        # IsCVM value.
+        # The security type is initialized by the ConfidentialVMInfo class because it fetches metadata from IMDS with
+        # the minimum version that supports the security type field. We do not use that minimum version in the IMDS
+        # request in this method due to inadequate saturation of that version in the fleet. When the ConfidentialVMInfo
+        # class attributes are initialized, AgentGlobals is also updated with the security type, so we can get the
+        # security type in this module without introducing dependencies on the ConfidentialVMInfo class.
+        try:
+            keyword_name_str = parameters[CommonTelemetryEventSchema.KeywordName].value               # Get the current value of keywordName
+            keyword_name_json = json.loads(keyword_name_str)                                          # Convert the string to JSON
+            # AgentGlobals.get_is_cvm() raises if cvm info is not initialized so the IsCVM value in the keywordName
+            # column would remain uninitialized in that case
+            is_cvm = AgentGlobals.get_is_cvm()                                                        # Get the CVM state from AgentGlobals
+            keyword_name_json["IsCVM"] = is_cvm                                                       # Update the security type in the JSON
+            parameters[CommonTelemetryEventSchema.KeywordName].value = json.dumps(keyword_name_json)  # Convert the JSON back to string and update the value of keywordName
+        except Exception as e:
+            logger.warn("Failed to update the KeywordName column with IsCVM; will be missing from telemetry: {0}", ustr(e))
 
     def save_event(self, data):
         if self.event_dir is None:
