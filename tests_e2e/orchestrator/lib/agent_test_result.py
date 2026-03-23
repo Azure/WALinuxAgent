@@ -23,20 +23,24 @@ import uuid
 from lisa import notifier  # pylint: disable=E0401
 from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
 
+from typing import Optional
+
 from azurelinuxagent.common.future import UTC
 
 
 class AgentTestResultMessage(TestResultMessage):
     def __init__(self, suite_name: str, test_name: str, status: TestStatus):
         super().__init__()
-        self.type = "AgentTestResultMessage"
-        self.id_ = str(uuid.uuid4())
-        self.status = status
-        self.suite_full_name = suite_name
-        self.suite_name = suite_name
-        self.full_name = test_name
-        self.name = test_name
-        self.elapsed = 0
+        self.type: str = "AgentTestResultMessage"
+        self.id_: str = str(uuid.uuid4())
+        self.status: TestStatus = status
+        self.suite_full_name: str = suite_name
+        self.suite_name: str = suite_name
+        self.full_name: str = test_name
+        self.name: str = test_name
+        self.elapsed: float = 0
+        self.message: str = ""
+        self.stacktrace: Optional[str] = None
 
 
 class AgentTestResult:
