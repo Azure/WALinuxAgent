@@ -77,6 +77,8 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
             protocol_util.get_protocol = Mock(return_value=protocol)
             send_telemetry_events_handler = get_send_telemetry_events_handler(protocol_util)
             send_telemetry_events_handler.event_calls = []
+            ConfidentialVMInfo = MagicMock()
+            ConfidentialVMInfo.is_confidential_vm = Mock(return_vale=False)
             with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MIN_EVENTS_TO_BATCH",
                        batching_queue_limit):
                 with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MAX_TIMEOUT", timeout):
@@ -383,7 +385,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
                              '<Param Name="ImageOrigin" Value="2468" T="mt:uint64" />' \
                              ']]></Event>'.format(AGENT_VERSION, TestSendTelemetryEventsHandler._TEST_EVENT_OPERATION, CURRENT_AGENT, test_opcodename, test_eventtid,
                                                   test_eventpid, test_taskname, osversion, int(osutil.get_total_mem()),
-                                                  osutil.get_processor_cores(), json.dumps({"CpuArchitecture": platform.machine()})).encode('utf-8')
+                                                  osutil.get_processor_cores(), json.dumps({"CpuArchitecture": platform.machine(), "IsCVM": False})).encode('utf-8')
 
             self.assertIn(sample_message, collected_event)
 
