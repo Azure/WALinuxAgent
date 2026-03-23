@@ -20,12 +20,15 @@ import uuid
 
 # Disable those warnings, since 'lisa' is an external, non-standard, dependency
 #     E0401: Unable to import 'lisa' (import-error)
-#     etc
-from lisa import (  # pylint: disable=E0401
-    notifier
-)
+from lisa import notifier  # pylint: disable=E0401
 from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
+
 from azurelinuxagent.common.future import UTC
+
+class AgentTestResultMessage(TestResultMessage):
+    def __init__(self):
+        super().__init__()
+        self.type = "AgentTestResultMessage"
 
 
 class AgentTestResult:
@@ -42,8 +45,7 @@ class AgentTestResult:
         Reports a test result to the junit notifier
         """
         # The junit notifier requires an initial RUNNING message in order to register the test in its internal cache.
-        msg: TestResultMessage = TestResultMessage()
-        msg.type = "AgentTestResultMessage"
+        msg: AgentTestResultMessage = AgentTestResultMessage()
         msg.id_ = str(uuid.uuid4())
         msg.status = TestStatus.RUNNING
         msg.suite_full_name = suite_name
