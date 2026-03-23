@@ -17,6 +17,7 @@
 
 import os
 
+from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 from tests.lib.tools import AgentTestCase, MagicMock, patch, data_dir
 
@@ -39,6 +40,7 @@ class TestConfidentialVMInfo(AgentTestCase):
             ConfidentialVMInfo.fetch_and_initialize_cvm_info()
             is_cvm = ConfidentialVMInfo.is_confidential_vm()
             self.assertTrue(is_cvm)
+            self.assertTrue(AgentGlobals.get_is_cvm())      # Verify that AgentGlobals was also updated
 
     def test_should_identify_non_confidential_vm(self):
         with patch('azurelinuxagent.ga.confidential_vm_info.ImdsClient.get_metadata') as mock_get_metadata:
@@ -46,6 +48,9 @@ class TestConfidentialVMInfo(AgentTestCase):
             ConfidentialVMInfo.fetch_and_initialize_cvm_info()
             is_cvm = ConfidentialVMInfo.is_confidential_vm()
             self.assertFalse(is_cvm)
+            # Verify that AgentGlobals was also updated
+            self.assertFalse(AgentGlobals.get_is_cvm())
+            self.assertIsNotNone(AgentGlobals.get_is_cvm())
 
     def test_should_return_false_when_imds_unavailable(self):
         with patch('azurelinuxagent.ga.confidential_vm_info.ImdsClient.get_metadata') as mock_get_metadata:
@@ -61,6 +66,9 @@ class TestConfidentialVMInfo(AgentTestCase):
             # After exception, is_confidential_vm should be False
             is_cvm = ConfidentialVMInfo.is_confidential_vm()
             self.assertFalse(is_cvm)
+            # Verify that AgentGlobals was also updated
+            self.assertFalse(AgentGlobals.get_is_cvm())
+            self.assertIsNotNone(AgentGlobals.get_is_cvm())
 
     def test_should_always_return_false_after_transient_imds_failure(self):
         with patch('azurelinuxagent.ga.confidential_vm_info.ImdsClient.get_metadata') as mock_get_metadata:
@@ -78,8 +86,14 @@ class TestConfidentialVMInfo(AgentTestCase):
                 ConfidentialVMInfo.fetch_and_initialize_cvm_info()
             first_call = ConfidentialVMInfo.is_confidential_vm()
             self.assertFalse(first_call)
+            # Verify that AgentGlobals was also updated
+            self.assertFalse(AgentGlobals.get_is_cvm())
+            self.assertIsNotNone(AgentGlobals.get_is_cvm())
             second_call = ConfidentialVMInfo.is_confidential_vm()
             self.assertFalse(second_call)
+            # Verify that AgentGlobals was also updated
+            self.assertFalse(AgentGlobals.get_is_cvm())
+            self.assertIsNotNone(AgentGlobals.get_is_cvm())
 
             # Verify IMDS was only called once
             self.assertEqual(mock_get_metadata.call_count, 1)
