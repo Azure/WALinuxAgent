@@ -71,7 +71,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             CommonTelemetryEventSchema.EventTid: threading.current_thread().ident,
             CommonTelemetryEventSchema.EventPid: os.getpid(),
             CommonTelemetryEventSchema.TaskName: threading.current_thread().name,
-            CommonTelemetryEventSchema.KeywordName: json.dumps({"CpuArchitecture": platform.machine()}),
+            CommonTelemetryEventSchema.KeywordName: json.dumps({"CpuArchitecture": platform.machine(), "IsCVM": False}),
             # common parameters computed from the OS platform
             CommonTelemetryEventSchema.OSVersion: EventLoggerTools.get_expected_os_version(),
             CommonTelemetryEventSchema.ExecutionMode: AGENT_EXECUTION_MODE,
