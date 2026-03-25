@@ -238,6 +238,22 @@ class TestAgentUpdate(UpdateTestCase):
             self._assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION), "99999.0.0.0"])
             self._assert_agent_exit_process_telemetry_emitted(ustr(context.exception.reason))
 
+    def test_it_should_not_download_manifest_again_if_last_attempted_download_time_not_elapsed(self):
+        self.prepare_agents(count=1)
+        data_file = DATA_FILE.copy()
+        data_file['ext_conf'] = "wire/ext_conf.xml"
+        with self._get_agent_update_handler(test_data=data_file, autoupdate_frequency=10, protocol_get_error=True) as (
+        agent_update_handler, _):
+            # making multiple agent update attempts
+            goal_state = GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState)
+            agent_update_handler.run(goal_state, True)
+            agent_update_handler.run(goal_state, True)
+            agent_update_handler.run(goal_state, True)
+
+            mock_wire_data = agent_update_handler._protocol.mock_wire_data
+            self.assertEqual(1, mock_wire_data.call_counts['manifest_of_ga.xml'],
+                             "Agent manifest should not be downloaded again")
+
     def test_it_should_download_manifest_if_last_attempted_download_time_is_elapsed(self):
         self.prepare_agents(count=1)
         data_file = DATA_FILE.copy()
