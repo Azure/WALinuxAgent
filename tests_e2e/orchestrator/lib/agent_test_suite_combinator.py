@@ -154,6 +154,8 @@ class AgentTestSuitesCombinator(Combinator):
 
         runbook_images = self._get_runbook_images(loader)
 
+        all_suites_require_vmss = all(s.executes_on_scale_set for s in loader.test_suites)
+
         skip_test_suites: List[str] = []
         skip_test_suites_images: List[Tuple[str, str]] = []
         for test_suite_info in loader.test_suites:
@@ -190,7 +192,16 @@ class AgentTestSuitesCombinator(Combinator):
                     shared_gallery = ""
 
                 if test_suite_info.executes_on_scale_set and (vhd != "" or shared_gallery != ""):
-                    raise Exception("VHDS and images from galleries are currently not supported on scale sets.")
+                    if all_suites_require_vmss:
+                        raise Exception("VHDs and images from galleries are currently not supported on scale sets")
+                    
+                    AgentTestResult.report(
+                        f"{test_suite_info.name}-{image_name}",
+                        test_suite_info.name,
+                        TestStatus.SKIPPED,
+                        datetime.datetime.now(datetime.timezone.utc),
+                        message="VHDs and images from galleries are currently not supported on scale sets.")
+                    continue
 
                 vm_size = self._get_vm_size(image)
 
