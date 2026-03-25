@@ -46,20 +46,20 @@ _agent_start_time = datetime.datetime.now(UTC)
 
 class SignatureValidationTimeout(object):
     """
-    If any signature validation operation exceeds the configured timeout threshold (Debug.SignatureValidationTimeout),
-    we mark that signature validation has "timed out" and signature validation will be disabled until
-    agent restart.
+    Tracks whether signature validation should be disabled due to a timeout. Disabling validation should only be done when the
+    customer has not opted into enforcement of extension signature validation.
     TODO: This is a temporary workaround to prevent performance impact during telemetry release; remove for production release.
     """
-    _exceeded = False
+    # Should only be set to True when customer has not opted into extension signature validation enforcement.
+    _validation_disabled = False
 
     @staticmethod
-    def exceeded():
-        return SignatureValidationTimeout._exceeded
+    def is_validation_disabled():
+        return SignatureValidationTimeout._validation_disabled
 
     @staticmethod
-    def mark_exceeded():
-        SignatureValidationTimeout._exceeded = True
+    def disable_validation():
+        SignatureValidationTimeout._validation_disabled = True
 
 
 class PackageValidationError(AgentError):
@@ -382,7 +382,7 @@ def signature_validation_enabled():
     - Agent is running on a Confidential VM (TODO: remove when all VMs are supported)
     """
     return conf.get_signature_validation_enabled() and \
-        not SignatureValidationTimeout.exceeded() and \
+        not SignatureValidationTimeout.is_validation_disabled() and \
         not _should_delay_signature_validation() and \
         openssl_version_supported_for_signature_validation() and \
         ConfidentialVMInfo.is_confidential_vm()

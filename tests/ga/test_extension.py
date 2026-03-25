@@ -4426,7 +4426,7 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
 
     @skip_if_predicate_true(lambda: sys.version_info[0] == 2, "Timeouts are not supported on Python 2")
     def test_should_disable_future_validation_if_timeout_exceeded(self):
-        with patch.object(SignatureValidationTimeout, '_exceeded', False):
+        with patch.object(SignatureValidationTimeout, '_validation_disabled', False):
             data_file = wire_protocol_data.DATA_FILE.copy()
             data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
             data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
@@ -4872,7 +4872,7 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
 
     @skip_if_predicate_true(lambda: sys.version_info[0] == 2, "Timeouts are not supported on Python 2")
     def test_should_not_disable_future_validation_if_timeout_exceeded_when_enforced(self):
-        with patch.object(SignatureValidationTimeout, '_exceeded', False):
+        with patch.object(SignatureValidationTimeout, '_validation_disabled', False):
             data_file = wire_protocol_data.DATA_FILE.copy()
             data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
             data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
