@@ -242,8 +242,7 @@ class TestAgentUpdate(UpdateTestCase):
         self.prepare_agents(count=1)
         data_file = DATA_FILE.copy()
         data_file['ext_conf'] = "wire/ext_conf.xml"
-        with self._get_agent_update_handler(test_data=data_file, autoupdate_frequency=10, protocol_get_error=True) as (
-        agent_update_handler, _):
+        with self._get_agent_update_handler(test_data=data_file, autoupdate_frequency=10, protocol_get_error=True) as (agent_update_handler, _):
             # making multiple agent update attempts
             goal_state = GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState)
             agent_update_handler.run(goal_state, True)
@@ -251,8 +250,7 @@ class TestAgentUpdate(UpdateTestCase):
             agent_update_handler.run(goal_state, True)
 
             mock_wire_data = agent_update_handler._protocol.mock_wire_data
-            self.assertEqual(1, mock_wire_data.call_counts['manifest_of_ga.xml'],
-                             "Agent manifest should not be downloaded again")
+            self.assertEqual(1, mock_wire_data.call_counts['manifest_of_ga.xml'], "Agent manifest should not be downloaded again")
 
     def test_it_should_download_manifest_if_last_attempted_download_time_is_elapsed(self):
         self.prepare_agents(count=1)
