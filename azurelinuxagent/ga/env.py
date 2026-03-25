@@ -111,6 +111,9 @@ class FirewallState(object):
 
 class EnableFirewall(PeriodicOperation):
     _REPORTING_PERIOD = datetime.timedelta(hours=24)  # We set limits on the number of reports for this period. Limits are reset after the period elapses.
+    _MAX_REPORTS_WHEN_FIREWALL_OK = 1  # Max number of reports to emit during a reporting period when the firewall is in a good state
+    _MAX_REPORTS_WHEN_FIREWALL_NOT_OK = 3  # Max number of reports to emit during a reporting period when the firewall is not in a good state
+    _MAX_REPORTS_PER_PERIOD = 8  # Absolute max number of reports to emit during a reporting period regardless of the state of the firewall.
 
     def __init__(self, wire_server_address):
         super(EnableFirewall, self).__init__(conf.get_enable_firewall_period())
@@ -118,15 +121,18 @@ class EnableFirewall(PeriodicOperation):
         self._firewall_manager = None  # initialized on demand in the _operation method
         self._firewall_state = FirewallState.OK  # Initialized to OK to prevent turning on verbose mode on the initial invocation of _operation(). It is properly initialized as soon as we do the first check of the firewall.
         #
-        # We use the below members to limit the number of reports we emit during a reporting period (a report consist of all the telemetry events/logging emitted during 1 execution of the _operation() method).
-        # When the firewall state is OK we emit 1 single report per period, otherwise we emit up to 3 reports per period. The self._report_count member is used to set this limit.
-        # However, if the state of the firewall changes after the limit has been exceeded, we want to know immediately, not until the full reporting period has elapsed. So, when the state changes, we reset self._report_count.
-        # Now, if the state of the firewall changes multiple times during the same reporting period, the above strategy can produce to many reports, so we set an absolute limit per period. The self_period_report_count member
-        # is used to set that limit and is reset each reporting period.
+        # This PeriodicOperation can run very frequently, so we need to limit the number of messages (local log and telemetry) that are emitted.
+        #
+        # Each execution of the _operation() method can emit one or more messages; a "report" consists of all the messages emitted during a single execution. We use self._report_count to limit the number of reports that are emitted 
+        # during a reporting period. When the firewall is in a good state (FirewallState.OK) the limit is set by _MAX_REPORTS_WHEN_FIREWALL_OK, otherwise it is set by _MAX_REPORTS_WHEN_FIREWALL_NOT_OK. However, when the state of the
+        # firewall changes (for example, it was OK and then it becomes incorrect because some rules missing) we want to resume reporting messages immediately, so we reset self._report_count. This strategy can produce too many messages
+        # if the state of the firewall changes too often, so we use self._period_report_count to set an absolute limit (_MAX_REPORTS_PER_PERIOD) on the number of reports per reporting period, regardless of the state of the firewall.
+        #
+        # Both report counters are reset each _REPORTING_PERIOD.
         #
         self._reporting_period_end = datetime.datetime.now(UTC) + EnableFirewall._REPORTING_PERIOD
-        self._report_count = 0   # we can reset this count more than once per period depending on the state of the firewall
-        self._period_report_count = 0  # this count is reset only once per period
+        self._report_count = 0   # we can reset this counter more than once per period depending on the state of the firewall
+        self._period_report_count = 0  # this counter is reset only once per period
         self._should_report = True
 
     def _operation(self):
@@ -167,31 +173,30 @@ class EnableFirewall(PeriodicOperation):
         except Exception as e:
             self._update_firewall_state(FirewallState.Unknown)
             self._emit_event(event.warn, WALAEventOperation.Firewall, "An error occurred while verifying the state of the firewall: {0}. Current state:\n{1}", textutil.format_exception(e), self._firewall_manager.get_state())
+        finally:
+            if self._should_report:
+                self._report_count += 1
+                self._period_report_count += 1
 
     def _emit_event(self, event_function, operation, message, *args):
         if self._should_report:
             event_function(operation, message, *args)
 
     def _update_reporting_state(self):
-        if datetime.datetime.now(UTC) >= self._reporting_period_end:  # Reset the all the report counts every time a reporting period has elapsed
+        # Reset the the report counts every time a period has elapsed
+        if datetime.datetime.now(UTC) >= self._reporting_period_end:
             self._report_count = 0
             self._period_report_count = 0
             self._reporting_period_end = datetime.datetime.now(UTC) + EnableFirewall._REPORTING_PERIOD
 
-        # if the state of the firewall does not change within a reporting period, we report only once when the state is OK and max 3 times when it is not.
-        # if the state changes, we report at most 8 times total.
-        self._report_count += 1
-        self._period_report_count += 1
-        max_reports = 1 if self._firewall_state == FirewallState.OK else 3
-        self._should_report = self._report_count <= max_reports
+        # Check the report limits
+        max_reports = EnableFirewall._MAX_REPORTS_WHEN_FIREWALL_OK if self._firewall_state == FirewallState.OK else EnableFirewall._MAX_REPORTS_WHEN_FIREWALL_NOT_OK
+        self._should_report = self._report_count < max_reports and self._period_report_count < EnableFirewall._MAX_REPORTS_PER_PERIOD
 
     def _update_firewall_state(self, firewall_state):
         if (self._firewall_state == FirewallState.OK) != (firewall_state == FirewallState.OK):
-            # Reset the self._report_count and self._should_report to their initial values if the firewall state goes from OK to not-OK or vice versa. We do this because we want to know about state changes
-            # immediately, even if the report count for the current period has already been exceeded. Otherwise, we would need to wait for the entire reporting period to report those changes.
-            # Now, if the state of the firewall changes too often, this strategy may emit too many events, so we use self._period_report_count, to set an absolute limit that is only reset when the full
-            # period elapses.
-            if self._period_report_count <= 8:
+            # Reset the report count and enable reporting immediately, as long as we have not reached the absolute limit per period.
+            if self._period_report_count < EnableFirewall._MAX_REPORTS_PER_PERIOD:
                 self._report_count = 0
                 self._should_report = True
         self._firewall_state = firewall_state
