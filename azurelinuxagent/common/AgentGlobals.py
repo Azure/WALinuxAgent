@@ -30,6 +30,16 @@ class AgentGlobals(object):
     #
     _container_id = GUID_ZERO
 
+    #
+    # The telemetry modules require the information about whether the agent is running in a CVM or not. This variable
+    # will be updated when the CVM info is initialized in ConfidentialVMInfo. There are three possible values:
+    #   - None
+    #   - True
+    #   - False
+    # The value is None when the CVM info has not yet been initialized.
+    #
+    _is_cvm = None
+
     @staticmethod
     def get_container_id():
         return AgentGlobals._container_id
@@ -37,3 +47,13 @@ class AgentGlobals(object):
     @staticmethod
     def update_container_id(container_id):
         AgentGlobals._container_id = container_id
+
+    @staticmethod
+    def get_is_cvm():
+        if AgentGlobals._is_cvm is None:
+            raise Exception("CVM info has not been initialized yet")
+        return AgentGlobals._is_cvm
+
+    @staticmethod
+    def update_is_cvm(is_cvm):
+        AgentGlobals._is_cvm = is_cvm
