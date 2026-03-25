@@ -299,7 +299,7 @@ class _PolicyEngine(object):
                 raise InvalidPolicyError("unrecognized attribute '{0}' in {1}".format(k, object_name))
 
         if object_.get("signatureRequired") is True and not ConfidentialVMInfo.is_confidential_vm():
-            raise InvalidPolicyError("attribute 'signatureRequired' is only supported on confidential virtual machines (CVMs).")
+            raise InvalidPolicyError("setting 'signatureRequired' to true is only supported on confidential virtual machines (CVMs).")
 
     @staticmethod
     def _get_dictionary(object_, attribute, name_prefix="", optional=False, default=None):
