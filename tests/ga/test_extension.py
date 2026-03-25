@@ -4444,18 +4444,27 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
                                             expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
                                             expected_version="1.7.0")
 
-            # Second run: Process another extension and verify signature validation is skipped
+            # Second run: Uninstall the extension, then reinstall to verify signature validation is skipped.
             with mock_wire_protocol(data_file) as protocol:
                 protocol.aggregate_status = None
                 protocol.report_vm_status = MagicMock()
                 exthandlers_handler = get_exthandlers_handler(protocol)
                 protocol.set_http_handlers(http_get_handler=self._make_http_get_handler(data_file))
 
+                # Uninstall the extension
+                protocol.mock_wire_data.set_incarnation(2)
+                protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
+                protocol.client.update_goal_state()
+                exthandlers_handler.run()
+
+                # Update the goal state to reinstall the extension
+                # Then, confirm that validate_signature is not called, because validation was disabled after the timeout in the previous run
+                protocol.mock_wire_data.set_incarnation(3)
+                protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Enabled)
+                protocol.client.update_goal_state()
                 with patch('azurelinuxagent.ga.exthandlers.validate_signature') as mock_validate:
                     exthandlers_handler.run()
                     exthandlers_handler.report_ext_handlers_status()
-
-                    # validate_signature should NOT be called because the timeout was exceeded in the previous run
                     mock_validate.assert_not_called()
 
 
