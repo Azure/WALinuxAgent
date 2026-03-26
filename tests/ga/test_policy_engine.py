@@ -338,7 +338,7 @@ class TestPolicyEngine(_TestPolicyBase):
                 }
             },
         ]
-        self._run_test_cases_should_fail_to_parse(cases, "'signatureRequired' only supported on confidential virtual machines")
+        self._run_test_cases_should_fail_to_parse(cases, "Expected an error indicating that 'signatureRequired' can be used only on confidential virtual machines")
 
 
 class TestExtensionPolicyEngine(_TestPolicyBase):
