@@ -1472,7 +1472,8 @@ class ExtHandlerInstance(object):
                         cleanup_package_with_invalid_signature(package_file)
                         raise
                     if isinstance(ex, SignatureValidationTimeoutError):
-                        # In the case of signature validation timeout, only disable future validations for customers who haven't opted into enforcement.
+                        # TODO: This is temporary behavior for the telemetry release. For production release, remove this
+                        # if-block so timeout is treated like any other signature validation failure (extension should fail).
                         SignatureValidationTimeout.disable_validation()
                     report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING, message=ustr(ex),
                                             name=self.ext_handler.name, version=self.ext_handler.version, duration=ex.duration)
@@ -1516,7 +1517,8 @@ class ExtHandlerInstance(object):
                 if not ignore_signature_validation_errors:
                     raise   # Package has already been cleaned up
                 if isinstance(ex, SignatureValidationTimeoutError):
-                    # In the case of signature validation timeout, only disable future validations for customers who haven't opted into enforcement.
+                    # TODO: This is temporary behavior for the telemetry release. For production release, remove this
+                    # if-block so timeout is treated like any other signature validation failure (extension should fail).
                     SignatureValidationTimeout.disable_validation()
                 report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING, message=ustr(ex), name=self.ext_handler.name,
                                         version=self.ext_handler.version, duration=ex.duration)
