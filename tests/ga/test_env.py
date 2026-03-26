@@ -17,6 +17,7 @@
 import datetime
 import time
 
+from azurelinuxagent.common.future import UTC
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil, shellutil
 from azurelinuxagent.ga.env import MonitorDhcpClientRestart, EnableFirewall, FirewallState
@@ -232,7 +233,6 @@ class TestEnableFirewall(AgentTestCase):
     
 
     def test_it_should_log_only_once_per_reporting_period_when_the_state_of_the_firewall_is_correct(self):
-        EnableFirewall._REPORTING_PERIOD = datetime.timedelta(milliseconds=500)
         enable_firewall = EnableFirewall('168.63.129.16')
 
         enable_firewall._firewall_manager = Mock()
@@ -253,7 +253,8 @@ class TestEnableFirewall(AgentTestCase):
             actual = self._get_firewall_events(add_event_patch)
             self.assertEqual(expected, actual, "Expected only one report during the first reporting period")
 
-            time.sleep(0.5)  # let 1 reporting period elapse
+            # Mark the end of the reporting period
+            enable_firewall._reporting_period_end = datetime.datetime.now(UTC)
 
             #
             # Second reporting period
@@ -271,7 +272,6 @@ class TestEnableFirewall(AgentTestCase):
 
 
     def test_it_should_log_only_three_times_per_reporting_period_when_the_state_of_the_firewall_is_incorrect(self):
-        EnableFirewall._REPORTING_PERIOD = datetime.timedelta(milliseconds=500)
         enable_firewall = EnableFirewall('168.63.129.16')
 
         enable_firewall._firewall_manager = Mock()
@@ -292,7 +292,8 @@ class TestEnableFirewall(AgentTestCase):
             actual = self._get_firewall_events(add_event_patch)
             self.assertEqual(expected, actual, "Expected only three reports during the first reporting period")
 
-            time.sleep(0.5)  # let 1 reporting period elapse
+            # Mark the end of the reporting period
+            enable_firewall._reporting_period_end = datetime.datetime.now(UTC)
 
             #
             # Second reporting period
@@ -310,7 +311,6 @@ class TestEnableFirewall(AgentTestCase):
             
     
     def test_it_should_set_a_limit_on_the_number_of_reports_when_the_firewall_state_changes(self):
-        EnableFirewall._REPORTING_PERIOD = datetime.timedelta(milliseconds=500)
         enable_firewall = EnableFirewall('168.63.129.16')
 
         def mock_check(*_, **__):
@@ -340,7 +340,8 @@ class TestEnableFirewall(AgentTestCase):
             actual = self._get_firewall_events(add_event_patch)
             self.assertEqual(expected, actual, "First reporting period: Expected 8 reports, 1 INFO (is_success == True) and 1 WARNING (is_success == False) alternating 4 times")
 
-            time.sleep(0.5)
+            # Mark the end of the reporting period
+            enable_firewall._reporting_period_end = datetime.datetime.now(UTC)
 
             #
             # Second reporting period
@@ -357,7 +358,6 @@ class TestEnableFirewall(AgentTestCase):
             self.assertEqual(expected, actual, "First reporting period: Expected 8 reports, 1 INFO (is_success == True) and 1 WARNING (is_success == False) alternating 4 times")
 
     def test_it_should_reset_the_count_of_reports_when_the_firewall_state_changes(self):
-        EnableFirewall._REPORTING_PERIOD = datetime.timedelta(milliseconds=500)
         enable_firewall = EnableFirewall('168.63.129.16')
 
         def mock_check(*_, **__):

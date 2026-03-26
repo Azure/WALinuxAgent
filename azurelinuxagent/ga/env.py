@@ -172,7 +172,10 @@ class EnableFirewall(PeriodicOperation):
             self._emit_event(event.info, WALAEventOperation.Firewall, "The firewall was setup successfully:\n{0}", self._firewall_manager.get_state())
         except Exception as e:
             self._update_firewall_state(FirewallState.Unknown)
-            self._emit_event(event.warn, WALAEventOperation.Firewall, "An error occurred while verifying the state of the firewall: {0}. Current state:\n{1}", textutil.format_exception(e), self._firewall_manager.get_state())
+            if self._firewall_manager is None:
+                self._emit_event(event.warn, WALAEventOperation.Firewall, "An error occurred while verifying the state of the firewall: {0}", textutil.format_exception(e))
+            else:
+                self._emit_event(event.warn, WALAEventOperation.Firewall, "An error occurred while verifying the state of the firewall: {0}. Current state:\n{1}", textutil.format_exception(e), self._firewall_manager.get_state())
         finally:
             if self._should_report:
                 self._report_count += 1
@@ -183,7 +186,7 @@ class EnableFirewall(PeriodicOperation):
             event_function(operation, message, *args)
 
     def _update_reporting_state(self):
-        # Reset the the report counts every time a period has elapsed
+        # Reset the report counts every time a period has elapsed
         if datetime.datetime.now(UTC) >= self._reporting_period_end:
             self._report_count = 0
             self._period_report_count = 0
