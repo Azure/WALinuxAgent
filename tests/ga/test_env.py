@@ -318,7 +318,7 @@ class TestEnableFirewall(AgentTestCase):
                 return True
             else:
                 raise TestEnableFirewall._FIREWALL_INCONSISTENT_EXCEPTION
-        mock_check.firewall_ok = False 
+        mock_check.firewall_ok = False
 
         enable_firewall._firewall_manager = Mock()
         enable_firewall._firewall_manager.check = Mock(side_effect=mock_check)
@@ -388,4 +388,4 @@ class TestEnableFirewall(AgentTestCase):
             self.assertEqual(20, enable_firewall._firewall_manager.check.call_count, "Expected 20 calls to FirewallManager.check() during the first reporting period")
 
             actual = self._get_firewall_events(add_event_patch)
-            self.assertEqual(expected, actual, "First reporting period: Expected 1 WARNING (is_success == False) and 1 INFOs (is_success == True), then 1 more INFO, repeated 4 times")
+            self.assertEqual(expected, actual, "First reporting period: Expected 1 INFO (is_success == True) then 3 WARNINGs (is_success == False), repeated 2 times")
