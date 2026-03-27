@@ -447,7 +447,7 @@ class TestAgentUpdate(UpdateTestCase):
                 agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
             self._assert_update_discovered_from_agent_manifest(mock_telemetry, version="99999.0.0.0")
             self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                                     "Self-update: failed to download version 99999.0.0.0, trying next largest version" in kwarg['message'] and kwarg[
+                                     "Self-update: failed to prepare version 99999.0.0.0 for update, trying next largest version" in kwarg['message'] and kwarg[
                                          'op'] == WALAEventOperation.AgentUpgrade]),
                                             "99999.0.0.0 download should have failed")
             self._assert_update_discovered_from_agent_manifest(mock_telemetry, version="9.9.9.10")
@@ -470,7 +470,7 @@ class TestAgentUpdate(UpdateTestCase):
                 agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
                 self._assert_update_discovered_from_agent_manifest(mock_telemetry, version="99999.0.0.0")
                 self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                                         "Self-update: failed to download version 99999.0.0.0, trying next largest version" in kwarg['message'] and kwarg[
+                                         "Self-update: failed to prepare version 99999.0.0.0 for update, trying next largest version" in kwarg['message'] and kwarg[
                                              'op'] == WALAEventOperation.AgentUpgrade]),
                                                 "99999.0.0.0 download should have failed")
                 self._assert_update_discovered_from_agent_manifest(mock_telemetry, version="9.9.9.10")
