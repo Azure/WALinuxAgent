@@ -164,7 +164,7 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         4. Iterate candidates descending, attempting download for each. On failure, try the next.
 
         @return: GuestAgent if a version was successfully downloaded, None if no update should be attempted.
-        @raises: AgentUpdateError if all candidate downloads fail.
+        @raises: If all candidate downloads/validations fail, an appropriate Exception will be raised based on the failure
         """
         # Fetch manifest and get all agent versions sorted highest-first
         sorted_versions = self._retrieve_sorted_agent_versions(agent_family, goal_state)
@@ -189,9 +189,9 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
                 return self._download_and_get_new_agent(protocol, agent_family, goal_state)
             except Exception as err:
                 if i < len(update_candidates) - 1:
-                    msg = "Self-update: failed to download version {0}, trying next largest version. Error: {1}".format(self._version, ustr(err))
+                    msg = "Self-update: failed to prepare version {0} for update, trying next largest version. Error: {1}".format(self._version, ustr(err))
                     logger.warn(msg)
-                    add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
+                    add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False, is_success=False)
                 else:
                     raise
 
