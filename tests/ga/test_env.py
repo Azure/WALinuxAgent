@@ -360,7 +360,7 @@ class TestEnableFirewall(AgentTestCase):
         enable_firewall = EnableFirewall('168.63.129.16')
 
         def mock_check(*_, **__):
-            # Return a correct state fives times, then report an incorrect state fives times, then repeat.
+            # Return a correct state five times, then report an incorrect state five times, then repeat.
             if ((enable_firewall._firewall_manager.check.call_count - 1) // 5) % 2 == 0:
                 return True
             else:
