@@ -582,15 +582,21 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         # Compare KeywordName as parsed JSON to avoid failures due to non-deterministic key ordering in json.dumps
         if CommonTelemetryEventSchema.KeywordName in event_parameters and \
                 CommonTelemetryEventSchema.KeywordName in all_expected_parameters:
-            if event_parameters[CommonTelemetryEventSchema.KeywordName] != \
-                    all_expected_parameters[CommonTelemetryEventSchema.KeywordName]:
-                # Normalize the KeywordName dict to be sorted so the string comparison is accurate
-                event_parameters[CommonTelemetryEventSchema.KeywordName] = json.dumps(
-                    json.loads(event_parameters[CommonTelemetryEventSchema.KeywordName]), sort_keys=True
-                )
-                all_expected_parameters[CommonTelemetryEventSchema.KeywordName] = json.dumps(
-                    json.loads(all_expected_parameters[CommonTelemetryEventSchema.KeywordName]), sort_keys=True
-                )
+            actual_keyword = event_parameters[CommonTelemetryEventSchema.KeywordName]
+            expected_keyword = all_expected_parameters[CommonTelemetryEventSchema.KeywordName]
+            if actual_keyword != expected_keyword:
+                # Normalize the KeywordName dict to be sorted so the string comparison is accurate.
+                # If either side is not valid JSON (e.g. legacy plain strings), fall back to the raw values.
+                try:
+                    event_parameters[CommonTelemetryEventSchema.KeywordName] = json.dumps(
+                        json.loads(actual_keyword), sort_keys=True
+                    )
+                    all_expected_parameters[CommonTelemetryEventSchema.KeywordName] = json.dumps(
+                        json.loads(expected_keyword), sort_keys=True
+                    )
+                except (ValueError, TypeError):
+                    # Leave KeywordName values as-is; assertDictEqual will show the difference.
+                    pass
 
         self.assertDictEqual(event_parameters, all_expected_parameters)
 
