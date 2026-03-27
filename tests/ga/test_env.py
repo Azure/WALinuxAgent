@@ -354,7 +354,7 @@ class TestEnableFirewall(AgentTestCase):
             self.assertEqual(10, enable_firewall._firewall_manager.check.call_count, "Expected 10 calls to FirewallManager.check() during the second reporting period")
 
             actual = self._get_firewall_events(add_event_patch)
-            self.assertEqual(expected, actual, "First reporting period: Expected 8 reports, 1 INFO (is_success == True) and 1 WARNING (is_success == False) alternating 4 times")
+            self.assertEqual(expected, actual, "Second reporting period: Expected 8 reports, 1 INFO (is_success == True) and 1 WARNING (is_success == False) alternating 4 times")
 
     def test_it_should_reset_the_count_of_reports_when_the_firewall_state_changes(self):
         enable_firewall = EnableFirewall('168.63.129.16')
