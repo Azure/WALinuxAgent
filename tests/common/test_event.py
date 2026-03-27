@@ -578,6 +578,20 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             assert_timestamp(telemetry_log_event_timestamp)
 
         self.maxDiff = None  # the dictionary diffs can be quite large; display the whole thing
+
+        # Compare KeywordName as parsed JSON to avoid failures due to non-deterministic key ordering in json.dumps
+        if CommonTelemetryEventSchema.KeywordName in event_parameters and \
+                CommonTelemetryEventSchema.KeywordName in all_expected_parameters:
+            if event_parameters[CommonTelemetryEventSchema.KeywordName] != \
+                    all_expected_parameters[CommonTelemetryEventSchema.KeywordName]:
+                # Normalize the KeywordName dict to be sorted so the string comparison is accurate
+                event_parameters[CommonTelemetryEventSchema.KeywordName] = json.dumps(
+                    json.loads(event_parameters[CommonTelemetryEventSchema.KeywordName]), sort_keys=True
+                )
+                all_expected_parameters[CommonTelemetryEventSchema.KeywordName] = json.dumps(
+                    json.loads(all_expected_parameters[CommonTelemetryEventSchema.KeywordName]), sort_keys=True
+                )
+
         self.assertDictEqual(event_parameters, all_expected_parameters)
 
         self.assertIsNotNone(timestamp, "The event does not have a timestamp (Opcode)")

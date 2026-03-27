@@ -30,6 +30,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateProperties
 from azurelinuxagent.common.protocol.util import get_protocol_util
+from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 from azurelinuxagent.pa.rdma.rdma import setup_rdma_device
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_NAME, \
@@ -143,6 +144,17 @@ class DaemonHandler(object):
         #
         protocol_util = get_protocol_util()
         protocol_util.clear_protocol()
+
+        # Initialize the CVM info before initializing the telemetry, since the CVM info is part of the common parameters
+        # for telemetry events.
+        try:
+            ConfidentialVMInfo.fetch_and_initialize_cvm_info()
+        except Exception as ex:
+            # Right now the daemon only fetches security type for telemetry purposes, so no need to send telemetry on
+            # the exception. This should be updated to send telemetry on the exception if we need the security type
+            # for other purposes in the daemon.
+            logger.warn("Failed to get virtual machine security type from IMDS, will assume this is not a Confidential "
+                        "Virtual Machine: {0}".format(ustr(ex)))
 
         #
         # Telemetry events include several fields that are retrieved from the goal state. The call to ProtocolUtil.get_protocol() will trigger protocol detection;
