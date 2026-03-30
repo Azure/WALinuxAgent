@@ -34,7 +34,6 @@ import time
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.ga import logcollector, cgroupconfigurator
 from azurelinuxagent.ga.cgroupcontroller import AGENT_LOG_COLLECTOR
-from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 from azurelinuxagent.ga.cpucontroller import _CpuController
 from azurelinuxagent.ga.cgroupapi import create_cgroup_api, InvalidCgroupMountpointException
 from azurelinuxagent.ga.firewall_manager import FirewallManager, IpTables
