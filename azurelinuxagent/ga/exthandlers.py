@@ -1432,6 +1432,23 @@ class ExtHandlerInstance(object):
             return False
         return True
 
+    def _handle_signature_validation_error(self, ex, ignore_errors, package_file=None):
+        """
+        Handles a SignatureValidationError by either re-raising it or reporting it via telemetry.
+        If ignore_errors is False, cleans up the package file (if provided) and re-raises the exception.
+        If ignore_errors is True, handles timeout behavior and reports the error via telemetry.
+        """
+        if not ignore_errors:
+            if package_file is not None:
+                cleanup_package_with_invalid_signature(package_file)
+            raise
+        if isinstance(ex, SignatureValidationTimeoutError):
+            # TODO: This is temporary behavior for the telemetry release. For production release, remove this
+            # if-block so timeout is treated like any other signature validation failure (extension should fail).
+            SignatureValidationTimeout.disable_validation()
+        report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING, message=ustr(ex),
+                                name=self.ext_handler.name, version=self.ext_handler.version, duration=ex.duration)
+
     def download(self, ignore_signature_validation_errors):
         """
         If extension is signed, validate extension package signature immediately after download, and validate handler
@@ -1467,16 +1484,7 @@ class ExtHandlerInstance(object):
                     validate_signature(package_file, self.ext_handler.encoded_signature, package_full_name=self.get_full_name())
                     signature_validation_succeeded = True
                 except SignatureValidationError as ex:
-                    # validate_signature() only raises SignatureValidationError (and subclasses).
-                    if not ignore_signature_validation_errors:
-                        cleanup_package_with_invalid_signature(package_file)
-                        raise
-                    if isinstance(ex, SignatureValidationTimeoutError):
-                        # TODO: This is temporary behavior for the telemetry release. For production release, remove this
-                        # if-block so timeout is treated like any other signature validation failure (extension should fail).
-                        SignatureValidationTimeout.disable_validation()
-                    report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING, message=ustr(ex),
-                                            name=self.ext_handler.name, version=self.ext_handler.version, duration=ex.duration)
+                    self._handle_signature_validation_error(ex, ignore_signature_validation_errors, package_file)
 
             if self._unzip_extension_package(package_file, self.get_base_dir()):
                 package_exists = True
@@ -1512,16 +1520,9 @@ class ExtHandlerInstance(object):
                     signature_validation_succeeded = True
 
             except SignatureValidationError as ex:
-                # download_zip_package() will propagate a SignatureValidationError if validation fails. Re-raise if
-                # validation errors should not be ignored, otherwise report the error and continue.
-                if not ignore_signature_validation_errors:
-                    raise   # Package has already been cleaned up
-                if isinstance(ex, SignatureValidationTimeoutError):
-                    # TODO: This is temporary behavior for the telemetry release. For production release, remove this
-                    # if-block so timeout is treated like any other signature validation failure (extension should fail).
-                    SignatureValidationTimeout.disable_validation()
-                report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING, message=ustr(ex), name=self.ext_handler.name,
-                                        version=self.ext_handler.version, duration=ex.duration)
+                # download_zip_package() will propagate a SignatureValidationError if validation fails.
+                # Package has already been cleaned up by download_zip_package().
+                self._handle_signature_validation_error(ex, ignore_signature_validation_errors)
 
             self.report_event(message="Download succeeded", duration=elapsed_milliseconds(begin_utc))
 
