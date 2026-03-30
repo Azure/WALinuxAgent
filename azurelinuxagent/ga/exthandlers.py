@@ -1441,7 +1441,7 @@ class ExtHandlerInstance(object):
         if not ignore_errors:
             if package_file is not None:
                 cleanup_package_with_invalid_signature(package_file)
-            raise
+            raise ex
         if isinstance(ex, SignatureValidationTimeoutError):
             # TODO: This is temporary behavior for the telemetry release. For production release, remove this
             # if-block so timeout is treated like any other signature validation failure (extension should fail).
