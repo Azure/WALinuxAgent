@@ -22,7 +22,7 @@ import random
 from azurelinuxagent.common import conf, logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import AgentUpgradeExitException, AgentUpdateError
-from azurelinuxagent.common.future import UTC, datetime_min_utc
+from azurelinuxagent.common.future import UTC, datetime_min_utc, ustr
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils import timeutil
 from azurelinuxagent.common.version import CURRENT_VERSION
@@ -43,18 +43,6 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         super(SelfUpdateVersionUpdater, self).__init__(gs_id)
         self._last_attempted_manifest_download_time = datetime_min_utc
         self._next_update_time = datetime_min_utc
-
-    @staticmethod
-    def _get_largest_version(agent_manifest):
-        """
-        Get the largest version from the agent manifest
-        """
-        largest_version = FlexibleVersion("0.0.0.0")
-        for pkg in agent_manifest.pkg_list.versions:
-            pkg_version = FlexibleVersion(pkg.version)
-            if pkg_version > largest_version:
-                largest_version = pkg_version
-        return largest_version
 
     @staticmethod
     def _get_agent_upgrade_type(version):
@@ -145,37 +133,17 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
 
         return False
 
-    def retrieve_agent_version(self, agent_family, goal_state):
+    def _retrieve_sorted_agent_versions(self, agent_family, goal_state):
         """
-        Get the largest version from the agent manifest
+        Fetch the agent manifest and return all versions from the agent manifest, sorted highest-first.
         """
         self._agent_manifest = goal_state.fetch_agent_manifest(agent_family.name, agent_family.uris)
-        largest_version = self._get_largest_version(self._agent_manifest)
-        self._version = largest_version
+        return sorted(
+            [FlexibleVersion(pkg.version) for pkg in self._agent_manifest.pkg_list.versions],
+            reverse=True
+        )
 
-    def is_retrieved_version_allowed_to_update(self, agent_family):
-        """
-        we don't allow new version update, if
-            1) The version is not greater than current version
-            2) if current time is before next update time
-
-        Allow the update, if
-            1) Initial update
-            2) If current time is on or after next update time
-        """
-        if self._version <= CURRENT_VERSION:
-            return False
-
-        # very first update need to proceed without any delay
-        if GuestAgentUpdateUtil.is_initial_update():
-            return True
-
-        if not self._new_agent_allowed_now_to_update():
-            return False
-
-        return True
-
-    def log_new_agent_update_message(self):
+    def _log_new_agent_update_message(self):
         """
         This function logs the update message after we check version allowed to update.
         """
@@ -183,6 +151,51 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
             str(self._version), self._gs_id)
         logger.info(msg)
         add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
+
+    def retrieve_and_download_agent(self, protocol, agent_family, goal_state):
+        """
+        Retrieve the target agent version, validate eligibility, and download it.
+        On download/unzip failure, falls back to the next highest version in the manifest.
+
+        The flow is:
+        1. Fetch manifest and determine versions > CURRENT_VERSION.
+        2. If there are no eligible candidates, return None.
+        3. Run the timing gate once (may mutate _next_update_time) using the largest version's upgrade type.
+        4. Iterate candidates descending, attempting download for each. On failure, try the next.
+
+        @return: GuestAgent if a version was successfully downloaded, None if no update should be attempted.
+        @raises: If all candidate downloads/validations fail, an appropriate Exception will be raised based on the failure
+        """
+        # Fetch manifest and get all agent versions sorted highest-first
+        sorted_versions = self._retrieve_sorted_agent_versions(agent_family, goal_state)
+
+        # We should attempt to update to latest version in manifest
+        self._version = sorted_versions[0] if len(sorted_versions) > 0 else FlexibleVersion("0.0.0.0")
+        if self._version <= CURRENT_VERSION:
+            return None
+
+        # If this is not the first update attempt, check if the agent is allowed to update now
+        if not GuestAgentUpdateUtil.is_initial_update():
+            if not self._new_agent_allowed_now_to_update():
+                return None
+
+        # Try downloading the latest version. If there's any issue with the download, try the next highest version until 
+        # we exhaust all options to prevent baked-in agent from processing extensions.
+        update_candidates = [v for v in sorted_versions if v > CURRENT_VERSION]
+        for i in range(len(update_candidates)):
+            self._version = update_candidates[i]
+            self._log_new_agent_update_message()
+            try:
+                return self._download_and_get_new_agent(protocol, agent_family, goal_state)
+            except Exception as err:
+                if i < len(update_candidates) - 1:
+                    msg = "Self-update: failed to prepare version {0} for update, trying next largest version. Error: {1}".format(self._version, ustr(err))
+                    logger.warn(msg)
+                    add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False, is_success=False)
+                else:
+                    raise
+
+        return None
 
     def proceed_with_update(self):
         """

@@ -78,13 +78,13 @@ class RSMVersionUpdater(GAVersionUpdater):
 
         return True
 
-    def retrieve_agent_version(self, agent_family, goal_state):
+    def _retrieve_agent_version(self, agent_family):
         """
         Get the agent version from the goal state
         """
         self._version = FlexibleVersion(agent_family.version)
 
-    def is_retrieved_version_allowed_to_update(self, agent_family):
+    def _is_retrieved_version_allowed_to_update(self, agent_family):
         """
         Once version retrieved from goal state, we check if we allowed to update for that version
         allow update If new version not same as current version, not below than daemon version and if version is from rsm request.
@@ -106,7 +106,7 @@ class RSMVersionUpdater(GAVersionUpdater):
 
         return True
 
-    def log_new_agent_update_message(self):
+    def _log_new_agent_update_message(self):
         """
         This function logs the update message after we check version allowed to update.
         """
@@ -114,6 +114,18 @@ class RSMVersionUpdater(GAVersionUpdater):
             str(self._version), self._gs_id)
         logger.info(msg)
         add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
+
+    def retrieve_and_download_agent(self, protocol, agent_family, goal_state):
+        """
+        Retrieve the RSM-requested version, validate it, and download it.
+        Returns GuestAgent if the version is valid and downloaded, None if no update should be attempted.
+        """
+        self._retrieve_agent_version(agent_family)
+        if not self._is_retrieved_version_allowed_to_update(agent_family):
+            return None
+        self._log_new_agent_update_message()
+        agent = self._download_and_get_new_agent(protocol, agent_family, goal_state)
+        return agent
 
     def proceed_with_update(self):
         """
