@@ -1472,6 +1472,8 @@ class ExtHandlerInstance(object):
 
         # Handle case where extension zip package already exists, but has not been extracted. If signature is present,
         # validate the package signature, extract the package, and then validate handler manifest.
+        # TODO: Refactor such that downloading and expanding the zip package are separate operations, so that the
+        # logic for existing and downloaded ZIPs can be combined.
         package_exists = False
         if os.path.exists(package_file):
             msg = "Using existing extension package: {0}".format(package_file)
