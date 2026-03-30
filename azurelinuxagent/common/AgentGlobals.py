@@ -50,6 +50,10 @@ class AgentGlobals(object):
 
     @staticmethod
     def get_is_cvm():
+        # The value of _is_cvm is uninitialized until ConfidentialVMInfo.fetch_and_initialize_cvm_info() is called. The value
+        # is only initialized on the ExtHandler process, since fetching the CVM info requires an extra network call and the value 
+        # is not needed on the Daemon or LogCollector processes. 
+        # If this method is called before the value is initialized, raise an exception.
         if AgentGlobals._is_cvm is None:
             raise Exception("CVM info has not been initialized yet")
         return AgentGlobals._is_cvm

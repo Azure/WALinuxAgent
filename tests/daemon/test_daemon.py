@@ -123,6 +123,9 @@ class TestDaemon(AgentTestCase):
         Agent should provision, then sleep forever when disable_agent is found
         """
         with patch('azurelinuxagent.daemon.main.get_protocol_util'):
+            # initialize_event_logger_vminfo_common_parameters_and_protocol requires communication with WireServer and IMDS; since we
+            # are not using telemetry in this test we mock it out. Also mock fetch_and_initialize_cvm_info since it also makes an IMDS call
+            # and it's only used for telemetry in the daemon
             with patch('azurelinuxagent.daemon.main.initialize_event_logger_vminfo_common_parameters_and_protocol'):
                 with patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.fetch_and_initialize_cvm_info'):
                     with patch('azurelinuxagent.pa.provision.get_provision_handler', return_value=ProvisionHandler()):

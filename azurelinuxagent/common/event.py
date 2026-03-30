@@ -483,7 +483,11 @@ class EventLogger(object):
             keyword_name_json["IsCVM"] = is_cvm                                                       # Update the security type in the JSON
             parameters[CommonTelemetryEventSchema.KeywordName].value = json.dumps(keyword_name_json)  # Convert the JSON back to string and update the value of keywordName
         except Exception as e:
-            logger.warn("Failed to update the KeywordName column with IsCVM; will be missing from telemetry: {0}", ustr(e))
+            # CVM info is only initialized on the ext handler process. It's not initialized on the Daemon or LogCollector 
+            # because discovering the value requires a network call and the value is not needed on those processes. Only log a warning 
+            # when uninitialized on the ext handler.
+            if threading.current_thread().name == "ExtHandler":
+                logger.warn("Failed to update the KeywordName column with IsCVM; will be missing from telemetry: {0}", ustr(e))
 
     def save_event(self, data):
         if self.event_dir is None:

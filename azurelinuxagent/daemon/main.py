@@ -145,17 +145,6 @@ class DaemonHandler(object):
         protocol_util = get_protocol_util()
         protocol_util.clear_protocol()
 
-        # Initialize the CVM info before initializing the telemetry, since the CVM info is part of the common parameters
-        # for telemetry events.
-        try:
-            ConfidentialVMInfo.fetch_and_initialize_cvm_info()
-        except Exception as ex:
-            # Right now the daemon only fetches security type for telemetry purposes, so no need to send telemetry on
-            # the exception. This should be updated to send telemetry on the exception if we need the security type
-            # for other purposes in the daemon.
-            logger.warn("Failed to get virtual machine security type from IMDS, will assume this is not a Confidential "
-                        "Virtual Machine: {0}".format(ustr(ex)))
-
         #
         # Telemetry events include several fields that are retrieved from the goal state. The call to ProtocolUtil.get_protocol() will trigger protocol detection;
         # If there are any errors, clear any protocol state that was saved to disk and continue execution.

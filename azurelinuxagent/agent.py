@@ -212,12 +212,6 @@ class Agent(object):
         else:
             logger.info("Running log collector mode normal")
 
-        # Initialize the CVM info before initializing the telemetry, since the CVM info is part of the common parameters for telemetry events.
-        try:
-            ConfidentialVMInfo.fetch_and_initialize_cvm_info()
-        except Exception as ex:
-            logger.warn("Failed to get virtual machine security type from IMDS, will assume this is not a Confidential Virtual Machine: {0}".format(
-                ustr(ex)))
         LogCollector.initialize_telemetry()
 
         # Check the cgroups unit
