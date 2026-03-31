@@ -260,11 +260,12 @@ class ExtSignatureValidation(AgentVmTest):
             settings = None,
             protected_settings={'username': 'testuser'}
         )
-        ahl_id_2_0 = VmExtensionIdentifier(publisher='Microsoft.ManagedServices.Edp', ext_type='ApplicationHealthLinux', version="2.0")
-        application_health_signed = ExtSignatureValidation._TestCase(
-            VirtualMachineExtensionClient(self._context.vm, ahl_id_2_0),
-            None
-        )
+        # TODO: Uncomment when ApplicationHealthLinux signature issues are resolved (see Test case 6)
+        # ahl_id_2_0 = VmExtensionIdentifier(publisher='Microsoft.ManagedServices.Edp', ext_type='ApplicationHealthLinux', version="2.0")
+        # application_health_signed = ExtSignatureValidation._TestCase(
+        #     VirtualMachineExtensionClient(self._context.vm, ahl_id_2_0),
+        #     None
+        # )
 
         # Delete any existing extensions on the VM to ensure a clean test setup.
         # Signature validation occurs only during download, so extensions must be removed
@@ -328,7 +329,8 @@ class ExtSignatureValidation(AgentVmTest):
         log.info("")
         log.info("*** Test case 6: should enable multiple signed extensions in single goal state")
         # RunCommand v2 is excluded here since it should be deployed only via VirtualMachineRunCommandClient, not ARM template.
-        ext_to_enable = [custom_script_signed, vm_access_signed, application_health_signed]
+        # ApplicationHealthLinux is temporarily excluded due to intermittent missing signature issue in certain prod regions.
+        ext_to_enable = [custom_script_signed, vm_access_signed] # TODO: Add application_health_signed back to this list once the intermittent signature issue is resolved.
         self._should_enable_multiple_signed_extensions(ext_to_enable)
 
         # This set of test cases will test behavior when signature is validated AND enforced. Unsigned extensions should fail.
