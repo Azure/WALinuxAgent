@@ -71,7 +71,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             CommonTelemetryEventSchema.EventTid: threading.current_thread().ident,
             CommonTelemetryEventSchema.EventPid: os.getpid(),
             CommonTelemetryEventSchema.TaskName: threading.current_thread().name,
-            CommonTelemetryEventSchema.KeywordName: json.dumps({"CpuArchitecture": platform.machine(), "IsCVM": False}),
+            CommonTelemetryEventSchema.KeywordName: json.dumps({"CpuArchitecture": platform.machine(), "IsCVM": False if threading.current_thread().name == "ExtHandler" else "IsCVM_UNINITIALIZED"}),
             # common parameters computed from the OS platform
             CommonTelemetryEventSchema.OSVersion: EventLoggerTools.get_expected_os_version(),
             CommonTelemetryEventSchema.ExecutionMode: AGENT_EXECUTION_MODE,
@@ -578,6 +578,26 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             assert_timestamp(telemetry_log_event_timestamp)
 
         self.maxDiff = None  # the dictionary diffs can be quite large; display the whole thing
+
+        # Compare KeywordName as parsed JSON to avoid failures due to non-deterministic key ordering in json.dumps
+        if CommonTelemetryEventSchema.KeywordName in event_parameters and \
+                CommonTelemetryEventSchema.KeywordName in all_expected_parameters:
+            actual_keyword = event_parameters[CommonTelemetryEventSchema.KeywordName]
+            expected_keyword = all_expected_parameters[CommonTelemetryEventSchema.KeywordName]
+            if actual_keyword != expected_keyword:
+                # Normalize the KeywordName dict to be sorted so the string comparison is accurate.
+                # If either side is not valid JSON (e.g. legacy plain strings), fall back to the raw values.
+                try:
+                    event_parameters[CommonTelemetryEventSchema.KeywordName] = json.dumps(
+                        json.loads(actual_keyword), sort_keys=True
+                    )
+                    all_expected_parameters[CommonTelemetryEventSchema.KeywordName] = json.dumps(
+                        json.loads(expected_keyword), sort_keys=True
+                    )
+                except (ValueError, TypeError):
+                    # Leave KeywordName values as-is; assertDictEqual will show the difference.
+                    pass
+
         self.assertDictEqual(event_parameters, all_expected_parameters)
 
         self.assertIsNotNone(timestamp, "The event does not have a timestamp (Opcode)")

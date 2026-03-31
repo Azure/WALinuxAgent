@@ -34,7 +34,6 @@ import time
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.ga import logcollector, cgroupconfigurator
 from azurelinuxagent.ga.cgroupcontroller import AGENT_LOG_COLLECTOR
-from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 from azurelinuxagent.ga.cpucontroller import _CpuController
 from azurelinuxagent.ga.cgroupapi import create_cgroup_api, InvalidCgroupMountpointException
 from azurelinuxagent.ga.firewall_manager import FirewallManager, IpTables
@@ -212,12 +211,6 @@ class Agent(object):
         else:
             logger.info("Running log collector mode normal")
 
-        # Initialize the CVM info before initializing the telemetry, since the CVM info is part of the common parameters for telemetry events.
-        try:
-            ConfidentialVMInfo.fetch_and_initialize_cvm_info()
-        except Exception as ex:
-            logger.warn("Failed to get virtual machine security type from IMDS, will assume this is not a Confidential Virtual Machine: {0}".format(
-                ustr(ex)))
         LogCollector.initialize_telemetry()
 
         # Check the cgroups unit

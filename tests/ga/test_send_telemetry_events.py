@@ -385,7 +385,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
                              '<Param Name="ImageOrigin" Value="2468" T="mt:uint64" />' \
                              ']]></Event>'.format(AGENT_VERSION, TestSendTelemetryEventsHandler._TEST_EVENT_OPERATION, CURRENT_AGENT, test_opcodename, test_eventtid,
                                                   test_eventpid, test_taskname, osversion, int(osutil.get_total_mem()),
-                                                  osutil.get_processor_cores(), json.dumps({"CpuArchitecture": platform.machine(), "IsCVM": False})).encode('utf-8')
+                                                  osutil.get_processor_cores(), json.dumps({"CpuArchitecture": platform.machine(), "IsCVM": "IsCVM_UNINITIALIZED"})).encode('utf-8')
 
             self.assertIn(sample_message, collected_event)
 
