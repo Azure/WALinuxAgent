@@ -164,23 +164,24 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
                        src=["config/clearlinux/waagent.conf"])
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/clearlinux/waagent.service"])
+    elif name in ["mariner", "azurelinux"] and "azure container linux" in fullname.lower():
+        set_bin_files(data_files, dest=agent_bin_path)
+        set_logrotate_files(data_files)
+        set_conf_files(data_files, dest="/etc",
+                       src=["config/acl/waagent.conf"])
+        set_systemd_files(data_files, dest=systemd_dir_path,
+                          src=["init/acl/waagent.service"])
+        multi_user_target_drop_in_dir = os.path.join(systemd_dir_path, "multi-user.target.d")
+        set_systemd_files(data_files, dest=multi_user_target_drop_in_dir,
+                          src=["init/acl/10-waagent-sysext.conf"])
     elif name in ["mariner", "azurelinux"]:
         set_bin_files(data_files, dest=agent_bin_path)
         set_logrotate_files(data_files)
-        if "azure container linux" in fullname.lower():
-            set_conf_files(data_files, dest="/etc",
-                          src=["config/acl/waagent.conf"])
-            set_systemd_files(data_files, dest=systemd_dir_path,
-                                          src=["init/acl/waagent.service"])
-            multi_user_target_drop_in_dir = os.path.join(systemd_dir_path, "multi-user.target.d")
-            set_systemd_files(data_files, dest=multi_user_target_drop_in_dir,
-                              src=["init/acl/10-waagent-sysext.conf"])
-        else:
-            set_conf_files(data_files, dest="/etc",
-                        src=["config/mariner/waagent.conf"])
-            set_systemd_files(data_files, dest=systemd_dir_path,
-                            src=["init/mariner/waagent.service"])
-            set_udev_files(data_files)
+        set_conf_files(data_files, dest="/etc",
+                       src=["config/mariner/waagent.conf"])
+        set_systemd_files(data_files, dest=systemd_dir_path,
+                          src=["init/mariner/waagent.service"])
+        set_udev_files(data_files)
     elif name == 'ubuntu':
         set_conf_files(data_files, src=["config/ubuntu/waagent.conf"])
         set_logrotate_files(data_files)

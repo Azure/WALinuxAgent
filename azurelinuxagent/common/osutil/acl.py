@@ -15,18 +15,25 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+# Azure Container Linux (ACL) is an immutable, sysext-based distro derived
+# from Flatcar.  This osutil is a standalone copy of MarinerOSUtil with
+# ACL-specific overrides so that future Azure-Linux changes do not
+# inadvertently affect the immutable ACL image.
+#
 
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 
-class MarinerOSUtil(DefaultOSUtil):
+class AclOSUtil(DefaultOSUtil):
     def __init__(self):
-        super(MarinerOSUtil, self).__init__()
+        super(AclOSUtil, self).__init__()
         self.jit_enabled = True
 
     @staticmethod
     def get_systemd_unit_file_install_path():
-        return "/usr/lib/systemd/system"
+        # ACL delivers waagent as a sysext; /usr is read-only.
+        # Writable systemd units must go to /etc/systemd/system.
+        return "/etc/systemd/system"
 
     @staticmethod
     def get_agent_bin_path():
@@ -42,7 +49,10 @@ class MarinerOSUtil(DefaultOSUtil):
         self._run_command_without_raising(["systemctl", "restart", "systemd-networkd"])
 
     def restart_ssh_service(self):
-        self._run_command_without_raising(["systemctl", "restart", "sshd"])
+        # ACL uses sshd.socket for socket-activated SSH (similar to
+        # Flatcar/CoreOS).  Restarting sshd.service would conflict with
+        # the active sshd.socket.
+        pass
 
     def stop_dhcp_service(self):
         self._run_command_without_raising(["systemctl", "stop", "systemd-networkd"], log_error=False)
