@@ -394,5 +394,5 @@ def cleanup_package_with_invalid_signature(package_file):
                                 message="Removing package {0} due to failed signature validation.".format(package_file), duration=0)
         os.remove(package_file)
     except Exception as cleanup_ex:
-        report_validation_event(op=WALAEventOperation.SignatureValidation, level=logger.LogLevel.WARNING, name=AGENT_NAME, version=AGENT_VERSION,
+        report_validation_event(op=WALAEventOperation.Download, level=logger.LogLevel.WARNING, name=AGENT_NAME, version=AGENT_VERSION,
                                 message="Failed to delete package {0}: {1}".format(package_file, ustr(cleanup_ex)), duration=0)

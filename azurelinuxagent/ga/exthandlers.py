@@ -1446,6 +1446,9 @@ class ExtHandlerInstance(object):
             # TODO: This is temporary behavior for the telemetry release. For production release, remove this
             # if-block so timeout is treated like any other signature validation failure (extension should fail).
             SignatureValidationTimeout.disable_validation()
+            report_validation_event(op=WALAEventOperation.SignatureValidation, level=logger.LogLevel.WARNING,
+                                    message="Signature validation timeout exceeded. Disabling signature validation until agent restart.",
+                                    name=self.ext_handler.name, version=self.ext_handler.version, duration=0)
         report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING, message=ustr(ex),
                                 name=self.ext_handler.name, version=self.ext_handler.version, duration=ex.duration)
 
@@ -1491,7 +1494,7 @@ class ExtHandlerInstance(object):
             if self._unzip_extension_package(package_file, self.get_base_dir()):
                 package_exists = True
             else:
-                msg = "The existing extension package is invalid, will ignore it."
+                msg = "Could not expand existing extension package '{0}', will ignore it.".format(package_file)
                 self.logger.info(msg)
                 add_event(op=WALAEventOperation.Download, message=msg, name=self.ext_handler.name, version=self.ext_handler.version, is_success=True, log_event=False)
                 signature_validation_succeeded = False
