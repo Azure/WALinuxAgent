@@ -1489,6 +1489,7 @@ class ExtHandlerInstance(object):
                     validate_signature(package_file, self.ext_handler.encoded_signature, package_full_name=self.get_full_name())
                     signature_validation_succeeded = True
                 except SignatureValidationError as ex:
+                    signature_validation_succeeded = False
                     self._handle_signature_validation_error(ex, ignore_signature_validation_errors, package_file)
 
             if self._unzip_extension_package(package_file, self.get_base_dir()):
@@ -1527,6 +1528,7 @@ class ExtHandlerInstance(object):
             except SignatureValidationError as ex:
                 # download_zip_package() will propagate a SignatureValidationError if validation fails.
                 # Package has already been cleaned up by download_zip_package().
+                signature_validation_succeeded = False
                 self._handle_signature_validation_error(ex, ignore_signature_validation_errors)
 
             self.report_event(message="Download succeeded", duration=elapsed_milliseconds(begin_utc))
