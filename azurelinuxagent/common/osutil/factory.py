@@ -147,7 +147,10 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
     if distro_name == "iosxe":
         return IosxeOSUtil()
 
-    if "azure container linux" in distro_full_name.lower():
+    # distro_name is same for azurelinux/mariner and Azure Container Linux (ACL).
+    # ACL is a flavor of Azure Linux, differentiation is based on distro_full_name.
+    # For Azure Container Linux, distro_name is "azurelinux" and distro_full_name is "Microsoft Azure Container Linux".
+    if distro_name == "azurelinux" and distro_full_name == "Microsoft Azure Container Linux":
         return AclOSUtil()
 
     if distro_name in ["mariner", "azurelinux"]:

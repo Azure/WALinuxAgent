@@ -164,7 +164,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
                        src=["config/clearlinux/waagent.conf"])
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/clearlinux/waagent.service"])
-    elif name in ["mariner", "azurelinux"] and "azure container linux" in fullname.lower():
+    elif name == 'azurelinux' and fullname == "Microsoft Azure Container Linux":
         set_bin_files(data_files, dest=agent_bin_path)
         set_logrotate_files(data_files)
         set_conf_files(data_files, dest="/etc",
@@ -176,11 +176,11 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
                           src=["init/acl/10-waagent-sysext.conf"])
     elif name in ["mariner", "azurelinux"]:
         set_bin_files(data_files, dest=agent_bin_path)
-        set_logrotate_files(data_files)
         set_conf_files(data_files, dest="/etc",
                        src=["config/mariner/waagent.conf"])
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/mariner/waagent.service"])
+        set_logrotate_files(data_files)
         set_udev_files(data_files)
     elif name == 'ubuntu':
         set_conf_files(data_files, src=["config/ubuntu/waagent.conf"])

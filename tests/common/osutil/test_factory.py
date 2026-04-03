@@ -160,10 +160,10 @@ class TestOsUtilFactory(AgentTestCase):
         self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_acl(self):
-        ret = _get_osutil(distro_name="acl",
+        ret = _get_osutil(distro_name="azurelinux",
                           distro_code_name="",
                           distro_version="3.0",
-                          distro_full_name="Azure Container Linux")
+                          distro_full_name="Microsoft Azure Container Linux")
         self.assertTrue(isinstance(ret, AclOSUtil))
         self.assertEqual(ret.get_service_name(), "waagent")
 
