@@ -87,6 +87,7 @@ class WALAEventOperation:
     Download = "Download"
     DuplicateFirewallRules = "DuplicateFirewallRules"
     Enable = "Enable"
+    ExtensionCleanup = "ExtensionCleanup"                               # Event for extension cleanup operations (e.g., removing packages with invalid signatures).
     ExtensionHandlerManifest = "ExtensionHandlerManifest"
     ExtensionPolicy = "ExtensionPolicy"                                 # Event for any extension policy-related operations (e.g., extension not in allowlist).
     ExtensionSignaturePolicy = "ExtensionSignaturePolicy"               # Event for unsigned extension blocked due to extension signature policy.
