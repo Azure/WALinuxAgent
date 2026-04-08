@@ -419,7 +419,13 @@ class ExtensionPolicyEngine(_PolicyEngine):
         """
         Return runtime policy for the extension if specified. If not, return None.
         """
-        individual_policy = self._policy.get("extensionPolicies").get("extensions").get(extension_name)
+        extension_policies = self._policy.get("extensionPolicies")
+        if extension_policies is None:
+            return None
+        extensions = extension_policies.get("extensions")
+        if extensions is None:
+            return None
+        individual_policy = extensions.get(extension_name)
         return individual_policy.get("runtimePolicy") if individual_policy is not None else None
 
     def create_runtime_policy_file(self, ext_handler_i):
@@ -447,8 +453,8 @@ class ExtensionPolicyEngine(_PolicyEngine):
                 fileutil.write_file(runtime_policy_file_path, json.dumps(data_to_write))
             except IOError as e:
                 raise ExtensionRuntimePolicyError("Failed to save runtime policy file: {0}. Error: {1}".format(runtime_policy_file_path, e))
-        elif not supports_policy and runtime_policy is not None:
+        elif runtime_policy is not None:
             raise ExtensionRuntimePolicyError(
-                "Runtime policy is specified for extension '{0}', but this extension does not support policy enforcement."
+                "Runtime policy is specified for extension '{0}', but this extension does not support policy enforcement. "
                 "To continue, remove the entry '{0}.runtimePolicy' from the policy file ({1}).".format(ext_handler_i.ext_handler.name, conf.get_policy_file_path())
             )

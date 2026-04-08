@@ -59,6 +59,18 @@ class _TestPolicyBase(AgentTestCase):
                 policy_file.write(policy)
             policy_file.flush()
 
+    def _create_mock_ext_handler_i(self, supports_policy, runtime_policy_path=None):
+        """
+        Create a mock ExtHandlerInstance with the specified supportsPolicy value and runtime policy file path.
+        """
+        if runtime_policy_path is None:
+            runtime_policy_path = os.path.join(self.tmp_dir, "waagent_runtime_policy.json")
+        mock_ext_handler_i = MagicMock()
+        mock_ext_handler_i.get_runtime_policy_file.return_value = runtime_policy_path
+        mock_ext_handler_i.load_manifest.return_value.supports_policy.return_value = supports_policy
+        mock_ext_handler_i.ext_handler.name = TEST_EXTENSION_NAME
+        return mock_ext_handler_i
+
     def _run_test_cases_should_fail_to_parse(self, cases, assert_msg):
         """
         Cases should be a list of policies.
@@ -663,11 +675,8 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
         engine = ExtensionPolicyEngine()
         engine.update_policy(self.goal_state_history)
 
-        runtime_policy_path = os.path.join(self.tmp_dir, "waagent_runtime_policy.json")
-        mock_ext_handler_i = MagicMock()
-        mock_ext_handler_i.get_runtime_policy_file.return_value = runtime_policy_path
-        mock_ext_handler_i.load_manifest.return_value.supports_policy.return_value = True
-        mock_ext_handler_i.ext_handler.name = TEST_EXTENSION_NAME
+        mock_ext_handler_i = self._create_mock_ext_handler_i(supports_policy=True)
+        runtime_policy_path = mock_ext_handler_i.get_runtime_policy_file()
 
         engine.create_runtime_policy_file(mock_ext_handler_i)
 
@@ -692,11 +701,8 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
         engine = ExtensionPolicyEngine()
         engine.update_policy(self.goal_state_history)
 
-        runtime_policy_path = os.path.join(self.tmp_dir, "waagent_runtime_policy.json")
-        mock_ext_handler_i = MagicMock()
-        mock_ext_handler_i.get_runtime_policy_file.return_value = runtime_policy_path
-        mock_ext_handler_i.load_manifest.return_value.supports_policy.return_value = True
-        mock_ext_handler_i.ext_handler.name = TEST_EXTENSION_NAME
+        mock_ext_handler_i = self._create_mock_ext_handler_i(supports_policy=True)
+        runtime_policy_path = mock_ext_handler_i.get_runtime_policy_file()
 
         engine.create_runtime_policy_file(mock_ext_handler_i)
 
@@ -724,11 +730,8 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
         engine = ExtensionPolicyEngine()
         engine.update_policy(self.goal_state_history)
 
-        runtime_policy_path = os.path.join(self.tmp_dir, "waagent_runtime_policy.json")
-        mock_ext_handler_i = MagicMock()
-        mock_ext_handler_i.get_runtime_policy_file.return_value = runtime_policy_path
-        mock_ext_handler_i.load_manifest.return_value.supports_policy.return_value = False
-        mock_ext_handler_i.ext_handler.name = TEST_EXTENSION_NAME
+        mock_ext_handler_i = self._create_mock_ext_handler_i(supports_policy=False)
+        runtime_policy_path = mock_ext_handler_i.get_runtime_policy_file()
 
         with self.assertRaises(ExtensionRuntimePolicyError):
             engine.create_runtime_policy_file(mock_ext_handler_i)
@@ -751,11 +754,8 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
         engine = ExtensionPolicyEngine()
         engine.update_policy(self.goal_state_history)
 
-        runtime_policy_path = os.path.join(self.tmp_dir, "waagent_runtime_policy.json")
-        mock_ext_handler_i = MagicMock()
-        mock_ext_handler_i.get_runtime_policy_file.return_value = runtime_policy_path
-        mock_ext_handler_i.load_manifest.return_value.supports_policy.return_value = False
-        mock_ext_handler_i.ext_handler.name = TEST_EXTENSION_NAME
+        mock_ext_handler_i = self._create_mock_ext_handler_i(supports_policy=False)
+        runtime_policy_path = mock_ext_handler_i.get_runtime_policy_file()
 
         engine.create_runtime_policy_file(mock_ext_handler_i)
 
@@ -780,10 +780,8 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
         engine = ExtensionPolicyEngine()
         engine.update_policy(self.goal_state_history)
 
-        mock_ext_handler_i = MagicMock()
-        mock_ext_handler_i.get_runtime_policy_file.return_value = "/nonexistent/path/waagent_runtime_policy.json"
-        mock_ext_handler_i.load_manifest.return_value.supports_policy.return_value = True
-        mock_ext_handler_i.ext_handler.name = TEST_EXTENSION_NAME
+        mock_ext_handler_i = self._create_mock_ext_handler_i(supports_policy=True,
+                                                              runtime_policy_path="/nonexistent/path/waagent_runtime_policy.json")
 
         with self.assertRaises(ExtensionRuntimePolicyError):
             engine.create_runtime_policy_file(mock_ext_handler_i)

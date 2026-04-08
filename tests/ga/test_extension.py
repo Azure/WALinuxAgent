@@ -3550,10 +3550,7 @@ class TestExtensionPolicy(TestExtensionBase):
         self.patch_is_cvm.start()
         self.maxDiff = None     # When long error messages don't match, display the entire diff.
 
-        test_ext = Extension(name='OSTCExtensions.ExampleHandlerLinux')
-        test_ext.version = "1.0.0"
-        ext_handler_i = ExtHandlerInstance(ext_handler=test_ext, protocol=WireProtocol("1.2.3.4"))
-        self.runtime_policy_path = ext_handler_i.get_runtime_policy_file()
+        self.runtime_policy_path = os.path.join(conf.get_lib_dir(), "OSTCExtensions.ExampleHandlerLinux-1.0.0", "config", "waagent_runtime_policy.json")
 
     def tearDown(self):
         patch.stopall()
@@ -3933,12 +3930,14 @@ class TestExtensionPolicy(TestExtensionBase):
         }
 
         with patch("azurelinuxagent.ga.exthandlers.HandlerManifest.supports_policy", return_value=False):
+            expected_msg = "Runtime policy is specified for extension 'OSTCExtensions.ExampleHandlerLinux', but this extension does not support policy enforcement."
             self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled,
                                    expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
-                                   expected_handler_status='NotReady', expected_ext_count=1)
+                                   expected_handler_status='NotReady', expected_ext_count=1,
+                                   expected_status_msg=expected_msg)
             self.assertFalse(os.path.exists(self.runtime_policy_path), "Runtime policy file should not have been created")
 
-    def test_should_not_create_runtime_policy_file(self):
+    def test_should_not_create_runtime_policy_file_if_supportsPolicy_false_and_not_specified(self):
         # If "runtimePolicy" is not specified in policy file, and "supportsPolicy" is false in handler manifest, do not create runtime policy file.
         policy = {
             "policyVersion": "0.1.0",

@@ -731,7 +731,7 @@ class ExtHandlersHandler(object):
             self.__handle_ext_disallowed_error(ext_handler_i, error_code, report_op=WALAEventOperation.ExtensionSignaturePolicy, message=msg,
                                                extension=extension)
         except ExtensionRuntimePolicyError as error:
-            operation, error_code = _EXT_DISALLOWED_ERROR_MAP.get(ext_handler_i.ext_handler.state)
+            _, error_code = _EXT_DISALLOWED_ERROR_MAP.get(ext_handler_i.ext_handler.state)
             msg = (
                 "Extension will not be processed: {0}"
             ).format(ustr(error))
@@ -2572,7 +2572,7 @@ class HandlerManifest(object):
     def supports_multiple_extensions(self):
         value = self.data['handlerManifest'].get('supportsMultipleExtensions', False)
         return self._parse_boolean_value(value, default_val=False)
-    
+
     def supports_policy(self):
         value = self.data['handlerManifest'].get('supportsPolicy', False)
         return self._parse_boolean_value(value, default_val=False)
