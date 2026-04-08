@@ -40,7 +40,6 @@ _MAX_SUPPORTED_POLICY_VERSION = "0.1.0"
 # Extension signature validation is currently only supported on CVMs. If a non-CVM user creates a policy with signature
 # required, we should raise an error indicating that the policy is invalid.
 # TODO: Remove once signature validation is supported on all VMs
-_CVM_ONLY_POLICIES = ["signatureRequired"]
 
 
 class PolicyError(AgentError):
@@ -299,8 +298,8 @@ class _PolicyEngine(object):
             if k not in valid_attributes:
                 raise InvalidPolicyError("unrecognized attribute '{0}' in {1}".format(k, object_name))
 
-            if not ConfidentialVMInfo.is_confidential_vm() and k in _CVM_ONLY_POLICIES:
-                raise InvalidPolicyError("attribute '{0}' is only supported on confidential virtual machines (CVMs).".format(k))
+        if object_.get("signatureRequired") is True and not ConfidentialVMInfo.is_confidential_vm():
+            raise InvalidPolicyError("setting 'signatureRequired' to true is only supported on confidential virtual machines (CVMs).")
 
     @staticmethod
     def _get_dictionary(object_, attribute, name_prefix="", optional=False, default=None):

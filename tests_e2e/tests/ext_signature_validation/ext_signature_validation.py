@@ -251,20 +251,21 @@ class ExtSignatureValidation(AgentVmTest):
             None
         )
 
-        # VmAccess 1.5 (signed, single-config) and ApplicationHealthLinux 2.0 (signed, no-config)
-        # are additional extensions used to stress test signature validation by including multiple
-        # signed extensions in a single goal state.
-        vmaccess_id_1_5 = VmExtensionIdentifier(publisher='Microsoft.OSTCExtensions.Edp', ext_type='VMAccessForLinux', version="1.5")
-        vm_access_signed = ExtSignatureValidation._TestCase(
-            VirtualMachineExtensionClient(self._context.vm, vmaccess_id_1_5),
-            settings = None,
-            protected_settings={'username': 'testuser'}
-        )
-        ahl_id_2_0 = VmExtensionIdentifier(publisher='Microsoft.ManagedServices.Edp', ext_type='ApplicationHealthLinux', version="2.0")
-        application_health_signed = ExtSignatureValidation._TestCase(
-            VirtualMachineExtensionClient(self._context.vm, ahl_id_2_0),
-            None
-        )
+        # TODO: Uncomment when ApplicationHealthLinux and VmAccess signature issues are resolved (see Test case 6)
+        # # VmAccess 1.5 (signed, single-config) and ApplicationHealthLinux 2.0 (signed, no-config)
+        # # are additional extensions used to stress test signature validation by including multiple
+        # # signed extensions in a single goal state.
+        # vmaccess_id_1_5 = VmExtensionIdentifier(publisher='Microsoft.OSTCExtensions.Edp', ext_type='VMAccessForLinux', version="1.5")
+        # vm_access_signed = ExtSignatureValidation._TestCase(
+        #     VirtualMachineExtensionClient(self._context.vm, vmaccess_id_1_5),
+        #     settings = None,
+        #     protected_settings={'username': 'testuser'}
+        # )
+        # ahl_id_2_0 = VmExtensionIdentifier(publisher='Microsoft.ManagedServices.Edp', ext_type='ApplicationHealthLinux', version="2.0")
+        # application_health_signed = ExtSignatureValidation._TestCase(
+        #     VirtualMachineExtensionClient(self._context.vm, ahl_id_2_0),
+        #     None
+        # )
 
         # Delete any existing extensions on the VM to ensure a clean test setup.
         # Signature validation occurs only during download, so extensions must be removed
@@ -325,11 +326,12 @@ class ExtSignatureValidation(AgentVmTest):
         # TODO: Add test cases for package published with invalid signature and invalid manifest signingInfo, when
         # PIR allows for publication of invalid packages.
 
-        log.info("")
-        log.info("*** Test case 6: should enable multiple signed extensions in single goal state")
-        # RunCommand v2 is excluded here since it should be deployed only via VirtualMachineRunCommandClient, not ARM template.
-        ext_to_enable = [custom_script_signed, vm_access_signed, application_health_signed]
-        self._should_enable_multiple_signed_extensions(ext_to_enable)
+        # TODO: VmAccess and ApplicationHealthLinux extensions are facing issues where the signature is intermittently missing in certain prod regions. Once the issue is resolved, re-enable this test case.
+        # log.info("")
+        # log.info("*** Test case 6: should enable multiple signed extensions in single goal state")
+        # # RunCommand v2 is excluded here since it should be deployed only via VirtualMachineRunCommandClient, not ARM template.
+        # ext_to_enable = [custom_script_signed, vm_access_signed, application_health_signed]
+        # self._should_enable_multiple_signed_extensions(ext_to_enable)
 
         # This set of test cases will test behavior when signature is validated AND enforced. Unsigned extensions should fail.
         try:

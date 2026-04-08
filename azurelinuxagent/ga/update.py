@@ -357,7 +357,9 @@ class UpdateHandler(object):
                 )
             logger.info(os_info_msg)
 
-            # Initialize Confidential VM info but defer sending telemetry until common parameters are initialized
+            # Initialize Confidential VM info but defer sending telemetry until common parameters are initialized.
+            # ConfidentialVMInfo.fetch_and_initialize_cvm_info() should be called to initialize AgentGlobals._is_cvm
+            # before initialize_event_logger_vminfo_common_parameters_and_protocol() is called.
             cvm_info_err = None
             try:
                 ConfidentialVMInfo.fetch_and_initialize_cvm_info()
