@@ -289,45 +289,37 @@ class TestProvision(AgentTestCase):
         positional_args, kw_args = ph.report_event.call_args_list[0]  # pylint: disable=unused-variable
         self.assertTrue(re.match(r'Provisioning failed: \[ProvisionError\] --unit-test-- \(\d+\.\d+s\)', positional_args[0]) is not None)
 
-    @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.write_agent_disabled')
     @distros()
-    def test_handle_provision_guest_agent(self,
-                                          patch_write_agent_disabled,
-                                          distro_name,
-                                          distro_version,
-                                          distro_full_name):
-        ph = get_provision_handler(distro_name,
-                                   distro_version,
-                                   distro_full_name)
+    def test_handle_provision_guest_agent(self, distro_name, distro_version, distro_full_name):
+        with patch('azurelinuxagent.pa.provision.default.ProvisionHandler.write_agent_disabled') as patch_write_agent_disabled:
+            ph = get_provision_handler(distro_name, distro_version, distro_full_name)
 
-        patch_write_agent_disabled.call_count = 0
+            ph.handle_provision_guest_agent(provision_guest_agent='false')
+            self.assertEqual(1, patch_write_agent_disabled.call_count)
 
-        ph.handle_provision_guest_agent(provision_guest_agent='false')
-        self.assertEqual(1, patch_write_agent_disabled.call_count)
+            ph.handle_provision_guest_agent(provision_guest_agent='False')
+            self.assertEqual(2, patch_write_agent_disabled.call_count)
 
-        ph.handle_provision_guest_agent(provision_guest_agent='False')
-        self.assertEqual(2, patch_write_agent_disabled.call_count)
+            ph.handle_provision_guest_agent(provision_guest_agent='FALSE')
+            self.assertEqual(3, patch_write_agent_disabled.call_count)
 
-        ph.handle_provision_guest_agent(provision_guest_agent='FALSE')
-        self.assertEqual(3, patch_write_agent_disabled.call_count)
+            ph.handle_provision_guest_agent(provision_guest_agent='')
+            self.assertEqual(3, patch_write_agent_disabled.call_count)
 
-        ph.handle_provision_guest_agent(provision_guest_agent='')
-        self.assertEqual(3, patch_write_agent_disabled.call_count)
+            ph.handle_provision_guest_agent(provision_guest_agent=' ')
+            self.assertEqual(3, patch_write_agent_disabled.call_count)
 
-        ph.handle_provision_guest_agent(provision_guest_agent=' ')
-        self.assertEqual(3, patch_write_agent_disabled.call_count)
+            ph.handle_provision_guest_agent(provision_guest_agent=None)
+            self.assertEqual(3, patch_write_agent_disabled.call_count)
 
-        ph.handle_provision_guest_agent(provision_guest_agent=None)
-        self.assertEqual(3, patch_write_agent_disabled.call_count)
+            ph.handle_provision_guest_agent(provision_guest_agent='true')
+            self.assertEqual(3, patch_write_agent_disabled.call_count)
 
-        ph.handle_provision_guest_agent(provision_guest_agent='true')
-        self.assertEqual(3, patch_write_agent_disabled.call_count)
+            ph.handle_provision_guest_agent(provision_guest_agent='True')
+            self.assertEqual(3, patch_write_agent_disabled.call_count)
 
-        ph.handle_provision_guest_agent(provision_guest_agent='True')
-        self.assertEqual(3, patch_write_agent_disabled.call_count)
-
-        ph.handle_provision_guest_agent(provision_guest_agent='TRUE')
-        self.assertEqual(3, patch_write_agent_disabled.call_count)
+            ph.handle_provision_guest_agent(provision_guest_agent='TRUE')
+            self.assertEqual(3, patch_write_agent_disabled.call_count)
 
     @patch(
         'azurelinuxagent.common.conf.get_provisioning_agent',

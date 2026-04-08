@@ -39,6 +39,28 @@ from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 # command is not supported on older versions.
 _MIN_OPENSSL_VERSION_FOR_SIG_VALIDATION = FlexibleVersion("1.1.0")
 
+# Track the time when the agent module is first loaded. This is used to implement an initial delay period before validating signature.
+# TODO: This is a temporary performance workaround for telemetry release; remove for production release.
+_agent_start_time = datetime.datetime.now(UTC)
+
+
+class SignatureValidationTimeout(object):
+    """
+    Tracks whether signature validation should be disabled due to a timeout. Disabling validation should only be done when the
+    customer has not opted into enforcement of extension signature validation.
+    TODO: This is a temporary workaround to prevent performance impact during telemetry release; remove for production release.
+    """
+    # Should only be set to True when customer has not opted into extension signature validation enforcement.
+    _validation_disabled = False
+
+    @staticmethod
+    def is_validation_disabled():
+        return SignatureValidationTimeout._validation_disabled
+
+    @staticmethod
+    def disable_validation():
+        SignatureValidationTimeout._validation_disabled = True
+
 
 class PackageValidationError(AgentError):
     """
@@ -60,6 +82,12 @@ class SignatureValidationError(PackageValidationError):
 class ManifestValidationError(PackageValidationError):
     """
     Error raised when handler manifest 'signingInfo' validation fails for a package.
+    """
+
+
+class SignatureValidationTimeoutError(SignatureValidationError):
+    """
+    Error raised when signature validation times out.
     """
 
 
@@ -204,10 +232,19 @@ def validate_signature(package_path, signature, package_full_name):
         if use_cgroups:
             slice_name = EXT_SIGNATURE_VALIDATION_SLICE_NAME + ".slice"
             scope_name = EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME + ".scope"
-            systemd_cmd = ['systemd-run', '--unit={0}'.format(scope_name), '--slice={0}'.format(slice_name), '--scope', '--property=CPUAccounting=yes',
-                           '--property=CPUQuota={0}'.format(EXT_SIGNATURE_VALIDATION_CPU_QUOTA)] + base_command
+            systemd_cmd = ['systemd-run', '--unit={0}'.format(scope_name), '--slice={0}'.format(slice_name), '--scope',
+                           '--property=CPUQuota={0}'.format(EXT_SIGNATURE_VALIDATION_CPU_QUOTA)]
+
+            # Add accounting properties based on cgroup version
+            accounting_props, accounting_vals = CGroupConfigurator.get_instance().get_cgroups_api().get_accounting_properties()
+            for prop, val in zip(accounting_props, accounting_vals):
+                systemd_cmd.append('--property={0}={1}'.format(prop, val))
+
+            systemd_cmd.extend(base_command)
             try:
-                run_command(systemd_cmd)
+                # NOTE: The timeout parameter is ignored on Python 2, but this is acceptable because signature validation
+                # is currently only performed on CVMs which should not be running Python 2, and the timeout is a temporary performance workaround.
+                run_command(systemd_cmd, timeout=conf.get_signature_validation_timeout())
             except CommandError as ex:
                 # If the systemd-run invocation itself failed, disable cgroups entirely and fall back to running openssl command directly.
                 # If the openssl command failed, re-raise and do not retry.
@@ -217,18 +254,25 @@ def validate_signature(package_path, signature, package_full_name):
                         message=error_msg,
                         name=name, version=version, duration=0)
                     CGroupConfigurator.get_instance().disable(reason=error_msg, disable_cgroups=DisableCgroups.ALL)
-                    run_command(base_command)
+                    run_command(base_command, timeout=conf.get_signature_validation_timeout())
                 else:
                     raise
         else:
             # Run without systemd if cgroups disabled
-            run_command(base_command)
+            run_command(base_command, timeout=conf.get_signature_validation_timeout())
 
         report_validation_event(op=WALAEventOperation.PackageSignatureResult, level=logger.LogLevel.INFO,
                                 message="Successfully validated signature for package '{0}'".format(package_full_name),
                                 name=name, version=version, duration=elapsed_milliseconds(start_time))
 
     except CommandError as ex:
+        # Handle command timeout - raise specific timeout error so caller can decide whether to disable future validations
+        if "command timeout" in ex.stderr:
+            msg = "Signature validation timed out after {0} seconds for package '{1}'.".format(
+                conf.get_signature_validation_timeout(), package_full_name)
+            raise SignatureValidationTimeoutError(msg=msg, operation=WALAEventOperation.PackageSignatureResult,
+                                                  duration=elapsed_milliseconds(start_time))
+
         # For validation-related errors only, send the full signature string in telemetry for debugging purposes.
         add_event(op=WALAEventOperation.SignatureValidation, message="Package encoded signature: '{0}'".format(signature),
                   name=name, version=version, log_event=False)
@@ -309,14 +353,39 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
                                       operation=WALAEventOperation.SignatureValidation, duration=0)
 
 
+def _should_delay_signature_validation():
+    """
+    Extension signature validation is a CPU-intensive operation that may impact VM provisioning time. To avoid affecting TDPR
+    for performance-sensitive users, we implement an initial delay period after agent startup (set via conf flag
+    Debug.SignatureValidationInitialDelay), during which signature validation is skipped. This allows us to gather telemetry
+    without impacting TDPR.
+
+    This function returns True if we are still within the delay period, False otherwise.
+
+    TODO: This delay is a temporary workaround for telemetry release; remove for production release.
+    """
+    delay_seconds = conf.get_signature_validation_initial_delay()
+    if delay_seconds <= 0:
+        return False
+
+    elapsed = datetime.datetime.now(UTC) - _agent_start_time
+    return elapsed < datetime.timedelta(seconds=delay_seconds)
+
+
 def signature_validation_enabled():
     """
-    Returns True if signature validation is enabled in conf file, OpenSSL version supports all validation parameters, and agent is running on a Confidential VM.
-
-    Extension signature validation is currently limited to CVMs for telemetry/preview releases. It will be expanded to all VMs after we gain confidence in the feature.
-    TODO: Remove the is_confidential_vm() check once signature validation is supported on all VMs.
+    Returns True if all conditions for signature validation are met:
+    - Conf flag 'EnableSignatureValidation' is True
+    - Validation timeout has not been exceeded (TODO: remove after telemetry release)
+    - Initial delay period after agent start has passed (TODO: remove after telemetry release)
+    - OpenSSL version supports required validation parameters (TODO: remove after timestamp validation implemented)
+    - Agent is running on a Confidential VM (TODO: remove when all VMs are supported)
     """
-    return conf.get_signature_validation_enabled() and openssl_version_supported_for_signature_validation() and ConfidentialVMInfo.is_confidential_vm()
+    return conf.get_signature_validation_enabled() and \
+        not SignatureValidationTimeout.is_validation_disabled() and \
+        not _should_delay_signature_validation() and \
+        openssl_version_supported_for_signature_validation() and \
+        ConfidentialVMInfo.is_confidential_vm()
 
 
 def cleanup_package_with_invalid_signature(package_file):
@@ -325,5 +394,5 @@ def cleanup_package_with_invalid_signature(package_file):
                                 message="Removing package {0} due to failed signature validation.".format(package_file), duration=0)
         os.remove(package_file)
     except Exception as cleanup_ex:
-        report_validation_event(op=WALAEventOperation.SignatureValidation, level=logger.LogLevel.WARNING, name=AGENT_NAME, version=AGENT_VERSION,
+        report_validation_event(op=WALAEventOperation.ExtensionCleanup, level=logger.LogLevel.WARNING, name=AGENT_NAME, version=AGENT_VERSION,
                                 message="Failed to delete package {0}: {1}".format(package_file, ustr(cleanup_ex)), duration=0)

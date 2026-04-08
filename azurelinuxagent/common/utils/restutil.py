@@ -17,6 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import json
 import os
 import threading
 import time
@@ -27,7 +28,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 
-from azurelinuxagent.common.exception import HttpError, ResourceGoneError, InvalidContainerError
+from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient, urlparse, ustr
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, AGENT_NAME, GOAL_STATE_AGENT_VERSION
 
@@ -35,6 +36,8 @@ SECURE_WARNING_EMITTED = False
 
 DEFAULT_RETRIES = 6
 DELAY_IN_SECONDS = 1
+
+FAIL_FAST_REQUEST_TIMEOUT = 5
 
 THROTTLE_RETRIES = 25
 THROTTLE_DELAY_IN_SECONDS = 1
@@ -110,6 +113,10 @@ KNOWN_WIRESERVER_IP = '168.63.129.16'
 HOST_PLUGIN_PORT = 32526
 
 TELEMETRY_DATA = "telemetrydata"
+
+# The URI for HGAP /extensionArtifact requests does not include the requested artifact. Include these headers in the
+# failure message if they exist for any failed request to improve the error reporting
+HEADERS_TO_INCLUDE_IN_FAILURE_MSG = ["x-ms-artifact-location", "x-ms-artifact-manifest-location"]
 
 class IOErrorCounter(object):
     _lock = threading.RLock()
@@ -367,7 +374,8 @@ def http_request(method,
                  retry_delay=DELAY_IN_SECONDS,
                  throttle_delay=THROTTLE_DELAY_IN_SECONDS,
                  redact_data=False,
-                 return_raw_response=False):
+                 return_raw_response=False,
+                 fail_fast_on_timeout=False):
     """
     NOTE: This method provides some logic to handle errors in the HTTP request, including checking the HTTP status of the response
           and handling some exceptions. If return_raw_response is set to True all the error handling will be skipped and the
@@ -417,6 +425,13 @@ def http_request(method,
             logger.warn("Python does not support HTTPS tunnelling")
             SECURE_WARNING_EMITTED = True
 
+    # Get the headers to include in messages for failed requests to improve error reporting
+    headers_for_failure_msg = {}
+    if headers is not None:
+        for k, v in headers.items():
+            if k in HEADERS_TO_INCLUDE_IN_FAILURE_MSG:
+                headers_for_failure_msg[k] = v
+
     msg = ''
     attempt = 0
     delay = 0
@@ -446,10 +461,13 @@ def http_request(method,
         attempt += 1
 
         try:
+            # If fail_fast_on_timeout is True, use a shorter timeout for the first attempt to fail fast in the case of
+            # no outbound connection on the VM.
+            req_timeout = timeout if not fail_fast_on_timeout or attempt > 1 else min(timeout, FAIL_FAST_REQUEST_TIMEOUT)
             resp = _http_request(method,
                                  host,
                                  rel_uri,
-                                 timeout,
+                                 req_timeout,
                                  port=port,
                                  data=data,
                                  secure=secure,
@@ -465,7 +483,10 @@ def http_request(method,
 
             if request_failed(resp):
                 if _is_retry_status(resp.status, retry_codes=retry_codes):
-                    msg = '[HTTP Retry] {0} {1} -- Status Code {2}'.format(method, url, resp.status)
+                    if len(headers_for_failure_msg) > 0:
+                        msg = '[HTTP Retry] {0} {1} {2} -- {3}'.format(method, url, json.dumps(headers_for_failure_msg), read_response_error(resp))
+                    else:
+                        msg = '[HTTP Retry] {0} {1} -- {2}'.format(method, url, read_response_error(resp))
                     # Note if throttled and ensure a safe, minimum number of
                     # retry attempts
                     if _is_throttle_status(resp.status):
@@ -482,20 +503,16 @@ def http_request(method,
                 response_error = read_response_error(resp)
                 raise ResourceGoneError(response_error)
 
-            # If we got a 400 (bad request) because the container id is invalid, it could indicate a stale goal
-            # state. The caller will handle this exception by forcing a goal state refresh and retrying the call.
-            if resp.status == httpclient.BAD_REQUEST:
-                response_error = read_response_error(resp)
-                if INVALID_CONTAINER_CONFIGURATION in response_error:
-                    raise InvalidContainerError(response_error)
-
             return resp
 
         except httpclient.HTTPException as e:
             if return_raw_response:  # skip all error handling
                 raise
             clean_url = _trim_url_parameters(url)
-            msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(method, clean_url, e)
+            if len(headers_for_failure_msg) > 0:
+                msg = '[HTTP Failed] {0} {1} {2} -- HttpException {3}'.format(method, clean_url, json.dumps(headers_for_failure_msg), e)
+            else:
+                msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(method, clean_url, e)
             if _is_retry_exception(e):
                 continue
             break
@@ -505,7 +522,15 @@ def http_request(method,
                 raise
             IOErrorCounter.increment(host=host, port=port)
             clean_url = _trim_url_parameters(url)
-            msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(method, clean_url, e)
+            if len(headers_for_failure_msg) > 0:
+                msg = '[HTTP Failed] {0} {1} {2} -- IOError {3}'.format(method, clean_url, json.dumps(headers_for_failure_msg), e)
+            else:
+                msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(method, clean_url, e)
+            # If the error was an IOError and fail_fast_on_timeout is True, check if the error message contains
+            # "timed out" or "timeout" and break the loop to fail fast in the case of no outbound connection on the VM.
+            # Otherwise, continue with the retries.
+            if fail_fast_on_timeout and "timed out" in ustr(e) or "timeout" in ustr(e):
+                break
             continue
 
     raise HttpError("{0} -- {1} attempts made".format(msg, attempt))
@@ -518,7 +543,8 @@ def http_get(url,
              retry_codes=None,
              retry_delay=DELAY_IN_SECONDS,
              return_raw_response=False,
-             timeout=10):
+             timeout=10,
+             fail_fast_on_timeout=False):
     """
     NOTE: This method provides some logic to handle errors in the HTTP request, including checking the HTTP status of the response
           and handling some exceptions. If return_raw_response is set to True all the error handling will be skipped and the
@@ -537,7 +563,8 @@ def http_get(url,
                         max_retry=max_retry,
                         retry_codes=retry_codes,
                         retry_delay=retry_delay,
-                        return_raw_response=return_raw_response)
+                        return_raw_response=return_raw_response,
+                        fail_fast_on_timeout=fail_fast_on_timeout)
 
 
 def http_head(url,
@@ -662,7 +689,7 @@ def read_response_error(resp):
             result = "[HTTP Failed] [{0}: {1}] {2}".format(
                         resp.status, 
                         resp.reason, 
-                        resp.read()) 
+                        resp.read())
 
             # this result string is passed upstream to several methods
             # which do a raise HttpError() or a format() of some kind;

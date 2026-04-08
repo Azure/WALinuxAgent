@@ -55,32 +55,22 @@ class GAVersionUpdater(object):
         """
         raise NotImplementedError
 
-    def retrieve_agent_version(self, agent_family, goal_state):
-        """
-        This function fetches the agent version from the goal state for the given family.
-        @param agent_family: agent family
-        @param goal_state: goal state
-        """
-        raise NotImplementedError
-
-    def is_retrieved_version_allowed_to_update(self, agent_family):
-        """
-        Checks all base condition if new version allow to update.
-        @param agent_family: agent family
-        @return: True if allowed to update else False
-        """
-        raise NotImplementedError
-
-    def log_new_agent_update_message(self):
-        """
-        This function logs the update message after we check agent allowed to update.
-        """
-        raise NotImplementedError
-
     def proceed_with_update(self):
         """
         performs upgrade/downgrade
         @return: AgentUpgradeExitException
+        """
+        raise NotImplementedError
+
+    def retrieve_and_download_agent(self, protocol, agent_family, goal_state):
+        """
+        Retrieve the target agent version, validate eligibility, and download it.
+        Subclasses control the full retrieve-validate-download flow.
+        @param protocol: protocol object for download
+        @param agent_family: agent family
+        @param goal_state: goal state
+        @return: GuestAgent if an update is ready, None if no update should be attempted at this time
+        @raises: AgentUpdateError if the download fails
         """
         raise NotImplementedError
 
@@ -126,7 +116,7 @@ class GAVersionUpdater(object):
                 logger.warn("Unable to delete Agent directory: {0}".format(err))
             raise AgentUpdateError("Downloaded agent package: {0} is missing agent handler manifest file: {1}".format(agent_name, agent_handler_manifest_file))
 
-    def download_and_get_new_agent(self, protocol, agent_family, goal_state):
+    def _download_and_get_new_agent(self, protocol, agent_family, goal_state):
         """
         Function downloads the new agent and returns the downloaded version.
         @param protocol: protocol object

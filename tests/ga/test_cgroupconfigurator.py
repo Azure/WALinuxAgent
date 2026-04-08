@@ -233,6 +233,14 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             self.assertIn(cmd1, configurator.mocks.commands_call_list, "The command to set CPU quota was not called")
             self.assertIn(cmd2, configurator.mocks.commands_call_list, "The command to set Memory quota was not called")
 
+    def test_accounting_properties_not_set_explicitly_in_cgroupv2(self):
+        with self._get_cgroup_configurator_v2() as configurator:
+            cmd = 'systemctl set-property walinuxagent.service CPUAccounting=yes MemoryAccounting=yes --runtime'
+            self.assertNotIn(cmd, configurator.mocks.commands_call_list, "The command to set CPU and Memory accounting was called")
+            for cmd in configurator.mocks.commands_call_list:
+                self.assertNotIn("CPUAccounting=yes", cmd, "CPUAccounting was set explicitly in cgroup v2")
+                self.assertNotIn("MemoryAccounting=yes", cmd, "MemoryAccounting was set explicitly in cgroup v2")
+
     def test_extension_enforcement_enabled_in_v2(self):
         service_list = [
             {
@@ -242,11 +250,11 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         ]
         with self._get_cgroup_configurator_v2() as configurator:
             configurator.setup_extension_slice(extension_name="Microsoft.CPlat.Extension", cpu_quota=5)
-            cmd = 'systemctl set-property azure-vmextensions-Microsoft.CPlat.Extension.slice CPUAccounting=yes MemoryAccounting=yes CPUQuota=5% --runtime'
+            cmd = 'systemctl set-property azure-vmextensions-Microsoft.CPlat.Extension.slice CPUQuota=5% --runtime'
             self.assertIn(cmd, configurator.mocks.commands_call_list,
                             "The command to set the CPU quota was not called")
             configurator.set_extension_services_cpu_memory_quota(service_list)
-            cmd = 'systemctl set-property extension.service CPUAccounting=yes MemoryAccounting=yes CPUQuota=5% --runtime'
+            cmd = 'systemctl set-property extension.service CPUQuota=5% --runtime'
             self.assertIn(cmd, configurator.mocks.commands_call_list,
                           "The command to set the reset CPU quota was not called")
 
@@ -468,6 +476,8 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
 
                 self.assertEqual(len(command_calls), 1, "The test command should have been called exactly once [{0}]".format(command_calls))
                 self.assertIn("systemd-run", command_calls[0], "The extension should have been invoked using systemd")
+                self.assertIn("CPUAccounting=no", command_calls[0], "The systemd-run command should include CPUAccounting when using cgroups v1")
+                self.assertIn("MemoryAccounting=no", command_calls[0], "The systemd-run command should include MemoryAccounting when using cgroups v1")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_start_tracking_the_extension_cgroups(self, _):
@@ -537,6 +547,9 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
 
                 self.assertEqual(len(command_calls), 1, "The test command should have been called exactly once [{0}]".format(command_calls))
                 self.assertIn("systemd-run", command_calls[0], "The extension should have been invoked using systemd")
+
+                self.assertNotIn("CPUAccounting", command_calls[0], "The systemd-run command should not include CPUAccounting when using cgroups v2")
+                self.assertNotIn("MemoryAccounting", command_calls[0], "The systemd-run command should not include MemoryAccounting when using cgroups v2")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_disable_cgroups_and_invoke_the_command_directly_if_systemd_fails(self, _):
@@ -1155,7 +1168,7 @@ exit 0
 
     def test_get_log_collector_properties_should_return_correct_props(self):
         with self._get_cgroup_configurator() as configurator:
-            self.assertEqual(configurator.get_logcollector_unit_properties(), ["--property=CPUAccounting=yes", "--property=MemoryAccounting=yes", "--property=CPUQuota=5%"])
+            self.assertEqual(configurator.get_logcollector_unit_properties(), ["--property=CPUQuota=5%", "--property=CPUAccounting=yes", "--property=MemoryAccounting=yes"])
 
         with self._get_cgroup_configurator_v2() as configurator:
-            self.assertEqual(configurator.get_logcollector_unit_properties(), ["--property=CPUAccounting=yes", "--property=MemoryAccounting=yes", "--property=CPUQuota=5%", "--property=MemoryHigh=170M"])
+            self.assertEqual(configurator.get_logcollector_unit_properties(), ["--property=CPUQuota=5%", "--property=MemoryHigh=170M"])

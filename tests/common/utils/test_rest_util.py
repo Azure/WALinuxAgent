@@ -18,7 +18,7 @@
 import os
 import unittest
 
-from azurelinuxagent.common.exception import HttpError, ResourceGoneError, InvalidContainerError
+from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 import azurelinuxagent.common.utils.restutil as restutil
 from azurelinuxagent.common.utils.restutil import HTTP_USER_AGENT
 from azurelinuxagent.common.future import httpclient, ustr
@@ -626,19 +626,6 @@ class TestHttpOperations(AgentTestCase):
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
-    def test_http_request_raises_for_invalid_container_configuration(self, _http_request, _sleep):
-        def read():
-            return b'{ "errorCode": "InvalidContainerConfiguration", "message": "Invalid request." }'
-
-        _http_request.side_effect = [
-            Mock(status=httpclient.BAD_REQUEST, reason='Bad Request', read=read)
-        ]
-
-        self.assertRaises(InvalidContainerError, restutil.http_get, "https://foo.bar")
-        self.assertEqual(1, _http_request.call_count)
-
-    @patch("time.sleep")
-    @patch("azurelinuxagent.common.utils.restutil._http_request")
     def test_http_request_raises_for_invalid_role_configuration(self, _http_request, _sleep):
         def read():
             return b'{ "errorCode": "RequestRoleConfigFileNotFound", "message": "Invalid request." }'
@@ -684,6 +671,32 @@ class TestHttpOperations(AgentTestCase):
         ]
 
         restutil.http_get("https://foo.bar")
+        self.assertEqual(2, _http_request.call_count)
+        self.assertEqual(1, _sleep.call_count)
+
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_fails_fast_for_timed_out_ioerror(self, _http_request):
+        ioerror = IOError("timed out")
+
+        _http_request.side_effect = [
+            ioerror
+        ]
+
+        self.assertRaises(HttpError, restutil.http_get, "https://foo.bar", fail_fast_on_timeout=True)
+        self.assertEqual(1, _http_request.call_count)
+
+    @patch("time.sleep")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_retries_for_non_timed_out_ioerror(self, _http_request, _sleep):
+        ioerror = IOError()
+        ioerror.errno = 42
+
+        _http_request.side_effect = [
+            ioerror,
+            Mock(status=httpclient.OK)
+        ]
+
+        restutil.http_get("https://foo.bar", fail_fast_on_timeout=True)
         self.assertEqual(2, _http_request.call_count)
         self.assertEqual(1, _sleep.call_count)
 

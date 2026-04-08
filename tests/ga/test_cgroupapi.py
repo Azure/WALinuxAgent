@@ -141,13 +141,10 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             self.assertTrue("/sys/fs/cgroup has an unexpected file type: {0}".format(unknown_cgroup_type) in str(context.exception))
 
     def test_get_unit_property_should_return_the_value_of_the_given_property(self):
-        # We expect same behavior for v1 and v2
-        mock_envs = [mock_cgroup_v1_environment(self.tmp_dir), mock_cgroup_v2_environment(self.tmp_dir)]
-        for env in mock_envs:
-            with env:
-                cpu_accounting = systemd.get_unit_property("walinuxagent.service", "CPUAccounting")
+        with mock_cgroup_v1_environment(self.tmp_dir):
+            cpu_accounting = systemd.get_unit_property("walinuxagent.service", "CPUAccounting")
 
-                self.assertEqual(cpu_accounting, "no", "Property {0} of {1} is incorrect".format("CPUAccounting", "walinuxagent.service"))
+            self.assertEqual(cpu_accounting, "no", "Property {0} of {1} is incorrect".format("CPUAccounting", "walinuxagent.service"))
 
 
 class SystemdCgroupsApiv1TestCase(AgentTestCase):

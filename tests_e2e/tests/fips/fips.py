@@ -48,8 +48,8 @@ class Fips(AgentVmTest):
 
         if self._distro.startswith("ubuntu_22"):
             self._enable_fips_on_ubuntu_22()
-        elif self._distro.startswith("rhel_9"):
-            self._enable_fips_on_rhel_9()
+        elif Fips._is_red_hat_distro(self._distro):
+            self._enable_fips_on_red_hat_distro()
         else:
             raise Exception(f'Unsupported distro: {self._distro}')
         log.info("")
@@ -122,6 +122,15 @@ class Fips(AgentVmTest):
             raise Exception(f"PUT additional capabilities  failed (status: {response.status_code}): {response.text}")
         log.info("Opt-in completed...")
 
+    @staticmethod
+    def _is_red_hat_distro(distro: str) -> bool:
+        """
+            Returns true if the distro is a Red Hat-based distro (e.g. RHEL or Oracle Linux).
+
+            The 'distro' parameter is expected to be in the format {name}_{version}, as returned by get_distro.py.
+        """
+        return distro in ("rhel_95", "oracle_95")
+
     def _enable_fips_on_ubuntu_22(self) -> None:
         #
         # See https://ubuntu.com/tutorials/using-the-ubuntu-pro-client-to-enable-fips#4-enabling-fips-crypto-modules
@@ -147,11 +156,16 @@ class Fips(AgentVmTest):
             raise Exception("Failed to enable FIPS on Ubuntu 22; aborting test!!!!")
         log.info("FIPS was enabled successfully.")
 
-    def _enable_fips_on_rhel_9(self) -> None:
+    def _enable_fips_on_red_hat_distro(self) -> None:
+        """
+        Enables FIPS on RHEL 9 and related distros.
+        """
         #
-        # See https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/security_hardening/switching-rhel-to-fips-mode_security-hardening
+        # See 
+        #    * https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/security_hardening/switching-rhel-to-fips-mode_security-hardening
+        #    * https://docs.oracle.com/en/operating-systems/oracle-linux/9/security/configuring_fips_mode.html#enabling-and-disabling-fips-mode
         #
-        log.info("Enabling FIPS on RHEL 9...")
+        log.info("Enabling FIPS on %s...", self._distro)
 
         # Skip this if FIPS is already enabled
         def is_enabled():
@@ -188,8 +202,8 @@ class Fips(AgentVmTest):
 
             certificates_by_cloud = {
                 'AzureCloud': {
-                    'source_vault': f"/subscriptions/{self._context.vm.subscription}/resourceGroups/waagent-tests/providers/Microsoft.KeyVault/vaults/waagenttests-canary",
-                    'certificate_url': 'https://waagenttests-canary.vault.azure.net/secrets/rsa/85d92c80443e44058cb034b2008e1e75'
+                    'source_vault': f"/subscriptions/{self._context.vm.subscription}/resourceGroups/waagent-tests/providers/Microsoft.KeyVault/vaults/waagenttests-westus2",
+                    'certificate_url': 'https://waagenttests-westus2.vault.azure.net/secrets/rsa/b46881d1dd73496fb98b2d008e9d471a'
                 },
                 'AzureUSGovernment': {
                     'source_vault': f"/subscriptions/{self._context.vm.subscription}/resourceGroups/waagent-tests/providers/Microsoft.KeyVault/vaults/waagenttests",
@@ -213,22 +227,6 @@ class Fips(AgentVmTest):
                 }
             })
         else:
-            if self._distro == 'rhel_95':
-                #
-                # TODO: Remove this workaround once the pre-installed Agent RHEL 9.5 is updated to support FIPS 140-3.
-                #
-                # The current Daemon on RHEL 95 (2.7.0.6) has not been updated to support FIPS 140-3 and goes into an infinite loop while trying to fetch the certificates in the goal
-                # state. The reason is that, even if it cannot decrypt the response from the WireServer, 2.7.0.6 assumes that Certificates.pem always exists; if it does not, it goes
-                # into an infinite retry loop. To prevent this, before deallocating and reallocating, ensure that there is a Certificates.pem file, even if it is empty.
-                #
-                # The agent may remove the new file if it fetches the goal state certificate (after the VM restart in the previous step) and fails to decrypt it while we create the file below.
-                # Therefore, stop the agent service to prevent it from removing the file.
-                output = self._ssh_client.run_command('agent-service stop', use_sudo=True)
-                log.info(output)
-                pem_file = '/var/lib/waagent/Certificates.pem'
-                log.info("Ensuring that %s exists...", pem_file)
-                self._ssh_client.run_command(f"touch {pem_file}", use_sudo=True)
-
             log.info("Deallocating and re-allocating %s to force a new tenant certificate in order to create a new PFX...", self._context.vm)
             log.info("Deallocating %s...", self._context.vm)
             self._context.vm.deallocate()
@@ -262,7 +260,7 @@ class Fips(AgentVmTest):
                 'if': lambda r: r.level == "ERROR"
             },
             #
-            # The current Daemon on RHEL_95 tries to fetch the certificates during initialization and has not been updated to support FIPS 140-3
+            # The current Daemon on RHEL/Oracle 9.5 tries to fetch the certificates during initialization and has not been updated to support FIPS 140-3
             #
             #		2025-07-31T19:06:59.878313Z ERROR Daemon Daemon Failed to decrypt /var/lib/waagent/Certificates.p7m (return code: 1)
             #
@@ -277,7 +275,7 @@ class Fips(AgentVmTest):
             #
             {
                 'message': 'Failed to decrypt /var/lib/waagent/Certificates.p7m',
-                'if': lambda r: self._distro == 'rhel_95' and r.prefix == "Daemon"
+                'if': lambda r: self._distro in ['rhel_95', 'oracle_95'] and r.prefix == "Daemon"
             },
             #
             # There are several extensions that are installed by policy, which is executed asynchronously to the test. If these extensions are installed before a new PFX has been generated, the Agent may issue those warnings, and the extensions may fail.

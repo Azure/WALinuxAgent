@@ -56,16 +56,6 @@ Before=slices.target
 CPUAccounting=yes
 MemoryAccounting=yes
 """
-_EXTENSION_SLICE_CONTENTS = """
-[Unit]
-Description=Slice for Azure VM extension {extension_name}
-DefaultDependencies=no
-Before=slices.target
-[Slice]
-CPUAccounting=yes
-CPUQuota={cpu_quota}
-MemoryAccounting=yes
-"""
 LOGCOLLECTOR_SLICE = "azure-walinuxagent-logcollector.slice"
 # More info on resource limits properties in systemd here:
 # https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/resource_management_guide/sec-modifying_control_groups
@@ -277,15 +267,14 @@ class CGroupConfigurator(object):
             # New agent will setup limits for scope instead slice, so removing existing logcollector slice.
             CGroupConfigurator._Impl._cleanup_unit_file(logcollector_slice)
 
-            # Cleanup the old drop-in files, new agent will use systemdctl set-property to enable accounting and limits
+            # Cleanup the old drop-in files, new agent will use systemctl set-property to enable accounting and limits
             CGroupConfigurator._Impl._cleanup_unit_file(agent_drop_in_file_cpu_accounting)
 
             CGroupConfigurator._Impl._cleanup_unit_file(agent_drop_in_file_memory_accounting)
 
             CGroupConfigurator._Impl._cleanup_unit_file(agent_drop_in_file_cpu_quota)
 
-        @staticmethod
-        def _setup_azure_slice():
+        def _setup_azure_slice(self):
             """
             The agent creates "azure.slice" for use by extensions and the agent. The agent runs under "azure.slice" directly and each
             extension runs under its own slice ("Microsoft.CPlat.Extension.slice" in the example below). All the slices for
@@ -318,7 +307,9 @@ class CGroupConfigurator(object):
             if not os.path.exists(azure_slice):
                 files_to_create.append((azure_slice, _AZURE_SLICE_CONTENTS))
 
-            if not os.path.exists(vmextensions_slice):
+            # Slice has only accounting properties, so no need explicit set in cgroupv2
+            accounting_props, _ = self._cgroups_api.get_accounting_properties()
+            if not os.path.exists(vmextensions_slice) and len(accounting_props) > 0:
                 files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
 
             if fileutil.findre_in_file(agent_unit_file, r"Slice=") is not None:
@@ -369,19 +360,18 @@ class CGroupConfigurator(object):
             except Exception as err:
                 logger.warn("Error while resetting the quotas: {0}".format(err))
 
-        @staticmethod
-        def _enable_accounting(unit_name):
+        def _enable_accounting(self, unit_name):
             """
-            Enable CPU and Memory accounting for the unit
+            Enable CPU and Memory accounting for the unit.
+            Note: On cgroup v2, accounting is enabled by default.
             """
             try:
-                # since we don't use daemon-reload and drop-files for accounting, so it will be enabled with systemctl set-property
-                accounting_properties = ("CPUAccounting", "MemoryAccounting")
-                values = ("yes", "yes")
-                log_cgroup_info("Enabling accounting properties for the agent: {0}".format(accounting_properties))
-                systemd.set_unit_run_time_properties(unit_name, accounting_properties, values)
+                accounting_properties, values = self._cgroups_api.get_accounting_properties()
+                if len(accounting_properties) > 0:
+                    log_cgroup_info("Enabling accounting properties for {0}: {1}".format(unit_name, accounting_properties))
+                    systemd.set_unit_run_time_properties(unit_name, accounting_properties, values)
             except Exception as exception:
-                log_cgroup_warning("Failed to set accounting properties for the agent: {0}".format(ustr(exception)))
+                log_cgroup_warning("Failed to set accounting properties for {0}: {1}".format(unit_name, ustr(exception)))
 
         # W0238: Unused private member `_Impl.__create_unit_file(path, contents)` (unused-private-member)
         @staticmethod
@@ -439,6 +429,9 @@ class CGroupConfigurator(object):
 
         def using_cgroup_v2(self):
             return isinstance(self._cgroups_api, SystemdCgroupApiv2)
+
+        def get_cgroups_api(self):
+            return self._cgroups_api
 
         def enable(self):
             if not self.supported():
@@ -670,14 +663,22 @@ class CGroupConfigurator(object):
 
             Each property should be explicitly set (even if already included in the log collector slice) for the log
             collector process to run in the transient scope directory with the expected accounting and limits.
+
+            Note: On cgroup v2, accounting is enabled by default. No need explicit set
             """
-            logcollector_properties = ["--property=CPUAccounting=yes", "--property=MemoryAccounting=yes", "--property=CPUQuota={0}".format(LOGCOLLECTOR_CPU_QUOTA_FOR_V1_AND_V2)]
-            if not self.using_cgroup_v2():
-                return logcollector_properties
+            logcollector_properties = ["--property=CPUQuota={0}".format(LOGCOLLECTOR_CPU_QUOTA_FOR_V1_AND_V2)]
+
+            # Add accounting properties based on cgroup version
+            accounting_props, accounting_vals = self._cgroups_api.get_accounting_properties()
+            for prop, val in zip(accounting_props, accounting_vals):
+                logcollector_properties.append("--property={0}={1}".format(prop, val))
+
             # Memory throttling limit is used when running log collector on v2 machines using the 'MemoryHigh' property.
             # We do not use a systemd property to enforce memory on V1 because it invokes the OOM killer if the limit
             # is exceeded.
-            logcollector_properties.append("--property=MemoryHigh={0}".format(LOGCOLLECTOR_MEMORY_THROTTLE_LIMIT_FOR_V2))
+            if self.using_cgroup_v2():
+                logcollector_properties.append("--property=MemoryHigh={0}".format(LOGCOLLECTOR_MEMORY_THROTTLE_LIMIT_FOR_V2))
+
             return logcollector_properties
 
         @staticmethod
@@ -873,27 +874,28 @@ class CGroupConfigurator(object):
             process = subprocess.Popen(command, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, preexec_fn=os.setsid)  # pylint: disable=W1509
             return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout, stderr=stderr, error_code=error_code)
 
-        @staticmethod
-        def _get_unit_properties_requiring_update(unit_name, cpu_quota=""):
+        def _get_unit_properties_requiring_update(self, unit_name, cpu_quota=""):
             """
             Check if the cgroups setup is completed for the unit and return the properties that need an update.
             """
             properties_to_update = ()
             properties_values = ()
-            cpu_accounting = systemd.get_unit_property(unit_name, "CPUAccounting")
-            if cpu_accounting != "yes":
-                properties_to_update += ("CPUAccounting",)
-                properties_values += ("yes",)
-            memory_accounting = systemd.get_unit_property(unit_name, "MemoryAccounting")
-            if memory_accounting != "yes":
-                properties_to_update += ("MemoryAccounting",)
-                properties_values += ("yes",)
+
+            # Get accounting properties based on cgroup version
+            accounting_props, accounting_vals = self._cgroups_api.get_accounting_properties()
+            for prop, val in zip(accounting_props, accounting_vals):
+                current = systemd.get_unit_property(unit_name, prop)
+                if current != val:
+                    properties_to_update += (prop,)
+                    properties_values += (val,)
+
             current_cpu_quota = CGroupUtil.get_current_cpu_quota(unit_name)
             if current_cpu_quota != cpu_quota:
                 properties_to_update += ("CPUQuota",)
                 # no-quota expressed as empty string while setting property
                 cpu_quota = cpu_quota if cpu_quota != "infinity" else ""
                 properties_values += (cpu_quota,)
+
             return properties_to_update, properties_values
 
         def setup_extension_slice(self, extension_name, cpu_quota):
