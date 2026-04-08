@@ -19,6 +19,13 @@
 /azurelinuxagent/pa/rdma/ @longlimsft
 
 #
+# Azure Container Linux (ACL)
+#
+/azurelinuxagent/common/osutil/acl.py @mayankfz
+/config/acl/ @mayankfz
+/init/acl/ @mayankfz
+
+#
 # Linux Agent team
 #
 * @narrieta @ZhidongPeng @nagworld9 @maddieford @gabstamsft

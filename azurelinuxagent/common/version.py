@@ -137,6 +137,14 @@ def get_distro():
     if os.path.exists("/etc/mariner-release"):
         osinfo[0] = "mariner"
 
+    if os.path.exists("/etc/os-release"):
+        try:
+            with open("/etc/os-release", "r") as f:
+                if re.search(r'^VARIANT_ID=azurecontainerlinux$', f.read(), re.MULTILINE):
+                    osinfo[0] = "azurecontainerlinux"
+        except Exception:
+            pass
+
     # The platform.py lib has issue with detecting BIG-IP linux distribution.
     # Merge the following patch provided by F5.
     if os.path.exists("/shared/vadc"):
