@@ -85,7 +85,7 @@ class TestSetupRdmaDevice(AgentTestCase):
         setup_rdma_device("4.1.0", shared_conf)
 
     @patch.object(RDMADeviceHandler, 'start')
-    def test_mac_address_formatting(self, mock_start):
+    def test_mac_address_formatting(self, _mock_start):
         """Verify MAC address is correctly formatted with colons"""
         shared_conf = Mock()
         shared_conf.xml_text = (
@@ -95,7 +95,7 @@ class TestSetupRdmaDevice(AgentTestCase):
             '</SharedConfig>'
         )
 
-        with patch.object(RDMADeviceHandler, '__init__', return_value=None) as mock_init:
+        with patch.object(RDMADeviceHandler, '__init__', return_value=None):
             mock_handler = MagicMock()
             with patch('azurelinuxagent.pa.rdma.rdma.RDMADeviceHandler', return_value=mock_handler) as mock_cls:
                 setup_rdma_device("4.1.0", shared_conf)
@@ -103,7 +103,7 @@ class TestSetupRdmaDevice(AgentTestCase):
                 mock_cls.assert_called_once_with("10.0.0.1", "00:15:5D:33:FF:1D", "4.1.0")
 
     @patch.object(RDMADeviceHandler, 'start')
-    def test_empty_mac_not_formatted(self, mock_start):
+    def test_empty_mac_not_formatted(self, _mock_start):
         """Verify empty MAC address is passed through without formatting"""
         shared_conf = Mock()
         shared_conf.xml_text = (
