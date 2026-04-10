@@ -23,6 +23,7 @@ import random
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -51,12 +52,14 @@ from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, migrate_handler_s
     get_exthandlers_handler, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
     ExtensionStatusValue, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, GoalStateStatus, ExtHandlerState
 from azurelinuxagent.ga.policy.policy_engine import _PolicyEngine
+from azurelinuxagent.ga.signature_validation_util import SignatureValidationTimeout
 
 from tests.lib import wire_protocol_data
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
 from tests.lib.http_request_predicates import HttpRequestPredicates
 from tests.lib.wire_protocol_data import DATA_FILE, DATA_FILE_EXT_ADDITIONAL_LOCATIONS
-from tests.lib.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep, load_bin_data, load_data
+from tests.lib.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep, load_bin_data, load_data, \
+    skip_if_predicate_true
 from tests.lib.extension_emulator import Actions, ExtensionCommandNames, extension_emulator, \
     enable_invocations, generate_put_handler
 
@@ -4419,8 +4422,50 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
                                             expected_status_msg='Plugin enabled',
                                             expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
                                             expected_version="1.7.0")
-
                 mock_validate.assert_not_called()
+
+    @skip_if_predicate_true(lambda: sys.version_info[0] == 2, "Timeouts are not supported on Python 2")
+    def test_should_disable_future_validation_if_timeout_exceeded(self):
+        with patch.object(SignatureValidationTimeout, '_validation_disabled', False):
+            data_file = wire_protocol_data.DATA_FILE.copy()
+            data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
+            data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
+            data_file["manifest"] = "wire/manifest_vm_access.xml"
+
+            # First run: Set a very short timeout period to trigger an actual timeout.
+            # Extension should still be Ready since enforcement is not enabled.
+            with patch('azurelinuxagent.common.conf.get_signature_validation_timeout', return_value=0.001):
+                self._test_enable_extension(data_file=data_file,
+                                            signature_validation_should_succeed=False,
+                                            expected_status_code=0,
+                                            expected_handler_status='Ready',
+                                            expected_ext_count=1,
+                                            expected_status_msg='Plugin enabled',
+                                            expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
+                                            expected_version="1.7.0")
+
+            # Second run: Uninstall the extension, then reinstall to verify signature validation is skipped.
+            with mock_wire_protocol(data_file) as protocol:
+                protocol.aggregate_status = None
+                protocol.report_vm_status = MagicMock()
+                exthandlers_handler = get_exthandlers_handler(protocol)
+                protocol.set_http_handlers(http_get_handler=self._make_http_get_handler(data_file))
+
+                # Uninstall the extension
+                protocol.mock_wire_data.set_incarnation(2)
+                protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
+                protocol.client.update_goal_state()
+                exthandlers_handler.run()
+
+                # Update the goal state to reinstall the extension
+                # Then, confirm that validate_signature is not called, because validation was disabled after the timeout in the previous run
+                protocol.mock_wire_data.set_incarnation(3)
+                protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Enabled)
+                protocol.client.update_goal_state()
+                with patch('azurelinuxagent.ga.exthandlers.validate_signature') as mock_validate:
+                    exthandlers_handler.run()
+                    exthandlers_handler.report_ext_handlers_status()
+                    mock_validate.assert_not_called()
 
 
 class TestSignatureValidationEnforced(_TestSignatureValidationBase):
@@ -4834,6 +4879,53 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
                                         expected_handler_name=handler_name,
                                         expected_version=handler_version)
 
+    @skip_if_predicate_true(lambda: sys.version_info[0] == 2, "Timeouts are not supported on Python 2")
+    def test_should_not_disable_future_validation_if_timeout_exceeded_when_enforced(self):
+        with patch.object(SignatureValidationTimeout, '_validation_disabled', False):
+            data_file = wire_protocol_data.DATA_FILE.copy()
+            data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
+            data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
+            data_file["manifest"] = "wire/manifest_vm_access.xml"
+
+            with mock_wire_protocol(data_file) as protocol:
+                protocol.aggregate_status = None
+                protocol.report_vm_status = MagicMock()
+                exthandlers_handler = get_exthandlers_handler(protocol)
+                protocol.set_http_handlers(http_get_handler=self._make_http_get_handler(data_file))
+
+                # First run: Set a very short timeout period to trigger an actual timeout.
+                # Because enforcement is enabled, the error is raised and extension should fail.
+                with patch('azurelinuxagent.common.conf.get_signature_validation_timeout', return_value=0.001):
+                    exthandlers_handler.run()
+                    exthandlers_handler.report_ext_handlers_status()
+
+                    # Extension should have failed due to timeout
+                    report_vm_status = protocol.report_vm_status
+                    self.assertTrue(report_vm_status.called)
+                    self._assert_handler_status(report_vm_status, "NotReady",
+                                                expected_ext_count=1,
+                                                version="1.7.0",
+                                                expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
+                                                expected_msg="timed out",
+                                                expected_code=ExtensionErrorCodes.PluginInstallProcessingFailed)
+
+                # Second run: Update goal state and run again - validation should be performed and succeed
+                protocol.mock_wire_data.set_incarnation(2)
+                protocol.client.update_goal_state()
+
+                exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
+
+                # Extension should now be Ready with signature validated
+                report_vm_status = protocol.report_vm_status
+                self.assertTrue(report_vm_status.called)
+                self._assert_handler_status(report_vm_status, "Ready",
+                                            expected_ext_count=1,
+                                            version="1.7.0",
+                                            expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
+                                            expected_msg="Plugin enabled",
+                                            expected_code=0,
+                                            expected_validation_state=True)
 
 if __name__ == '__main__':
     unittest.main()

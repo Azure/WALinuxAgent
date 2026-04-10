@@ -60,7 +60,7 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.signature_validation_util import validate_handler_manifest_signing_info, SignatureValidationError, \
     PackageValidationError, ManifestValidationError, signature_validation_enabled, validate_signature, \
-    cleanup_package_with_invalid_signature, report_validation_event
+    cleanup_package_with_invalid_signature, report_validation_event, SignatureValidationTimeoutError, SignatureValidationTimeout
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
 _HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
@@ -1432,6 +1432,26 @@ class ExtHandlerInstance(object):
             return False
         return True
 
+    def _handle_signature_validation_error(self, ex, ignore_errors, package_file=None):
+        """
+        Handles a SignatureValidationError by either re-raising it or reporting it via telemetry.
+        If ignore_errors is False, cleans up the package file (if provided) and re-raises the exception.
+        If ignore_errors is True, handles timeout behavior and reports the error via telemetry.
+        """
+        if not ignore_errors:
+            if package_file is not None:
+                cleanup_package_with_invalid_signature(package_file)
+            raise ex
+        if isinstance(ex, SignatureValidationTimeoutError):
+            # TODO: This is temporary behavior for the telemetry release. For production release, remove this
+            # if-block so timeout is treated like any other signature validation failure (extension should fail).
+            SignatureValidationTimeout.disable_validation()
+            report_validation_event(op=WALAEventOperation.SignatureValidation, level=logger.LogLevel.WARNING,
+                                    message="Signature validation timeout exceeded. Disabling signature validation until agent restart.",
+                                    name=self.ext_handler.name, version=self.ext_handler.version, duration=0)
+        report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING, message=ustr(ex),
+                                name=self.ext_handler.name, version=self.ext_handler.version, duration=ex.duration)
+
     def download(self, ignore_signature_validation_errors):
         """
         If extension is signed, validate extension package signature immediately after download, and validate handler
@@ -1455,6 +1475,8 @@ class ExtHandlerInstance(object):
 
         # Handle case where extension zip package already exists, but has not been extracted. If signature is present,
         # validate the package signature, extract the package, and then validate handler manifest.
+        # TODO: Refactor such that downloading and expanding the zip package are separate operations, so that the
+        # logic for existing and downloaded ZIPs can be combined.
         package_exists = False
         if os.path.exists(package_file):
             msg = "Using existing extension package: {0}".format(package_file)
@@ -1467,17 +1489,13 @@ class ExtHandlerInstance(object):
                     validate_signature(package_file, self.ext_handler.encoded_signature, package_full_name=self.get_full_name())
                     signature_validation_succeeded = True
                 except SignatureValidationError as ex:
-                    # validate_signature() only raises SignatureValidationError.
-                    if not ignore_signature_validation_errors:
-                        cleanup_package_with_invalid_signature(package_file)
-                        raise
-                    report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING, message=ustr(ex),
-                                            name=self.ext_handler.name, version=self.ext_handler.version, duration=ex.duration)
+                    signature_validation_succeeded = False
+                    self._handle_signature_validation_error(ex, ignore_signature_validation_errors, package_file)
 
             if self._unzip_extension_package(package_file, self.get_base_dir()):
                 package_exists = True
             else:
-                msg = "The existing extension package is invalid, will ignore it."
+                msg = "Could not expand existing extension package '{0}', will ignore it.".format(package_file)
                 self.logger.info(msg)
                 add_event(op=WALAEventOperation.Download, message=msg, name=self.ext_handler.name, version=self.ext_handler.version, is_success=True, log_event=False)
                 signature_validation_succeeded = False
@@ -1508,12 +1526,10 @@ class ExtHandlerInstance(object):
                     signature_validation_succeeded = True
 
             except SignatureValidationError as ex:
-                # download_zip_package() will propagate a SignatureValidationError if validation fails. Re-raise if
-                # validation errors should not be ignored, otherwise report the error and continue.
-                if not ignore_signature_validation_errors:
-                    raise   # Package has already been cleaned up
-                report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING, message=ustr(ex), name=self.ext_handler.name,
-                                        version=self.ext_handler.version, duration=ex.duration)
+                # download_zip_package() will propagate a SignatureValidationError if validation fails.
+                # Package has already been cleaned up by download_zip_package().
+                signature_validation_succeeded = False
+                self._handle_signature_validation_error(ex, ignore_signature_validation_errors)
 
             self.report_event(message="Download succeeded", duration=elapsed_milliseconds(begin_utc))
 

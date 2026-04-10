@@ -34,6 +34,7 @@ from azurelinuxagent.common.osutil.redhat import RedhatOSUtil, Redhat6xOSUtil
 from azurelinuxagent.common.osutil.suse import SUSEOSUtil, SUSE11OSUtil
 from azurelinuxagent.common.osutil.ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, \
     UbuntuSnappyOSUtil, Ubuntu16OSUtil, Ubuntu18OSUtil
+from azurelinuxagent.common.osutil.acl import AclOSUtil
 from tests.lib.tools import AgentTestCase, patch
 
 
@@ -156,6 +157,14 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_version="",
                           distro_full_name="")
         self.assertTrue(isinstance(ret, CoreOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
+
+    def test_get_osutil_it_should_return_acl(self):
+        ret = _get_osutil(distro_name="azurecontainerlinux",
+                          distro_code_name="",
+                          distro_version="3.0",
+                          distro_full_name="Microsoft Azure Container Linux")
+        self.assertTrue(isinstance(ret, AclOSUtil))
         self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_suse(self):

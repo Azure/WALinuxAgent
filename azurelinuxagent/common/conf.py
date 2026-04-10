@@ -737,6 +737,15 @@ def get_signature_validation_initial_delay(conf=__conf__):
     """
     return conf.get_int("Debug.SignatureValidationInitialDelay", 10 * 60)
 
+
+def get_signature_validation_timeout(conf=__conf__):
+    """
+    Get timeout (in seconds) for signature validation operations. If a single validation exceeds this threshold,
+    the feature is disabled until agent restart.
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.SignatureValidationTimeout", 10)
+
   
 def get_enable_rsm_downgrade(conf=__conf__):
     """
