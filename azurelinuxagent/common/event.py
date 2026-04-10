@@ -92,6 +92,7 @@ class WALAEventOperation:
     ExtensionPolicy = "ExtensionPolicy"                                 # Event for any extension policy-related operations (e.g., extension not in allowlist).
     ExtensionSignaturePolicy = "ExtensionSignaturePolicy"               # Event for unsigned extension blocked due to extension signature policy.
     ExtensionSigned = "ExtensionSigned"                                 # Event indicating whether an extension is signed.
+    AgentSignature = "AgentSignature"                                   # Event indicating which agent signatures are delivered in the goal state.
     ExtensionProcessing = "ExtensionProcessing"
     ExtensionResourceGovernance = "ExtensionResourceGovernance"
     ExtensionTelemetryEventProcessing = "ExtensionTelemetryEventProcessing"

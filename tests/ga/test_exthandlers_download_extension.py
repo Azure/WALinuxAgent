@@ -276,7 +276,7 @@ class DownloadExtensionTestCase(AgentTestCase):
 
         stream.destination = None
         self.ext_handler_instance.ext_handler.encoded_signature = "mockencodedsignature"
-        with patch("azurelinuxagent.ga.exthandlers.signature_validation_enabled", return_value=True):
+        with patch("azurelinuxagent.ga.exthandlers.ext_signature_validation_enabled", return_value=True):
             with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.load_manifest', return_value={}):
                 with DownloadExtensionTestCase.create_mock_stream(stream):
                     # Both signature and manifest are invalid, but download should still succeed with no errors.
@@ -294,7 +294,7 @@ class DownloadExtensionTestCase(AgentTestCase):
 
         stream.destination = None
         self.ext_handler_instance.ext_handler.encoded_signature = "mockencodedsignature"
-        with patch("azurelinuxagent.ga.exthandlers.signature_validation_enabled", return_value=True):
+        with patch("azurelinuxagent.ga.exthandlers.ext_signature_validation_enabled", return_value=True):
             with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
                 with self.assertRaises(SignatureValidationError):
                     self.ext_handler_instance.download(ignore_signature_validation_errors=False)
@@ -314,7 +314,7 @@ class DownloadExtensionTestCase(AgentTestCase):
 
         stream.destination = None
         self.ext_handler_instance.ext_handler.encoded_signature = "mockencodedsignature"
-        with patch("azurelinuxagent.ga.exthandlers.signature_validation_enabled", return_value=True):
+        with patch("azurelinuxagent.ga.exthandlers.ext_signature_validation_enabled", return_value=True):
             with DownloadExtensionTestCase.create_mock_stream(stream):
 
                 # Mock that signature validation succeeds, but manifest is invalid - should raise ManifestValidationError

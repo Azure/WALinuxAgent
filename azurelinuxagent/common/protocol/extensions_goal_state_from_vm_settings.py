@@ -31,6 +31,9 @@ from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 # The 'encodedSignature' property is only supported on newer versions of HGAP.
 _MIN_HGAP_VERSION_FOR_EXT_SIGNATURE = FlexibleVersion("1.0.8.159")
 
+# The 'versionToSignatureMappings' property in the Agent Family is only supported on newer versions of HGAP.
+_MIN_HGAP_VERSION_FOR_AGENT_SIGNATURE_MAPPING = FlexibleVersion("1.0.8.177")
+
 class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
     def __init__(self, etag, json_text, correlation_id):
         super(ExtensionsGoalStateFromVmSettings, self).__init__()
@@ -578,6 +581,14 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         TODO: Remove CVM check once encoded signature is supported for all VMs, not just CVMs.
         """
         return self._host_ga_plugin_version >= _MIN_HGAP_VERSION_FOR_EXT_SIGNATURE and ConfidentialVMInfo.is_confidential_vm()
+
+    def supports_agent_signature_mapping(self):
+        """
+        Returns True if the HGAP version supports the 'versionToSignatureMappings' property in the GA family, and agent is running on a CVM.
+
+        TODO: Remove CVM check once encoded signature is supported for all VMs, not just CVMs.
+        """
+        return self._host_ga_plugin_version >= _MIN_HGAP_VERSION_FOR_AGENT_SIGNATURE_MAPPING and ConfidentialVMInfo.is_confidential_vm()
 
 
 #

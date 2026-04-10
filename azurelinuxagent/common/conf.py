@@ -149,8 +149,8 @@ __SWITCH_OPTIONS__ = {
     "Debug.EnableGAVersioning": True,
     "Debug.EnableCgroupV2ResourceLimiting": False,
     "Debug.EnableExtensionPolicy": False,
-    "Debug.EnableSignatureValidation": False,
-    "Debug.IgnoreSignatureValidationErrors": True
+    "Debug.EnableExtSignatureValidation": False,
+    "Debug.IgnoreExtSignatureValidationErrors": True
 }
 
 
@@ -712,27 +712,46 @@ def get_log_collector_initial_delay(conf=__conf__):
     return conf.get_int("Debug.LogCollectorInitialDelay", 5 * 60)
 
   
-def get_signature_validation_enabled(conf=__conf__):
+def get_ext_signature_validation_enabled(conf=__conf__):
     """
-    Determine whether signature validation is enabled. If true, package signature will be validated before
-    installing any signed extensions.
+    Determine whether extension signature validation is enabled. If true, extension package signature will be validated
+    before installing any signed extensions.
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.EnableSignatureValidation", False)
+    return conf.get_switch("Debug.EnableExtSignatureValidation", False)
 
 
-def get_ignore_signature_validation_errors(conf=__conf__):
+def get_agent_signature_validation_enabled(conf=__conf__):
     """
-    If True, signature validation errors will be ignored, unless extension policy requires signature. This is primarily intended for use during telemetry release.
-    If False, any signature validation error will block the extension, regardless of extension policy.
+    Determine whether agent package signature validation is enabled. If true, agent package signature will be
+    validated before updating to any signed agent for supported VMs (CVMs only).
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.IgnoreSignatureValidationErrors", True)
+    return conf.get_switch("Debug.EnableAgentSignatureValidation", False)
+
+
+def get_agent_signature_validation_expiry_time(conf=__conf__):
+    """
+    Get the expiry date for the agent signature validation feature.
+    After this date, agent signature validation will be disabled.
+    Format: YYYY-MM-DD
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get("Debug.AgentSignatureValidationExpiryTime", "2026-12-01")
+
+
+def get_ignore_ext_signature_validation_errors(conf=__conf__):
+    """
+    If True, extension signature validation errors will be ignored, unless extension policy requires signature. This is primarily intended for use during telemetry release.
+    If False, any extension signature validation error will block the extension, regardless of extension policy.
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.IgnoreExtSignatureValidationErrors", True)
 
 
 def get_signature_validation_initial_delay(conf=__conf__):
     """
-    Get initial delay period (in seconds) after service start before extension signature validation is enabled.
+    Get initial delay period (in seconds) after service start before extension and agent signature validation is enabled.
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_int("Debug.SignatureValidationInitialDelay", 10 * 60)

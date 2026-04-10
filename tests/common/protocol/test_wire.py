@@ -575,6 +575,24 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(os.path.exists(target_directory), "The extension package was not downloaded")
             self.assertFalse(os.path.exists(target_file), "The extension package was not deleted")
 
+    def test_download_zip_package_should_not_attempt_signature_validation_if_signature_is_empty(self):
+        extension_url = 'https://fake_host/fake_extension.zip'
+        target_file = os.path.join(self.tmp_dir, 'fake_extension.zip')
+        target_directory = os.path.join(self.tmp_dir, "fake_extension")
+
+        def http_get_handler(url, *_, **__):
+            if url == extension_url or self.is_host_plugin_extension_artifact_request(url):
+                return MockHttpResponse(200, body=load_bin_data("ga/fake_extension.zip"))
+            return None
+
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_get_handler=http_get_handler) as protocol:
+            with patch("azurelinuxagent.ga.signature_validation_util.validate_signature") as mock_validate_signature:
+                protocol.client.download_zip_package("Microsoft.FakeExtension-1.0.0.0", [extension_url], target_file, target_directory, use_verify_header=False,
+                                                     signature="", ignore_signature_validation_errors=True)
+                self.assertEqual(mock_validate_signature.call_count, 0)
+
+        self.assertTrue(os.path.exists(target_directory), "The extension package was not downloaded")
+
     def test_download_zip_package_should_raise_error_and_cleanup_if_ignore_signature_validation_errors_false(self):
         # If "ignore_signature_validation_errors" is False and signature is invalid, signature validation error should be raised.
         extension_url = 'https://fake_host/fake_extension.zip'

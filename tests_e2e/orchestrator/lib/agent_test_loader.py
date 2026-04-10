@@ -346,8 +346,9 @@ class AgentTestLoader(object):
         spec = importlib.util.spec_from_file_location(f"tests_e2e.tests.{relative_path.replace('/', '.').replace('.py', '')}", str(full_path))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        # return all the classes in the module that are subclasses of AgentTest but are not AgentVmTest or AgentVmssTest themselves.
-        matches = [v for v in module.__dict__.values() if isinstance(v, type) and issubclass(v, AgentTest) and v != AgentVmTest and v != AgentVmssTest]
+        # return all the classes in the module that are subclasses of AgentTest, are not AgentVmTest or AgentVmssTest themselves,
+        # and are defined in this module (not imported from another module).
+        matches = [v for v in module.__dict__.values() if isinstance(v, type) and issubclass(v, AgentTest) and v != AgentVmTest and v != AgentVmssTest and v.__module__ == module.__name__]
         if len(matches) != 1:
             raise Exception(f"Error in {full_path} (each test file must contain exactly one class derived from AgentTest)")
         return matches[0]

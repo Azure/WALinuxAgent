@@ -44,6 +44,7 @@ variable:
       - agent_persist_firewall
       - agent_status
       - agent_update
+      - agent_update_with_signature
       - ext_cgroups
 #
 # TODO: These tests are disabled temporarily since our test account does not have quota to create the Confidential VMs required by the tests.

@@ -3881,7 +3881,7 @@ class _TestSignatureValidationBase(TestExtensionBase):
         AgentTestCase.setUp(self)
         self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.01))
         self.mock_sleep.start()
-        self.patch_conf_flag = patch('azurelinuxagent.ga.exthandlers.conf.get_signature_validation_enabled', return_value=True)
+        self.patch_conf_flag = patch('azurelinuxagent.ga.exthandlers.conf.get_ext_signature_validation_enabled', return_value=True)
         self.patch_conf_flag.start()
         self.patch_is_cvm = patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm', return_value=True)
         self.patch_is_cvm.start()
@@ -3976,10 +3976,10 @@ class _TestSignatureValidationBase(TestExtensionBase):
 class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
     """
     This tests expected behavior when extension package signature validation is enabled, but not enforced (default
-    value for 'Debug.IgnoreSignatureValidationErrors' is True and no policy set).
+    value for 'Debug.IgnoreExtSignatureValidationErrors' is True and no policy set).
 
     TODO: Remove after telemetry release, when signature validation errors are enforced by default (when default value for
-    'Debug.IgnoreSignatureValidationErrors' is changed from True to False).
+    'Debug.IgnoreExtSignatureValidationErrors' is changed from True to False).
     """
     def test_enable_should_succeed_and_send_telemetry_if_signature_validation_fails(self):
         # Signature validation fails, handler manifest validation succeeds -> enable, send telemetry, state should not be set
@@ -4165,7 +4165,7 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
         data_file["manifest"] = "wire/manifest_vm_access.xml"
 
-        with patch('azurelinuxagent.ga.exthandlers.conf.get_signature_validation_enabled', return_value=False):
+        with patch('azurelinuxagent.ga.exthandlers.conf.get_ext_signature_validation_enabled', return_value=False):
             self._test_enable_extension(data_file=data_file,
                                         signature_validation_should_succeed=False,
                                         expected_status_code=0,
@@ -4426,7 +4426,7 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
 
     @skip_if_predicate_true(lambda: sys.version_info[0] == 2, "Timeouts are not supported on Python 2")
     def test_should_disable_future_validation_if_timeout_exceeded(self):
-        with patch.object(SignatureValidationTimeout, '_validation_disabled', False):
+        with patch.object(SignatureValidationTimeout, '_ext_validation_disabled', False):
             data_file = wire_protocol_data.DATA_FILE.copy()
             data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
             data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"
@@ -4586,14 +4586,14 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
                                     expected_handler_status='NotReady', expected_ext_count=1)
 
     def test_enable_should_succeed_for_extension_with_invalid_signature_if_conf_flag_disabled(self):
-        # If 'Debug.EnableSignatureValidation' flag is set to false, enable should succeed for an extension with
+        # If 'Debug.EnableExtSignatureValidation' flag is set to false, enable should succeed for an extension with
         # invalid signature, even with enforcement enabled.
         data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_invalid_signature.xml"
         data_file["manifest"] = "wire/manifest_vm_access.xml"
 
-        with patch('azurelinuxagent.ga.exthandlers.conf.get_signature_validation_enabled', return_value=False):
+        with patch('azurelinuxagent.ga.exthandlers.conf.get_ext_signature_validation_enabled', return_value=False):
             self._test_enable_extension(data_file=data_file,
                                         signature_validation_should_succeed=False,
                                         expected_status_code=0,
@@ -4846,7 +4846,7 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
             self.assertEqual(0, len(vm_status.vmAgent.extensionHandlers))
 
     def test_should_fail_on_validation_error_if_ignore_errors_flag_false(self):
-        # If 'Debug.IgnoreSignaturevalidationErrors' conf flag is set to false, signature validation error should block
+        # If 'Debug.IgnoreExtSignaturevalidationErrors' conf flag is set to false, signature validation error should block
         # extension install, even if policy does not require signature.
 
         # Update policy to not require signature
@@ -4859,7 +4859,7 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
             }
         self._create_policy_file(policy)
 
-        with patch('azurelinuxagent.ga.exthandlers.conf.get_ignore_signature_validation_errors', return_value=False):
+        with patch('azurelinuxagent.ga.exthandlers.conf.get_ignore_ext_signature_validation_errors', return_value=False):
 
             # Should fail enable if signature invalid
             data_file = wire_protocol_data.DATA_FILE.copy()
@@ -4881,7 +4881,7 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
 
     @skip_if_predicate_true(lambda: sys.version_info[0] == 2, "Timeouts are not supported on Python 2")
     def test_should_not_disable_future_validation_if_timeout_exceeded_when_enforced(self):
-        with patch.object(SignatureValidationTimeout, '_validation_disabled', False):
+        with patch.object(SignatureValidationTimeout, '_ext_validation_disabled', False):
             data_file = wire_protocol_data.DATA_FILE.copy()
             data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
             data_file["ext_conf"] = "wire/ext_conf-vm_access_with_signature.xml"

@@ -591,6 +591,14 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         """
         return ConfidentialVMInfo.is_confidential_vm()
 
+    def supports_agent_signature_mapping(self):
+        """
+        Return True if the ExtensionsConfig API supports the 'VersionToSignatureMappings' property in the GA family and agent is running on a CVM.
+
+        TODO: Remove CVM check once agent signature mapping is supported for all VMs, not just CVMs.
+        """
+        return ConfidentialVMInfo.is_confidential_vm()
+
 
 # Do not extend this class
 class _InVMArtifactsProfile(object):

@@ -30,7 +30,7 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
-from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, EXT_SIGNATURE_VALIDATION_CPU_QUOTA, EXT_SIGNATURE_VALIDATION_SLICE_NAME, EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME, DisableCgroups
+from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, PKG_SIGNATURE_VALIDATION_CPU_QUOTA, PKG_SIGNATURE_VALIDATION_SLICE_NAME, PKG_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME, DisableCgroups
 from azurelinuxagent.common.osutil.systemd import is_systemd_run_failure
 from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 
@@ -46,20 +46,37 @@ _agent_start_time = datetime.datetime.now(UTC)
 
 class SignatureValidationTimeout(object):
     """
-    Tracks whether signature validation should be disabled due to a timeout. Disabling validation should only be done when the
-    customer has not opted into enforcement of extension signature validation.
+    Tracks whether signature validation should be disabled due to a timeout. 
+    
+    A timeout during extension signature validation should not disable validation for agent signature validation, 
+    and vice versa. This is because extension packages are typically larger than agent packages, and are more likely 
+    to experience timeouts. 
+    
+    Disabling extension signature validation should only be done when the customer has not opted into enforcement
+    of extension signature validation.
+
     TODO: This is a temporary workaround to prevent performance impact during telemetry release; remove for production release.
     """
     # Should only be set to True when customer has not opted into extension signature validation enforcement.
-    _validation_disabled = False
+    _ext_validation_disabled = False
+
+    _agent_validation_disabled = False
 
     @staticmethod
-    def is_validation_disabled():
-        return SignatureValidationTimeout._validation_disabled
+    def is_ext_validation_disabled():
+        return SignatureValidationTimeout._ext_validation_disabled
 
     @staticmethod
-    def disable_validation():
-        SignatureValidationTimeout._validation_disabled = True
+    def disable_ext_validation():
+        SignatureValidationTimeout._ext_validation_disabled = True
+
+    @staticmethod
+    def is_agent_validation_disabled():
+        return SignatureValidationTimeout._agent_validation_disabled
+
+    @staticmethod
+    def disable_agent_validation():
+        SignatureValidationTimeout._agent_validation_disabled = True
 
 
 class PackageValidationError(AgentError):
@@ -124,14 +141,18 @@ def openssl_version_supported_for_signature_validation():
     # For private preview release only, signature validation is only supported on distros with OpenSSL >= 1.1.0, and
     # users will be informed accordingly. If the OpenSSL version is too old, we log this and return False rather than
     # raising an error.
-    openssl_version = _get_openssl_version()
-    if FlexibleVersion(openssl_version) < _MIN_OPENSSL_VERSION_FOR_SIG_VALIDATION:
-        msg = ("Signature validation requires OpenSSL version {0}, but the current version is {1}. "
-               "To validate signature, please upgrade OpenSSL to version {0} or higher.").format(
-            _MIN_OPENSSL_VERSION_FOR_SIG_VALIDATION, openssl_version)
-        logger.info(msg)
+    try:
+        openssl_version = _get_openssl_version()
+        if FlexibleVersion(openssl_version) < _MIN_OPENSSL_VERSION_FOR_SIG_VALIDATION:
+            msg = ("Signature validation requires OpenSSL version {0}, but the current version is {1}. "
+                   "To validate signature, please upgrade OpenSSL to version {0} or higher.").format(
+                _MIN_OPENSSL_VERSION_FOR_SIG_VALIDATION, openssl_version)
+            logger.info(msg)
+            return False
+        return True
+    except Exception as ex:
+        logger.error("Failed to determine if OpenSSL version supports signature validation. Error: {0}", ustr(ex))
         return False
-    return True
 
 
 def _write_signature_to_file(sig_string, output_file):
@@ -230,10 +251,10 @@ def validate_signature(package_path, signature, package_full_name):
         # If the systemd-run invocation fails, disable cgroups entirely and fall back to running the OpenSSL command directly.
         use_cgroups = CGroupConfigurator.get_instance().enabled()
         if use_cgroups:
-            slice_name = EXT_SIGNATURE_VALIDATION_SLICE_NAME + ".slice"
-            scope_name = EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME + ".scope"
+            slice_name = PKG_SIGNATURE_VALIDATION_SLICE_NAME + ".slice"
+            scope_name = PKG_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME + ".scope"
             systemd_cmd = ['systemd-run', '--unit={0}'.format(scope_name), '--slice={0}'.format(slice_name), '--scope',
-                           '--property=CPUQuota={0}'.format(EXT_SIGNATURE_VALIDATION_CPU_QUOTA)]
+                           '--property=CPUQuota={0}'.format(PKG_SIGNATURE_VALIDATION_CPU_QUOTA)]
 
             # Add accounting properties based on cgroup version
             accounting_props, accounting_vals = CGroupConfigurator.get_instance().get_cgroups_api().get_accounting_properties()
@@ -248,7 +269,7 @@ def validate_signature(package_path, signature, package_full_name):
             except CommandError as ex:
                 # If the systemd-run invocation itself failed, disable cgroups entirely and fall back to running openssl command directly.
                 # If the openssl command failed, re-raise and do not retry.
-                if is_systemd_run_failure(EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME, ex.stderr):
+                if is_systemd_run_failure(PKG_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME, ex.stderr):
                     error_msg = "'systemd-run' invocation failed for signature validation, disabling cgroups and falling back to direct execution. Error: '{0}'".format(ex.stderr)
                     report_validation_event(op=WALAEventOperation.SignatureValidation, level=logger.LogLevel.WARNING,
                         message=error_msg,
@@ -355,10 +376,11 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
 
 def _should_delay_signature_validation():
     """
-    Extension signature validation is a CPU-intensive operation that may impact VM provisioning time. To avoid affecting TDPR
+    Signature validation is a CPU-intensive operation that may impact VM provisioning time. To avoid affecting TDPR
     for performance-sensitive users, we implement an initial delay period after agent startup (set via conf flag
     Debug.SignatureValidationInitialDelay), during which signature validation is skipped. This allows us to gather telemetry
-    without impacting TDPR.
+    without impacting TDPR. This strategy will be used for both agent and extension signature validation while gathering
+    telemetry.
 
     This function returns True if we are still within the delay period, False otherwise.
 
@@ -372,20 +394,73 @@ def _should_delay_signature_validation():
     return elapsed < datetime.timedelta(seconds=delay_seconds)
 
 
-def signature_validation_enabled():
+def _is_agent_signature_validation_expired():
     """
-    Returns True if all conditions for signature validation are met:
-    - Conf flag 'EnableSignatureValidation' is True
-    - Validation timeout has not been exceeded (TODO: remove after telemetry release)
+    We disable the agent signature validation feature after the expiry time. This is to prevent any long-term unintended
+    behaviors in the agent if this version of the agent is baked-in to an image.
+    """
+    try:
+        expiry_date = datetime.datetime.strptime(conf.get_agent_signature_validation_expiry_time(), "%Y-%m-%d").replace(tzinfo=UTC)
+        return datetime.datetime.now(UTC) >= expiry_date
+    except ValueError as ex:
+        logger.error("Failed to parse agent signature validation expiry time. Treating feature as expired. Error: {0}", ustr(ex))
+        return True
+
+
+def ext_signature_validation_enabled():
+    """
+    Returns True if all conditions for extension signature validation are met:
+    - Conf flag 'EnableExtSignatureValidation' is True
+    - Extension signature validation timeout has not been exceeded (TODO: remove after telemetry release)
     - Initial delay period after agent start has passed (TODO: remove after telemetry release)
     - OpenSSL version supports required validation parameters (TODO: remove after timestamp validation implemented)
     - Agent is running on a Confidential VM (TODO: remove when all VMs are supported)
     """
-    return conf.get_signature_validation_enabled() and \
-        not SignatureValidationTimeout.is_validation_disabled() and \
-        not _should_delay_signature_validation() and \
-        openssl_version_supported_for_signature_validation() and \
-        ConfidentialVMInfo.is_confidential_vm()
+    return conf.get_ext_signature_validation_enabled() and \
+           not SignatureValidationTimeout.is_ext_validation_disabled() and \
+           not _should_delay_signature_validation() and \
+           openssl_version_supported_for_signature_validation() and \
+           ConfidentialVMInfo.is_confidential_vm()
+
+
+def agent_signature_validation_enabled():
+    """
+    Returns True if all conditions for agent signature validation are met:
+        1. Conf flag 'EnableAgentSignatureValidation' is True,
+        2. Agent signature validation feature is not expired according to Conf flag 'Debug.AgentSignatureValidationExpiryTime', (TODO: remove after telemetry release(s))
+        3. Agent is running on a Confidential VM (TODO: remove when all VMs are supported)
+        4. Agent signature validation timeout has not been exceeded (TODO: remove after telemetry release(s))
+        5. Initial delay period after agent start has passed (TODO: remove after telemetry release(s))
+        6. OpenSSL version supports all validation parameters (TODO: remove after timestamp validation implemented)
+
+    Agent package signature validation is currently limited to CVMs for telemetry/preview releases. It will be expanded to all VMs after we gain confidence in the feature.
+    TODO: Remove the is_confidential_vm() check once signature validation is supported on all VMs.
+    """
+    return conf.get_agent_signature_validation_enabled() and \
+           not _is_agent_signature_validation_expired() and \
+           ConfidentialVMInfo.is_confidential_vm() and \
+           not SignatureValidationTimeout.is_agent_validation_disabled() and \
+           not _should_delay_signature_validation() and \
+           openssl_version_supported_for_signature_validation()
+
+
+def agent_signature_goal_state_telemetry_enabled():
+    """
+    Returns True if all conditions for agent signature goal state telemetry are met:
+        1. Conf flag 'EnableAgentSignatureValidation' is True,
+        2. Agent signature validation feature is not expired according to Conf flag 'Debug.AgentSignatureValidationExpiryTime', (TODO: remove after telemetry release(s))
+        3. Agent is running on a Confidential VM (TODO: remove when all VMs are supported)
+
+    We separate goal state telemetry enablement from signature validation enablement because validation enablement has
+    performance concerns and openssl requirements, whereas sending telemetry on goal state signature contents has no
+    performance concerns or dependencies on OpenSSL.
+
+    Agent package signature validation is currently limited to CVMs for telemetry/preview releases. It will be expanded to all VMs after we gain confidence in the feature.
+    TODO: Remove the is_confidential_vm() check once signature validation is supported on all VMs.
+    """
+    return conf.get_agent_signature_validation_enabled() and \
+           not _is_agent_signature_validation_expired() and \
+           ConfidentialVMInfo.is_confidential_vm()
 
 
 def cleanup_package_with_invalid_signature(package_file):
