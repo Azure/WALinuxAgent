@@ -33,12 +33,7 @@ class TestSetupRdmaDevice(AgentTestCase):
         )
 
         setup_rdma_device("4.1.0", shared_conf)
-
-        mock_start.assert_called_once()
-        # Verify the MAC address was formatted with colons
-        call_args = RDMADeviceHandler.__init__  # accessed via mock_start
-        # Check the RDMADeviceHandler was created with the formatted MAC
-        self.assertTrue(mock_start.called)
+        self.assertEqual(mock_start.call_count, 1)
 
     @patch.object(RDMADeviceHandler, 'start')
     def test_setup_rdma_device_with_empty_mac(self, mock_start):
@@ -53,7 +48,7 @@ class TestSetupRdmaDevice(AgentTestCase):
 
         # Should not raise TypeError
         setup_rdma_device("4.1.0", shared_conf)
-        mock_start.assert_called_once()
+        self.assertEqual(mock_start.call_count, 1)
 
     @patch.object(RDMADeviceHandler, 'start')
     def test_setup_rdma_device_with_missing_mac_attribute(self, mock_start):
@@ -68,7 +63,7 @@ class TestSetupRdmaDevice(AgentTestCase):
 
         # Should not raise TypeError
         setup_rdma_device("4.1.0", shared_conf)
-        mock_start.assert_called_once()
+        self.assertEqual(mock_start.call_count, 1)
 
     def test_setup_rdma_device_with_invalid_xml(self):
         """When XML cannot be parsed, should raise an XML parsing error"""
