@@ -51,7 +51,6 @@ variable:
 #      - ext_policy
 #      - ext_policy_with_dependencies
       - ext_sequencing
-      - ext_signature_validation
       - ext_telemetry_pipeline
       - ext_update
       - extensions_disabled
