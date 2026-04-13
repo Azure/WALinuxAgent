@@ -774,7 +774,7 @@ class CgroupV1(Cgroup):
             if expected_relative_path is not None:
                 expected_path = os.path.join(controller_mountpoint, expected_relative_path)
                 if controller_path != expected_path:
-                    log_cgroup_warning("The {0} controller is not mounted at the expected path for the {1} cgroup; will not track. Actual cgroup path:[{2}] Expected:[{3}]".format(supported_controller_name, self._cgroup_name, controller_path, expected_path))
+                    log_cgroup_info("The {0} controller is not mounted at the expected path for the {1} cgroup; will not track. Actual cgroup path:[{2}] Expected:[{3}]".format(supported_controller_name, self._cgroup_name, controller_path, expected_path))
                     continue
 
             if supported_controller_name == self.CPU_CONTROLLER:

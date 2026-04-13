@@ -463,14 +463,6 @@ class AgentLog(object):
             {
                 'message': r"(?s)Disabling resource usage monitoring. Reason: Failed to start.*using systemd-run, will try invoking the extension directly. Error: \[SystemdRunError\].* (Message recipient disconnected from message bus without replying|Connection reset by peer|Remote peer disconnected|Transport endpoint is not connected)",
             },
-            #
-            # If agent is not mounted at the expected path, we log this message in v2 machines. This is not an error.
-            # 2025-03-03T09:19:03.145557Z INFO ExtHandler ExtHandler [CGW] The walinuxagent.service cgroup is not mounted at the expected path; will not track. Actual cgroup path:[/sys/fs/cgroup/system.slice/walinuxagent.service] Expected:[/sys/fs/cgroup/azure.slice/walinuxagent.service]
-            # 2025-03-12T22:03:04.095141Z INFO ExtHandler ExtHandler [CGW] The cpu,cpuacct controller is not mounted at the expected path for the walinuxagent.service cgroup; will not track. Actual cgroup path:[/sys/fs/cgroup/cpu,cpuacct/system.slice/walinuxagent.service] Expected:[/sys/fs/cgroup/cpu,cpuacct/azure.slice/walinuxagent.service]
-            #
-            {
-                'message': r"(The walinuxagent.service cgroup is not mounted at the expected path|controller is not mounted at the expected path for the walinuxagent.service cgroup); will not track. Actual cgroup path:\[.*\] Expected:\[.*\]",
-            },
             # Timing issue when the CGroup has been deleted/reset quota by the time we are fetching the values
             # from it. We would see IOError with file entry not found (ERRNO: 2).
             # 2025-08-28T18:46:06.813016Z WARNING MonitorHandler ExtHandler [PERIODIC] Could not collect metrics for cgroup azuremonitor-coreagent. Error : [CGroupsException] Failed to read cpu.stat: Cannot find throttled_usec
