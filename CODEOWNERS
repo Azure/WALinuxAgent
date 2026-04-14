@@ -5,12 +5,11 @@
 # It uses the same pattern rule for gitignore file
 # https://git-scm.com/docs/gitignore#_pattern_format
 
+#
 # Provisioning Agent
-# The Azure Linux Provisioning team is interested in getting notifications
-# when there are requests for changes in the provisioning agent. For any
-# questions, please feel free to reach out to thstring@microsoft.com.
-/azurelinuxagent/pa/ @trstringer @anhvoms
-/tests/pa/ @trstringer @anhvoms
+#
+/azurelinuxagent/pa/ @anhvoms
+/tests/pa/ @anhvoms
 
 #
 # RDMA
@@ -28,4 +27,4 @@
 #
 # Linux Agent team
 #
-* @narrieta @ZhidongPeng @nagworld9 @maddieford @gabstamsft
+* @narrieta @nagworld9 @maddieford
