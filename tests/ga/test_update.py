@@ -1795,7 +1795,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
     def test_it_should_mark_current_agent_as_bad_version_on_downgrade(self):
         no_of_iterations = 100
-        downgrade_version = "2.5.0"
+        downgrade_version = "2.0.0"
 
         self.prepare_agents(count=1)
         self.assertTrue(os.path.exists(self.agent_dir(CURRENT_VERSION)))

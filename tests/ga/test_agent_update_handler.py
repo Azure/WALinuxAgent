@@ -313,7 +313,7 @@ class TestAgentUpdate(UpdateTestCase):
         self.prepare_agents()
         self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
 
-        downgrade_version = "2.5.0"
+        downgrade_version = "2.0.0"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgrade_version)
@@ -335,8 +335,8 @@ class TestAgentUpdate(UpdateTestCase):
         self.prepare_agents()
         self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
 
-        downgrade_version = "2.5.0"
-        from_version = "3.0.0"
+        downgrade_version = "2.0.0"
+        from_version = "2.5.0"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgrade_version)
@@ -361,7 +361,7 @@ class TestAgentUpdate(UpdateTestCase):
         self.prepare_agents()
         self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
 
-        downgrade_version = "2.5.0"
+        downgrade_version = "2.0.0"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgrade_version)
@@ -485,7 +485,7 @@ class TestAgentUpdate(UpdateTestCase):
         self.prepare_agents(count=1)
         data_file = DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_version_not_from_rsm.xml"
-        downgrade_version = "2.5.0"
+        downgrade_version = "2.0.0"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgrade_version)
