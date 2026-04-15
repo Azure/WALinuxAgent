@@ -208,7 +208,7 @@ class TestSignatureValidation(AgentTestCase):
 
     def test_agent_signature_validation_enabled_should_return_false_when_timeout_exceeded(self):
         """
-        Test that agent_signature_validation_enabled returns False when the the agent signature validation timeout is
+        Test that agent_signature_validation_enabled returns False when the agent signature validation timeout is
         exceeded, even if all other conditions are met.
         """
         with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_enabled", return_value=True):
