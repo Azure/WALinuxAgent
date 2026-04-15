@@ -84,8 +84,7 @@ class TestSetupRdmaDevice(AgentTestCase):
         # Should not raise, just return early
         setup_rdma_device("4.1.0", shared_conf)
 
-    @patch.object(RDMADeviceHandler, 'start')
-    def test_mac_address_formatting(self, _mock_start):
+    def test_mac_address_formatting(self):
         """Verify MAC address is correctly formatted with colons"""
         shared_conf = Mock()
         shared_conf.xml_text = (
@@ -95,12 +94,10 @@ class TestSetupRdmaDevice(AgentTestCase):
             '</SharedConfig>'
         )
 
-        with patch.object(RDMADeviceHandler, '__init__', return_value=None):
-            mock_handler = MagicMock()
-            with patch('azurelinuxagent.pa.rdma.rdma.RDMADeviceHandler', return_value=mock_handler) as mock_cls:
-                setup_rdma_device("4.1.0", shared_conf)
-                # Verify MAC was formatted as 00:15:5D:33:FF:1D
-                mock_cls.assert_called_once_with("10.0.0.1", "00:15:5D:33:FF:1D", "4.1.0")
+        with patch('azurelinuxagent.pa.rdma.rdma.RDMADeviceHandler', return_value=MagicMock()) as mock_cls:
+            setup_rdma_device("4.1.0", shared_conf)
+            # Verify MAC was formatted as 00:15:5D:33:FF:1D
+            mock_cls.assert_called_once_with("10.0.0.1", "00:15:5D:33:FF:1D", "4.1.0")
 
     @patch.object(RDMADeviceHandler, 'start')
     def test_empty_mac_not_formatted(self, _mock_start):
