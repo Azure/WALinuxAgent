@@ -51,7 +51,19 @@
                 {
                     "encodedSignature": "test_test_signature_for_invalid"
                 },
-                {}
+                {},
+                {
+                    "version": 1.0,
+                    "encodedSignature": true
+                },
+                {
+                    "version": 123456,
+                    "encodedSignature": 1.0
+                },
+                {
+                    "version": true,
+                    "encodedSignature": 123456
+                }
             ]
         }
     ],

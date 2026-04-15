@@ -312,7 +312,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             for ga_signature_mapping in ga_signature_mappings:
                 ga_signature_version = ga_signature_mapping.get("version")
                 ga_encoded_signature = ga_signature_mapping.get("encodedSignature")
-                if ga_signature_version is not None and ga_encoded_signature is not None:
+                if ga_signature_version is not None and ga_encoded_signature is not None and isinstance(ga_signature_version, str) and isinstance(ga_encoded_signature, str):
                     agent_family.ga_version_to_signature_mapping[ga_signature_version] = ga_encoded_signature
             self._agent_families.append(agent_family)
 

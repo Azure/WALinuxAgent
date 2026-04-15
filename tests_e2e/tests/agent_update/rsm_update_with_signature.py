@@ -37,7 +37,7 @@ class RsmUpdateWithSignatureBvt(RsmUpdateBvt):
 
     def _prepare_agent(self) -> None:
         """
-        Extends the base preparation to also enable agent signature validation, which is disabled by default.
+        Extends the base to also enable agent signature validation, which is disabled by default.
         """
         super()._prepare_agent()
         log.info("Enabling agent signature validation for CVM test")

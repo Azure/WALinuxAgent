@@ -807,7 +807,7 @@ class TestAgentUpdate(UpdateTestCase):
                                             "rsm mode should be used for update")
 
     def _get_signature_telemetry_events(self, mock_telemetry):
-        """Helper to extract AgentSignatureTelemetry events from the mock telemetry call list."""
+        """Helper to extract AgentSignature events from the mock telemetry call list."""
         return [kwarg for _, kwarg in mock_telemetry.call_args_list
                 if kwarg.get('op') == WALAEventOperation.AgentSignature]
 
@@ -822,7 +822,7 @@ class TestAgentUpdate(UpdateTestCase):
         data_file["ext_conf"] = "wire/ext_conf-two_ga_signatures.xml"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
-            # Patch agent_signature_validation_enabled() and supports_agent_signature_mapping() so that the agent takes
+            # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
             # the signature validation flow
             with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
                 with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
@@ -847,7 +847,7 @@ class TestAgentUpdate(UpdateTestCase):
         data_file["ext_conf"] = "wire/ext_conf-two_ga_signatures.xml"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
-            # Patch agent_signature_validation_enabled() and supports_agent_signature_mapping() so that the agent takes
+            # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
             # the signature validation flow
             with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=False):
                 with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
@@ -867,7 +867,7 @@ class TestAgentUpdate(UpdateTestCase):
         data_file["ext_conf"] = "wire/ext_conf-two_ga_signatures.xml"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
-            # Patch agent_signature_validation_enabled() and supports_agent_signature_mapping() so that the agent takes
+            # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
             # the signature validation flow
             with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
                 with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=False):
@@ -890,7 +890,7 @@ class TestAgentUpdate(UpdateTestCase):
         data_file["ext_conf"] = "wire/ext_conf-agent_signatures_and_version_from_rsm.xml"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
-            # Patch agent_signature_validation_enabled() and supports_agent_signature_mapping() so that the agent takes
+            # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
             # the signature validation flow
             with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
                 with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
@@ -918,14 +918,14 @@ class TestAgentUpdate(UpdateTestCase):
         data_file["ext_conf"] = "wire/ext_conf-invalid_ga_signature_mappings.xml"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
-            # Patch agent_signature_validation_enabled() and supports_agent_signature_mapping() so that the agent takes
+            # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
             # the signature validation flow
             with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
                 with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
                     agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
 
             sig_events = self._get_signature_telemetry_events(mock_telemetry)
-            self.assertEqual(1, len(sig_events), "Expected exactly one AgentSignatureTelemetry event. Got: {0}".format(sig_events))
+            self.assertEqual(1, len(sig_events), "Expected exactly one AgentSignature event. Got: {0}".format(sig_events))
 
             telemetry_data = json.loads(sig_events[0]['message'])
             self.assertEqual([], telemetry_data["versions_with_signatures"], "versions_with_signatures should be empty when no signatures are present")
@@ -944,7 +944,7 @@ class TestAgentUpdate(UpdateTestCase):
         data_file["ext_conf"] = "wire/ext_conf-two_ga_signatures.xml"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
-            # Patch agent_signature_validation_enabled() and supports_agent_signature_mapping() so that the agent takes
+            # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
             # the signature validation flow
             with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
                 with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
@@ -1091,7 +1091,7 @@ class TestAgentUpdate(UpdateTestCase):
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
                 with patch("azurelinuxagent.ga.ga_version_updater.agent_signature_validation_enabled", return_value=True):
-                    with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=False):
+                    with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
                         with patch("azurelinuxagent.ga.ga_version_updater.GAVersionUpdater._get_agent_package_signature", side_effect=Exception("test error")):
                             with patch.object(agent_update_handler._protocol.client, "download_zip_package", wraps=agent_update_handler._protocol.client.download_zip_package) as mock_download:
                                 with self.assertRaises(AgentUpgradeExitException):
