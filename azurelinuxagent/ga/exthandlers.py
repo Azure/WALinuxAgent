@@ -1176,7 +1176,7 @@ class ExtHandlersHandler(object):
         """
         Determine whether to ignore extension signature validation errors.
         Extension signature validation errors are ignored only if:
-            1. The configuration flag "Debug.IgnoreExtSignatureValidationError" is set to True, AND
+            1. The configuration flag "Debug.IgnoreExtSignatureValidationErrors" is set to True, AND
             2. The policy does NOT require signature validation for this extension.
 \
         TODO: After telemetry release, remove condition #2 so that signature validation errors will block the
