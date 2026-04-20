@@ -118,7 +118,7 @@ class EnableFirewall(PeriodicOperation):
     def __init__(self, wire_server_address):
         super(EnableFirewall, self).__init__(conf.get_enable_firewall_period())
         self._wire_server_address = wire_server_address
-        self._is_first_iteration = True # The firewall may not be setup on service start (e.g. new VMs); we issue some messages as INFO the first time, then as WARNING/ERROR for subsequent iterations
+        self._is_first_iteration = True  # The firewall may not be setup on service start (e.g. new VMs); we issue some messages as INFO the first time, then as WARNING/ERROR for subsequent iterations
         self._firewall_manager = None  # initialized on demand in the _operation method
         self._firewall_state = FirewallState.OK  # Initialized to OK to prevent turning on verbose mode on the initial invocation of _operation(). It is properly initialized as soon as we do the first check of the firewall.
         #

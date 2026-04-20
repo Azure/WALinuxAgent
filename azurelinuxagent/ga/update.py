@@ -781,7 +781,8 @@ class UpdateHandler(object):
             # There may be a race condition in which the child exited after the above check for None and send_signal(); ignore it.
             if error.errno != errno.ESRCH:  # "no such process" 
                 raise
-            logger.info(u"The {0} child process no longer existed when forwarding signal {1}, continuing the service shutdown process.", CURRENT_AGENT, signum)
+            message = u"The {0} child process no longer existed when forwarding signal {1}; continuing the service shutdown process.".format(CURRENT_AGENT, signum)
+            logger.info(u"{0}", message)
             add_event(op=WALAEventOperation.Enable, message=message)
 
         if self.signal_handler not in (None, signal.SIG_IGN, signal.SIG_DFL):
