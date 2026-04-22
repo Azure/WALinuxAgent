@@ -771,8 +771,8 @@ class UpdateHandler(object):
             return
 
         child_agent_name = self.child_agent.name if self.child_agent is not None else CURRENT_AGENT
-        message = u"Agent {0} forwarding signal {1} to {2}\n".format(CURRENT_AGENT, signum, child_agent_name)
-        logger.info(u"{0}", message)
+        message = u"Agent {0} forwarding signal {1} to {2}...".format(CURRENT_AGENT, signum, child_agent_name)
+        logger.info(u"{0}\n", message)
         add_event(op=WALAEventOperation.Enable, message=message)
 
         try:
