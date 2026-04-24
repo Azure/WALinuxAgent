@@ -66,7 +66,7 @@ class UpdateArmTemplateHook:
                 if func_def is not None:
                     output_value = func_def.get("output", {}).get("value", {})
                     if "diskSizeGB" in output_value:
-                        log.info("******** Waagent: Removing diskSizeGB in %s, which set by LISA template", func_name)
+                        log.info("******** Waagent: Removing diskSizeGB in %s, which is set by the LISA template", func_name)
                         del output_value["diskSizeGB"]
 
         #
