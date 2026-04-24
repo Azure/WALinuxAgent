@@ -55,6 +55,21 @@ class UpdateArmTemplateHook:
             network_security_rule.add_allow_ssh_rule(allow_ssh)
 
         #
+        # Remove diskSizeGB from OS disk functions to avoid errors when the specified
+        # size is smaller than the VM image's disk size.
+        # TODO: Remove this workaround after LISA fixing the default size issue in their template
+        #
+        for func_group in template.get("functions", []):
+            members = func_group.get("members", {})
+            for func_name in ("getOSImage", "getEphemeralOSImage"):
+                func_def = members.get(func_name)
+                if func_def is not None:
+                    output_value = func_def.get("output", {}).get("value", {})
+                    if "diskSizeGB" in output_value:
+                        log.info("******** Waagent: Removing diskSizeGB in %s, which set by LISA template", func_name)
+                        del output_value["diskSizeGB"]
+
+        #
         # Apply any template customizations provided by the tests.
         #
         # The "templates" tag is a comma-separated list of the template customizations provided by the tests
