@@ -55,19 +55,23 @@ class UpdateArmTemplateHook:
             network_security_rule.add_allow_ssh_rule(allow_ssh)
 
         #
-        # Remove diskSizeGB from OS disk functions to avoid errors when the specified
-        # size is smaller than the VM image's disk size.
+        # Update diskSizeGB from OS disk functions to avoid errors when the specified
+        # size is smaller than the VM image's disk size for rhel_82 and rhel_75 distros.
         # TODO: Remove this workaround after LISA fixing the default size issue in their template
         #
-        for func_group in template.get("functions", []):
-            members = func_group.get("members", {})
+        image_name = vm_tags.get("image_name", "")
+        if any(name in image_name.lower() for name in ("rhel-8.2", "rhel-7.5")):
             for func_name in ("getOSImage", "getEphemeralOSImage"):
-                func_def = members.get(func_name)
-                if func_def is not None:
-                    output_value = func_def.get("output", {}).get("value", {})
+                try:
+                    output_value = UpdateArmTemplate.get_function_output(
+                        UpdateArmTemplate.get_lisa_function(template, func_name)
+                    )
                     if "diskSizeGB" in output_value:
-                        log.info("******** Waagent: Removing diskSizeGB in %s, which is set by the LISA template", func_name)
-                        del output_value["diskSizeGB"]
+                        log.info("******** Waagent: Updating diskSizeGB in %s to 64GB", func_name)
+                        output_value["diskSizeGB"] = 64
+                except Exception as e:
+                    log.info("Error while updating diskSizeGB in %s. Error: %s", func_name, str(e))
+
 
         #
         # Apply any template customizations provided by the tests.
