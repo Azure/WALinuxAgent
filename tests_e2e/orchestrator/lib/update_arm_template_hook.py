@@ -59,8 +59,8 @@ class UpdateArmTemplateHook:
         # size is smaller than the VM image's disk size for rhel_82 and rhel_75 distros.
         # TODO: Remove this workaround after LISA fixing the default size issue in their template
         #
-        image_name = vm_tags.get("image_name", "")
-        if any(name in image_name.lower() for name in ("rhel-8.2", "rhel-7.5")):
+        image_name = vm_tags.get("image_name", "").lower()
+        if image_name in ("rhel-8.2", "rhel-7.5"):
             for func_name in ("getOSImage", "getEphemeralOSImage"):
                 try:
                     output_value = UpdateArmTemplate.get_function_output(
