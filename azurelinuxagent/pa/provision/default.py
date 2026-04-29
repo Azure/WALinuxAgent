@@ -37,6 +37,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, \
 from azurelinuxagent.common.exception import ProvisionError, ProtocolError, \
     OSUtilError
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateProperties
 from azurelinuxagent.common.protocol.restapi import ProvisionStatus
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME
@@ -240,8 +241,31 @@ class ProvisionHandler(object):
         logger.info("Configure sshd")
         self.osutil.conf_sshd(ovfenv.disable_ssh_password_auth)
 
+        self._download_ssh_keys(ovfenv)
         self.deploy_ssh_pubkeys(ovfenv)
         self.deploy_ssh_keypairs(ovfenv)
+
+    def _download_ssh_keys(self, ovfenv):
+        #
+        # We need to download the Certificates package from the Wireserver if any public key in ovfenv.xml has only a thumbprint (i.e. no value for the key) or if any key pairs need to be installed
+        #
+        download_certificates = any(value is None and thumbprint is not None for _, thumbprint, value in ovfenv.ssh_pubkeys) or len(ovfenv.ssh_keypairs) > 0
+        if not download_certificates:
+            return
+
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            try:
+                protocol = self.protocol_util.get_protocol(init_goal_state=False)
+                _ = GoalState(protocol.client, goal_state_properties=GoalStateProperties.Certificates)
+                logger.info("Downloaded certificates successfully")
+                return
+            except Exception as e:
+                if attempt < max_attempts - 1:
+                    logger.warn("Unable to download certificates; will retry after a short delay: {0}", ustr(e))
+                    time.sleep(30)
+                else:
+                    logger.error("Unable to download certificates: {0}", ustr(e))
 
     def save_customdata(self, ovfenv):
         customdata = ovfenv.customdata

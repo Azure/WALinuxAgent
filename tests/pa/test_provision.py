@@ -14,7 +14,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+import contextlib
 import os
 import re
 import unittest
@@ -22,12 +22,15 @@ import unittest
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import ProvisionError
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
+from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.common.protocol.util import OVF_FILE_NAME
 from azurelinuxagent.pa.provision import get_provision_handler
 from azurelinuxagent.pa.provision.cloudinit import CloudInitProvisionHandler
 from azurelinuxagent.pa.provision.default import ProvisionHandler
 from azurelinuxagent.common.utils import fileutil
+from tests.lib import wire_protocol_data
 from tests.lib.tools import AgentTestCase, distros, load_data, MagicMock, Mock, patch
+from tests.lib.mock_wire_protocol import mock_wire_protocol
 
 
 class TestProvision(AgentTestCase):
@@ -376,6 +379,34 @@ class TestProvision(AgentTestCase):
         provisioning_handler = get_provision_handler()
         self.assertIsInstance(provisioning_handler, CloudInitProvisionHandler, 'Provisioning handler should be cloud-init if agent is set to cloud-init')
 
+
+    @staticmethod
+    @contextlib.contextmanager
+    def _create_provision_handler_with_mock_protocol():
+        handler = ProvisionHandler()
+        handler.protocol_util = Mock()
+
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, detect_protocol=False) as mock_protocol:
+            handler.protocol_util.get_protocol = Mock(return_value=mock_protocol)
+            yield handler, mock_protocol
+
+    def test_it_should_not_download_certificates_when_the_public_key_has_a_value(self):
+        ovfenv = OvfEnv(load_data("ovf-env_public_key.xml"))
+        with TestProvision._create_provision_handler_with_mock_protocol() as (handler, protocol):
+            handler._download_ssh_keys(ovfenv)
+        self.assertEqual(0, protocol.mock_wire_data.call_counts['certificates'], "The Certificates package should not have been retrieved")
+
+    def test_it_should_download_certificates_when_the_public_key_does_not_have_a_value(self):
+        ovfenv = OvfEnv(load_data("ovf-env_public_key_no_value.xml"))
+        with TestProvision._create_provision_handler_with_mock_protocol() as (handler, protocol):
+            handler._download_ssh_keys(ovfenv)
+        self.assertEqual(1, protocol.mock_wire_data.call_counts['certificates'], "The Certificates package should have been retrieved")
+
+    def test_it_should_download_certificates_when_key_pairs_need_to_deployed(self):
+        ovfenv = OvfEnv(load_data("ovf-env_key_pair.xml"))
+        with TestProvision._create_provision_handler_with_mock_protocol() as (handler, protocol):
+            handler._download_ssh_keys(ovfenv)
+        self.assertEqual(1, protocol.mock_wire_data.call_counts['certificates'], "The Certificates package should have been retrieved")
 
 if __name__ == '__main__':
     unittest.main()
