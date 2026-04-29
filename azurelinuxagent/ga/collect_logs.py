@@ -57,22 +57,17 @@ def is_log_collection_allowed():
     supported_python = PY_VERSION_MINOR >= 6 if PY_VERSION_MAJOR == 2 else PY_VERSION_MAJOR == 3
     is_allowed = conf_enabled and (cgroups_enabled or cgroup_v2_resource_limiting_enabled) and supported_python
 
-    msg = "Checking if log collection is allowed at this time [{0}]. All three conditions must be met: " \
+    msg = "Log collection {0} supported. All three conditions must be met: " \
           "1. configuration enabled [{1}], " \
           "2. cgroups v1 enabled [{2}] OR cgroups v2 is in use and v2 resource limiting configuration enabled [{3}], " \
-          "3. python supported: [{4}]".format(is_allowed,
-                                              conf_enabled,
-                                              cgroups_enabled,
-                                              cgroup_v2_resource_limiting_enabled,
-                                              supported_python)
+          "3. python supported: [{4}]".format(
+            "is" if is_allowed else "is not",
+            conf_enabled,
+            cgroups_enabled,
+            cgroup_v2_resource_limiting_enabled,
+            supported_python)
     logger.info(msg)
-    add_event(
-        name=AGENT_NAME,
-        version=CURRENT_VERSION,
-        op=WALAEventOperation.LogCollection,
-        is_success=is_allowed,
-        message=msg,
-        log_event=False)
+    add_event(op=WALAEventOperation.LogCollection, message=msg)
 
     return is_allowed
 

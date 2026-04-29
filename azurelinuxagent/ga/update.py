@@ -18,6 +18,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import glob
+import errno
 import os
 import platform
 import re
@@ -769,13 +770,20 @@ class UpdateHandler(object):
         if self.child_process is None:
             return
 
-        logger.info(
-            u"Agent {0} forwarding signal {1} to {2}\n",
-            CURRENT_AGENT,
-            signum,
-            self.child_agent.name if self.child_agent is not None else CURRENT_AGENT)
+        child_agent_name = self.child_agent.name if self.child_agent is not None else CURRENT_AGENT
+        message = u"Agent {0} forwarding signal {1} to {2}...".format(CURRENT_AGENT, signum, child_agent_name)
+        logger.info(u"{0}\n", message)
+        add_event(op=WALAEventOperation.Enable, message=message)
 
-        self.child_process.send_signal(signum)
+        try:
+            self.child_process.send_signal(signum)
+        except OSError as error:
+            # There may be a race condition in which the child exited after the above check for None and send_signal(); ignore it.
+            if error.errno != errno.ESRCH:  # "no such process" 
+                raise
+            message = u"The {0} child process no longer existed when forwarding signal {1}; continuing the service shutdown process.".format(CURRENT_AGENT, signum)
+            logger.info(u"{0}", message)
+            add_event(op=WALAEventOperation.Enable, message=message)
 
         if self.signal_handler not in (None, signal.SIG_IGN, signal.SIG_DFL):
             self.signal_handler(signum, frame)

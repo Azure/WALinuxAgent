@@ -118,6 +118,7 @@ class EnableFirewall(PeriodicOperation):
     def __init__(self, wire_server_address):
         super(EnableFirewall, self).__init__(conf.get_enable_firewall_period())
         self._wire_server_address = wire_server_address
+        self._is_first_iteration = True  # The firewall may not be setup on service start (e.g. new VMs); we issue some messages as INFO the first time, then as WARNING/ERROR for subsequent iterations
         self._firewall_manager = None  # initialized on demand in the _operation method
         self._firewall_state = FirewallState.OK  # Initialized to OK to prevent turning on verbose mode on the initial invocation of _operation(). It is properly initialized as soon as we do the first check of the firewall.
         #
@@ -157,14 +158,14 @@ class EnableFirewall(PeriodicOperation):
                     self._emit_event(event.info, WALAEventOperation.Firewall, "The firewall is configured correctly. Current state:\n{0}", self._firewall_manager.get_state())
                     return
                 self._update_firewall_state(FirewallState.NotSet)
-                self._emit_event(event.warn, WALAEventOperation.Firewall, "The firewall has not been setup. Will set it up.")
+                self._emit_event(event.info if self._is_first_iteration else event.warn, WALAEventOperation.Firewall, "The firewall has not been setup. Will set it up.")
             except IptablesInconsistencyError as e:
                 self._update_firewall_state(FirewallState.Inconsistent)
                 self._emit_event(event.warn, WALAEventOperation.FirewallInconsistency, "The results returned by iptables are inconsistent, will not change the current state of the firewall: {0}", ustr(e))
                 return
             except FirewallStateError as e:
                 self._update_firewall_state(FirewallState.Invalid)
-                self._emit_event(event.warn, WALAEventOperation.ResetFirewall, "The firewall is not configured correctly. {0}. Will reset it. Current state:\n{1}", ustr(e), self._firewall_manager.get_state())
+                self._emit_event(event.info if self._is_first_iteration else event.warn, WALAEventOperation.ResetFirewall, "The firewall is not configured correctly. {0}. Will reset it. Current state:\n{1}", ustr(e), self._firewall_manager.get_state())
                 self._firewall_manager.remove()
 
             self._firewall_manager.setup()
@@ -180,6 +181,8 @@ class EnableFirewall(PeriodicOperation):
             if self._should_report:
                 self._report_count += 1
                 self._period_report_count += 1
+            self._is_first_iteration = False
+
 
     def _emit_event(self, event_function, operation, message, *args):
         if self._should_report:
