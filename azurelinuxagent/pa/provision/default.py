@@ -253,6 +253,9 @@ class ProvisionHandler(object):
         if not download_certificates:
             return
 
+        #
+        # Try to download the certificates a few times but continue execution if all attempts fail. The code that deploys the SSH keys will report that as a provisioning error.
+        #
         max_attempts = 5
         for attempt in range(max_attempts):
             try:
