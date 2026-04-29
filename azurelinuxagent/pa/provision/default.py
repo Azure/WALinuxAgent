@@ -261,7 +261,6 @@ class ProvisionHandler(object):
             try:
                 protocol = self.protocol_util.get_protocol(init_goal_state=False)
                 _ = GoalState(protocol.client, goal_state_properties=GoalStateProperties.Certificates)
-                logger.info("Downloaded certificates successfully")
                 return
             except Exception as e:
                 if attempt < max_attempts - 1:

@@ -402,7 +402,7 @@ class TestProvision(AgentTestCase):
             handler._download_ssh_keys(ovfenv)
         self.assertEqual(1, protocol.mock_wire_data.call_counts['certificates'], "The Certificates package should have been retrieved")
 
-    def test_it_should_download_certificates_when_key_pairs_need_to_deployed(self):
+    def test_it_should_download_certificates_when_key_pairs_need_to_be_deployed(self):
         ovfenv = OvfEnv(load_data("ovf-env_key_pair.xml"))
         with TestProvision._create_provision_handler_with_mock_protocol() as (handler, protocol):
             handler._download_ssh_keys(ovfenv)
