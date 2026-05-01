@@ -259,8 +259,9 @@ class AgentTestSuitesCombinator(Combinator):
                                     test_suite_info=test_suite_info)
                             shared_environments[env_name] = env
 
+                    vm_tags = env["vm_tags"]
+                    vm_tags["image_name"] = image_name # used in the update_arm_template hook to apply image-specific customizations in the ARM template
                     if test_suite_info.template != '':
-                        vm_tags = env["vm_tags"]
                         if "templates" not in vm_tags:
                             vm_tags["templates"] = test_suite_info.template
                         else:
