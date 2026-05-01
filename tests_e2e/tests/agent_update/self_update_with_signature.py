@@ -25,10 +25,15 @@
 #   2. Goal state signature telemetry was sent on new goal states
 #
 from tests_e2e.tests.agent_update.self_update import SelfUpdateBvt
+from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.logging import log
 
 
 class SelfUpdateWithSignatureBvt(SelfUpdateBvt):
+
+    def __init__(self, context: AgentVmTestContext):
+        super().__init__(context)
+        self._latest_manifest_versions = self._get_latest_manifest_versions()
 
     def _test_setup(self) -> None:
         """
@@ -58,16 +63,22 @@ class SelfUpdateWithSignatureBvt(SelfUpdateBvt):
             use_sudo=True)
         log.info("Successfully verified agent signature validated for version %s", version)
 
-    def _verify_gs_signature_telemetry(self) -> None:
-        log.info("Verifying goal state signature telemetry")
-        log.info("Fetching latest two versions from the agent manifest")
+    def _get_latest_manifest_versions(self) -> list:
+        """
+        Retrieves the latest two versions from the agent manifest.
+        """
+        log.info("Fetching latest two versions from the agent manifest to use for goal state comparison later...")
         output: str = self._ssh_client.run_command(
             "agent_update-get_latest_version_from_manifest.py --all", use_sudo=True).rstrip()
         versions = output.split()
-        latest_versions = versions[-2:]
-        log.info("Latest two manifest versions: %s", latest_versions)
+        latest_manifest_versions = versions[-2:]
+        log.info("Latest two manifest versions: %s", latest_manifest_versions)
+        return latest_manifest_versions
+
+    def _verify_gs_signature_telemetry(self) -> None:
+        log.info("Verifying goal state signature telemetry")
         cmd = "agent_update-check_gs_signature_telemetry.py --latest-versions {0}".format(
-            " ".join(latest_versions))
+            " ".join(self._latest_manifest_versions))
         self._run_remote_test(
             self._ssh_client,
             cmd,

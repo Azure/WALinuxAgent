@@ -20,6 +20,7 @@ import base64
 import datetime
 import os
 import re
+import uuid
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.utils.shellutil import run_command, CommandError
@@ -133,6 +134,27 @@ def _get_openssl_version():
         return "0.0.0"
 
 
+class _OpenSSLVersionCheck(object):
+    """
+    Caches the result of the OpenSSL version capability check performed by
+    openssl_version_supported_for_signature_validation(). Caching avoids repeated subprocess calls, 
+    log noise, and repeated telemetry events.
+
+    TODO: This is a temporary workaround while we collect telemetry on the signature validation feature; remove for
+    production release once enforcement is in place.
+    """
+    # None until first check; True/False thereafter.
+    _version_supports_validation = None
+
+    @staticmethod
+    def get_version_supports_validation():
+        return _OpenSSLVersionCheck._version_supports_validation
+
+    @staticmethod
+    def set_version_supports_validation(supported):
+        _OpenSSLVersionCheck._version_supports_validation = supported
+
+
 def openssl_version_supported_for_signature_validation():
     # Signature validation currently requires OpenSSL >= 1.1.0 to support the 'no_check_time' flag
     # used with the 'openssl cms verify' command. This flag bypasses timestamp checks, and will be removed once
@@ -141,6 +163,13 @@ def openssl_version_supported_for_signature_validation():
     # For private preview release only, signature validation is only supported on distros with OpenSSL >= 1.1.0, and
     # users will be informed accordingly. If the OpenSSL version is too old, we log this and return False rather than
     # raising an error.
+    #
+    # The result is cached after the first call so the OpenSSL version check (and any associated log/telemetry) only
+    # runs once per agent execution.
+    version_supports_validation = _OpenSSLVersionCheck.get_version_supports_validation()
+    if version_supports_validation is not None:
+        return version_supports_validation
+
     try:
         openssl_version = _get_openssl_version()
         if FlexibleVersion(openssl_version) < _MIN_OPENSSL_VERSION_FOR_SIG_VALIDATION:
@@ -148,10 +177,17 @@ def openssl_version_supported_for_signature_validation():
                    "To validate signature, please upgrade OpenSSL to version {0} or higher.").format(
                 _MIN_OPENSSL_VERSION_FOR_SIG_VALIDATION, openssl_version)
             logger.info(msg)
+            add_event(op=WALAEventOperation.SignatureValidation, is_success=True,
+                      message=msg, log_event=False)     # is_success=True to avoid polluting release monitoring queries while we collect telemetry on this feature
+            _OpenSSLVersionCheck.set_version_supports_validation(False)
             return False
+        _OpenSSLVersionCheck.set_version_supports_validation(True)
         return True
     except Exception as ex:
-        logger.error("Failed to determine if OpenSSL version supports signature validation. Error: {0}", ustr(ex))
+        logger.warn("Failed to determine if OpenSSL version supports signature validation. Error: {0}", ustr(ex))
+        msg = "Failed to determine if OpenSSL version supports signature validation. Error: {0}".format(ustr(ex))
+        add_event(op=WALAEventOperation.SignatureValidation, is_success=False, message=msg, log_event=False)
+        _OpenSSLVersionCheck.set_version_supports_validation(False)
         return False
 
 
@@ -170,6 +206,12 @@ def report_validation_event(op, level, message, name, version, duration):
     'level' is expected to be one of logger.LogLevel.INFO, WARNING, or ERROR. If level is WARNING, prefix with "[WARNING]"
     in telemetry, and append a message that failure can be ignored.
 
+    Telemetry 'is_success' behavior based on log level:
+        - ERROR: is_success=False, these should surface in release error monitoring queries.
+        - WARNING: is_success=True. WARNING-level events should not surface in release error monitoring queries while
+            we are collecting telemetry for this feature. TODO: is_success = False once we start enforcing signature validation
+        - INFO: is_success=True.
+
     TODO: for extension signature validation, add '[Name-Version]' prefix to log messages
     """
     if level == logger.LogLevel.ERROR:
@@ -180,7 +222,7 @@ def report_validation_event(op, level, message, name, version, duration):
         message = "{0}\nThis failure can be safely ignored; will continue processing the package.".format(message)
         logger.warn(message)
         event_msg = "[WARNING] {0}".format(message)
-        is_success = False
+        is_success = True
     else:
         # Log as INFO. If the level is invalid (i.e., not INFO, WARNING, or ERROR), treat it as INFO and prepend a warning to the message.
         if level != logger.LogLevel.INFO:
@@ -252,8 +294,11 @@ def validate_signature(package_path, signature, package_full_name):
         use_cgroups = CGroupConfigurator.get_instance().enabled()
         if use_cgroups:
             slice_name = PKG_SIGNATURE_VALIDATION_SLICE_NAME + ".slice"
-            scope_name = PKG_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME + ".scope"
-            systemd_cmd = ['systemd-run', '--unit={0}'.format(scope_name), '--slice={0}'.format(slice_name), '--scope',
+            # Use a unique unit name per invocation to avoid collisions with prior transient units that systemd may
+            # not have garbage-collected yet (e.g. if a previous invocation left the unit in a 'failed' state). This
+            # mirrors the pattern used by start_extension_command() in cgroupapi.py.
+            unit_name = "{0}_{1}".format(PKG_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME, ustr(uuid.uuid4()))
+            systemd_cmd = ['systemd-run', '--unit={0}'.format(unit_name), '--slice={0}'.format(slice_name), '--scope',
                            '--property=CPUQuota={0}'.format(PKG_SIGNATURE_VALIDATION_CPU_QUOTA)]
 
             # Add accounting properties based on cgroup version
@@ -269,7 +314,7 @@ def validate_signature(package_path, signature, package_full_name):
             except CommandError as ex:
                 # If the systemd-run invocation itself failed, disable cgroups entirely and fall back to running openssl command directly.
                 # If the openssl command failed, re-raise and do not retry.
-                if is_systemd_run_failure(PKG_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME, ex.stderr):
+                if is_systemd_run_failure(unit_name, ex.stderr):
                     error_msg = "'systemd-run' invocation failed for signature validation, disabling cgroups and falling back to direct execution. Error: '{0}'".format(ex.stderr)
                     report_validation_event(op=WALAEventOperation.SignatureValidation, level=logger.LogLevel.WARNING,
                         message=error_msg,
@@ -394,15 +439,16 @@ def _should_delay_signature_validation():
     return elapsed < datetime.timedelta(seconds=delay_seconds)
 
 
-def _is_agent_signature_validation_expired():
+def _is_signature_validation_telemetry_expired():
     """
     We disable the agent signature validation feature after the expiry time. This is to prevent any long-term unintended
     behaviors in the agent if this version of the agent is baked-in to an image.
     """
     try:
-        expiry_date = datetime.datetime.strptime(conf.get_agent_signature_validation_expiry_time(), "%Y-%m-%d").replace(tzinfo=UTC)
+        expiry_date = datetime.datetime.strptime(conf.get_signature_validation_telemetry_expiry_time(), "%Y-%m-%d").replace(tzinfo=UTC)
         return datetime.datetime.now(UTC) >= expiry_date
-    except ValueError as ex:
+    except Exception as ex:
+        # Catch any exception (e.g. ValueError from a malformed date string) and treat the feature as expired so we fail safe.
         logger.error("Failed to parse agent signature validation expiry time. Treating feature as expired. Error: {0}", ustr(ex))
         return True
 
@@ -427,7 +473,7 @@ def agent_signature_validation_enabled():
     """
     Returns True if all conditions for agent signature validation are met:
         1. Conf flag 'EnableAgentSignatureValidation' is True,
-        2. Agent signature validation feature is not expired according to Conf flag 'Debug.AgentSignatureValidationExpiryTime', (TODO: remove after telemetry release(s))
+        2. Agent signature validation feature is not expired according to Conf flag 'Debug.SignatureValidationTelemetryExpiryTime', (TODO: remove after telemetry release(s))
         3. Agent is running on a Confidential VM (TODO: remove when all VMs are supported)
         4. Agent signature validation timeout has not been exceeded (TODO: remove after telemetry release(s))
         5. Initial delay period after agent start has passed (TODO: remove after telemetry release(s))
@@ -437,7 +483,7 @@ def agent_signature_validation_enabled():
     TODO: Remove the is_confidential_vm() check once signature validation is supported on all VMs.
     """
     return conf.get_agent_signature_validation_enabled() and \
-           not _is_agent_signature_validation_expired() and \
+           not _is_signature_validation_telemetry_expired() and \
            ConfidentialVMInfo.is_confidential_vm() and \
            not SignatureValidationTimeout.is_agent_validation_disabled() and \
            not _should_delay_signature_validation() and \
@@ -448,7 +494,7 @@ def agent_signature_goal_state_telemetry_enabled():
     """
     Returns True if all conditions for agent signature goal state telemetry are met:
         1. Conf flag 'EnableAgentSignatureValidation' is True,
-        2. Agent signature validation feature is not expired according to Conf flag 'Debug.AgentSignatureValidationExpiryTime', (TODO: remove after telemetry release(s))
+        2. Agent signature validation feature is not expired according to Conf flag 'Debug.SignatureValidationTelemetryExpiryTime', (TODO: remove after telemetry release(s))
         3. Agent is running on a Confidential VM (TODO: remove when all VMs are supported)
 
     We separate goal state telemetry enablement from signature validation enablement because validation enablement has
@@ -459,7 +505,7 @@ def agent_signature_goal_state_telemetry_enabled():
     TODO: Remove the is_confidential_vm() check once signature validation is supported on all VMs.
     """
     return conf.get_agent_signature_validation_enabled() and \
-           not _is_agent_signature_validation_expired() and \
+           not _is_signature_validation_telemetry_expired() and \
            ConfidentialVMInfo.is_confidential_vm()
 
 

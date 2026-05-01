@@ -143,7 +143,7 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
         # VMAgentFamily.ga_version_to_signature_mapping should be a dict with one element when the goal state
         # VersionToSignatureMappings element has one GASignature element
         data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
-        data_file["vm_settings"] = "hostgaplugin/vm_settings-one_ga_signature.json"
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-one_ga_dummy_signature.json"
         with mock_wire_protocol(data_file) as protocol:
             protocol.mock_wire_data.set_etag(888)
             goal_state = GoalState(protocol.client)
@@ -164,7 +164,7 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
         # VMAgentFamily.ga_version_to_signature_mapping should be a dict with two elements when the goal state
         # VersionToSignatureMappings element has two GASignature elements
         data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
-        data_file["vm_settings"] = "hostgaplugin/vm_settings-two_ga_signatures.json"
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-two_ga_dummy_signatures.json"
         with mock_wire_protocol(data_file) as protocol:
             protocol.mock_wire_data.set_etag(888)
             goal_state = GoalState(protocol.client)

@@ -730,14 +730,14 @@ def get_agent_signature_validation_enabled(conf=__conf__):
     return conf.get_switch("Debug.EnableAgentSignatureValidation", False)
 
 
-def get_agent_signature_validation_expiry_time(conf=__conf__):
+def get_signature_validation_telemetry_expiry_time(conf=__conf__):
     """
-    Get the expiry date for the agent signature validation feature.
-    After this date, agent signature validation will be disabled.
+    Get the expiry date for the signature validation telemetry.
+    After this date, signature validation telemetry will be disabled.
     Format: YYYY-MM-DD
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get("Debug.AgentSignatureValidationExpiryTime", "2026-12-01")
+    return conf.get("Debug.SignatureValidationTelemetryExpiryTime", "2026-12-01")
 
 
 def get_ignore_ext_signature_validation_errors(conf=__conf__):

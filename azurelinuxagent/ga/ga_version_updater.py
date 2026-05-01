@@ -165,9 +165,11 @@ class GAVersionUpdater(object):
         try:
             signature = self._get_agent_package_signature(self._version, agent_family, goal_state)
         except Exception as e:
+            # TODO: Once agent signature validation is enforced, this condition should raise an exception instead of skipping validation.
+            # Log as warning but mark event as success to avoid poluting release monitoring queries while we collect telemetry on this feature
             msg = "Unexpected error getting the agent package signature, skipping agent package signature validation: {0}".format(ustr(e))
             logger.warn(msg)
-            add_event(op=WALAEventOperation.SignatureValidation, is_success=False, message=msg, log_event=False)
+            add_event(op=WALAEventOperation.SignatureValidation, is_success=True, message=msg, log_event=False)
         is_fast_track_goal_state = goal_state.extensions_goal_state.source == GoalStateSource.FastTrack
         self.download_new_agent_pkg(package_to_download, protocol, is_fast_track_goal_state, signature)
         agent = GuestAgent.from_agent_package(package_to_download)
@@ -205,17 +207,19 @@ class GAVersionUpdater(object):
         if not agent_signature_validation_enabled():
             return ""
 
-        # If agent signature validation is enabled, but the goal state doesn't support agent signature mapping, send telemetry
-        # and skip validation (return empty string).
+        # If agent signature validation is enabled, but the goal state doesn't support agent signature mapping, log
+        # locally and skip validation (return empty string). Send event so we can determine how many VMs are skipping
+        # agent package signature validation due to this condition.
         # TODO: Once signature validation is enforced, this condition should raise an exception.
         if not goal_state.extensions_goal_state.supports_agent_signature_mapping():
             msg = "Goal state does not support agent signature mapping, skipping agent package signature validation."
-            logger.warn(msg)
-            add_event(op=WALAEventOperation.SignatureValidation, is_success=False, message=msg, log_event=False)
+            logger.info(msg)
+            add_event(op=WALAEventOperation.SignatureValidation, is_success=True, message=msg, log_event=False)
             return ""
 
-        # If agent signature validation is enabled, but the goal state doesn't have a signature for the given version, send telemetry
-        # and skip validation (return empty string). Once signature validation is enforced, this condition should raise an exception.
+        # If agent signature validation is enabled, but the goal state doesn't have a signature for the given version,
+        # log locally and skip validation (return empty string). Send event so we can determine how many VMs are
+        # skipping agent package signature validation due to this condition.
         # There are a few reasons the signature might be missing from the goal state:
         #   1) Instability in CRP changes to include the signature
         #   2) The agent discovered the update from the manifest before it received a new goal state with the signature
@@ -226,8 +230,8 @@ class GAVersionUpdater(object):
         if str(version) not in agent_family.ga_version_to_signature_mapping:
             msg = "No signature found for agent version {0} in goal state (goal state timestamp: {1}; activity id: {2}), skipping agent package signature validation.".format(
                 str(version), goal_state.extensions_goal_state.created_on_timestamp, goal_state.extensions_goal_state.activity_id)
-            logger.warn(msg)
-            add_event(op=WALAEventOperation.SignatureValidation, is_success=False, message=msg, log_event=False)
+            logger.info(msg)
+            add_event(op=WALAEventOperation.SignatureValidation, is_success=True, message=msg, log_event=False)
             return ""
 
         return agent_family.ga_version_to_signature_mapping[str(version)]

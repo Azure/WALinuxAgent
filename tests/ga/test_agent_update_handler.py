@@ -83,6 +83,9 @@ class TestAgentUpdate(UpdateTestCase):
                     with patch("azurelinuxagent.ga.self_update_version_updater.random.randint", side_effect=_mock_random_update_time):
                         with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
                             with patch("azurelinuxagent.common.conf.get_enable_ga_versioning", return_value=True):
+                                # Patch validate_signature so that the function is mocked in these UTs. The actual
+                                # signature validation logic is unit tested in test_signature_validation.py and
+                                # test_signature_validation_sudo.py
                                 with patch("azurelinuxagent.common.protocol.wire.validate_signature"):
                                     with patch("azurelinuxagent.common.event.EventLogger.add_event") as mock_telemetry:
                                         agent_update_handler = get_agent_update_handler(protocol)
@@ -819,7 +822,7 @@ class TestAgentUpdate(UpdateTestCase):
         # This goal state is for a VM enrolled into RSM but the agent version in the goal state is not from RSM, so it
         # should not result in an agent update. This unit test is only testing the agent logic to send telemetry on
         # agent signatures in the goal state, so an actual agent update is not needed.
-        data_file["ext_conf"] = "wire/ext_conf-two_ga_signatures.xml"
+        data_file["ext_conf"] = "wire/ext_conf-two_ga_dummy_signatures.xml"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
@@ -844,7 +847,7 @@ class TestAgentUpdate(UpdateTestCase):
         # This goal state is for a VM enrolled into RSM but the agent version in the goal state is not from RSM, so it
         # should not result in an agent update. This unit test is only testing the agent logic to send telemetry on
         # agent signatures in the goal state, so an actual agent update is not needed.
-        data_file["ext_conf"] = "wire/ext_conf-two_ga_signatures.xml"
+        data_file["ext_conf"] = "wire/ext_conf-two_ga_dummy_signatures.xml"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
@@ -864,7 +867,7 @@ class TestAgentUpdate(UpdateTestCase):
         # This goal state is for a VM enrolled into RSM but the agent version in the goal state is not from RSM, so it
         # should not result in an agent update. This unit test is only testing the agent logic to send telemetry on
         # agent signatures in the goal state, so an actual agent update is not needed.
-        data_file["ext_conf"] = "wire/ext_conf-two_ga_signatures.xml"
+        data_file["ext_conf"] = "wire/ext_conf-two_ga_dummy_signatures.xml"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
@@ -887,7 +890,7 @@ class TestAgentUpdate(UpdateTestCase):
         data_file = DATA_FILE.copy()
         # This goal state is for a VM enrolled into RSM where the agent version in the goal state is from RSM. As a
         # result, the agent should update to the requested version (9.9.9.10)
-        data_file["ext_conf"] = "wire/ext_conf-agent_signatures_and_version_from_rsm.xml"
+        data_file["ext_conf"] = "wire/ext_conf-agent_dummy_signatures_and_version_from_rsm.xml"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
@@ -929,7 +932,7 @@ class TestAgentUpdate(UpdateTestCase):
 
             telemetry_data = json.loads(sig_events[0]['message'])
             self.assertEqual([], telemetry_data["versions_with_signatures"], "versions_with_signatures should be empty when no signatures are present")
-            self.assertEqual(None, telemetry_data["rsm_requested_version"], "RSM requested version should be None if goal state is not an RSM request")
+            self.assertEqual("", telemetry_data["rsm_requested_version"], "RSM requested version should be empty str if goal state is not an RSM request")
             self.assertIsNotNone(telemetry_data["created_on_timestamp"], "Goal state created_on_timestamp should be present")
             self.assertIsNotNone(telemetry_data["activity_id"], "Activity id should be present")
 
@@ -941,7 +944,7 @@ class TestAgentUpdate(UpdateTestCase):
         # This goal state is for a VM enrolled into RSM but the agent version in the goal state is not from RSM, so it
         # should not result in an agent update. This unit test is only testing the agent logic to send telemetry on
         # agent signatures in the goal state, so an actual agent update is not needed.
-        data_file["ext_conf"] = "wire/ext_conf-two_ga_signatures.xml"
+        data_file["ext_conf"] = "wire/ext_conf-two_ga_dummy_signatures.xml"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
@@ -955,7 +958,7 @@ class TestAgentUpdate(UpdateTestCase):
 
             telemetry_data = json.loads(sig_events[0]['message'])
             self.assertEqual(["9.9.9.10", "99999.0.0.0"], telemetry_data["versions_with_signatures"], "Telemetry should contain the versions with signatures in the goal state")
-            self.assertIsNone(telemetry_data["rsm_requested_version"], "RSM requested version should be None when this is not an RSM request")
+            self.assertEqual("", telemetry_data["rsm_requested_version"], "RSM requested version should be empty str when this is not an RSM request")
             self.assertIsNotNone(telemetry_data["created_on_timestamp"], "Goal state created_on_timestamp should be present")
             self.assertIsNotNone(telemetry_data["activity_id"], "Activity id should be present")
 
@@ -967,7 +970,7 @@ class TestAgentUpdate(UpdateTestCase):
         data_file = DATA_FILE.copy()
         # This goal state is for a VM enrolled into RSM where the agent version in the goal state is from RSM. As a
         # result, the agent should update to the requested version (9.9.9.10)
-        data_file["ext_conf"] = "wire/ext_conf-agent_signatures_and_version_from_rsm.xml"
+        data_file["ext_conf"] = "wire/ext_conf-agent_dummy_signatures_and_version_from_rsm.xml"
 
         self.prepare_agents(count=1)
 
@@ -993,7 +996,7 @@ class TestAgentUpdate(UpdateTestCase):
         data_file = DATA_FILE.copy()
         # This goal state is for a VM enrolled into RSM where the agent version in the goal state is from RSM. As a
         # result, the agent should update to the requested version (9.9.9.10)
-        data_file["ext_conf"] = "wire/ext_conf-agent_signatures_and_version_from_rsm.xml"
+        data_file["ext_conf"] = "wire/ext_conf-agent_dummy_signatures_and_version_from_rsm.xml"
 
         self.prepare_agents(count=1)
 
@@ -1019,7 +1022,7 @@ class TestAgentUpdate(UpdateTestCase):
         # This goal state is for a VM enrolled into RSM where the agent version in the goal state is from RSM. As a
         # result, the agent should update to the requested version (9.9.9.10). However, the signature for 9.9.9.10 is
         # not in the goal state. As a result, agent signature validation should be skipped and telemetry should be sent.
-        data_file["ext_conf"] = "wire/ext_conf-agent_signature_missing_from_gs.xml"
+        data_file["ext_conf"] = "wire/ext_conf-agent_dummy_signature_missing_from_gs.xml"
 
         self.prepare_agents(count=1)
 
@@ -1051,7 +1054,7 @@ class TestAgentUpdate(UpdateTestCase):
         data_file = DATA_FILE.copy()
         # This goal state is for a VM enrolled into RSM where the agent version in the goal state is from RSM. As a
         # result, the agent should update to the requested version (9.9.9.10)
-        data_file["ext_conf"] = "wire/ext_conf-agent_signatures_and_version_from_rsm.xml"
+        data_file["ext_conf"] = "wire/ext_conf-agent_dummy_signatures_and_version_from_rsm.xml"
 
         self.prepare_agents(count=1)
 
@@ -1084,7 +1087,7 @@ class TestAgentUpdate(UpdateTestCase):
         data_file = DATA_FILE.copy()
         # This goal state is for a VM enrolled into RSM where the agent version in the goal state is from RSM. As a
         # result, the agent should update to the requested version (9.9.9.10)
-        data_file["ext_conf"] = "wire/ext_conf-agent_signatures_and_version_from_rsm.xml"
+        data_file["ext_conf"] = "wire/ext_conf-agent_dummy_signatures_and_version_from_rsm.xml"
 
         self.prepare_agents(count=1)
 
@@ -1118,7 +1121,7 @@ class TestAgentUpdate(UpdateTestCase):
         data_file = DATA_FILE.copy()
         # This goal state is for a VM enrolled into RSM where the agent version in the goal state is from RSM. As a
         # result, the agent should update to the requested version (9.9.9.10)
-        data_file["ext_conf"] = "wire/ext_conf-agent_signatures_and_version_from_rsm.xml"
+        data_file["ext_conf"] = "wire/ext_conf-agent_dummy_signatures_and_version_from_rsm.xml"
 
         self.prepare_agents(count=1)
 
@@ -1153,7 +1156,7 @@ class TestAgentUpdate(UpdateTestCase):
         data_file = DATA_FILE.copy()
         # This goal state is for a VM enrolled into RSM where the agent version in the goal state is from RSM. As a
         # result, the agent should update to the requested version (9.9.9.10)
-        data_file["ext_conf"] = "wire/ext_conf-agent_signatures_and_version_from_rsm.xml"
+        data_file["ext_conf"] = "wire/ext_conf-agent_dummy_signatures_and_version_from_rsm.xml"
 
         self.prepare_agents(count=1)
 
@@ -1163,7 +1166,7 @@ class TestAgentUpdate(UpdateTestCase):
                     with patch("azurelinuxagent.ga.signature_validation_util._should_delay_signature_validation", return_value=False):
                         with patch("azurelinuxagent.ga.signature_validation_util.openssl_version_supported_for_signature_validation", return_value=True):
                             with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=True):
-                                with patch("azurelinuxagent.ga.signature_validation_util._is_agent_signature_validation_expired", return_value=False):
+                                with patch("azurelinuxagent.ga.signature_validation_util._is_signature_validation_telemetry_expired", return_value=False):
                                     with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
                                         with patch("azurelinuxagent.common.protocol.wire.validate_signature", side_effect=SignatureValidationTimeoutError(msg="test error", operation=WALAEventOperation.PackageSignatureResult, duration=0)):
                                             with patch.object(agent_update_handler._protocol.client, "download_zip_package", wraps=agent_update_handler._protocol.client.download_zip_package) as mock_download:

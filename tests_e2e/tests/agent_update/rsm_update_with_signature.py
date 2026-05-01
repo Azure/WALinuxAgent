@@ -33,7 +33,7 @@ class RsmUpdateWithSignatureBvt(RsmUpdateBvt):
 
     def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
-        self._latest_manifest_versions = []
+        self._latest_manifest_versions = self._get_latest_manifest_versions()
 
     def _prepare_agent(self) -> None:
         """
@@ -85,22 +85,19 @@ class RsmUpdateWithSignatureBvt(RsmUpdateBvt):
     def _get_latest_manifest_versions(self) -> list:
         """
         Retrieves the latest two versions from the agent manifest.
-        Keeps the result so that the manifest is only fetched once per test run.
         """
-        if len(self._latest_manifest_versions) == 0:
-            log.info("Fetching latest two versions from the agent manifest")
-            output: str = self._ssh_client.run_command(
-                "agent_update-get_latest_version_from_manifest.py --all", use_sudo=True).rstrip()
-            versions = output.split()
-            self._latest_manifest_versions = versions[-2:]
-            log.info("Latest two manifest versions: %s", self._latest_manifest_versions)
-        return self._latest_manifest_versions
+        log.info("Fetching latest two versions from the agent manifest to use for goal state comparison later...")
+        output: str = self._ssh_client.run_command(
+            "agent_update-get_latest_version_from_manifest.py --all", use_sudo=True).rstrip()
+        versions = output.split()
+        latest_manifest_versions = versions[-2:]
+        log.info("Latest two manifest versions: %s", latest_manifest_versions)
+        return latest_manifest_versions
 
     def _verify_gs_signature_telemetry(self, rsm_requested_version: str = None) -> None:
         log.info("Verifying goal state signature telemetry")
-        latest_versions = self._get_latest_manifest_versions()
         cmd = "agent_update-check_gs_signature_telemetry.py --latest-versions {0}".format(
-            " ".join(latest_versions))
+            " ".join(self._latest_manifest_versions))
         if rsm_requested_version is not None:
             cmd += f" --rsm-requested-version {rsm_requested_version}"
         self._run_remote_test(

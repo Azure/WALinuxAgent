@@ -245,9 +245,9 @@ class AgentUpdateHandler(object):
             if not goal_state.extensions_goal_state.supports_agent_signature_mapping():
                 return
 
-            gs_signature_info = self._build_agent_signature_data(agent_family, goal_state.extensions_goal_state.created_on_timestamp, goal_state.extensions_goal_state.activity_id)
+            gs_signature_info = self._build_agent_signature_telemetry_data(agent_family, goal_state.extensions_goal_state.created_on_timestamp, goal_state.extensions_goal_state.activity_id)
             msg = json.dumps(gs_signature_info)
-            logger.info(msg)
+            logger.info("Agent signatures from goal state: {0}", msg)
             add_event(op=WALAEventOperation.AgentSignature, message=msg, log_event=False)
         except Exception as err:
             msg = "Unable to send agent signature telemetry: {0}".format(textutil.format_exception(err))
@@ -255,7 +255,7 @@ class AgentUpdateHandler(object):
             add_event(op=WALAEventOperation.AgentSignature, is_success=False, message=msg, log_event=False)
 
     @staticmethod
-    def _build_agent_signature_data(agent_family, created_on_timestamp, activity_id):
+    def _build_agent_signature_telemetry_data(agent_family, created_on_timestamp, activity_id):
         """
         Builds the telemetry payload dict for agent signatures in a goal state.
 
@@ -287,7 +287,7 @@ class AgentUpdateHandler(object):
         # If is_version_from_rsm and is_vm_enabled_for_rsm_upgrades are both True, include the requested version in
         # the payload
         is_rsm_request = agent_family.is_version_from_rsm and agent_family.is_vm_enabled_for_rsm_upgrades
-        rsm_requested_version = agent_family.version if is_rsm_request else None
+        rsm_requested_version = agent_family.version if is_rsm_request else ""
 
         return {
             "versions_with_signatures": versions_with_signatures,

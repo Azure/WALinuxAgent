@@ -126,7 +126,7 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
         # VMAgentFamily.ga_version_to_signature_mapping should be a dict with one element when the goal state
         # VersionToSignatureMappings element has one GASignature element
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["ext_conf"] = "wire/ext_conf-one_ga_signature.xml"
+        data_file["ext_conf"] = "wire/ext_conf-one_ga_dummy_signature.xml"
         with mock_wire_protocol(data_file) as protocol:
             agent_families = GoalState(protocol.client, GoalStateProperties.ExtensionsGoalState).extensions_goal_state.agent_families
             for family in agent_families:
@@ -141,7 +141,7 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
         # VMAgentFamily.ga_version_to_signature_mapping should be a dict with two elements when the goal state
         # VersionToSignatureMappings element has two GASignature elements
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["ext_conf"] = "wire/ext_conf-two_ga_signatures.xml"
+        data_file["ext_conf"] = "wire/ext_conf-two_ga_dummy_signatures.xml"
         with mock_wire_protocol(data_file) as protocol:
             agent_families = GoalState(protocol.client, GoalStateProperties.ExtensionsGoalState).extensions_goal_state.agent_families
             for family in agent_families:

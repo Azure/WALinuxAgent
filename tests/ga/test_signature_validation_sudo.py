@@ -144,7 +144,12 @@ class TestSignatureValidationSudo(AgentTestCase):
             def mock_run_command(command, *args, **kwargs):
                 cmd = ' '.join(command)
                 if self.openssl_cmd_pattern.search(cmd):
-                    error_msg = 'Running as unit: {0}\nVerification failure'.format(PKG_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME)
+                    # The unit name is generated per invocation; extract it from the systemd-run --unit argument so
+                    # that 'is_systemd_run_failure' classifies this as an OpenSSL failure (unit name is in stderr),
+                    # not a systemd-run infrastructure failure.
+                    unit_match = re.search(r'--unit=(\S+)', cmd)
+                    unit = unit_match.group(1) if unit_match else PKG_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME
+                    error_msg = 'Running as unit: {0}\nVerification failure'.format(unit)
                     raise shellutil.CommandError(command=cmd, return_code=1, stdout="", stderr=error_msg)
                 return original_run_command(command, *args, **kwargs)
 
@@ -161,7 +166,11 @@ class TestSignatureValidationSudo(AgentTestCase):
                 cmd = ' '.join(command)
                 run_command_calls.append(cmd)
                 if cmd.startswith('systemd-run'):
-                    error_msg = 'Unit {0} not found.'.format(PKG_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME)
+                    # The unit name is generated per invocation; extract it from the systemd-run --unit argument so
+                    # that 'is_systemd_run_failure' classifies this as a systemd-run failure ("Unit X not found.").
+                    unit_match = re.search(r'--unit=(\S+)', cmd)
+                    unit = unit_match.group(1) if unit_match else PKG_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME
+                    error_msg = 'Unit {0} not found.'.format(unit)
                     raise shellutil.CommandError(command=cmd, return_code=1, stdout=ustr(""), stderr=ustr(error_msg))
                 return original_run_command(command, *args, **kwargs)
 

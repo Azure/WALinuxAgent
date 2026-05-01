@@ -16,6 +16,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import contextlib
 import datetime
 import os
 import sys
@@ -27,7 +28,7 @@ from azurelinuxagent.ga.signature_validation_util import validate_signature, Sig
     validate_handler_manifest_signing_info, \
     ManifestValidationError, _get_openssl_version, openssl_version_supported_for_signature_validation, \
     ext_signature_validation_enabled, agent_signature_validation_enabled, agent_signature_goal_state_telemetry_enabled, \
-    _is_agent_signature_validation_expired
+    _is_signature_validation_telemetry_expired, _OpenSSLVersionCheck
 from azurelinuxagent.ga.exthandlers import HandlerManifest
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.future import UTC
@@ -44,6 +45,8 @@ class TestSignatureValidation(AgentTestCase):
         with open(vm_access_signature_path, 'r') as f:
             self.vm_access_signature = f.read()
         self.package_name_and_version = "Microsoft.OSTCExtensions.Edp.VMAccessForLinux-1.5.0"
+        # Reset cached OpenSSL version check result so each test starts with a clean state.
+        _OpenSSLVersionCheck._version_supports_validation = None  # pylint: disable=protected-access
 
     def test_should_validate_signature_successfully(self):
         """
@@ -111,14 +114,67 @@ class TestSignatureValidation(AgentTestCase):
                 self.assertEqual(version, case[1], "Returned incorrect openssl version")
 
     def test_should_not_support_signature_validation_if_fail_to_get_openssl_version(self):
+        # The result of openssl_version_supported_for_signature_validation() is cached per agent execution,
+        # so reset the cache between sub-cases to ensure each patched run_command is actually exercised.
         with patch("azurelinuxagent.ga.signature_validation_util.run_command", side_effect=CommandError("cmd", 1, "", "error")):
             self.assertFalse(openssl_version_supported_for_signature_validation())
 
+        _OpenSSLVersionCheck._version_supports_validation = None  # pylint: disable=protected-access
         with patch("azurelinuxagent.ga.signature_validation_util.run_command", return_value=None):
             self.assertFalse(openssl_version_supported_for_signature_validation())
 
+        _OpenSSLVersionCheck._version_supports_validation = None  # pylint: disable=protected-access
         with patch("azurelinuxagent.ga.signature_validation_util.run_command", return_value="some junk output"):
             self.assertFalse(openssl_version_supported_for_signature_validation())
+
+    def test_should_cache_result_of_openssl_version_check_when_version_not_supported(self):
+        # First call should invoke run_command and produce a log + telemetry event. Subsequent calls should return the
+        # cached result without invoking run_command again, and without producing additional logs or telemetry.
+        unsupported_output = "OpenSSL 1.0.2  1 Aug 2023"
+        with patch("azurelinuxagent.ga.signature_validation_util.run_command", return_value=unsupported_output) as mock_run:
+            with patch("azurelinuxagent.ga.signature_validation_util.logger.info") as mock_info:
+                with patch("azurelinuxagent.ga.signature_validation_util.add_event") as mock_add_event:
+                    for _ in range(5):
+                        self.assertFalse(openssl_version_supported_for_signature_validation(),
+                                         "Expected unsupported OpenSSL version to return False")
+                    self.assertEqual(1, mock_run.call_count,
+                                     "Expected run_command to be invoked exactly once across 5 calls (result should be cached)")
+                    sig_val_events = [kw for _, kw in mock_add_event.call_args_list
+                                      if kw.get('op') == WALAEventOperation.SignatureValidation]
+                    self.assertEqual(1, len(sig_val_events),
+                                     "Expected exactly one SignatureValidation telemetry event for unsupported OpenSSL version")
+                    unsupported_logs = [args for args, _ in mock_info.call_args_list
+                                        if args and "Signature validation requires OpenSSL" in args[0]]
+                    self.assertEqual(1, len(unsupported_logs),
+                                     "Expected the unsupported-OpenSSL-version log to be emitted exactly once")
+
+        # Cache should also short-circuit the supported case (no further run_command invocations).
+        _OpenSSLVersionCheck._version_supports_validation = None  # pylint: disable=protected-access
+        supported_output = "OpenSSL 1.1.1f  31 Mar 2020"
+        with patch("azurelinuxagent.ga.signature_validation_util.run_command", return_value=supported_output) as mock_run:
+            for _ in range(5):
+                self.assertTrue(openssl_version_supported_for_signature_validation(),
+                                "Expected supported OpenSSL version to return True")
+            self.assertEqual(1, mock_run.call_count,
+                             "Expected run_command to be invoked exactly once for supported OpenSSL version (result should be cached)")
+
+    def test_should_cache_result_of_openssl_version_check_when_exception_raised(self):
+        # If determining the OpenSSL version raises an unexpected exception, the function should return False, emit
+        # a single error log + telemetry event, and cache the result so the failure path is not re-executed.
+        with patch("azurelinuxagent.ga.signature_validation_util._get_openssl_version", side_effect=Exception()) as mock_get:
+            with patch("azurelinuxagent.ga.signature_validation_util.logger.warn") as mock_error:
+                with patch("azurelinuxagent.ga.signature_validation_util.add_event") as mock_add_event:
+                    for _ in range(5):
+                        self.assertFalse(openssl_version_supported_for_signature_validation(),
+                                         "Expected exception path to return False")
+                    self.assertEqual(1, mock_get.call_count,
+                                     "Expected _get_openssl_version to be invoked exactly once across 5 calls (result should be cached)")
+                    sig_val_events = [kw for _, kw in mock_add_event.call_args_list
+                                      if kw.get('op') == WALAEventOperation.SignatureValidation]
+                    self.assertEqual(1, len(sig_val_events),
+                                     "Expected exactly one SignatureValidation telemetry event for the exception path")
+                    self.assertEqual(1, mock_error.call_count,
+                                     "Expected the failure-to-determine-version error to be logged exactly once")
 
     @skip_if_predicate_true(lambda: True, "Enable this test when timestamp validation has been implemented.")
     def test_should_raise_error_if_root_cert_was_expired_at_signing_time(self):
@@ -145,170 +201,95 @@ class TestSignatureValidation(AgentTestCase):
         """
         with patch("azurelinuxagent.ga.signature_validation_util.conf.get_ext_signature_validation_enabled", return_value=True):
             with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_enabled", return_value=True):
-                with patch("azurelinuxagent.ga.signature_validation_util.openssl_version_supported_for_signature_validation", return_value=True):
-                    with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=True):
-                        with patch("azurelinuxagent.ga.signature_validation_util._is_agent_signature_validation_expired", return_value=False):
+                with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=True):
 
-                            # Test 1: Within delay period - validation should be disabled
-                            now = datetime.datetime.now(UTC)
-                            with patch("azurelinuxagent.ga.signature_validation_util._agent_start_time", now):
-                                self.assertFalse(ext_signature_validation_enabled(),
-                                                 "Extension signature validation should be disabled during delay period")
-                                self.assertFalse(agent_signature_validation_enabled(),
-                                                  "Agent signature validation should be disabled during delay period")
+                    # Test 1: Within delay period - validation should be disabled
+                    now = datetime.datetime.now(UTC)
+                    with patch("azurelinuxagent.ga.signature_validation_util._agent_start_time", now):
+                        self.assertFalse(ext_signature_validation_enabled(),
+                                         "Extension signature validation should be disabled during delay period")
+                        self.assertFalse(agent_signature_validation_enabled(),
+                                         "Agent signature validation should be disabled during delay period")
 
-                            # Test 2: After delay period - validation should be enabled
-                            past_time = now - datetime.timedelta(seconds=conf.get_signature_validation_initial_delay() + 1)
-                            with patch("azurelinuxagent.ga.signature_validation_util._agent_start_time", past_time):
-                                self.assertTrue(ext_signature_validation_enabled(), "Extension signature validation should be enabled after delay period")
-                                self.assertTrue(agent_signature_validation_enabled(), "Agent signature validation should be enabled after delay period")
+                    # Test 2: After delay period - validation should be enabled
+                    past_time = now - datetime.timedelta(seconds=conf.get_signature_validation_initial_delay() + 1)
+                    with patch("azurelinuxagent.ga.signature_validation_util._agent_start_time", past_time):
+                        self.assertTrue(ext_signature_validation_enabled(), "Extension signature validation should be enabled after delay period")
+                        self.assertTrue(agent_signature_validation_enabled(), "Agent signature validation should be enabled after delay period")
 
     def test_is_agent_signature_validation_expired_should_return_true_if_feature_is_expired(self):
         """
-        Test that _is_agent_signature_validation_expired returns True when current time is greater than the feature
+        Test that _is_signature_validation_telemetry_expired returns True when current time is greater than the feature
         expiry time, or when the conf value is invalid
         """
-        # When expiry time is in the future, _is_agent_signature_validation_expired should return False
-        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_expiry_time", return_value="2099-12-01"):
-            self.assertFalse(_is_agent_signature_validation_expired())
+        # When expiry time is in the future, _is_signature_validation_telemetry_expired should return False
+        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_signature_validation_telemetry_expiry_time", return_value="2099-12-01"):
+            self.assertFalse(_is_signature_validation_telemetry_expired())
 
-        # When expiry time is in the past, _is_agent_signature_validation_expired should return True
-        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_expiry_time", return_value="2000-01-01"):
-            self.assertTrue(_is_agent_signature_validation_expired())
+        # When expiry time is in the past, _is_signature_validation_telemetry_expired should return True
+        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_signature_validation_telemetry_expiry_time", return_value="2000-01-01"):
+            self.assertTrue(_is_signature_validation_telemetry_expired())
 
-        # When conf value of Debug.AgentSignatureValidationExpiryTime is invalid, _is_agent_signature_validation_expired should return True
-        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_expiry_time", return_value="2026-31-12"):
-            self.assertTrue(_is_agent_signature_validation_expired())
+        # When conf value of Debug.SignatureValidationTelemetryExpiryTime is invalid, _is_signature_validation_telemetry_expired should return True
+        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_signature_validation_telemetry_expiry_time", return_value="2026-31-12"):
+            self.assertTrue(_is_signature_validation_telemetry_expired())
 
-    def test_agent_signature_validation_enabled_should_return_true_when_all_conditions_met(self):
+    @contextlib.contextmanager
+    def _patch_agent_signature_validation_dependencies(self, conf_enabled=True, validation_timeout_disabled=False,
+                                                       should_delay=False, openssl_supported=True, is_cvm=True,
+                                                       telemetry_expired=False):
         """
-        Test that agent_signature_validation_enabled returns True when conf flag is enabled, agent validation is not disabled, delay has passed,
-        OpenSSL version is supported, VM is a CVM, and the agent signature validation feature is not expired.
+        Helper that patches all dependencies of agent_signature_validation_enabled() and
+        agent_signature_goal_state_telemetry_enabled(). Defaults are set so that both functions return True;
+        each test case overrides one parameter to exercise a single failure condition.
         """
-        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_enabled", return_value=True):
-            with patch("azurelinuxagent.ga.signature_validation_util.SignatureValidationTimeout.is_agent_validation_disabled", return_value=False):
-                with patch("azurelinuxagent.ga.signature_validation_util._should_delay_signature_validation", return_value=False):
-                    with patch("azurelinuxagent.ga.signature_validation_util.openssl_version_supported_for_signature_validation", return_value=True):
-                        with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=True):
-                            with patch("azurelinuxagent.ga.signature_validation_util._is_agent_signature_validation_expired", return_value=False):
-                                self.assertTrue(agent_signature_validation_enabled(), "agent_signature_validation_enabled should return True when all conditions are met")
+        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_enabled", return_value=conf_enabled):
+            with patch("azurelinuxagent.ga.signature_validation_util.SignatureValidationTimeout.is_agent_validation_disabled", return_value=validation_timeout_disabled):
+                with patch("azurelinuxagent.ga.signature_validation_util._should_delay_signature_validation", return_value=should_delay):
+                    with patch("azurelinuxagent.ga.signature_validation_util.openssl_version_supported_for_signature_validation", return_value=openssl_supported):
+                        with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=is_cvm):
+                            with patch("azurelinuxagent.ga.signature_validation_util._is_signature_validation_telemetry_expired", return_value=telemetry_expired):
+                                yield
 
-    def test_agent_signature_validation_enabled_should_return_false_when_conf_flag_is_disabled(self):
+    def test_agent_signature_validation_enabled_should_return_expected_value(self):
         """
-        Test that agent_signature_validation_enabled returns False when the conf flag is disabled,
-        even if all other conditions are met.
+        Test that agent_signature_validation_enabled() returns True when conf flag is enabled, agent validation is not
+        disabled, delay has passed, OpenSSL version is supported, VM is a CVM, and the agent signature validation
+        feature is not expired. Returns False if any of these conditions is not met.
         """
-        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_enabled", return_value=False):
-            with patch("azurelinuxagent.ga.signature_validation_util.SignatureValidationTimeout.is_agent_validation_disabled", return_value=False):
-                with patch("azurelinuxagent.ga.signature_validation_util._should_delay_signature_validation", return_value=False):
-                    with patch("azurelinuxagent.ga.signature_validation_util.openssl_version_supported_for_signature_validation", return_value=True):
-                        with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=True):
-                            with patch("azurelinuxagent.ga.signature_validation_util._is_agent_signature_validation_expired", return_value=False):
-                                self.assertFalse(agent_signature_validation_enabled(), "agent_signature_validation_enabled should return False when conf flag is disabled")
+        # (description, overrides applied on top of the all-conditions-met defaults, expected return value)
+        cases = [
+            ("all conditions met", {}, True),
+            ("conf flag is disabled", {"conf_enabled": False}, False),
+            ("validation timeout exceeded", {"validation_timeout_disabled": True}, False),
+            ("validation is delayed", {"should_delay": True}, False),
+            ("OpenSSL version is not supported", {"openssl_supported": False}, False),
+            ("VM is not a CVM", {"is_cvm": False}, False),
+            ("feature is expired", {"telemetry_expired": True}, False),
+        ]
+        for description, overrides, expected in cases:
+            with self._patch_agent_signature_validation_dependencies(**overrides):
+                self.assertEqual(expected, agent_signature_validation_enabled(),
+                                 "agent_signature_validation_enabled() returned wrong value for case: {0}".format(description))
 
-    def test_agent_signature_validation_enabled_should_return_false_when_timeout_exceeded(self):
+    def test_agent_signature_goal_state_telemetry_enabled_should_return_expected_value(self):
         """
-        Test that agent_signature_validation_enabled returns False when the agent signature validation timeout is
-        exceeded, even if all other conditions are met.
+        Test that agent_signature_goal_state_telemetry_enabled() returns True when conf flag is enabled, VM is a CVM,
+        and the agent signature validation feature is not expired. Returns False if any of these conditions is not met.
         """
-        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_enabled", return_value=True):
-            with patch("azurelinuxagent.ga.signature_validation_util.SignatureValidationTimeout.is_agent_validation_disabled", return_value=True):
-                with patch("azurelinuxagent.ga.signature_validation_util._should_delay_signature_validation", return_value=False):
-                    with patch("azurelinuxagent.ga.signature_validation_util.openssl_version_supported_for_signature_validation", return_value=True):
-                        with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=True):
-                            with patch("azurelinuxagent.ga.signature_validation_util._is_agent_signature_validation_expired", return_value=False):
-                                self.assertFalse(agent_signature_validation_enabled(), "agent_signature_validation_enabled should return False when timeout is exceeded")
-                        
-    def test_agent_signature_validation_enabled_should_return_false_when_validation_is_delayed(self):
-        """
-        Test that agent_signature_validation_enabled returns False when the validation is delayed,
-        even if all other conditions are met.
-        """
-        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_enabled", return_value=True):
-            with patch("azurelinuxagent.ga.signature_validation_util.SignatureValidationTimeout.is_agent_validation_disabled", return_value=False):
-                with patch("azurelinuxagent.ga.signature_validation_util._should_delay_signature_validation", return_value=True):
-                    with patch("azurelinuxagent.ga.signature_validation_util.openssl_version_supported_for_signature_validation", return_value=True):
-                        with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=True):
-                            with patch("azurelinuxagent.ga.signature_validation_util._is_agent_signature_validation_expired", return_value=False):
-                                self.assertFalse(agent_signature_validation_enabled(), "agent_signature_validation_enabled should return False when validation is delayed")
-
-    def test_agent_signature_validation_enabled_should_return_false_when_openssl_version_not_supported(self):
-        """
-        Test that agent_signature_validation_enabled returns False when OpenSSL version does not meet
-        the minimum requirement, even if all other conditions are met.
-        """
-        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_enabled", return_value=True):
-            with patch("azurelinuxagent.ga.signature_validation_util.SignatureValidationTimeout.is_agent_validation_disabled", return_value=False):
-                with patch("azurelinuxagent.ga.signature_validation_util._should_delay_signature_validation", return_value=False):
-                    with patch("azurelinuxagent.ga.signature_validation_util.openssl_version_supported_for_signature_validation", return_value=False):
-                        with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=True):
-                            with patch("azurelinuxagent.ga.signature_validation_util._is_agent_signature_validation_expired", return_value=False):
-                                self.assertFalse(agent_signature_validation_enabled(), "agent_signature_validation_enabled should return False when OpenSSL version is not supported")
-
-    def test_agent_signature_validation_enabled_should_return_false_when_not_cvm(self):
-        """
-        Test that agent_signature_validation_enabled returns False when the VM is not a Confidential VM,
-        even if all other conditions are met.
-        """
-        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_enabled", return_value=True):
-            with patch("azurelinuxagent.ga.signature_validation_util.SignatureValidationTimeout.is_agent_validation_disabled", return_value=False):
-                with patch("azurelinuxagent.ga.signature_validation_util._should_delay_signature_validation", return_value=False):
-                    with patch("azurelinuxagent.ga.signature_validation_util.openssl_version_supported_for_signature_validation", return_value=True):
-                        with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=False):
-                            with patch("azurelinuxagent.ga.signature_validation_util._is_agent_signature_validation_expired", return_value=False):
-                                self.assertFalse(agent_signature_validation_enabled(), "agent_signature_validation_enabled should return False when VM is not a CVM")
-
-    def test_agent_signature_validation_enabled_should_return_false_when_feature_is_expired(self):
-        """
-        Test that agent_signature_validation_enabled returns False when the the agent signature validation feature is
-        expired, even if all other conditions are met.
-        """
-        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_enabled", return_value=True):
-            with patch("azurelinuxagent.ga.signature_validation_util.SignatureValidationTimeout.is_agent_validation_disabled", return_value=False):
-                with patch("azurelinuxagent.ga.signature_validation_util._should_delay_signature_validation", return_value=False):
-                    with patch("azurelinuxagent.ga.signature_validation_util.openssl_version_supported_for_signature_validation", return_value=True):
-                        with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=True):
-                            with patch("azurelinuxagent.ga.signature_validation_util._is_agent_signature_validation_expired", return_value=True):
-                                self.assertFalse(agent_signature_validation_enabled(), "agent_signature_validation_enabled should return False when feature is expired")
-
-    def test_agent_signature_goal_state_telemetry_enabled_should_return_true_when_all_conditions_met(self):
-        """
-        Test that agent_signature_goal_state_telemetry_enabled returns True when conf flag is enabled, VM is a CVM, and the agent signature validation feature is not expired.
-        """
-        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_enabled", return_value=True):
-            with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=True):
-                with patch("azurelinuxagent.ga.signature_validation_util._is_agent_signature_validation_expired", return_value=False):
-                    self.assertTrue(agent_signature_goal_state_telemetry_enabled(), "agent_signature_goal_state_telemetry_enabled should return True when all conditions are met")
-
-    def test_agent_signature_goal_state_telemetry_enabled_should_return_false_when_conf_flag_is_disabled(self):
-        """
-        Test that agent_signature_goal_state_telemetry_enabled returns False when the conf flag is disabled,
-        even if all other conditions are met.
-        """
-        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_enabled", return_value=False):
-            with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=True):
-                with patch("azurelinuxagent.ga.signature_validation_util._is_agent_signature_validation_expired", return_value=False):
-                    self.assertFalse(agent_signature_goal_state_telemetry_enabled(), "agent_signature_goal_state_telemetry_enabled should return False when conf flag is disabled")
-
-    def test_agent_signature_goal_state_telemetry_enabled_should_return_false_when_not_cvm(self):
-        """
-        Test that agent_signature_goal_state_telemetry_enabled returns False when the VM is not a Confidential VM,
-        even if all other conditions are met.
-        """
-        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_enabled", return_value=True):
-            with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=False):
-                with patch("azurelinuxagent.ga.signature_validation_util._is_agent_signature_validation_expired", return_value=False):
-                    self.assertFalse(agent_signature_goal_state_telemetry_enabled(), "agent_signature_validation_enabled should return False when VM is not a CVM")
-
-    def test_agent_signature_goal_state_telemetry_enabled_should_return_false_when_feature_is_expired(self):
-        """
-        Test that agent_signature_goal_state_telemetry_enabled returns False when the agent signature validation
-        feature is expired, even if all other conditions are met.
-        """
-        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_enabled", return_value=True):
-            with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=True):
-                with patch("azurelinuxagent.ga.signature_validation_util._is_agent_signature_validation_expired", return_value=True):
-                    self.assertFalse(agent_signature_goal_state_telemetry_enabled(), "agent_signature_validation_enabled should return False when agent signature validation feature is expired")
+        # (description, overrides applied on top of the all-conditions-met defaults, expected return value)
+        # Note: agent_signature_goal_state_telemetry_enabled() only depends on conf flag, CVM status, and expiry, so
+        # only those overrides are exercised here. 
+        cases = [
+            ("all conditions met", {}, True),
+            ("conf flag is disabled", {"conf_enabled": False}, False),
+            ("VM is not a CVM", {"is_cvm": False}, False),
+            ("feature is expired", {"telemetry_expired": True}, False),
+        ]
+        for description, overrides, expected in cases:
+            with self._patch_agent_signature_validation_dependencies(**overrides):
+                self.assertEqual(expected, agent_signature_goal_state_telemetry_enabled(),
+                                 "agent_signature_goal_state_telemetry_enabled() returned wrong value for case: {0}".format(description))
 
 
 class TestHandlerManifestValidation(AgentTestCase):

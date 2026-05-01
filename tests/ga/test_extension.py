@@ -52,7 +52,7 @@ from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, migrate_handler_s
     get_exthandlers_handler, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
     ExtensionStatusValue, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, GoalStateStatus, ExtHandlerState
 from azurelinuxagent.ga.policy.policy_engine import _PolicyEngine
-from azurelinuxagent.ga.signature_validation_util import SignatureValidationTimeout
+from azurelinuxagent.ga.signature_validation_util import SignatureValidationTimeout, _OpenSSLVersionCheck
 
 from tests.lib import wire_protocol_data
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
@@ -3887,6 +3887,10 @@ class _TestSignatureValidationBase(TestExtensionBase):
         self.patch_is_cvm.start()
         self.patch_should_delay = patch('azurelinuxagent.ga.signature_validation_util._should_delay_signature_validation', return_value=False)
         self.patch_should_delay.start()
+        # Reset the cached OpenSSL version check result so each test starts with a clean state. Tests that patch
+        # '_get_openssl_version' rely on the check actually running, but the result is cached for the lifetime of
+        # the agent process and would otherwise bleed across tests in the same run.
+        _OpenSSLVersionCheck._version_supports_validation = None  # pylint: disable=protected-access
         # Mock Popen to avoid executing the extension being tested
         original_popen = subprocess.Popen
         def mock_popen(command, *args, **kwargs):
@@ -4001,7 +4005,7 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
                                         expected_version=handler_version)
 
             # Telemetry should report signature validation failure and manifest validation success
-            self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSignatureResult, is_success=False)
+            self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSignatureResult, is_success=True)
             self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSigningInfoResult, is_success=True)
 
     def test_enable_should_succeed_and_send_telemetry_if_handler_manifest_validation_fails(self):
@@ -4047,7 +4051,7 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
 
                 # Telemetry should report successful signature validation and failed manifest validation
                 self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSignatureResult, is_success=True)
-                self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSigningInfoResult, is_success=False,
+                self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSigningInfoResult, is_success=True,
                                             msg="expected extension version '1.7.0' does not match downloaded package version '1.5.0'")
 
 
@@ -4094,8 +4098,8 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
                                             expected_version=handler_version)
 
             # Telemetry should report signature validation failure and manifest validation failure
-            self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSignatureResult, is_success=False)
-            self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSigningInfoResult, is_success=False,
+            self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSignatureResult, is_success=True)
+            self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSigningInfoResult, is_success=True,
                                         msg="expected extension version '1.7.0' does not match downloaded package version '1.5.0'")
 
     def test_enable_should_succeed_if_signature_validation_succeeds(self):
@@ -4351,7 +4355,7 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
                                         expected_version="1.7.0")
 
             # Should have reported signature validation error and successful handler manifest validation
-            self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSignatureResult, is_success=False)
+            self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSignatureResult, is_success=True)
             self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSigningInfoResult, is_success=True)
 
     def test_should_enable_existing_zip_package_if_manifest_validation_fails(self):
@@ -4401,7 +4405,7 @@ class TestSignatureValidationNotEnforced(_TestSignatureValidationBase):
 
             # Should report successful signature validation and failed manifest validation
             self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSignatureResult, is_success=True)
-            self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSigningInfoResult, is_success=False,
+            self._assert_telemetry_sent(patched_add_event, handler_name, handler_version, WALAEventOperation.PackageSigningInfoResult, is_success=True,
                             msg="expected extension version '1.7.0' does not match downloaded package version '1.5.0'")
 
     def test_should_not_validate_signature_on_non_cvm(self):

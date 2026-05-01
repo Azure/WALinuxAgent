@@ -41,15 +41,17 @@ from tests_e2e.tests.lib.remote_test import run_remote_test
 def _find_gs_signature_events(agent_log):
     """
     Searches the agent log for goal state signature telemetry events and returns the parsed JSON payloads.
-    These events contain a JSON object with 'versions_with_signatures', 'created_on_timestamp',
-    'rsm_requested_version', and 'activity_id' fields.
+    The agent logs these events with the prefix 'Agent signatures from goal state: ' followed by a JSON object
+    containing 'versions_with_signatures', 'created_on_timestamp', 'rsm_requested_version', and 'activity_id'
+    fields.
     """
     events = []
-    pattern = re.compile(r'"versions_with_signatures"')
+    prefix = "Agent signatures from goal state: "
+    pattern = re.compile(re.escape(prefix) + r'(\{.*\})')
     for record in agent_log.read():
-        if pattern.search(record.message):
-            data = json.loads(record.message)
-            events.append(data)
+        match = pattern.search(record.message)
+        if match:
+            events.append(json.loads(match.group(1)))
     return events
 
 
