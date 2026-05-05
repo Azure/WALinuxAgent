@@ -2,6 +2,7 @@
 # Licensed under the Apache License.
 import json
 
+from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateProperties
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateChannel
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
@@ -224,11 +225,19 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
         data_file["vm_settings"] = "hostgaplugin/vm_settings-invalid_ga_signature_mappings.json"
         with mock_wire_protocol(data_file) as protocol:
             protocol.mock_wire_data.set_etag(888)
-            goal_state = GoalState(protocol.client)
-            families = goal_state.extensions_goal_state.agent_families
-            for family in families:
-                # GA version to signature mapping should be an empty dict if there are no valid mappings in the GS
-                self.assertDictEqual(family.ga_version_to_signature_mapping, {})
+            with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings.add_event") as mock_add_event:
+                goal_state = GoalState(protocol.client)
+                families = goal_state.extensions_goal_state.agent_families
+                for family in families:
+                    # GA version to signature mapping should be an empty dict if there are no valid mappings in the GS
+                    self.assertDictEqual(family.ga_version_to_signature_mapping, {})
+
+                # The Test family has 6 invalid versionToSignatureMappings entries (3 with missing fields and 3 with
+                # non-string value types). We expect exactly one AgentSignature telemetry event per invalid pair.
+                agent_signature_events = [kw for _, kw in mock_add_event.call_args_list
+                                          if kw.get('op') == WALAEventOperation.AgentSignature]
+                self.assertEqual(6, len(agent_signature_events),
+                                 "Expected one AgentSignature telemetry event per invalid versionToSignatureMappings pair")
 
     def test_it_should_parse_missing_status_upload_blob_as_none(self):
         data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()

@@ -914,18 +914,20 @@ class TestAgentUpdate(UpdateTestCase):
         When signature validation is enabled and goal state supports agent signature mapping but no signatures
         are present, telemetry should be sent with an empty versions_with_signatures list.
         """
+        self.prepare_agents(count=1)
+
         data_file = DATA_FILE.copy()
-        # This goal state is for a VM enrolled into RSM but the agent version in the goal state is not from RSM, so it
-        # should not result in an agent update. This unit test is only testing the agent logic to send telemetry on
-        # agent signatures in the goal state, so an actual agent update is not needed.
-        data_file["ext_conf"] = "wire/ext_conf-invalid_ga_signature_mappings.xml"
+        # The default ext_conf.xml has no VersionToSignatureMappings element, so the parsed signature mapping
+        # will be empty.
+        data_file["ext_conf"] = "wire/ext_conf.xml"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
             # the signature validation flow
             with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
                 with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
-                    agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+                    with self.assertRaises(AgentUpgradeExitException):
+                        agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
 
             sig_events = self._get_signature_telemetry_events(mock_telemetry)
             self.assertEqual(1, len(sig_events), "Expected exactly one AgentSignature event. Got: {0}".format(sig_events))

@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
+from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateChannel
 from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateProperties
 from tests.lib.mock_wire_protocol import wire_protocol_data, mock_wire_protocol
@@ -195,10 +196,18 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
         data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf-invalid_ga_signature_mappings.xml"
         with mock_wire_protocol(data_file) as protocol:
-            agent_families = GoalState(protocol.client, GoalStateProperties.ExtensionsGoalState).extensions_goal_state.agent_families
-            for family in agent_families:
-                # GA version to signature mapping should be an empty dict if there are no valid mappings in the GS
-                self.assertDictEqual(family.ga_version_to_signature_mapping, {})
+            with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.add_event") as mock_add_event:
+                agent_families = GoalState(protocol.client, GoalStateProperties.ExtensionsGoalState).extensions_goal_state.agent_families
+                for family in agent_families:
+                    # GA version to signature mapping should be an empty dict if there are no valid mappings in the GS
+                    self.assertDictEqual(family.ga_version_to_signature_mapping, {})
+
+                # The Test family has 3 invalid GASignature elements (each with missing fields). We expect exactly one
+                # AgentSignature telemetry event per invalid GASignature pair.
+                agent_signature_events = [kw for _, kw in mock_add_event.call_args_list
+                                          if kw.get('op') == WALAEventOperation.AgentSignature]
+                self.assertEqual(3, len(agent_signature_events),
+                                 "Expected one AgentSignature telemetry event per invalid GASignature pair")
 
     def test_it_should_parse_encoded_signature_plugin_property(self):
         data_file = wire_protocol_data.DATA_FILE.copy()

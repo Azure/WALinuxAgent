@@ -83,7 +83,13 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             for ga_signature_mapping in ga_signature_mappings:
                 ga_signature_version = findtext(ga_signature_mapping, "Version")
                 ga_encoded_signature = findtext(ga_signature_mapping, "EncodedSignature")
-                if ga_signature_version is not None and ga_encoded_signature is not None and isinstance(ga_signature_version, ustr) and isinstance(ga_encoded_signature, ustr):
+                if ga_signature_version is None or ga_encoded_signature is None or \
+                        not isinstance(ga_signature_version, ustr) or not isinstance(ga_encoded_signature, ustr):
+                    # Send warning for any GASignature pair with missing fields or unexpected types
+                    msg = "Invalid GASignature pair. Version type: {0}; EncodedSignature type: {1}".format(type(ga_signature_version).__name__, type(ga_encoded_signature).__name__)
+                    logger.warn(msg)
+                    add_event(op=WALAEventOperation.AgentSignature, message=msg, log_event=False)   # TODO: When CRP changes are stable, is_success should be marked as False to surface this in release monitoring queries
+                else:
                     family.ga_version_to_signature_mapping[ga_signature_version] = ga_encoded_signature
             self._agent_families.append(family)
 

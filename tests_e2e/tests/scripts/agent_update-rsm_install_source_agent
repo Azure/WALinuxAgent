@@ -22,7 +22,7 @@
 set -euo pipefail
 
 usage() (
-    echo "Usage: agent_update-rsm_update_test_setup -p|--package <path> -v|--version <version>"
+    echo "Usage: agent_update-rsm_install_source_agent -p|--package <path> -v|--version <version>"
     exit 1
 )
 
