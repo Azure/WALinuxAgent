@@ -80,6 +80,10 @@ class VmImageInfo(object):
     locations: Dict[str, List[str]]
     # Indicates that the image is available only for those VM sizes. If empty, the image should be available for all VM sizes
     vm_sizes: List[str]
+    # Optional security type (e.g. "ConfidentialVM") to use when deploying this image. When set, the deployment
+    # is forced to use this security type both for VM (via LISA's Security_Profile requirement) and for VMSS
+    # (via the 'securityType' parameter in the ARM template). When empty, the default deployment behavior is used.
+    security_type: str
 
     def __str__(self):
         return self.urn
@@ -373,12 +377,16 @@ class AgentTestLoader(object):
                 i.urn = description
                 i.locations = {}
                 i.vm_sizes = []
+                i.security_type = ""
             else:
                 if "urn" not in description:
                     raise Exception(f"Image {name} is missing the 'urn' property: {description}")
                 i.urn = description["urn"]
                 i.locations = description["locations"] if "locations" in description else {}
                 i.vm_sizes = description["vm_sizes"] if "vm_sizes" in description else []
+                i.security_type = description["security_type"] if "security_type" in description else ""
+                if i.security_type not in ("", "ConfidentialVM"):
+                    raise Exception(f"Invalid security_type {i.security_type} for image {name} in images.yml; expected one of '', 'ConfidentialVM'")
                 for cloud in i.locations.keys():
                     if cloud not in ["AzureCloud", "AzureChinaCloud", "AzureUSGovernment"]:
                         raise Exception(f"Invalid cloud {cloud} for image {name} in images.yml")

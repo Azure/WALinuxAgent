@@ -218,6 +218,15 @@ variable:
     value: false
     is_case_visible: true
 
+  #
+  # Security type to use when deploying the VM/VMSS resource (e.g. "ConfidentialVM"). Empty means use the default
+  # deployment behavior. Populated by the AgentTestSuiteCombinator from the 'security_type' property on the
+  # image in images.yml.
+  #
+  - name: c_security_type
+    value: ""
+    is_case_visible: true
+
 environment: $(c_environment)
 
 platform: $(c_platform)

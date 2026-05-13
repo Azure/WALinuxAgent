@@ -204,6 +204,7 @@ class AgentTestSuitesCombinator(Combinator):
                     continue
 
                 vm_size = self._get_vm_size(image)
+                security_type = image.security_type
 
                 locations: List[str] = self._get_locations(test_suite_info, image)
                 if len(locations) == 0:
@@ -223,6 +224,7 @@ class AgentTestSuitesCombinator(Combinator):
                                 marketplace_image=marketplace_image,
                                 location=location,
                                 vm_size=vm_size,
+                                security_type=security_type,
                                 test_suite_info=test_suite_info)
                         else:
                             env = self.create_vm_environment(
@@ -232,6 +234,7 @@ class AgentTestSuitesCombinator(Combinator):
                                 shared_gallery=shared_gallery,
                                 location=location,
                                 vm_size=vm_size,
+                                security_type=security_type,
                                 test_suite_info=test_suite_info)
                         environments.append(env)
                     else:
@@ -247,6 +250,7 @@ class AgentTestSuitesCombinator(Combinator):
                                     marketplace_image=marketplace_image,
                                     location=location,
                                     vm_size=vm_size,
+                                    security_type=security_type,
                                     test_suite_info=test_suite_info)
                             else:
                                 env = self.create_vm_environment(
@@ -256,6 +260,7 @@ class AgentTestSuitesCombinator(Combinator):
                                     shared_gallery=shared_gallery,
                                     location=location,
                                     vm_size=vm_size,
+                                    security_type=security_type,
                                     test_suite_info=test_suite_info)
                             shared_environments[env_name] = env
 
@@ -371,7 +376,7 @@ class AgentTestSuitesCombinator(Combinator):
             "c_test_suites": loader.test_suites,
         }
 
-    def create_vm_environment(self, env_name: str, marketplace_image: str, vhd: str, shared_gallery: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo) -> Dict[str, Any]:
+    def create_vm_environment(self, env_name: str, marketplace_image: str, vhd: str, shared_gallery: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo, security_type: str = "") -> Dict[str, Any]:
         #
         # Custom ARM templates (to create the test VMs) require special handling. These templates are processed by the azure_update_arm_template
         # hook, which does not have access to the runbook variables. Instead, we use a dummy VM tag named "templates" and pass the
@@ -435,9 +440,24 @@ class AgentTestSuitesCombinator(Combinator):
                     }
                 ]
             }
+        elif security_type == "ConfidentialVM":
+            # On the VM path LISA performs the deployment, so the security type must be expressed as a LISA feature
+            # requirement on 'c_platform' (LISA does not look at the 'c_security_type' variable, which is consumed
+            # only by 'AgentTestSuite' on the VMSS path). This forces LISA to deploy the image as a Confidential VM
+            # regardless of which security profiles the image and VM size happen to support; without it, LISA's
+            # priority-based selection may pick a non-CVM profile. Note that LISA's SecurityProfileType enum uses
+            # the lowercase value 'cvm' (which it maps internally to ARM's 'ConfidentialVM').
+            environment['c_platform'][0]['requirement']["features"] = {
+                "items": [
+                    {
+                        "type": "Security_Profile",
+                        "security_profile": "cvm"
+                    }
+                ]
+            }
         return environment
 
-    def create_vmss_environment(self, env_name: str, marketplace_image: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo) -> Dict[str, Any]:
+    def create_vmss_environment(self, env_name: str, marketplace_image: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo, security_type: str = "") -> Dict[str, Any]:
         return {
             "c_platform": [
                 {
@@ -461,6 +481,9 @@ class AgentTestSuitesCombinator(Combinator):
             "c_location": location,
             "c_image": marketplace_image,
             "c_is_vhd": False,
+            # On the VMSS path the scale set is deployed by 'AgentTestSuite' using our own ARM template
+            # (vmss.json), bypassing LISA.
+            "c_security_type": security_type,
             "c_vm_size": vm_size,
             "vm_tags": {}
         }
@@ -484,6 +507,7 @@ class AgentTestSuitesCombinator(Combinator):
         i.urn = self.runbook.image  # Note that this could be a URN or the URI for a VHD, or an image from a shared gallery
         i.locations = []
         i.vm_sizes = []
+        i.security_type = ""
 
         return [i]
 
@@ -503,6 +527,7 @@ class AgentTestSuitesCombinator(Combinator):
                     i.urn = image
                     i.locations = []
                     i.vm_sizes = []
+                    i.security_type = ""
                     image_list = [i]
                 else:
                     image_list = loader.images[image]

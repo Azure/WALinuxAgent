@@ -26,6 +26,18 @@
         },
         "version": {
             "type": "string"
+        },
+        "vmSize": {
+            "type": "string",
+            "defaultValue": "Standard_D2s_v3"
+        },
+        "securityType": {
+            "type": "string",
+            "defaultValue": "Standard",
+            "allowedValues": [
+                "Standard",
+                "ConfidentialVM"
+            ]
         }
     },
     "variables": {
@@ -167,7 +179,7 @@
                 "[concat('Microsoft.Network/loadBalancers/', variables('lbName'))]"
             ],
             "sku": {
-                "name": "Standard_D2s_v3",
+                "name": "[parameters('vmSize')]",
                 "tier": "Standard",
                 "capacity": 3
             },
@@ -199,7 +211,8 @@
                             "createOption": "FromImage",
                             "caching": "ReadWrite",
                             "managedDisk": {
-                                "storageAccountType": "Premium_LRS"
+                                "storageAccountType": "Premium_LRS",
+                                "securityProfile": "[if(equals(parameters('securityType'), 'ConfidentialVM'), createObject('securityEncryptionType', 'DiskWithVMGuestState'), json('null'))]"
                             },
                             "diskSizeGB": 64
                         },
@@ -210,6 +223,7 @@
                             "version": "[parameters('version')]"
                         }
                     },
+                    "securityProfile": "[if(equals(parameters('securityType'), 'ConfidentialVM'), createObject('securityType', 'ConfidentialVM', 'uefiSettings', createObject('secureBootEnabled', true(), 'vTpmEnabled', true())), json('null'))]",
                     "diagnosticsProfile": {
                         "bootDiagnostics": {
                             "enabled": true
