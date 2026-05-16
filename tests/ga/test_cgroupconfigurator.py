@@ -226,12 +226,45 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     any(cg for cg in tracked if tracked[cg].name == AGENT_NAME_TELEMETRY and 'cpu' in cg),
                     "The Agent's cpu is being tracked. Tracked: {0}".format(tracked))
 
-    def test_agent_enforcement_enabled_in_v2(self):
+    def test_agent_should_set_cpu_quota_and_not_set_memory_quota_in_v2(self):
         with self._get_cgroup_configurator_v2() as configurator:
             cmd1 = 'systemctl set-property walinuxagent.service CPUQuota=50% --runtime'
-            cmd2 = 'systemctl set-property walinuxagent.service MemoryHigh=314572800 --runtime'
             self.assertIn(cmd1, configurator.mocks.commands_call_list, "The command to set CPU quota was not called")
-            self.assertIn(cmd2, configurator.mocks.commands_call_list, "The command to set Memory quota was not called")
+            # The agent no longer enforces a memory limit via systemd; it must never set MemoryHigh to a value.
+            cmd2 = "systemctl set-property walinuxagent.service MemoryHigh=314572800 --runtime"
+            self.assertNotIn(cmd2, configurator.mocks.commands_call_list, "The command to set Memory quota was called")
+
+    def test_agent_should_reset_memory_quota_in_v2_when_previously_set(self):
+        # Simulate a previously-set MemoryHigh on the agent unit; the agent should reset it on initialize.
+        command_mocks = [MockCommand(r"^systemctl show (.+) --property MemoryHigh$",
+                                     '''MemoryHigh=314572800
+                                     ''')]
+        with self._get_cgroup_configurator_v2(mock_commands=command_mocks) as configurator:
+            cmd = 'systemctl set-property walinuxagent.service MemoryHigh= --runtime'
+            self.assertIn(cmd, configurator.mocks.commands_call_list,
+                          "The command to reset the Memory quota was not called")
+
+    def test_agent_should_not_reset_memory_quota_in_v2_when_already_infinity(self):
+        # The default v2 mock returns MemoryHigh=infinity; the reset must be a no-op (no systemctl call).
+        with self._get_cgroup_configurator_v2() as configurator:
+            for cmd in configurator.mocks.commands_call_list:
+                self.assertNotIn(
+                    "systemctl set-property walinuxagent.service MemoryHigh= --runtime", cmd,
+                    "MemoryHigh reset should not be issued when current value is already infinity. Command: {0}".format(cmd))
+
+    def test_agent_should_reset_cpu_quota_when_previously_set_and_agent_not_enabled_now(self):
+        command_mocks = [
+                 MockCommand(r"^systemctl show walinuxagent\.service --property ControlGroup$",
+                             '''ControlGroup=/azure.slice/walinuxagent.service
+                             '''),
+                 MockCommand(r"^systemctl show (.+) --property CPUQuotaPerSecUSec$",
+                             '''CPUQuotaPerSecUSec=5ms
+                             ''')
+                         ]
+        with self._get_cgroup_configurator_v2(mock_commands=command_mocks) as configurator:
+            cmd = 'systemctl set-property walinuxagent.service CPUQuota= --runtime'
+            self.assertIn(cmd, configurator.mocks.commands_call_list,
+                          "The command to reset the cpu quota was not called")
 
     def test_accounting_properties_not_set_explicitly_in_cgroupv2(self):
         with self._get_cgroup_configurator_v2() as configurator:

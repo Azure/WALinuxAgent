@@ -152,6 +152,8 @@ class CGroupConfigurator(object):
                 # Before agent setup, cleanup the old agent setup (drop-in files) since new agent uses different approach(systemctl) to setup cgroups.
                 log_cgroup_info("Cleaning up old agent setup (drop-in files), if any")
                 self._cleanup_old_agent_setup()
+                if self.using_cgroup_v2():
+                    self._reset_resource_quota(systemd.get_agent_unit_name(), ResourceName.MEMORY, ignore_enforce_check=True)
 
                 # Notes about slice setup:
                 #   For machines where daemon version did not already create azure.slice, the
@@ -183,8 +185,7 @@ class CGroupConfigurator(object):
                     if isinstance(controller, _CpuController) and self._cgroups_api.can_enforce_cpu():
                         self._set_resource_quota(agent_unit_name, {ResourceName.CPU:conf.get_agent_cpu_quota()})
                         controller.track_throttle_time(True)  # CPU controller track the throttle time only when CPU quota is set
-                    elif isinstance(controller, _MemoryController) and self._cgroups_api.can_enforce_memory():
-                        self._set_resource_quota(agent_unit_name, {ResourceName.MEMORY:conf.get_agent_memory_quota()})
+                    elif isinstance(controller, _MemoryController):
                         self._agent_memory_metrics = controller
                     CGroupsTelemetry.track_cgroup_controller(controller)
 
@@ -194,9 +195,9 @@ class CGroupConfigurator(object):
                 log_cgroup_info('Agent cgroups enabled: {0}'.format(self._agent_cgroups_enabled))
                 self._initialized = True
 
-                if self._cgroups_api is not None and not self._cgroups_api.can_enforce_cpu():
-                    # If agent cgroups are not enabled or quotas not enabled, reset the quota for the agent unit
-                    log_cgroup_info("Reset CPU quota if agent cgroups were not enabled for enforcement")
+                # If agent cgroups are not enabled or CPU quotas cannot be enforced, reset the quota for the agent unit
+                if self._cgroups_api is not None and (not self._agent_cgroups_enabled or not self._cgroups_api.can_enforce_cpu()):
+                    log_cgroup_info("Reset CPU quota since agent cgroups are not enabled for enforcement")
                     self._reset_resource_quota(systemd.get_agent_unit_name(), ResourceName.CPU, ignore_enforce_check=True)
 
         def _check_cgroups_supported(self):

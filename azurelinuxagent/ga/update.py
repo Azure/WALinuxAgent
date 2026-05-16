@@ -332,6 +332,36 @@ class UpdateHandler(object):
         """
 
         try:
+            reset_memory_telemetry = []
+            msg1 = "[{0}] Starting ext_handler process".format(datetime.now(UTC))
+            logger.info(msg1)
+            reset_memory_telemetry.append(msg1)
+            try:
+                if systemd.is_systemd():
+                    unit_name = systemd.get_agent_unit_name()
+                    current_limit = systemd.get_unit_property(unit_name, "MemoryHigh").strip().lower()  # check if the property exists
+                    if current_limit != "infinity":
+                        systemd.set_unit_run_time_property(unit_name, "MemoryHigh", "")
+                        msg2 = "[{0}] Reset agent cgroup MemoryHigh property to infinity finished.".format(datetime.now(UTC))
+                        logger.info(msg2)
+                        reset_memory_telemetry.append(msg2)
+                        new_limit = systemd.get_unit_property(unit_name, "MemoryHigh")
+                        msg3 = "[{0}] Current MemoryHigh is {1}.".format(datetime.now(UTC), new_limit)
+                        logger.info(msg3)
+                        reset_memory_telemetry.append(msg3)
+                    else:
+                        msg4 = "[{0}] Agent cgroup MemoryHigh property is already set to infinity, no need to reset it.".format(datetime.now(UTC))
+                        logger.info(msg4)
+                        reset_memory_telemetry.append(msg4)
+                else:
+                    msg6 = "[{0}] Systemd is not present, skipping reset of agent cgroup MemoryHigh property.".format(datetime.now(UTC))
+                    logger.info(msg6)
+                    reset_memory_telemetry.append(msg6)
+            except Exception as e:
+                msg5 = "[{0}] Failed to reset agent cgroup MemoryHigh property: {1}".format(datetime.now(UTC), ustr(e))
+                logger.info(msg5)
+                reset_memory_telemetry.append(msg5)
+
             logger.info("{0} (Goal State Agent version {1})", AGENT_LONG_NAME, AGENT_VERSION)
             logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
             logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
@@ -376,6 +406,9 @@ class UpdateHandler(object):
 
             # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters_and_protocol(protocol)
+
+            # reporting reset memory telemetry
+            add_event(AGENT_NAME, op=WALAEventOperation.ResetMemory, message="\n".join(reset_memory_telemetry))
 
             # Send telemetry if protocol endpoint is not the known WireServer endpoint.
             endpoint = protocol.get_endpoint()
