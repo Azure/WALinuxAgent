@@ -232,10 +232,15 @@ if __name__ == '__main__':
         service_unit_file = self.get_service_file_path()
         binary_path = os.path.join(conf.get_lib_dir(), self.BINARY_FILE_NAME)
         try:
-            fileutil.write_file(service_unit_file,
-                                self.__SERVICE_FILE_CONTENT.format(binary_path=binary_path,
-                                                                   py_path=sys.executable,
-                                                                   version=self._UNIT_VERSION))
+            service_content = self.__SERVICE_FILE_CONTENT.format(binary_path=binary_path,
+                                                                 py_path=sys.executable,
+                                                                 version=self._UNIT_VERSION)
+            # On Azure Container Linux, Python lives inside a sysext overlay that is only available after
+            # systemd-sysext.service merges it. Add an explicit ordering dependency so the service waits.
+            if self._DISTRO == "azurecontainerlinux":
+                service_content = service_content.replace("After=local-fs.target",
+                                                         "After=local-fs.target systemd-sysext.service")
+            fileutil.write_file(service_unit_file, service_content)
             fileutil.chmod(service_unit_file, 0o644)
 
             # Finally enable the service. This is needed to ensure the service is started on system boot
