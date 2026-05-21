@@ -1,15 +1,13 @@
 #
 # The test suite verifies that disallowed extensions are not processed, but the agent should still report status.
 #
+# TODO: This test suite takes ~30 minutes to run. This should be optimized to reduce impact to pipeline run times.
 name: "ExtensionPolicy"
 tests:
   - "ext_policy/ext_policy.py"
 images:
-  - "endorsed"
+  - "random(endorsed,10)" # TODO: Remove randomization and run on all endorsed images once the test suite is optimized to reduce runtime.
   - "cvm-endorsed"
-# This test is executed in southcentralus as a workaround for recurring fabric "ServiceUnavailableFault" issues observed in westus2.
-locations: "AzureCloud:southcentralus"
-# TODO: This test is currently failing on usgov cloud due to an issue with the GuestConfig extension. Re-enable once the extension fix has been rolled out.
-skip_on_clouds:
-  - "AzureUSGovernment"
 owns_vm: false
+skip_on_images:
+  - "AzureChinaCloud:debian_11" # The ConfigurationforLinux-1.26.109 extension is failing on Debian 11 in China cloud only; skip this image until the issue in the extension is fixed

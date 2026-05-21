@@ -145,6 +145,9 @@ class AgentTestSuite(LisaTestSuite):
         self._location: str  # Azure location (region) where test VMs are located
         self._image: str   # Image used to create the test VMs; it can be empty if LISA chose the size, or when using an existing VM
 
+        self._vm_size: str  # VM size to use when creating scale sets; empty means use the template default
+        self._security_type: str  # ARM security type (e.g. 'ConfidentialVM') to use when deploying scale sets; empty means template default
+
         self._is_vhd: bool  # True when the test VMs were created by LISA from a VHD; this is usually used to validate a new VHD and the test Agent is not installed
 
         # username and public SSH key for the admin account used to connect to the test VMs
@@ -203,6 +206,8 @@ class AgentTestSuite(LisaTestSuite):
         self._subscription_id = variables["subscription_id"]
         self._location = variables["c_location"]
         self._image = variables["c_image"]
+        self._vm_size = variables["c_vm_size"]
+        self._security_type = variables["c_security_type"]
 
         self._is_vhd = variables["c_is_vhd"]
 
@@ -903,7 +908,7 @@ class AgentTestSuite(LisaTestSuite):
         if self._allow_ssh != '':
             network_security_rule.add_allow_ssh_rule(self._allow_ssh)
 
-        return template, {
+        parameters = {
             "username": {"value": self._user},
             "sshPublicKey": {"value": read_file(f"{self._identity_file}.pub")},
             "vmName": {"value": scale_set_name},
@@ -912,6 +917,18 @@ class AgentTestSuite(LisaTestSuite):
             "sku": {"value": sku},
             "version": {"value": version}
         }
+
+        # If the image definition (in images.yml) or the runbook specifies a VM size, use it; otherwise fall back
+        # to the template default.
+        if self._vm_size != '':
+            parameters["vmSize"] = {"value": self._vm_size}
+
+        # If the image definition (in images.yml) declares a security type (e.g. 'ConfidentialVM'), set it on the
+        # scale set; otherwise the template default ('Standard') is used.
+        if self._security_type != '':
+            parameters["securityType"] = {"value": self._security_type}
+
+        return template, parameters
 
 
 

@@ -138,6 +138,7 @@ class WALAEventOperation:
     RequestedStateDisabled = "RequestedStateDisabled"
     RequestedVersionMismatch = "RequestedVersionMismatch"
     ResetFirewall = "ResetFirewall"
+    ResetMemory = "ResetMemory"
     Restart = "Restart"
     SetCGroupsLimits = "SetCGroupsLimits"
     SignatureValidation = "SignatureValidation"                         # Event for general logs related to package signature or manifest validation that don't fall under a specific operation.
