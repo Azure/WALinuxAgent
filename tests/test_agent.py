@@ -56,6 +56,7 @@ Debug.FirewallRulesLogPeriod = 86400
 Debug.IgnoreExtSignatureValidationErrors = True
 Debug.LogCollectorInitialDelay = 300
 Debug.SignatureValidationInitialDelay = 600
+Debug.SignatureValidationTelemetryExpiryTime = 2026-12-01
 DetectScvmmEnv = False
 EnableOverProvisioning = True
 Extension.LogDir = /var/log/azure

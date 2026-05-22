@@ -174,7 +174,12 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.Filesystem": "ext3",
     "AutoUpdate.GAFamily": "Prod",
     "Policy.PolicyFilePath": "/etc/waagent_policy.json",
-    "Protocol.EndpointDiscovery": "dhcp"
+    "Protocol.EndpointDiscovery": "dhcp",
+    #
+    # "Debug" options are experimental and may be removed in later
+    # versions of the Agent.
+    #
+    "Debug.SignatureValidationTelemetryExpiryTime": "2026-12-01"
 }
 
 

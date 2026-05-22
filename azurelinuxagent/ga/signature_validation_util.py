@@ -184,8 +184,8 @@ def openssl_version_supported_for_signature_validation():
         _OpenSSLVersionCheck.set_version_supports_validation(True)
         return True
     except Exception as ex:
-        logger.warn("Failed to determine if OpenSSL version supports signature validation. Error: {0}", ustr(ex))
         msg = "Failed to determine if OpenSSL version supports signature validation. Error: {0}".format(ustr(ex))
+        logger.warn(msg)
         add_event(op=WALAEventOperation.SignatureValidation, is_success=False, message=msg, log_event=False)
         _OpenSSLVersionCheck.set_version_supports_validation(False)
         return False
@@ -439,6 +439,20 @@ def _should_delay_signature_validation():
     return elapsed < datetime.timedelta(seconds=delay_seconds)
 
 
+# Tracks whether we have already reported an error while checking the expiry time so we don't log/emit telemetry on every call.
+# _is_signature_validation_telemetry_expired() can be called multiple times during a single goal state execution
+class _ExpiryCheckErrorReporter(object):
+    _reported = False
+
+    @staticmethod
+    def already_reported():
+        return _ExpiryCheckErrorReporter._reported
+
+    @staticmethod
+    def mark_reported():
+        _ExpiryCheckErrorReporter._reported = True
+
+
 def _is_signature_validation_telemetry_expired():
     """
     We disable the agent signature validation feature after the expiry time. This is to prevent any long-term unintended
@@ -449,7 +463,15 @@ def _is_signature_validation_telemetry_expired():
         return datetime.datetime.now(UTC) >= expiry_date
     except Exception as ex:
         # Catch any exception (e.g. ValueError from a malformed date string) and treat the feature as expired so we fail safe.
-        logger.error("Failed to parse agent signature validation expiry time. Treating feature as expired. Error: {0}", ustr(ex))
+        # Only report the error once per agent execution to avoid flooding the log, since this function can be called
+        # multiple times for a single goal state.
+        if not _ExpiryCheckErrorReporter.already_reported():
+            _ExpiryCheckErrorReporter.mark_reported()
+            msg = ("Error while checking signature validation expiry time "
+                   "(Debug.SignatureValidationTelemetryExpiryTime) from conf, will skip signature validation. "
+                   "Error: {0}").format(ustr(ex))
+            logger.warn(msg)
+            add_event(op=WALAEventOperation.SignatureValidation, is_success=False, message=msg, log_event=False)
         return True
 
 
@@ -457,45 +479,47 @@ def ext_signature_validation_enabled():
     """
     Returns True if all conditions for extension signature validation are met:
     - Conf flag 'EnableExtSignatureValidation' is True
+    - Agent is running on a Confidential VM (TODO: remove when all VMs are supported)
     - Extension signature validation timeout has not been exceeded (TODO: remove after telemetry release)
     - Initial delay period after agent start has passed (TODO: remove after telemetry release)
+    - Signature validation feature is not expired according to Conf flag 'Debug.SignatureValidationTelemetryExpiryTime' (TODO: remove after telemetry release(s))
     - OpenSSL version supports required validation parameters (TODO: remove after timestamp validation implemented)
-    - Agent is running on a Confidential VM (TODO: remove when all VMs are supported)
     """
     return conf.get_ext_signature_validation_enabled() and \
+           ConfidentialVMInfo.is_confidential_vm() and \
            not SignatureValidationTimeout.is_ext_validation_disabled() and \
            not _should_delay_signature_validation() and \
-           openssl_version_supported_for_signature_validation() and \
-           ConfidentialVMInfo.is_confidential_vm()
+           not _is_signature_validation_telemetry_expired() and \
+           openssl_version_supported_for_signature_validation()
 
 
 def agent_signature_validation_enabled():
     """
     Returns True if all conditions for agent signature validation are met:
-        1. Conf flag 'EnableAgentSignatureValidation' is True,
-        2. Agent signature validation feature is not expired according to Conf flag 'Debug.SignatureValidationTelemetryExpiryTime', (TODO: remove after telemetry release(s))
-        3. Agent is running on a Confidential VM (TODO: remove when all VMs are supported)
-        4. Agent signature validation timeout has not been exceeded (TODO: remove after telemetry release(s))
-        5. Initial delay period after agent start has passed (TODO: remove after telemetry release(s))
-        6. OpenSSL version supports all validation parameters (TODO: remove after timestamp validation implemented)
+        - Conf flag 'EnableAgentSignatureValidation' is True
+        - Agent is running on a Confidential VM (TODO: remove when all VMs are supported)
+        - Agent signature validation timeout has not been exceeded (TODO: remove after telemetry release(s))
+        - Initial delay period after agent start has passed (TODO: remove after telemetry release(s))
+        - Signature validation feature is not expired according to Conf flag 'Debug.SignatureValidationTelemetryExpiryTime' (TODO: remove after telemetry release(s))
+        - OpenSSL version supports all validation parameters (TODO: remove after timestamp validation implemented)
 
     Agent package signature validation is currently limited to CVMs for telemetry/preview releases. It will be expanded to all VMs after we gain confidence in the feature.
     TODO: Remove the is_confidential_vm() check once signature validation is supported on all VMs.
     """
     return conf.get_agent_signature_validation_enabled() and \
-           not _is_signature_validation_telemetry_expired() and \
            ConfidentialVMInfo.is_confidential_vm() and \
            not SignatureValidationTimeout.is_agent_validation_disabled() and \
            not _should_delay_signature_validation() and \
+           not _is_signature_validation_telemetry_expired() and \
            openssl_version_supported_for_signature_validation()
 
 
 def agent_signature_goal_state_telemetry_enabled():
     """
     Returns True if all conditions for agent signature goal state telemetry are met:
-        1. Conf flag 'EnableAgentSignatureValidation' is True,
-        2. Agent signature validation feature is not expired according to Conf flag 'Debug.SignatureValidationTelemetryExpiryTime', (TODO: remove after telemetry release(s))
-        3. Agent is running on a Confidential VM (TODO: remove when all VMs are supported)
+        - Conf flag 'EnableAgentSignatureValidation' is True
+        - Agent is running on a Confidential VM (TODO: remove when all VMs are supported)
+        - Agent signature validation feature is not expired according to Conf flag 'Debug.SignatureValidationTelemetryExpiryTime' (TODO: remove after telemetry release(s))
 
     We separate goal state telemetry enablement from signature validation enablement because validation enablement has
     performance concerns and openssl requirements, whereas sending telemetry on goal state signature contents has no
@@ -505,8 +529,8 @@ def agent_signature_goal_state_telemetry_enabled():
     TODO: Remove the is_confidential_vm() check once signature validation is supported on all VMs.
     """
     return conf.get_agent_signature_validation_enabled() and \
-           not _is_signature_validation_telemetry_expired() and \
-           ConfidentialVMInfo.is_confidential_vm()
+           ConfidentialVMInfo.is_confidential_vm() and \
+           not _is_signature_validation_telemetry_expired()
 
 
 def cleanup_package_with_invalid_signature(package_file):

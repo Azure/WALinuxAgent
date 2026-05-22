@@ -28,7 +28,7 @@ from azurelinuxagent.ga.signature_validation_util import validate_signature, Sig
     validate_handler_manifest_signing_info, \
     ManifestValidationError, _get_openssl_version, openssl_version_supported_for_signature_validation, \
     ext_signature_validation_enabled, agent_signature_validation_enabled, agent_signature_goal_state_telemetry_enabled, \
-    _is_signature_validation_telemetry_expired, _OpenSSLVersionCheck
+    _is_signature_validation_telemetry_expired, _OpenSSLVersionCheck, _ExpiryCheckErrorReporter
 from azurelinuxagent.ga.exthandlers import HandlerManifest
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.future import UTC
@@ -47,6 +47,8 @@ class TestSignatureValidation(AgentTestCase):
         self.package_name_and_version = "Microsoft.OSTCExtensions.Edp.VMAccessForLinux-1.5.0"
         # Reset cached OpenSSL version check result so each test starts with a clean state.
         _OpenSSLVersionCheck._version_supports_validation = None  # pylint: disable=protected-access
+        # Reset the once-per-run guard for the expiry-check error reporter so each test starts with a clean state.
+        _ExpiryCheckErrorReporter._reported = False  # pylint: disable=protected-access
 
     def test_should_validate_signature_successfully(self):
         """
@@ -233,6 +235,26 @@ class TestSignatureValidation(AgentTestCase):
         # When conf value of Debug.SignatureValidationTelemetryExpiryTime is invalid, _is_signature_validation_telemetry_expired should return True
         with patch("azurelinuxagent.ga.signature_validation_util.conf.get_signature_validation_telemetry_expiry_time", return_value="2026-31-12"):
             self.assertTrue(_is_signature_validation_telemetry_expired())
+
+    def test_is_signature_validation_telemetry_expired_should_report_error_at_most_once_per_run(self):
+        """
+        When the configured expiry time cannot be parsed, _is_signature_validation_telemetry_expired() should log an
+        error and emit a telemetry event exactly once per agent execution, regardless of how many times it is called.
+        This avoids flooding the log/telemetry on each goal state processing.
+        """
+        with patch("azurelinuxagent.ga.signature_validation_util.conf.get_signature_validation_telemetry_expiry_time", return_value="2026-31-12"):
+            with patch("azurelinuxagent.ga.signature_validation_util.logger.warn") as mock_warn:
+                with patch("azurelinuxagent.ga.signature_validation_util.add_event") as mock_add_event:
+                    for _ in range(5):
+                        self.assertTrue(_is_signature_validation_telemetry_expired(),
+                                        "Expected malformed expiry to be treated as expired")
+                    self.assertEqual(1, mock_warn.call_count,
+                                     "Expected expiry-check error to be logged exactly once across 5 calls")
+                    self.assertEqual(1, len(mock_add_event.call_args_list),
+                                     "Expected exactly one telemetry event for the malformed expiry")
+                    _, kw = mock_add_event.call_args_list[0]
+                    self.assertIn("Error while checking signature validation expiry time", kw.get('message'),
+                                     "Expected telemetry event to indicate the malformed expiry")
 
     @contextlib.contextmanager
     def _patch_agent_signature_validation_dependencies(self, conf_enabled=True, validation_timeout_disabled=False,
