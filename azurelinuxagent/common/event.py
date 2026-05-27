@@ -115,6 +115,7 @@ class WALAEventOperation:
     ImdsHeartbeat = "ImdsHeartbeat"
     Install = "Install"
     InitializeHostPlugin = "InitializeHostPlugin"
+    KernelSoftLockup = "KernelSoftLockup"
     Log = "Log"
     LogCollection = "LogCollection"
     NoExec = "NoExec"

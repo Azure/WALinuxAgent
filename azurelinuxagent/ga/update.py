@@ -67,6 +67,7 @@ from azurelinuxagent.ga.guestagent import GuestAgent
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates, get_microsoft_signing_certificate_path
+from azurelinuxagent.ga import state_dir
 from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 
 CHILD_HEALTH_INTERVAL = 15 * 60
@@ -365,6 +366,9 @@ class UpdateHandler(object):
             logger.info("{0} (Goal State Agent version {1})", AGENT_LONG_NAME, AGENT_VERSION)
             logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
             logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
+
+            # Ensure state dir exists (may not be created by the daemon if it runs an older version)
+            state_dir.initialize_state_dir()
 
             vm_arch = self.osutil.get_vm_arch()
             logger.info("CPU Arch: {0}", vm_arch)

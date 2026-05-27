@@ -61,6 +61,7 @@ _MUST_COLLECT_FILES = [
     _AGENT_LOG,
     os.path.join(_AGENT_LIB_DIR, "waagent_status.json"),
     os.path.join(_AGENT_LIB_DIR, "history", "*.zip"),
+    os.path.join(_AGENT_LIB_DIR, "state", "*"),
     os.path.join(_EXTENSION_LOG_DIR, "*", "*"),
     os.path.join(_EXTENSION_LOG_DIR, "*", "*", "*"),
     "{0}.*".format(_AGENT_LOG)  # any additional waagent.log files (e.g., waagent.log.1.gz)

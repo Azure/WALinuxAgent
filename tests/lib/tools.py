@@ -35,6 +35,7 @@ from threading import current_thread
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.ga import state_dir
 from azurelinuxagent.common.future import range  # pylint: disable=redefined-builtin
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
@@ -196,6 +197,7 @@ class AgentTestCase(unittest.TestCase):
         self.test_file = 'test_file'
 
         conf.get_lib_dir = Mock(return_value=self.tmp_dir)
+        state_dir.get_state_dir = Mock(return_value=self.tmp_dir)
 
         ext_log_dir = os.path.join(self.tmp_dir, "azure")
         conf.get_ext_log_dir = Mock(return_value=ext_log_dir)
