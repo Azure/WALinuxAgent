@@ -9,9 +9,8 @@ import subprocess
 import sys
 
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
-    AGENT_LONG_VERSION
+    AGENT_LONG_VERSION, AGENT_SIGNING_INFO_NAME
 from azurelinuxagent.ga.guestagent import AGENT_MANIFEST_FILE
-from azurelinuxagent.ga.signature_validation_util import AGENT_SIGNING_INFO_NAME
 
 MANIFEST = '''[{{
     "name": "{0}",

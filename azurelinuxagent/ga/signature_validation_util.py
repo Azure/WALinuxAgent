@@ -40,10 +40,6 @@ from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 # command is not supported on older versions.
 _MIN_OPENSSL_VERSION_FOR_SIG_VALIDATION = FlexibleVersion("1.1.0")
 
-# Expected value of the 'signingInfo.name' attribute in the agent package's HandlerManifest.json.
-# Used both when generating the manifest (makepkg.py) and when validating it during update.
-AGENT_SIGNING_INFO_NAME = "Microsoft.OSTCLinuxAgent"
-
 # Track the time when the agent module is first loaded. This is used to implement an initial delay period before validating signature.
 # TODO: This is a temporary performance workaround for telemetry release; remove for production release.
 _agent_start_time = datetime.datetime.now(UTC)
