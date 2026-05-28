@@ -26,6 +26,7 @@ import time
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
+from azurelinuxagent.common.utils.shellutil import CommandError
 
 
 class AclOSUtil(DefaultOSUtil):
@@ -56,10 +57,12 @@ class AclOSUtil(DefaultOSUtil):
         """
         retry_limit = retries + 1
         for attempt in range(1, retry_limit):
-            return_code = shellutil.run("ip link set {0} down && ip link set {0} up".format(ifname))
-            if return_code == 0:
+            try:
+                shellutil.run_command(["ip", "link", "set", ifname, "down"])
+                shellutil.run_command(["ip", "link", "set", ifname, "up"])
                 return
-            logger.warn("failed to restart {0}: return code {1}".format(ifname, return_code))
+            except CommandError as e:
+                logger.warn("failed to restart {0}: {1}".format(ifname, e))
             if attempt < retry_limit:
                 logger.info("retrying in {0} seconds".format(wait))
                 time.sleep(wait)
