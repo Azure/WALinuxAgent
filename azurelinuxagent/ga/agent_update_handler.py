@@ -16,6 +16,8 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 
+import json
+
 from azurelinuxagent.common import conf, logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import AgentUpgradeExitException, AgentUpdateError, AgentFamilyMissingError
@@ -27,6 +29,7 @@ from azurelinuxagent.common.version import get_daemon_version, CURRENT_VERSION
 from azurelinuxagent.ga.guestagent import GuestAgentUpdateUtil
 from azurelinuxagent.ga.rsm_version_updater import RSMVersionUpdater
 from azurelinuxagent.ga.self_update_version_updater import SelfUpdateVersionUpdater
+from azurelinuxagent.ga.signature_validation_util import agent_signature_goal_state_telemetry_enabled
 
 
 class UpdateMode(object):
@@ -171,6 +174,11 @@ class AgentUpdateHandler(object):
                     self._updater = RSMVersionUpdater(self._gs_id, self._daemon_version)
                     GuestAgentUpdateUtil.save_rsm_update_state_file()
 
+            # On each new goal state, send telemetry on the agent signatures in the goal state if agent signature
+            # validation is enabled and the goal state supports agent signature mapping.
+            if ext_gs_updated:
+                self._send_agent_signature_event(goal_state, agent_family)
+
             # If updater is changed in previous step, we allow update as it consider as first attempt. If not, it checks below condition
             # RSM checks new goal state; self-update checks manifest download interval
             if not self._updater.is_update_allowed_this_time(ext_gs_updated):
@@ -221,6 +229,72 @@ class AgentUpdateHandler(object):
         finally:
             if GuestAgentUpdateUtil.is_initial_update():
                 GuestAgentUpdateUtil.save_initial_update_state_file()
+
+    def _send_agent_signature_event(self, goal_state, agent_family):
+        """
+        Sends telemetry about agent package signatures in the goal state. This telemetry is collected to gain confidence
+         that agent signatures are being correctly delivered in the goal state before requiring agent signature
+         validation on update.
+
+        Only sends telemetry when agent signature goal state telemetry is enabled and goal state supports agent signature mapping.
+        """
+        try:
+            if not agent_signature_goal_state_telemetry_enabled():
+                return
+
+            if not goal_state.extensions_goal_state.supports_agent_signature_mapping():
+                return
+
+            gs_signature_info = self._build_agent_signature_telemetry_data(agent_family, goal_state.extensions_goal_state.created_on_timestamp, goal_state.extensions_goal_state.activity_id)
+            msg = json.dumps(gs_signature_info)
+            logger.info("Agent signatures from goal state: {0}", msg)
+            add_event(op=WALAEventOperation.AgentSignature, message=msg, log_event=False)
+        except Exception as err:
+            msg = "Unable to send agent signature telemetry: {0}".format(textutil.format_exception(err))
+            logger.warn(msg)
+            add_event(op=WALAEventOperation.AgentSignature, is_success=False, message=msg, log_event=False)
+
+    @staticmethod
+    def _build_agent_signature_telemetry_data(agent_family, created_on_timestamp, activity_id):
+        """
+        Builds the telemetry payload dict for agent signatures in a goal state.
+
+        The following information is included in the payload:
+            1. Guest Agent versions with signatures in the goal state
+                - This information will be used in monitoring queries to assert that the expected agent versions are
+                    being delivered in the goal state. For a non-RSM goal state, the latest two published versions
+                    should be included. For an RSM driven goal state (is_version_from_rsm=True), the latest two
+                    published versions should be included AND the requested version if it is not the latest two.
+
+                    We do not do this assertion in the agent itself because:
+                        a: we do not want to download the manifest on every goal state to compare its contents to the
+                            goal state, AND
+                        b: the agent has no knowledge of when a particular version was published and the goal state may
+                            have been created before the latest versions in the manifest were published.
+            2. Extensions goal state created_on_timestamp.
+                - This information will be used in monitoring queries to filter out events where the goal state was
+                    created before the changes to include agent signatures in the goal state were rolled out to all
+                    Prod. It will also be used in queries to assert which versions were published at the time of the
+                    goal state creation.
+            3. Requested version if the version is from RSM, None otherwise
+                - This information will be used in monitoring queries to assert that the RSM requested version's
+                    signature is always included in the goal state, even if it is not one of the latest two published.
+            4. Extensions goal state activity id
+                - This information will be used in monitoring queries to quickly correlate with CRP/HGAP telemetry for
+                    a particular goal state without needing to infer the activity id from other guest agent events.
+        """
+        versions_with_signatures = [str(v) for v in sorted(FlexibleVersion(version) for version in agent_family.ga_version_to_signature_mapping.keys())]
+        # If is_version_from_rsm and is_vm_enabled_for_rsm_upgrades are both True, include the requested version in
+        # the payload
+        is_rsm_request = agent_family.is_version_from_rsm and agent_family.is_vm_enabled_for_rsm_upgrades
+        rsm_requested_version = agent_family.version if is_rsm_request else ""
+
+        return {
+            "versions_with_signatures": versions_with_signatures,
+            "created_on_timestamp": str(created_on_timestamp),
+            "rsm_requested_version": rsm_requested_version,
+            "activity_id": activity_id
+        }
 
     def get_vmagent_update_status(self):
         """

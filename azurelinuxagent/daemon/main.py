@@ -38,6 +38,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_NAME, \
     PY_VERSION_MICRO
 from azurelinuxagent.daemon.resourcedisk import get_resourcedisk_handler
 from azurelinuxagent.daemon.scvmm import get_scvmm_handler
+from azurelinuxagent.ga import state_dir
 from azurelinuxagent.ga.update import get_update_handler
 from azurelinuxagent.pa.provision import get_provision_handler
 from azurelinuxagent.pa.rdma import get_rdma_handler
@@ -116,6 +117,9 @@ class DaemonHandler(object):
         if not os.path.isdir(conf.get_lib_dir()):
             fileutil.mkdir(conf.get_lib_dir(), mode=0o700)
             os.chdir(conf.get_lib_dir())
+
+        # Create state dir for persisting component state files
+        state_dir.initialize_state_dir()
 
     def daemon(self, child_args=None):
         logger.info("Run daemon")

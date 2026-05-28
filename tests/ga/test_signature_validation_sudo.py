@@ -24,7 +24,7 @@ from tests.lib.tools import AgentTestCase, data_dir, patch, i_am_root, MagicMock
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 from azurelinuxagent.ga.signature_validation_util import validate_signature, SignatureValidationError
 from azurelinuxagent.common.utils import shellutil
-from azurelinuxagent.ga.cgroupconfigurator import EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME
+from azurelinuxagent.ga.cgroupconfigurator import PKG_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME
 from azurelinuxagent.common.future import ustr
 
 
@@ -70,14 +70,14 @@ class TestSignatureValidationSudo(AgentTestCase):
         TestSignatureValidationSudo._validate_signature_in_another_year(2037, self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
 
     def test_should_validate_signature_for_package_signed_with_expired_intermediate_cert(self):
-        # Root certificate expires in 2036. This test changes system time to 2037 to simulate root cert expiry.
-        # Signature validation should still pass, because the signature was generated when the root certificate was unexpired.
+        # Intermediate certificate expires in 2027. This test changes system time to 2027 to simulate intermediate cert expiry.
+        # Signature validation should still pass, because the signature was generated when the intermediate certificate was unexpired.
         self.assertTrue(i_am_root(), "Test does not run when non-root")
         TestSignatureValidationSudo._validate_signature_in_another_year(2027, self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
 
     def test_should_validate_signature_for_package_signed_with_leaf_root_cert(self):
-        # Leaf certificate expires in September 2025. This test changes system time to 2026 to simulate root cert expiry.
-        # Signature validation should still pass, because the signature was generated when the root certificate was unexpired.
+        # Leaf certificate expires in September 2025. This test changes system time to 2026 to simulate leaf cert expiry.
+        # Signature validation should still pass, because the signature was generated when the leaf certificate was unexpired.
         self.assertTrue(i_am_root(), "Test does not run when non-root")
         TestSignatureValidationSudo._validate_signature_in_another_year(2026, self.vm_access_zip_path, self.vm_access_signature, self.package_name_and_version)
 
@@ -144,7 +144,12 @@ class TestSignatureValidationSudo(AgentTestCase):
             def mock_run_command(command, *args, **kwargs):
                 cmd = ' '.join(command)
                 if self.openssl_cmd_pattern.search(cmd):
-                    error_msg = 'Running as unit: {0}\nVerification failure'.format(EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME)
+                    # The unit name is generated per invocation; extract it from the systemd-run --unit argument so
+                    # that 'is_systemd_run_failure' classifies this as an OpenSSL failure (unit name is in stderr),
+                    # not a systemd-run infrastructure failure.
+                    unit_match = re.search(r'--unit=(\S+)', cmd)
+                    unit = unit_match.group(1) if unit_match else PKG_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME
+                    error_msg = 'Running as unit: {0}\nVerification failure'.format(unit)
                     raise shellutil.CommandError(command=cmd, return_code=1, stdout="", stderr=error_msg)
                 return original_run_command(command, *args, **kwargs)
 
@@ -161,7 +166,11 @@ class TestSignatureValidationSudo(AgentTestCase):
                 cmd = ' '.join(command)
                 run_command_calls.append(cmd)
                 if cmd.startswith('systemd-run'):
-                    error_msg = 'Unit {0} not found.'.format(EXT_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME)
+                    # The unit name is generated per invocation; extract it from the systemd-run --unit argument so
+                    # that 'is_systemd_run_failure' classifies this as a systemd-run failure ("Unit X not found.").
+                    unit_match = re.search(r'--unit=(\S+)', cmd)
+                    unit = unit_match.group(1) if unit_match else PKG_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME
+                    error_msg = 'Unit {0} not found.'.format(unit)
                     raise shellutil.CommandError(command=cmd, return_code=1, stdout=ustr(""), stderr=ustr(error_msg))
                 return original_run_command(command, *args, **kwargs)
 

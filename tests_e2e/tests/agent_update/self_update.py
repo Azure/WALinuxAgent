@@ -17,18 +17,13 @@
 # limitations under the License.
 #
 
-import os
-from pathlib import Path
-from threading import RLock
-
 from assertpy import fail
 
-import azurelinuxagent
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
+from tests_e2e.tests.lib.agent_update_helpers import build_agent_package
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
-from tests_e2e.tests.lib.shell import run_command
 
 
 class SelfUpdateBvt(AgentVmTest):
@@ -41,8 +36,7 @@ class SelfUpdateBvt(AgentVmTest):
         self._ssh_client = self._context.create_ssh_client()
         self._test_version = "2.8.9.9"
         self._test_pkg_name = f"WALinuxAgent-{self._test_version}.zip"
-
-    _setup_lock = RLock()
+        self._latest_version = ""
 
     def run(self):
         log.info("Verifying agent updated to latest version from custom test version")
@@ -57,57 +51,23 @@ class SelfUpdateBvt(AgentVmTest):
         """
         Builds the custom test agent pkg as some lower version and installs it on the vm
         """
-        self._build_custom_test_agent()
+        build_agent_package(self._context.working_directory, self._test_version, self._ssh_client, self._context.vm)
         output: str = self._ssh_client.run_command(
             f"agent_update-self_update_test_setup --package ~/tmp/{self._test_pkg_name} --version {self._test_version} --update_to_latest_version y",
             use_sudo=True)
         log.info("Successfully installed custom test agent pkg version \n%s", output)
-
-    def _build_custom_test_agent(self) -> None:
-        """
-        Builds the custom test pkg
-        """
-        with self._setup_lock:
-            agent_source_path: Path = self._context.working_directory / "source"
-            source_pkg_path: Path = agent_source_path / "eggs" / f"{self._test_pkg_name}"
-            if source_pkg_path.exists():
-                log.info("The test pkg already exists at %s, skipping build", source_pkg_path)
-            else:
-                if agent_source_path.exists():
-                    os.rmdir(agent_source_path)  # Remove if partial build exists
-                source_directory: Path = Path(azurelinuxagent.__path__[0]).parent
-                copy_cmd: str = f"cp -r {source_directory} {agent_source_path}"
-                log.info("Copying agent source %s to %s", source_directory, agent_source_path)
-                run_command(copy_cmd, shell=True)
-                if not agent_source_path.exists():
-                    raise Exception(
-                        f"The agent source was not copied to the expected path {agent_source_path}")
-                version_file: Path = agent_source_path / "azurelinuxagent" / "common" / "version.py"
-                version_cmd = rf"""sed -E -i "s/^AGENT_VERSION\s+=\s+'[0-9.]+'/AGENT_VERSION = '{self._test_version}'/g" {version_file}"""
-                log.info("Setting agent version to %s to build new pkg", self._test_version)
-                run_command(version_cmd, shell=True)
-                makepkg_file: Path = agent_source_path / "makepkg.py"
-                build_cmd: str = f"env PYTHONPATH={agent_source_path} python3 {makepkg_file} -o {agent_source_path}"
-                log.info("Building custom test agent pkg version %s", self._test_version)
-                run_command(build_cmd, shell=True)
-                if not source_pkg_path.exists():
-                    raise Exception(
-                        f"The test pkg was not created at the expected path {source_pkg_path}")
-            target_path: Path = Path("~") / "tmp"
-            log.info("Copying %s to %s:%s", source_pkg_path, self._context.vm, target_path)
-            self._ssh_client.copy_to_node(source_pkg_path, target_path)
 
     def _verify_agent_updated_to_latest_version(self) -> None:
         """
         Verifies the agent updated to latest version from custom test version.
         We retrieve latest version from goal state and compare with current agent version running as that latest version
         """
-        latest_version: str = self._ssh_client.run_command("agent_update-get_latest_version_from_manifest.py",
+        self._latest_version = self._ssh_client.run_command("agent_update-get_latest_version_from_manifest.py",
                                                            use_sudo=True).rstrip()
-        self._verify_guest_agent_update(latest_version)
+        self._verify_guest_agent_update(self._latest_version)
         # Verify agent updated to latest version by custom test agent
         self._ssh_client.run_command(
-            "agent_update-self_update_check.py --latest-version {0} --current-version {1}".format(latest_version,
+            "agent_update-self_update_check.py --latest-version {0} --current-version {1}".format(self._latest_version,
                                                                                                   self._test_version))
 
     def _verify_guest_agent_update(self, latest_version: str) -> None:
@@ -137,7 +97,7 @@ class SelfUpdateBvt(AgentVmTest):
         Builds the custom test agent pkg as some lower version and installs it on the vm
         Also modify the configuration AutoUpdate.UpdateToLatestVersion=n
         """
-        self._build_custom_test_agent()
+        build_agent_package(self._context.working_directory, self._test_version, self._ssh_client, self._context.vm)
         output: str = self._ssh_client.run_command(
             f"agent_update-self_update_test_setup --package ~/tmp/{self._test_pkg_name} --version {self._test_version} --update_to_latest_version n",
             use_sudo=True)

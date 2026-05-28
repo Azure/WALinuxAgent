@@ -44,6 +44,7 @@ variable:
       - agent_persist_firewall
       - agent_status
       - agent_update
+      - agent_update_with_signature
       - ext_cgroups
       - ext_policy
       - ext_policy_with_dependencies

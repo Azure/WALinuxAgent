@@ -35,7 +35,7 @@ from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.utils.archive import GoalStateHistory, SHARED_CONF_FILE_NAME
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
-from azurelinuxagent.ga.signature_validation_util import signature_validation_enabled
+from azurelinuxagent.ga.signature_validation_util import ext_signature_validation_enabled
 
 
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
@@ -287,7 +287,7 @@ class GoalState(object):
             #   - Signature validation is enabled
             #   - Extension requested state is *not* 'uninstall' (uninstall goal states never include signature).
             #
-            if signature_validation_enabled() and self._extensions_goal_state.supports_encoded_signature():
+            if ext_signature_validation_enabled() and self._extensions_goal_state.supports_encoded_signature():
                 for ext in self._extensions_goal_state.extensions:
                     if ext.state == "uninstall":
                         continue

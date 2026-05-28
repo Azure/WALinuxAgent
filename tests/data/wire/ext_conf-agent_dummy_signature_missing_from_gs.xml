@@ -3,30 +3,17 @@
   <GAFamilies>
     <GAFamily>
       <IsVMEnabledForRSMUpgrades>true</IsVMEnabledForRSMUpgrades>
-      <IsVersionFromRSM>false</IsVersionFromRSM>
+      <IsVersionFromRSM>true</IsVersionFromRSM>
       <Name>Prod</Name>
-      <Uris>
-        <Uri>http://mock-goal-state/manifest_of_ga.xml</Uri>
-      </Uris>
-      <Version>9.9.9.10</Version>
-      <VersionToSignatureMappings/>
-    </GAFamily>
-    <GAFamily>
-      <IsVMEnabledForRSMUpgrades>true</IsVMEnabledForRSMUpgrades>
-      <IsVersionFromRSM>false</IsVersionFromRSM>
-      <Name>Test</Name>
       <Uris>
         <Uri>http://mock-goal-state/manifest_of_ga.xml</Uri>
       </Uris>
       <Version>9.9.9.10</Version>
       <VersionToSignatureMappings>
         <GASignature>
-          <Version>9.9.9.10</Version>
+          <EncodedSignature>MIInpwYJKoZIhvcNAQcCProd9999=</EncodedSignature>
+          <Version>9.9.9.9</Version>
         </GASignature>
-        <GASignature>
-          <EncodedSignature>test_test_signature_for_invalid</EncodedSignature>
-        </GASignature>
-        <GASignature/>
       </VersionToSignatureMappings>
     </GAFamily>
   </GAFamilies>
