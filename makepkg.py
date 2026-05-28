@@ -11,8 +11,7 @@ import sys
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
     AGENT_LONG_VERSION
 from azurelinuxagent.ga.guestagent import AGENT_MANIFEST_FILE
-
-AGENT_SIGNING_INFO_NAME = "Microsoft.OSTCLinuxAgent"
+from azurelinuxagent.ga.signature_validation_util import AGENT_SIGNING_INFO_NAME
 
 MANIFEST = '''[{{
     "name": "{0}",
