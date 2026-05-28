@@ -63,7 +63,7 @@ class GuestAgent(object):
                 if os.path.isdir(self.get_agent_dir()):
                     shutil.rmtree(self.get_agent_dir(), ignore_errors=True)
             except Exception as err:
-                logger.warn("Unable to delete Agent files: {0}".format(err))
+                logger.warning("Unable to delete Agent files: {0}".format(err))
             msg = u"Agent {0} install failed with exception:".format(
                 self.name)
             detailed_msg = '{0} {1}'.format(msg, textutil.format_exception(e))
@@ -137,14 +137,14 @@ class GuestAgent(object):
                 msg = u"Agent {0} is permanently disabled".format(self.name)
                 report_func(WALAEventOperation.AgentDisabled, msg)
         except Exception as e:
-            logger.warn(u"Agent {0} failed recording error state: {1}", self.name, ustr(e))
+            logger.warning(u"Agent {0} failed recording error state: {1}", self.name, ustr(e))
 
     def inc_update_attempt_count(self):
         try:
             self.update_attempt_data.inc_count()
             self.update_attempt_data.save()
         except Exception as e:
-            logger.warn(u"Agent {0} failed recording update attempt: {1}", self.name, ustr(e))
+            logger.warning(u"Agent {0} failed recording update attempt: {1}", self.name, ustr(e))
 
     def get_update_attempt_count(self):
         return self.update_attempt_data.count
@@ -159,7 +159,7 @@ class GuestAgent(object):
             self.error.load()
             logger.verbose(u"Agent {0} error state: {1}", self.name, ustr(self.error))
         except Exception as e:
-            logger.warn(u"Agent {0} failed loading error state: {1}", self.name, ustr(e))
+            logger.warning(u"Agent {0} failed loading error state: {1}", self.name, ustr(e))
 
     def _load_manifest(self):
         path = self.get_agent_manifest_path()
@@ -242,7 +242,7 @@ class GuestAgentError(object):
             except Exception as error:
                 # The error.json file is only supposed to be written only by the agent.
                 # If for whatever reason the file is malformed, just delete it to reset state of the errors.
-                logger.warn(
+                logger.warning(
                     "Ran into error when trying to load error file {0}, deleting it to clean state. Error: {1}".format(
                         self.path, textutil.format_exception(error)))
                 try:
@@ -306,7 +306,7 @@ class GuestAgentUpdateAttempt(object):
             except Exception as error:
                 # The update_attempt.json file is only supposed to be written only by the agent.
                 # If for whatever reason the file is malformed, just delete it to reset state of the errors.
-                logger.warn(
+                logger.warning(
                     "Ran into error when trying to load error file {0}, deleting it to clean state. Error: {1}".format(
                         self.path, textutil.format_exception(error)))
                 try:
@@ -349,7 +349,7 @@ class GuestAgentUpdateUtil(object):
                 pass
         except Exception as e:
             msg = "Error creating the initial update state file ({0}): {1}".format(GuestAgentUpdateUtil.get_initial_update_state_file(), ustr(e))
-            logger.warn(msg)
+            logger.warning(msg)
             add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
 
     @staticmethod
@@ -376,7 +376,7 @@ class GuestAgentUpdateUtil(object):
                 pass
         except Exception as e:
             msg = "Error creating the RSM state file ({0}): {1}".format(GuestAgentUpdateUtil.get_rsm_update_state_file(), ustr(e))
-            logger.warn(msg)
+            logger.warning(msg)
             add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
 
     @staticmethod
@@ -389,7 +389,7 @@ class GuestAgentUpdateUtil(object):
                 os.remove(GuestAgentUpdateUtil.get_rsm_update_state_file())
         except Exception as e:
             msg = "Error removing the RSM state file ({0}): {1}".format(GuestAgentUpdateUtil.get_rsm_update_state_file(), ustr(e))
-            logger.warn(msg)
+            logger.warning(msg)
             add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
 
     @staticmethod

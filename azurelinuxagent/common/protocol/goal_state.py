@@ -324,7 +324,7 @@ class GoalState(object):
                 except Exception as e:
                     message = "Unable to download certificates. Goal state processing will continue, some " \
                               "extensions requiring certificates may fail. Error: {0}".format(ustr(e))
-                    self.logger.warn(message)
+                    self.logger.warning(message)
                     add_event(op=WALAEventOperation.GoalState, is_success=False, message=message)
 
     def _restore_wire_server_goal_state(self, incarnation, xml_text, xml_doc, vm_settings_support_stopped_error):
@@ -462,7 +462,7 @@ class GoalState(object):
                 try:
                     fileutil.write_file(shared_config_file, xml_text)
                 except Exception as e:
-                    logger.warn("Failed to save {0}: {1}".format(shared_config, e))
+                    logger.warning("Failed to save {0}: {1}".format(shared_config, e))
 
             certs = EmptyCertificates()
             certs_uri = findtext(xml_doc, "Certificates")
@@ -491,7 +491,7 @@ class GoalState(object):
             return extensions_config
 
         except Exception as exception:
-            self.logger.warn("Fetching the goal state failed: {0}", ustr(exception))
+            self.logger.warning("Fetching the goal state failed: {0}", ustr(exception))
             raise ProtocolError(msg="Error fetching goal state", inner=exception)
         finally:
             message = 'Fetch goal state from WireServer completed'

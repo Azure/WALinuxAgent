@@ -194,7 +194,7 @@ class EventStatus(object):
                 with open(self._path, 'r') as f:
                     self._status = json.load(f)
         except Exception as e:
-            logger.warn("Exception occurred loading event status: {0}".format(e))
+            logger.warning("Exception occurred loading event status: {0}".format(e))
             self._status = {}
 
     def _save(self):
@@ -202,7 +202,7 @@ class EventStatus(object):
             with open(self._path, 'w') as f:
                 json.dump(self._status, f)
         except Exception as e:
-            logger.warn("Exception occurred saving event status: {0}".format(e))
+            logger.warning("Exception occurred saving event status: {0}".format(e))
 
 
 __event_status__ = EventStatus()
@@ -420,7 +420,7 @@ class EventLogger(object):
         try:
             return osutil.get_total_mem()
         except OSUtilError as e:
-            logger.warn("Failed to get RAM info; will be missing from telemetry: {0}", ustr(e))
+            logger.warning("Failed to get RAM info; will be missing from telemetry: {0}", ustr(e))
         return 0
 
     @staticmethod
@@ -428,7 +428,7 @@ class EventLogger(object):
         try:
             return osutil.get_processor_cores()
         except OSUtilError as e:
-            logger.warn("Failed to get Processors info; will be missing from telemetry: {0}", ustr(e))
+            logger.warning("Failed to get Processors info; will be missing from telemetry: {0}", ustr(e))
         return 0
 
     def initialize_vminfo_common_parameters(self, protocol):
@@ -446,7 +446,7 @@ class EventLogger(object):
             parameters[CommonTelemetryEventSchema.RoleName].value = vminfo.roleName
             parameters[CommonTelemetryEventSchema.RoleInstanceName].value = vminfo.roleInstanceName
         except Exception as e:
-            logger.warn("Failed to get VM info from goal state; will be missing from telemetry: {0}", ustr(e))
+            logger.warning("Failed to get VM info from goal state; will be missing from telemetry: {0}", ustr(e))
 
         try:
             imds_client = get_imds_client()
@@ -457,11 +457,11 @@ class EventLogger(object):
             parameters[CommonTelemetryEventSchema.VMId].value = imds_info.vmId
             parameters[CommonTelemetryEventSchema.ImageOrigin].value = int(imds_info.image_origin)
         except Exception as e:
-            logger.warn("Failed to get IMDS info; will be missing from telemetry: {0}", ustr(e))
+            logger.warning("Failed to get IMDS info; will be missing from telemetry: {0}", ustr(e))
 
     def save_event(self, data):
         if self.event_dir is None:
-            logger.warn("Cannot save event -- Event reporter is not initialized.")
+            logger.warning("Cannot save event -- Event reporter is not initialized.")
             return
 
         try:
@@ -695,7 +695,7 @@ def report_metric(category, counter, instance, value, log_event=False, reporter=
     :param EventLogger reporter: The EventLogger instance to which metric events should be sent
     """
     if reporter.event_dir is None:
-        logger.warn("Cannot report metric event -- Event reporter is not initialized.")
+        logger.warning("Cannot report metric event -- Event reporter is not initialized.")
         message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
         _log_event(AGENT_NAME, "METRIC", message, 0)
         return
@@ -718,7 +718,7 @@ def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, d
     :param flush: if true, flush the event immediately to the wire server
     """
     if reporter.event_dir is None:
-        logger.warn("Cannot add event -- Event reporter is not initialized.")
+        logger.warning("Cannot add event -- Event reporter is not initialized.")
         _log_event(name, op, message, duration, is_success=is_success)
         return
 
@@ -741,7 +741,7 @@ def warn(op, fmt, *args):
     """
     Creates a telemetry event and logs the message as WARNING.
     """
-    logger.warn(fmt, *args)
+    logger.warning(fmt, *args)
     add_event(op=op, message="[WARNING] " + fmt.format(*args), is_success=False, log_event=False)
 
 
@@ -765,7 +765,7 @@ class LogEvent(object):
         add_event(op=op, message=fmt.format(*args), is_success=True)
 
     def warn(self, op, fmt, *args):
-        self._logger.warn(fmt, *args)
+        self._logger.warning(fmt, *args)
         add_event(op=op, message="[WARNING] " + fmt.format(*args), is_success=False, log_event=False)
 
     def error(self, op, fmt, *args):
@@ -794,7 +794,7 @@ def add_log_event(level, message, forced=False, reporter=__event_logger__):
 def add_periodic(delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
                  message="", log_event=True, force=False, reporter=__event_logger__):
     if reporter.event_dir is None:
-        logger.warn("Cannot add periodic event -- Event reporter is not initialized.")
+        logger.warning("Cannot add periodic event -- Event reporter is not initialized.")
         _log_event(name, op, message, duration, is_success=is_success)
         return
 

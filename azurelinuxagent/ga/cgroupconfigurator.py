@@ -358,7 +358,7 @@ class CGroupConfigurator(object):
                         self._reset_cpu_quota(systemd.get_agent_unit_name())
 
             except Exception as err:
-                logger.warn("Error while resetting the quotas: {0}".format(err))
+                logger.warning("Error while resetting the quotas: {0}".format(err))
 
         @staticmethod
         def _enable_accounting(unit_name):

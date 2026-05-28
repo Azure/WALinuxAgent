@@ -428,7 +428,7 @@ class HostPluginProtocol(object):
                 with open(HostPluginProtocol._get_fast_track_state_file(), "w") as file_:
                     json.dump({"timestamp": timestamp}, file_)
         except Exception as e:
-            logger.warn("Error updating the Fast Track state ({0}): {1}", HostPluginProtocol._get_fast_track_state_file(), ustr(e))
+            logger.warning("Error updating the Fast Track state ({0}): {1}", HostPluginProtocol._get_fast_track_state_file(), ustr(e))
 
     @staticmethod
     def clear_fast_track_state():
@@ -437,7 +437,7 @@ class HostPluginProtocol(object):
                 if os.path.exists(HostPluginProtocol._get_fast_track_state_file()):
                     os.remove(HostPluginProtocol._get_fast_track_state_file())
         except Exception as e:
-            logger.warn("Error clearing the current state for Fast Track ({0}): {1}", HostPluginProtocol._get_fast_track_state_file(),
+            logger.warning("Error clearing the current state for Fast Track ({0}): {1}", HostPluginProtocol._get_fast_track_state_file(),
                         ustr(e))
 
     @staticmethod
@@ -455,7 +455,7 @@ class HostPluginProtocol(object):
                 with open(state_file, "r") as file_:
                     return json.load(file_)["timestamp"]
             except Exception as e:
-                logger.warn("Can't retrieve the timestamp for the most recent Fast Track goal state ({0}), will assume the current time. Error: {1}", state_file, ustr(e))
+                logger.warning("Can't retrieve the timestamp for the most recent Fast Track goal state ({0}), will assume the current time. Error: {1}", state_file, ustr(e))
             return timeutil.create_utc_timestamp(datetime.datetime.now(UTC))
 
     def fetch_vm_settings(self, force_update=False):
@@ -475,7 +475,7 @@ class HostPluginProtocol(object):
                 if self._supports_vm_settings:
                     # The most recent goal state was delivered using FastTrack, and suddenly the HostGAPlugin does not support the vmSettings API anymore.
                     # This can happen if, for example, the VM is migrated across host nodes that are running different versions of the HostGAPlugin.
-                    logger.warn("The HostGAPlugin stopped supporting the vmSettings API. If there is a pending FastTrack goal state, it will not be executed.")
+                    logger.warning("The HostGAPlugin stopped supporting the vmSettings API. If there is a pending FastTrack goal state, it will not be executed.")
                     add_event(op=WALAEventOperation.VmSettings, message="[VmSettingsSupportStopped] HostGAPlugin: {0}".format(self._version), is_success=False, log_event=False)
                     raise VmSettingsSupportStopped(self._fast_track_timestamp)
                 else:

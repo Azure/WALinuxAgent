@@ -214,7 +214,7 @@ class AgentUpdateHandler(object):
                 error_msg = "Unable to update Agent: {0}".format(textutil.format_exception(err))
             if log_error:
                 error_msg = "[{0}]{1}".format(self.get_current_update_mode(), error_msg)
-                logger.warn(error_msg)
+                logger.warning(error_msg)
                 add_event(op=WALAEventOperation.AgentUpgrade, is_success=False, message=error_msg, log_event=False)
             self._last_attempted_update_error_msg = error_msg
 
@@ -240,6 +240,6 @@ class AgentUpdateHandler(object):
                 return VMAgentUpdateStatus(expected_version=str(CURRENT_VERSION), status=status, code=code, message=self._last_attempted_update_error_msg)
         except Exception as err:
             msg = "Unable to report agent update status: {0}".format(textutil.format_exception(err))
-            logger.warn(msg)
+            logger.warning(msg)
             add_event(op=WALAEventOperation.AgentUpgrade, is_success=False, message=msg, log_event=True)
         return None

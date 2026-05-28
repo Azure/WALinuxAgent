@@ -188,7 +188,7 @@ if __name__ == '__main__':
                 try:
                     fileutil.rm_files(old_service_file_path)
                 except Exception as error:
-                    logger.warn("Unable to delete old service in image mode {0}: {1}".format(self._network_setup_service_name, ustr(error)))
+                    logger.warning("Unable to delete old service in image mode {0}: {1}".format(self._network_setup_service_name, ustr(error)))
 
         self.__setup_binary_file()
 
@@ -218,7 +218,7 @@ if __name__ == '__main__':
                                                               py_path=sys.executable))
             logger.info("Successfully updated the Binary file {0} for firewall setup".format(binary_file_path))
         except Exception:
-            logger.warn(
+            logger.warning(
                 "Unable to setup binary file, removing the service unit file {0} to ensure its not run on system reboot".format(
                     self.get_service_file_path()))
             self.__remove_file_without_raising(binary_file_path)
@@ -256,7 +256,7 @@ if __name__ == '__main__':
             try:
                 os.remove(file_path)
             except Exception as error:
-                logger.warn("Unable to delete file: {0}; Error: {1}".format(file_path, ustr(error)))
+                logger.warning("Unable to delete file: {0}; Error: {1}".format(file_path, ustr(error)))
 
     def __verify_network_setup_service_failed(self):
         # Check if the agent-network-setup.service failed in its last run
@@ -287,11 +287,11 @@ if __name__ == '__main__':
         except CommandError as error:
             msg = "Unable to fetch service logs, Command: {0} failed with ExitCode: {1}\nStdout: {2}\nStderr: {3}".format(
                 ' '.join(cmd), error.returncode, error.stdout, error.stderr)
-            logger.warn(msg)
+            logger.warning(msg)
         except Exception as e:
             msg = "Ran into unexpected error when getting logs for {0} service. Error: {1}".format(
                 self._network_setup_service_name, textutil.format_exception(e))
-            logger.warn(msg)
+            logger.warning(msg)
 
         # Log service status and logs if we can fetch them from journalctl and send it to Kusto,
         # else just log the error of the failure of fetching logs

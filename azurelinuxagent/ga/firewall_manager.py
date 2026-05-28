@@ -128,7 +128,7 @@ class FirewallManager(object):
             return shellutil.run_command(self._get_state_command())
         except Exception as e:
             message = "Failed to get the current state of the firewall rules: {0}".format(ustr(e))
-            logger.warn("Listing firewall rules failed: {0}".format(ustr(e)))
+            logger.warning("Listing firewall rules failed: {0}".format(ustr(e)))
             return message
 
     def _get_state_command(self):

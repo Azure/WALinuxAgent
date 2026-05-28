@@ -105,7 +105,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             add_event(op=WALAEventOperation.ArtifactsProfileBlob, message=message, is_success=True, log_event=False)
 
         def log_warning(message):
-            logger.warn(message)
+            logger.warning(message)
             add_event(op=WALAEventOperation.ArtifactsProfileBlob, message=message, is_success=False, log_event=False)
 
         artifacts_profile_blob = gettext(artifacts_profile_blob_xml_node)
@@ -429,7 +429,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             try:
                 depends_on_level = int(getattrib(depends_on_node, "dependencyLevel"))
             except (ValueError, TypeError):
-                logger.warn("Could not parse dependencyLevel for handler {0}. Setting it to 0".format(name))
+                logger.warning("Could not parse dependencyLevel for handler {0}. Setting it to 0".format(name))
                 depends_on_level = 0
         return depends_on_level
 

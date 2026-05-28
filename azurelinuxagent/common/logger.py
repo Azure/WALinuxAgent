@@ -95,7 +95,7 @@ class Logger(object):
             Assuming a logger with two appenders - FileAppender and TelemetryAppender. Here is an example of
             how using appender_lock flag can help.
 
-            logger.warn("foo")
+            logger.warning("foo")
                 |- log.warn() (azurelinuxagent.common.logger.Logger.warn)
                     |- log() (azurelinuxagent.common.logger.Logger.log)
                         |- FileAppender.appender_lock is currently False not log_appender.appender_lock is True

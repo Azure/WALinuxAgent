@@ -130,13 +130,13 @@ def _get_firewall_will_wait():
         output = shellutil.run_command(_get_iptables_version_command())
     except Exception as e:
         msg = "Unable to determine version of iptables: {0}".format(ustr(e))
-        logger.warn(msg)
+        logger.warning(msg)
         raise Exception(msg)
 
     m = _IPTABLES_VERSION_PATTERN.match(output)
     if m is None:
         msg = "iptables did not return version information: {0}".format(output)
-        logger.warn(msg)
+        logger.warning(msg)
         raise Exception(msg)
 
     wait = "-w" \

@@ -123,7 +123,7 @@ class GAVersionUpdater(object):
                 if os.path.isdir(agent_dir):
                     shutil.rmtree(agent_dir, ignore_errors=True)
             except Exception as err:
-                logger.warn("Unable to delete Agent directory: {0}".format(err))
+                logger.warning("Unable to delete Agent directory: {0}".format(err))
             raise AgentUpdateError("Downloaded agent package: {0} is missing agent handler manifest file: {1}".format(agent_name, agent_handler_manifest_file))
 
     def download_and_get_new_agent(self, protocol, agent_family, goal_state):
@@ -180,4 +180,4 @@ class GAVersionUpdater(object):
                         logger.info(u"Purging outdated Agent directory {0}", agent_path)
                         shutil.rmtree(agent_path)
             except Exception as e:
-                logger.warn(u"Purging {0} raised exception: {1}", agent_path, ustr(e))
+                logger.warning(u"Purging {0} raised exception: {1}", agent_path, ustr(e))

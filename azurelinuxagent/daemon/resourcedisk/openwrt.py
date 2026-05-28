@@ -37,7 +37,7 @@ class OpenWRTResourceDiskHandler(ResourceDiskHandler):
     def reread_partition_table(self, device):
         ret, output = shellutil.run_get_output("hdparm -z {0}".format(device), chk_err=False)  # pylint: disable=W0612
         if ret != 0:
-            logger.warn("Failed refresh the partition table.")
+            logger.warning("Failed refresh the partition table.")
 
     def mount_resource_disk(self, mount_point):
         device = self.osutil.device_for_ide_port(1)
@@ -101,7 +101,7 @@ class OpenWRTResourceDiskHandler(ResourceDiskHandler):
             raise ResourceDiskError("Partition was not created [{0}]".format(partition))
 
         if os.path.ismount(mount_point):
-            logger.warn("Disk is already mounted on {0}", mount_point)
+            logger.warning("Disk is already mounted on {0}", mount_point)
         else:
             # Some kernels seem to issue an async partition re-read after a
             # command invocation. This causes mount to fail if the
@@ -115,7 +115,7 @@ class OpenWRTResourceDiskHandler(ResourceDiskHandler):
             logger.info("Mount resource disk [{0}]", mount_string)
             ret, output = shellutil.run_get_output(mount_string)
             if ret:
-                logger.warn("Failed to mount resource disk. "
+                logger.warning("Failed to mount resource disk. "
                             "Attempting to format and retry mount. [{0}]",
                             output)
 

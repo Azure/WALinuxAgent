@@ -136,7 +136,7 @@ class DefaultOSUtil(object):
         try:
             return platform.machine()
         except Exception as e:
-            logger.warn("Unable to determine cpu architecture: {0}", ustr(e))
+            logger.warning("Unable to determine cpu architecture: {0}", ustr(e))
             return "unknown"
 
     @staticmethod
@@ -480,7 +480,7 @@ class DefaultOSUtil(object):
                 logger.info("Successfully mounted dvd")
                 return
             else:
-                logger.warn(
+                logger.warning(
                     "Mounting dvd failed [retry {0}/{1}, sleeping {2} sec]",
                     retry,
                     max_retry - 1,
@@ -519,7 +519,7 @@ class DefaultOSUtil(object):
         try:
             self.load_atapiix_mod()
         except Exception as e:
-            logger.warn("Could not load ATAPI driver: {0}".format(e))
+            logger.warning("Could not load ATAPI driver: {0}".format(e))
 
     def load_atapiix_mod(self):
         if self.is_atapiix_mod_loaded():
@@ -590,7 +590,7 @@ class DefaultOSUtil(object):
             if os.path.isfile(dest):
                 os.remove(dest)
             if os.path.isfile(src):
-                logger.warn("Move rules file {0} to {1}", file_name, dest)
+                logger.warning("Move rules file {0} to {1}", file_name, dest)
                 shutil.move(src, dest)
 
     def restore_rules_files(self, rules_files=None):
@@ -603,7 +603,7 @@ class DefaultOSUtil(object):
             if os.path.isfile(dest):
                 continue
             if os.path.isfile(src):
-                logger.warn("Move rules file {0} to {1}", filename, dest)
+                logger.warning("Move rules file {0} to {1}", filename, dest)
                 shutil.move(src, dest)
 
     def get_mac_addr(self):
@@ -655,7 +655,7 @@ class DefaultOSUtil(object):
         sock.close()
 
         if retsize == array_size:
-            logger.warn(('SIOCGIFCONF returned more than {0} up '
+            logger.warning(('SIOCGIFCONF returned more than {0} up '
                          'network interfaces.'), expected)
 
         ifconf_buff = array_to_bytes(buff)
@@ -793,10 +793,10 @@ class DefaultOSUtil(object):
             if not self.disable_route_warning:
                 with open('/proc/net/route') as routing_table_fh:
                     routing_table_text = routing_table_fh.read()
-                    logger.warn('Could not determine primary interface, '
+                    logger.warning('Could not determine primary interface, '
                                 'please ensure /proc/net/route is correct')
-                    logger.warn('Contents of /proc/net/route:\n{0}'.format(routing_table_text))
-                    logger.warn('Primary interface examination will retry silently')
+                    logger.warning('Contents of /proc/net/route:\n{0}'.format(routing_table_text))
+                    logger.warning('Primary interface examination will retry silently')
                     self.disable_route_warning = True
         else:
             logger.info('Primary interface is [{0}]'.format(primary_interface))
@@ -906,7 +906,7 @@ class DefaultOSUtil(object):
                     return False
             return True
         except CommandError as e:
-            logger.warn("Cannot get the routing table. {0} failed: {1}", ustr(route_cmd), ustr(e))
+            logger.warning("Cannot get the routing table. {0} failed: {1}", ustr(route_cmd), ustr(e))
             return False
 
     def get_if_name(self):
@@ -1016,12 +1016,12 @@ class DefaultOSUtil(object):
             return_code = shellutil.run("ifdown {0} && ifup {0}".format(ifname), expected_errors=[1] if attempt < retries else [])
             if return_code == 0:
                 return
-            logger.warn("failed to restart {0}: return code {1}".format(ifname, return_code))
+            logger.warning("failed to restart {0}: return code {1}".format(ifname, return_code))
             if attempt < retry_limit:
                 logger.info("retrying in {0} seconds".format(wait))
                 time.sleep(wait)
             else:
-                logger.warn("exceeded restart retries")
+                logger.warning("exceeded restart retries")
 
     def check_and_recover_nic_state(self, ifname):
         # TODO: This should be implemented for all distros where we reset the network during publishing hostname. Currently it is only implemented in RedhatOSUtil.
@@ -1131,7 +1131,7 @@ class DefaultOSUtil(object):
                                     device = d.split(':')[1]
                                     return device
         except (OSError, IOError) as exc:
-            logger.warn('Error getting device for {0} or {1}: {2}', gen1_device_prefix, gen2_device_id, ustr(exc))
+            logger.warning('Error getting device for {0} or {1}: {2}', gen1_device_prefix, gen2_device_id, ustr(exc))
         return None
 
     def device_for_ide_port(self, port_id):
@@ -1194,7 +1194,7 @@ class DefaultOSUtil(object):
                 if "hostname" in hostname_info:
                     return hostname_info["hostname"]
         except Exception as exception:
-            logger.warn("Error retrieving hostname: {0}", ustr(exception))
+            logger.warning("Error retrieving hostname: {0}", ustr(exception))
         return None
 
     def del_account(self, username):
@@ -1246,7 +1246,7 @@ class DefaultOSUtil(object):
         try:
             results = fileutil.read_file('/proc/stat')
         except (OSError, IOError) as ex:
-            logger.warn("Couldn't read /proc/stat: {0}".format(ex.strerror))
+            logger.warning("Couldn't read /proc/stat: {0}".format(ex.strerror))
             raise
 
         return results

@@ -51,12 +51,12 @@ class ChainguardOSUtil(DefaultOSUtil):
                 shellutil.run_command(["systemctl", "restart", "systemd-networkd"])
 
             except shellutil.CommandError as cmd_err:
-                logger.warn("failed to restart systemd-networkd: return code {1}".format(cmd_err.returncode))
+                logger.warning("failed to restart systemd-networkd: return code {1}".format(cmd_err.returncode))
                 if attempt < retry_limit:
                     logger.info("retrying in {0} seconds".format(wait))
                     time.sleep(wait)
                 else:
-                    logger.warn("exceeded restart retries")
+                    logger.warning("exceeded restart retries")
 
     def is_dhcp_available(self):
         return True

@@ -72,7 +72,7 @@ class ResourceDiskHandler(object):
             try:
                 fileutil.write_file(warning_file, DATA_LOSS_WARNING)
             except IOError as e:
-                logger.warn("Failed to write data loss warning:{0}", e)
+                logger.warning("Failed to write data loss warning:{0}", e)
             return mount_point
         except ResourceDiskError as e:
             logger.error("Failed to mount resource disk {0}", e)
@@ -184,21 +184,21 @@ class ResourceDiskHandler(object):
         ret, output = shellutil.run_get_output(mount_string, chk_err=False)
         # if the exit code is 32, then the resource disk can be already mounted
         if ret == 32 and output.find("is already mounted") != -1:
-            logger.warn("Could not mount resource disk: {0}", output)
+            logger.warning("Could not mount resource disk: {0}", output)
         elif ret != 0:
             # Some kernels seem to issue an async partition re-read after a
             # 'parted' command invocation. This causes mount to fail if the
             # partition re-read is not complete by the time mount is
             # attempted. Seen in CentOS 7.2. Force a sequential re-read of
             # the partition and try mounting.
-            logger.warn("Failed to mount resource disk. "
+            logger.warning("Failed to mount resource disk. "
                         "Retry mounting after re-reading partition info.")
 
             self.reread_partition_table(device)
 
             ret, output = shellutil.run_get_output(mount_string, chk_err=False)
             if ret:
-                logger.warn("Failed to mount resource disk. "
+                logger.warning("Failed to mount resource disk. "
                             "Attempting to format and retry mount. [{0}]",
                             output)
 

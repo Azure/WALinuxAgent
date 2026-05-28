@@ -245,7 +245,7 @@ def migrate_handler_state():
                     try:
                         shutil.move(from_path, to_path)
                     except Exception as e:
-                        logger.warn(
+                        logger.warning(
                             "Exception occurred migrating {0} {1} file: {2}",
                             handler,
                             file,
@@ -254,7 +254,7 @@ def migrate_handler_state():
     try:
         shutil.rmtree(handler_state_path)
     except Exception as e:
-        logger.warn("Exception occurred removing {0}: {1}", handler_state_path, str(e))
+        logger.warning("Exception occurred removing {0}: {1}", handler_state_path, str(e))
     return
 
 
@@ -373,7 +373,7 @@ class ExtHandlersHandler(object):
             unsupported_features = self.__get_unsupported_features()
             if any(unsupported_features):
                 msg = "Failing GS {0} as Unsupported features found: {1}".format(goal_state_id, ', '.join(unsupported_features))
-                logger.warn(msg)
+                logger.warning(msg)
                 self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=svd_sequence_number,
                                                                       code=GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures,
                                                                       message=msg)
@@ -391,7 +391,7 @@ class ExtHandlersHandler(object):
             self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=svd_sequence_number,
                                                                   code=GoalStateAggregateStatusCodes.GoalStateUnknownFailure,
                                                                   message=msg)
-            logger.warn(msg)
+            logger.warning(msg)
             add_event(op=WALAEventOperation.ExtensionProcessing,
                       is_success=False,
                       message=msg,
@@ -451,7 +451,7 @@ class ExtHandlersHandler(object):
                 os.remove(pkg)
                 logger.verbose("Removed orphaned extension package {0}".format(pkg))
             except OSError as e:
-                logger.warn("Failed to remove orphaned package {0}: {1}".format(pkg, e.strerror))
+                logger.warning("Failed to remove orphaned package {0}: {1}".format(pkg, e.strerror))
 
         # Finally, remove the directories and packages of the orphaned handlers, i.e. Any extension directory that
         # is still in the FileSystem but not in the GoalState
@@ -463,7 +463,7 @@ class ExtHandlersHandler(object):
                     os.remove(pkg)
                     logger.verbose("Removed extension package {0}".format(pkg))
                 except OSError as e:
-                    logger.warn("Failed to remove extension package {0}: {1}".format(pkg, e.strerror))
+                    logger.warning("Failed to remove extension package {0}: {1}".format(pkg, e.strerror))
 
     def _extensions_on_hold(self):
         if conf.get_enable_overprovisioning():
@@ -606,7 +606,7 @@ class ExtHandlersHandler(object):
                     self.wait_for_handler_completion(handler_i, wait_until, extension=extension)
 
                 except Exception as error:
-                    logger.warn(
+                    logger.warning(
                         "Dependent extension {0} failed or timed out, will skip processing the rest of the extensions".format(
                             extension_full_name))
                     depends_on_err_msg = ustr(error)
@@ -1000,7 +1000,7 @@ class ExtHandlersHandler(object):
             except Exception as error:
                 # Log error once per goal state
                 if goal_state_changed:
-                    logger.warn("Can't fetch ExtHandler from path: {0}; Error: {1}".format(path, ustr(error)))
+                    logger.warning("Can't fetch ExtHandler from path: {0}; Error: {1}".format(path, ustr(error)))
 
         return handlers_to_report
 
@@ -1065,7 +1065,7 @@ class ExtHandlersHandler(object):
 
         except Exception as error:
             msg = u"Failed to report status: {0}".format(textutil.format_exception(error))
-            logger.warn(msg)
+            logger.warning(msg)
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
                       op=WALAEventOperation.ReportStatus,
@@ -1222,7 +1222,7 @@ class ExtHandlerInstance(object):
                     if is_file_not_found_error(cleanup_exception):
                         logger.info("File '{0}' does not exist.", f)
                     else:
-                        logger.warn("Exception occurred while attempting to remove file '{0}': {1}", f,
+                        logger.warning("Exception occurred while attempting to remove file '{0}': {1}", f,
                                     cleanup_exception)
 
     def decide_version(self, target_state, extension, gs_activity_id):
@@ -1263,7 +1263,7 @@ class ExtHandlerInstance(object):
             if installed_pkg is None:
                 msg = "Failed to find installed version: {0} of Handler: {1}  in handler manifest to uninstall.".format(
                     installed_version, self.ext_handler.name)
-                self.logger.warn(msg)
+                self.logger.warning(msg)
             self.pkg = installed_pkg
             self.ext_handler.version = str(installed_version) \
                 if installed_version is not None else None
@@ -1731,7 +1731,7 @@ class ExtHandlerInstance(object):
         except IOError as e:
             message = "Failed to remove extension handler directory: {0}".format(e)
             self.report_event(message=message, is_success=False)
-            self.logger.warn(message)
+            self.logger.warning(message)
 
     def update(self, handler_version=None, disable_exit_codes=None, updating_from_version=None, extension=None):
         # For Handler level operations, extension just specifies the settings that initiated the update.
@@ -1969,7 +1969,7 @@ class ExtHandlerInstance(object):
         # Since this code is called on a loop, logging as a warning only on goal state change, else logging it
         # as verbose
         if goal_state_changed:
-            logger.warn(log_msg)
+            logger.warning(log_msg)
             add_event(name=self.get_extension_full_name(extension), version=self.ext_handler.version,
                       op=op, message=event_msg, is_success=False, log_event=False)
         else:
@@ -2273,7 +2273,7 @@ class ExtHandlerInstance(object):
             extension_name = self.get_extension_full_name(extension)
             message = "Failed to remove extension state files for {0}: {1}".format(extension_name, ustr(error))
             self.report_event(name=extension_name, message=message, is_success=False, log_event=False)
-            self.logger.warn(message)
+            self.logger.warning(message)
 
     def set_handler_status(self, status=ExtHandlerStatusValue.not_ready, message="", code=0):
         state_dir = self.get_conf_dir()

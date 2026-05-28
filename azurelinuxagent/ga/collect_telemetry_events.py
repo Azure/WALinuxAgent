@@ -101,7 +101,7 @@ class _ProcessExtensionEvents(PeriodicOperation):
     def _operation(self):
 
         if self._send_telemetry_events_handler.stopped():
-            logger.warn("{0} service is not running, skipping current iteration".format(
+            logger.warning("{0} service is not running, skipping current iteration".format(
                 self._send_telemetry_events_handler.get_thread_name()))
             return
 
@@ -163,7 +163,7 @@ class _ProcessExtensionEvents(PeriodicOperation):
             msg = "Skipping file: {0} as its size is {1:.2f} Mb > Max size allowed {2:.1f} Mb".format(
                 event_file_path, convert_to_mb(event_file_size),
                 convert_to_mb(self._EXTENSION_EVENT_FILE_MAX_SIZE))
-            logger.warn(msg)
+            logger.warning(msg)
             add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
             return False
         return True
@@ -203,7 +203,7 @@ class _ProcessExtensionEvents(PeriodicOperation):
                     if captured_extension_events_count >= self._MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD:
                         msg = "Reached max count for the extension: {0}; Max Limit: {1}. Skipping the rest.".format(
                             handler_name, self._MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD)
-                        logger.warn(msg)
+                        logger.warning(msg)
                         add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
                         break
                 except ServiceStoppedError:
@@ -214,7 +214,7 @@ class _ProcessExtensionEvents(PeriodicOperation):
                 except Exception as error:
                     msg = "Failed to process event file {0}:{1}".format(event_file,
                                                                               textutil.format_exception(error))
-                    logger.warn(msg)
+                    logger.warning(msg)
                     add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
                 finally:
                     # Todo: We should delete files after ensuring that we sent the data to Wireserver successfully
@@ -226,7 +226,7 @@ class _ProcessExtensionEvents(PeriodicOperation):
             if dropped_events_with_error_count:
                 msg = "Dropped events for Extension: {0}; Details:\n\t{1}".format(handler_name, '\n\t'.join(
                     ["Reason: {0}; Dropped Count: {1}".format(k, v) for k, v in dropped_events_with_error_count.items()]))
-                logger.warn(msg)
+                logger.warning(msg)
                 add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
 
             if captured_extension_events_count > 0:
@@ -311,7 +311,7 @@ class _ProcessExtensionEvents(PeriodicOperation):
                         ustr(stopped_error)))
                 raise
             except Exception as error:
-                logger.warn("Unable to parse and transmit event, error: {0}".format(error))
+                logger.warning("Unable to parse and transmit event, error: {0}".format(error))
 
             if captured_events_count >= self._MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD:
                 break
@@ -433,7 +433,7 @@ class _CollectAndEnqueueEvents(PeriodicOperation):
         """
         try:
             if self._send_telemetry_events_handler.stopped():
-                logger.warn("{0} service is not running, skipping iteration.".format(
+                logger.warning("{0} service is not running, skipping iteration.".format(
                     self._send_telemetry_events_handler.get_thread_name()))
                 return
             self.process_events()
@@ -627,7 +627,7 @@ class CollectTelemetryEventsHandler(ThreadHandlerInterface):
                     periodic_op.run()
 
             except Exception as error:
-                logger.warn(
+                logger.warning(
                     "An error occurred in the Telemetry Extension thread main loop; will skip the current iteration.\n{0}",
                     ustr(error))
             finally:

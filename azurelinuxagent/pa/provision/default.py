@@ -175,7 +175,7 @@ class ProvisionHandler(object):
                 msg = "VM is provisioned, but the VM unique identifier has changed. This indicates the VM may be " \
                       "created from an image that was not properly deprovisioned or generalized, which can result in " \
                       "unexpected behavior from the guest agent -- clearing cached state"
-                logger.warn(msg)
+                logger.warning(msg)
                 self.report_event(msg)
                 from azurelinuxagent.pa.deprovision \
                     import get_deprovision_handler
@@ -194,7 +194,7 @@ class ProvisionHandler(object):
 
     @staticmethod
     def write_agent_disabled():
-        logger.warn("Disabling guest agent in accordance with ovf-env.xml")
+        logger.warning("Disabling guest agent in accordance with ovf-env.xml")
         fileutil.write_file(conf.get_disable_agent_file_path(), '')
 
     def handle_provision_guest_agent(self, provision_guest_agent):

@@ -126,7 +126,7 @@ class RedhatOSUtil(Redhat6xOSUtil):
         try:
             shellutil.run_command(hostnamectl_cmd, log_error=False)
         except shellutil.CommandError:
-            logger.warn("[{0}] failed, attempting fallback".format(' '.join(hostnamectl_cmd)))
+            logger.warning("[{0}] failed, attempting fallback".format(' '.join(hostnamectl_cmd)))
             DefaultOSUtil.set_hostname(self, hostname)
 
     def get_nm_controlled(self, ifname):
@@ -145,9 +145,9 @@ class RedhatOSUtil(Redhat6xOSUtil):
             # Log warning for any other exit code.
             # NM_CONTROLLED=y by default if not specified.
             if e.returncode != 1:
-                logger.warn("[{0}] failed: {1}.\nAgent will continue to publish hostname without NetworkManager restart".format(' '.join(nm_controlled_cmd), e))
+                logger.warning("[{0}] failed: {1}.\nAgent will continue to publish hostname without NetworkManager restart".format(' '.join(nm_controlled_cmd), e))
         except Exception as e:
-            logger.warn("Unexpected error while retrieving value of NM_CONTROLLED in {0}: {1}.\nAgent will continue to publish hostname without NetworkManager restart".format(filepath, e))
+            logger.warning("Unexpected error while retrieving value of NM_CONTROLLED in {0}: {1}.\nAgent will continue to publish hostname without NetworkManager restart".format(filepath, e))
 
         return True
 
@@ -160,24 +160,24 @@ class RedhatOSUtil(Redhat6xOSUtil):
         nic_general_state_cmd = ['nmcli', '-g', 'general.state', 'device', 'show', ifname]
         if not os.path.isfile(filepath):
             msg = "Unable to determine primary network interface {0} state, because state file does not exist: {1}".format(ifname, filepath)
-            logger.warn(msg)
+            logger.warning(msg)
             raise Exception(msg)
 
         try:
             nic_oper_state = fileutil.read_file(filepath).rstrip().lower()
             nic_general_state = shellutil.run_command(nic_general_state_cmd, log_error=True).rstrip().lower()
             if nic_oper_state != "up":
-                logger.warn("The primary network interface {0} operational state is '{1}'.".format(ifname, nic_oper_state))
+                logger.warning("The primary network interface {0} operational state is '{1}'.".format(ifname, nic_oper_state))
             else:
                 logger.info("The primary network interface {0} operational state is '{1}'.".format(ifname, nic_oper_state))
             if nic_general_state != "100 (connected)":
-                logger.warn("The primary network interface {0} general state is '{1}'.".format(ifname, nic_general_state))
+                logger.warning("The primary network interface {0} general state is '{1}'.".format(ifname, nic_general_state))
             else:
                 logger.info("The primary network interface {0} general state is '{1}'.".format(ifname, nic_general_state))
             return nic_oper_state, nic_general_state
         except Exception as e:
             msg = "Unexpected error while determining the primary network interface state: {0}".format(e)
-            logger.warn(msg)
+            logger.warning(msg)
             raise Exception(msg)
 
     def check_and_recover_nic_state(self, ifname):
@@ -200,7 +200,7 @@ class RedhatOSUtil(Redhat6xOSUtil):
             # down, disconnected, up, or connected
             if nic_operstate != "up" or nic_general_state != "100 (connected)":
                 msg = "Network Manager restart failed to bring network interface {0} into 'up' and 'connected' state".format(ifname)
-                logger.warn(msg)
+                logger.warning(msg)
                 raise Exception(msg)
             else:
                 logger.info("Network Manager restart successfully brought the network interface {0} into 'up' and 'connected' state".format(ifname))
@@ -279,12 +279,12 @@ class RedhatOSModernUtil(RedhatOSUtil):
             return_code = shellutil.run("ip link set {0} down && ip link set {0} up".format(ifname))
             if return_code == 0:
                 return
-            logger.warn("failed to restart {0}: return code {1}".format(ifname, return_code))
+            logger.warning("failed to restart {0}: return code {1}".format(ifname, return_code))
             if attempt < retry_limit:
                 logger.info("retrying in {0} seconds".format(wait))
                 time.sleep(wait)
             else:
-                logger.warn("exceeded restart retries")
+                logger.warning("exceeded restart retries")
 
     def check_and_recover_nic_state(self, ifname):
         # TODO: Implement and test a way to recover the network interface for RedhatOSModernUtil

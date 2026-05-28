@@ -399,7 +399,7 @@ def http_request(method,
 
         secure = False
         if not SECURE_WARNING_EMITTED:
-            logger.warn("Python does not include SSL support")
+            logger.warning("Python does not include SSL support")
             SECURE_WARNING_EMITTED = True
 
     # If httplib module doesn't support HTTPS tunnelling,
@@ -414,7 +414,7 @@ def http_request(method,
 
         secure = False
         if not SECURE_WARNING_EMITTED:
-            logger.warn("Python does not support HTTPS tunnelling")
+            logger.warning("Python does not support HTTPS tunnelling")
             SECURE_WARNING_EMITTED = True
 
     msg = ''
@@ -677,5 +677,5 @@ def read_response_error(resp):
             result = textutil.replace_non_ascii(result)
 
         except Exception as e:
-            logger.warn(textutil.format_exception(e))
+            logger.warning(textutil.format_exception(e))
     return result

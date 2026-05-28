@@ -90,7 +90,7 @@ class MonitorDhcpClientRestart(PeriodicOperation):
             pid = sorted(self.osutil.get_dhcp_pid())
 
             if len(pid) == 0 and self.dhcp_warning_enabled:
-                logger.warn("Dhcp client is not running.")
+                logger.warning("Dhcp client is not running.")
         except Exception as exception:
             if self.dhcp_warning_enabled:
                 logger.error("Failed to get the PID of the DHCP client: {0}", ustr(exception))

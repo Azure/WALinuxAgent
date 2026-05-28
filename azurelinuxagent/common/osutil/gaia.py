@@ -59,7 +59,7 @@ class GaiaOSUtil(DefaultOSUtil):
         return ret, out
 
     def useradd(self, username, expiration=None, comment=None):
-        logger.warn('useradd is not supported on GAiA')
+        logger.warning('useradd is not supported on GAiA')
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
         logger.info('chpasswd')
@@ -147,7 +147,7 @@ class GaiaOSUtil(DefaultOSUtil):
             username, (path, thumbprint, value))
 
     def eject_dvd(self, chk_err=True):
-        logger.warn('eject is not supported on GAiA')
+        logger.warning('eject is not supported on GAiA')
 
     def mount(self, device, mount_point, option=None, chk_err=True):
         if not option:
@@ -196,13 +196,13 @@ class GaiaOSUtil(DefaultOSUtil):
         return ret
 
     def set_hostname(self, hostname):
-        logger.warn('set_hostname is ignored on GAiA')
+        logger.warning('set_hostname is ignored on GAiA')
 
     def set_dhcp_hostname(self, hostname):
-        logger.warn('set_dhcp_hostname is ignored on GAiA')
+        logger.warning('set_dhcp_hostname is ignored on GAiA')
 
     def publish_hostname(self, hostname, recover_nic=False):
-        logger.warn('publish_hostname is ignored on GAiA')
+        logger.warning('publish_hostname is ignored on GAiA')
 
     def del_account(self, username):
-        logger.warn('del_account is ignored on GAiA')
+        logger.warning('del_account is ignored on GAiA')

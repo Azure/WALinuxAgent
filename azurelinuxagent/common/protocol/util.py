@@ -110,7 +110,7 @@ class ProtocolUtil(SingletonPerThread):
             self.osutil.umount_dvd()
             self.osutil.eject_dvd()
         except OSUtilError as e:
-            logger.warn(ustr(e))
+            logger.warning(ustr(e))
 
     def get_ovf_env(self):
         """

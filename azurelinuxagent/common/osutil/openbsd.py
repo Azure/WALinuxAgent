@@ -259,7 +259,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
                 if existing is not None:
                     logger.info("{0} is mounted at {1}", dvd_device, existing)
                     return
-                logger.warn("Mount DVD failed: retry={0}, ret={1}", retry,
+                logger.warning("Mount DVD failed: retry={0}, ret={1}", retry,
                             retcode)
                 time.sleep(sleep_time)
         if chk_err:

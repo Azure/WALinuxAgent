@@ -106,12 +106,12 @@ class Ubuntu18OSUtil(Ubuntu16OSUtil):
                 shellutil.run_command(["systemctl", "restart", "systemd-networkd"])
 
             except shellutil.CommandError as cmd_err:
-                logger.warn("failed to restart systemd-networkd: return code {1}".format(cmd_err.returncode))
+                logger.warning("failed to restart systemd-networkd: return code {1}".format(cmd_err.returncode))
                 if attempt < retry_limit:
                     logger.info("retrying in {0} seconds".format(wait))
                     time.sleep(wait)
                 else:
-                    logger.warn("exceeded restart retries")
+                    logger.warning("exceeded restart retries")
 
     def get_dhcp_pid(self):
         return self._get_dhcp_pid(["pidof", "systemd-networkd"])
@@ -173,12 +173,12 @@ class UbuntuOSUtil(Ubuntu16OSUtil):
             return_code = shellutil.run("ip link set {0} down && ip link set {0} up".format(ifname))
             if return_code == 0:
                 return
-            logger.warn("failed to restart {0}: return code {1}".format(ifname, return_code))
+            logger.warning("failed to restart {0}: return code {1}".format(ifname, return_code))
             if attempt < retry_limit:
                 logger.info("retrying in {0} seconds".format(wait))
                 time.sleep(wait)
             else:
-                logger.warn("exceeded restart retries")
+                logger.warning("exceeded restart retries")
 
 
 class UbuntuSnappyOSUtil(Ubuntu14OSUtil):

@@ -36,7 +36,7 @@ class OpenWRTOSUtil(DefaultOSUtil):
     _ip_command_output = re.compile(r'^\d+:\s+(\w+):\s+(.*)$')
 
     def eject_dvd(self, chk_err=True):
-        logger.warn('eject is not supported on OpenWRT')
+        logger.warning('eject is not supported on OpenWRT')
 
     def useradd(self, username, expiration=None, comment=None):
         """
@@ -130,7 +130,7 @@ class OpenWRTOSUtil(DefaultOSUtil):
         if os.path.exists("/etc/init.d/sshd"):
             return shellutil.run("/etc/init.d/sshd restart", chk_err=True)
         else:
-            logger.warn("sshd service does not exists")
+            logger.warning("sshd service does not exists")
 
     def stop_agent_service(self):
         return shellutil.run("/etc/init.d/{0} stop".format(self.service_name), chk_err=True)

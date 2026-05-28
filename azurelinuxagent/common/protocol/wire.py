@@ -728,13 +728,13 @@ class WireClient(object):
                 try:
                     shutil.rmtree(target_directory)
                 except Exception as rmtree_exception:
-                    logger.warn("Cannot delete {0}: {1}", target_directory, ustr(rmtree_exception))
+                    logger.warning("Cannot delete {0}: {1}", target_directory, ustr(rmtree_exception))
             raise
         finally:
             try:
                 os.remove(target_file)
             except Exception as exception:
-                logger.warn("Cannot delete {0}: {1}", target_file, ustr(exception))
+                logger.warning("Cannot delete {0}: {1}", target_file, ustr(exception))
 
     def stream(self, uri, destination, headers=None, use_proxy=None):
         """
@@ -758,7 +758,7 @@ class WireClient(object):
                 try:
                     os.remove(destination)
                 except Exception as exception:
-                    logger.warn("Can't delete {0}: {1}", destination, ustr(exception))
+                    logger.warning("Can't delete {0}: {1}", destination, ustr(exception))
             raise
 
     def fetch(self, uri, headers=None, use_proxy=None, decode=True, retry_codes=None, ok_codes=None):
@@ -790,7 +790,7 @@ class WireClient(object):
             if restutil.request_failed(resp, ok_codes=ok_codes):
                 error_response = restutil.read_response_error(resp)
                 msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
-                logger.warn(msg)
+                logger.warning(msg)
 
                 if host_plugin is not None:
                     host_plugin.report_fetch_health(uri,
@@ -804,7 +804,7 @@ class WireClient(object):
 
         except (HttpError, ProtocolError, IOError) as error:
             msg = "Fetch failed: {0}".format(error)
-            logger.warn(msg)
+            logger.warning(msg)
             report_event(op=WALAEventOperation.HttpGet, is_success=False, message=msg, log_event=False)
             raise
 
@@ -1146,7 +1146,7 @@ class WireClient(object):
                 events_per_provider[event.providerId] += 1
 
             except Exception as error:
-                logger.warn("Unexpected error when generating Events:{0}", textutil.format_exception(error))
+                logger.warning("Unexpected error when generating Events:{0}", textutil.format_exception(error))
 
         # Send out all events left in buffer.
         for provider_id in list(buf.keys()):

@@ -414,7 +414,7 @@ class TestLogger(AgentTestCase):
         logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
         logger.set_prefix(prefix)
 
-        logger.warn('Test Log - Warning')
+        logger.warning('Test Log - Warning')
 
         event_files = os.listdir(__event_logger__.event_dir)
         self.assertEqual(1, len(event_files))
@@ -438,7 +438,7 @@ class TestLogger(AgentTestCase):
         logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
 
         for i in range(MAX_NUMBER_OF_EVENTS):
-            logger.warn('Test Log - {0} - 1 - Warning'.format(i))
+            logger.warning('Test Log - {0} - 1 - Warning'.format(i))
 
         exception_caught = False
 
@@ -448,7 +448,7 @@ class TestLogger(AgentTestCase):
         # The description of the fix is given in the comments @ azurelinuxagent.common.logger.Logger#log.write_log.
         try:
             for i in range(10):
-                logger.warn('Test Log - {0} - 2 - Warning'.format(i))
+                logger.warning('Test Log - {0} - 2 - Warning'.format(i))
         except RuntimeError:
             exception_caught = True
 
@@ -474,7 +474,7 @@ class TestLogger(AgentTestCase):
         # 1000 events into the events dir, and then drop the remaining events. It should not generate the RuntimeError
         try:
             for i in range(0, no_of_log_statements):
-                logger.warn('Test Log - {0} - 1 - Warning'.format(i))
+                logger.warning('Test Log - {0} - 1 - Warning'.format(i))
         except RuntimeError:
             exception_caught = True
 
@@ -526,7 +526,7 @@ class TestAppender(AgentTestCase):
 
         logger.verbose("test-verbose")
         logger.info("test-info")
-        logger.warn("test-warn")
+        logger.warning("test-warn")
         logger.error("test-error")
 
         # Validating Console and File logs
@@ -555,7 +555,7 @@ class TestAppender(AgentTestCase):
             self.assertEqual(0, len(logcontent))
 
         # As console has a mode of w, it'll always only have 1 line only.
-        logger.warn("test-warn")
+        logger.warning("test-warn")
         with open(self.log_file) as logfile:
             logcontent = logfile.readlines()
             self.assertEqual(1, len(logcontent))
@@ -572,7 +572,7 @@ class TestAppender(AgentTestCase):
         logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
         logger.verbose("test-verbose")
         logger.info("test-info")
-        logger.warn("test-warn")
+        logger.warning("test-warn")
         logger.error("test-error")
 
         with open(self.log_file) as logfile:
@@ -589,7 +589,7 @@ class TestAppender(AgentTestCase):
         logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
         logger.verbose("test-verbose")
         logger.info("test-info")
-        logger.warn("test-warn")
+        logger.warning("test-warn")
         logger.error("test-error")
 
         self.assertEqual(2, mock_add_log_event.call_count)
@@ -599,7 +599,7 @@ class TestAppender(AgentTestCase):
         logger.add_logger_appender(logger.AppenderType.STDOUT, logger.LogLevel.ERROR)
         logger.verbose("test-verbose")
         logger.info("test-info")
-        logger.warn("test-warn")
+        logger.warning("test-warn")
         logger.error("test-error")
 
         # Validating only test-error gets logged and not others.

@@ -96,7 +96,7 @@ class DhcpHandler(object):
                 route_exists = True
                 logger.info("Route to {0} exists".format(KNOWN_WIRESERVER_IP))
             else:
-                logger.warn("No route exists to {0}".format(KNOWN_WIRESERVER_IP))
+                logger.warning("No route exists to {0}".format(KNOWN_WIRESERVER_IP))
         except Exception as e:
             logger.error(
                 "Could not determine whether route exists to {0}: {1}".format(
@@ -144,7 +144,7 @@ class DhcpHandler(object):
                 validate_dhcp_resp(request, response)
                 return response
             except DhcpError as e:
-                logger.warn("Failed to send DHCP request: {0}", e)
+                logger.warning("Failed to send DHCP request: {0}", e)
             time.sleep(duration)
         return None
 

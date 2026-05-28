@@ -140,7 +140,7 @@ class ReportNetworkConfigurationChanges(PeriodicOperation):
             if network_interfaces != '':
                 logger.info("Network interfaces:\n{0}", network_interfaces)
         except Exception as exception:
-            logger.warn("Error fetching the network configuration: {0}", ustr(exception))
+            logger.warning("Error fetching the network configuration: {0}", ustr(exception))
 
     def _operation(self):
         raw_route_list = self.osutil.read_route_table()

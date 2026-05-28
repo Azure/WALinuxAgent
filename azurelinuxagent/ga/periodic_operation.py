@@ -51,7 +51,7 @@ class PeriodicOperation(object):
         except Exception as e:
             warning = "Error in {0}: {1} --- [NOTE: Will not log the same error for the next hour]".format(self._name, ustr(e))
             if warning != self._last_warning or self._last_warning_time is None or datetime.datetime.now(UTC) >= self._last_warning_time + self._LOG_WARNING_PERIOD:
-                logger.warn(warning)
+                logger.warning(warning)
                 self._last_warning_time = datetime.datetime.now(UTC)
                 self._last_warning = warning
 

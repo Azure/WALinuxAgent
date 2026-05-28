@@ -162,7 +162,7 @@ class StateArchiver(object):
                 fileutil.mkdir(self._source, mode=0o700)
             except IOError as exception:
                 if exception.errno != errno.EEXIST:
-                    logger.warn("{0} : {1}", self._source, exception.strerror)
+                    logger.warning("{0} : {1}", self._source, exception.strerror)
 
     @staticmethod
     def purge_legacy_goal_state_history():
@@ -180,7 +180,7 @@ class StateArchiver(object):
                     try:
                         os.remove(full_path)
                     except Exception as e:
-                        logger.warn("Cannot delete legacy history file '{0}': {1}".format(full_path, e))
+                        logger.warning("Cannot delete legacy history file '{0}': {1}".format(full_path, e))
                     break
 
     def archive(self):
@@ -239,7 +239,7 @@ class GoalStateHistory(object):
         except Exception as e:
             if not self._errors:  # report only 1 error per directory
                 self._errors = True
-                logger.warn("Failed to save {0} to the goal state history: {1} [no additional errors saving the goal state will be reported]".format(file_name, e))
+                logger.warning("Failed to save {0} to the goal state history: {1} [no additional errors saving the goal state will be reported]".format(file_name, e))
 
     _purge_error_count = 0
 
@@ -274,9 +274,9 @@ class GoalStateHistory(object):
         except Exception as e:
             GoalStateHistory._purge_error_count += 1
             if GoalStateHistory._purge_error_count < 5:
-                logger.warn("Failed to clean up the goal state history directory: {0}".format(e))
+                logger.warning("Failed to clean up the goal state history directory: {0}".format(e))
             elif GoalStateHistory._purge_error_count == 5:
-                logger.warn("Failed to clean up the goal state history directory [will stop reporting these errors]: {0}".format(e))
+                logger.warning("Failed to clean up the goal state history directory [will stop reporting these errors]: {0}".format(e))
 
 
     @staticmethod
@@ -290,7 +290,7 @@ class GoalStateHistory(object):
             with open(placeholder, "w") as handle:
                 handle.write("<xml>empty placeholder file</xml>")
         except Exception as e:
-            logger.warn("Failed to save placeholder file ({0}): {1}".format(_PLACEHOLDER_FILE_NAME, e))
+            logger.warning("Failed to save placeholder file ({0}): {1}".format(_PLACEHOLDER_FILE_NAME, e))
 
     def save_goal_state(self, text):
         self.save(text, _GOAL_STATE_FILE_NAME)

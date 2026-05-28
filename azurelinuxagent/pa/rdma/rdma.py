@@ -256,7 +256,7 @@ class RDMADeviceHandler(object):
             else:
                 logger.info("RDMA: hv_network_direct driver version not present, assuming 4.0.x or older.")
         else:
-            logger.warn("RDMA: failed to get module info on hv_network_direct.")
+            logger.warning("RDMA: failed to get module info on hv_network_direct.")
 
         if not skip_rdma_device:
             RDMADeviceHandler.wait_rdma_device(

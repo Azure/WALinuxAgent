@@ -56,7 +56,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         """
         userentry = self.get_userentry(username)
         if userentry is not None:
-            logger.warn("User {0} already exists, skip useradd", username)
+            logger.warning("User {0} already exists, skip useradd", username)
             return
         if expiration is not None:
             cmd = ["pw", "useradd", username, "-e", expiration, "-m"]
@@ -377,9 +377,9 @@ class FreeBSDOSUtil(DefaultOSUtil):
         if primary_interface is None:
             primary_interface = ''
             if not self.disable_route_warning:
-                logger.warn('Could not determine primary interface, '
+                logger.warning('Could not determine primary interface, '
                             'please ensure routes are correct')
-                logger.warn('Primary interface examination will retry silently')
+                logger.warning('Primary interface examination will retry silently')
                 self.disable_route_warning = True
         else:
             logger.info('Primary interface is [{0}]'.format(primary_interface))

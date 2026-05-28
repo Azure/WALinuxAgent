@@ -267,7 +267,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
             success = True
         except Exception as e:
             msg = "Failed to upload logs. Error: {0}".format(ustr(e))
-            logger.warn(msg)
+            logger.warning(msg)
         finally:
             add_event(
                 name=AGENT_NAME,

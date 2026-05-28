@@ -127,12 +127,12 @@ def _check_noexec():
                 flags = columns[3]
                 if agent_dir.startswith(mount_point) and "noexec" in flags:
                     message = "The noexec flag is set on {0}. This can prevent extensions from executing.".format(mount_point)
-                    logger.warn(message)
+                    logger.warning(message)
                     add_event(op=WALAEventOperation.NoExec, is_success=False, message=message)
                     return mount_point
     except Exception as e:
         message = "Error while checking the noexec flag: {0}".format(e)
-        logger.warn(message)
+        logger.warning(message)
         if _COLLECT_NOEXEC_ERRORS:
             _COLLECT_NOEXEC_ERRORS = False
             add_event(op=WALAEventOperation.NoExec, is_success=False, log_event=False, message="Error while checking the noexec flag: {0}".format(e))
@@ -212,6 +212,6 @@ def get_cpu_throttled_time(cpu_controller):
         try:
             throttled_time = cpu_controller.get_cpu_throttled_time(read_previous_throttled_time=False)
         except Exception as e:
-            logger.warn("Failed to get cpu throttled time for the extension: {0}", ustr(e))
+            logger.warning("Failed to get cpu throttled time for the extension: {0}", ustr(e))
 
     return throttled_time

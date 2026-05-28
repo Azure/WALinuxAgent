@@ -95,7 +95,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
                                                     max_retry - retry,
                                                     sleep_time))
                         if not cloud_init_is_enabled():
-                            logger.warn("cloud-init does not appear to be enabled")
+                            logger.warning("cloud-init does not appear to be enabled")
                         logging_interval = min(logging_interval * 2, max_logging_interval)
                     time.sleep(sleep_time)
         raise ProvisionError("Giving up, ovf-env.xml was not copied to {0} "
@@ -118,7 +118,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
                     logger.info("Thumbprint obtained from : {0}".format(path))
                     return thumbprint
                 except ProvisionError:
-                    logger.warn("Could not get thumbprint from {0}".format(path))
+                    logger.warning("Could not get thumbprint from {0}".format(path))
             if retry < max_retry - 1:
                 if retry % logging_interval == 0:
                     logger.info("Waiting for ssh host key be generated at {0} "
@@ -127,7 +127,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
                                                         max_retry - retry,
                                                         sleep_time))
                     if not cloud_init_is_enabled():
-                        logger.warn("cloud-init does not appear to be running")
+                        logger.warning("cloud-init does not appear to be running")
                     logging_interval = min(logging_interval * 2, max_logging_interval)
                 time.sleep(sleep_time)
         raise ProvisionError("Giving up, ssh host key was not found at {0} "

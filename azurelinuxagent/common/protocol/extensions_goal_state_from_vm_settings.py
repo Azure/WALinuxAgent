@@ -529,7 +529,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             if length > 1:
                 raise Exception('dependsOn should be an array with exactly one item for single-config extensions ({0}) (got {1})'.format(extension.name, depends_on))
             if length == 0:
-                logger.warn('dependsOn is an empty array for extension {0}; setting the dependency level to 0'.format(extension.name))
+                logger.warning('dependsOn is an empty array for extension {0}; setting the dependency level to 0'.format(extension.name))
                 dependency_level = 0
             else:
                 dependency_level = depends_on[0]['dependencyLevel']
@@ -538,7 +538,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                     # TODO: Consider removing this check and its telemetry after a few releases if we do not receive any telemetry indicating
                     #       that dependsOnExtension is actually missing from the vmSettings
                     message = 'Missing dependsOnExtension on extension {0}'.format(extension.name)
-                    logger.warn(message)
+                    logger.warning(message)
                     add_event(WALAEventOperation.ProvisionAfterExtensions, message=message, is_success=False, log_event=False)
                 else:
                     message = '{0} depends on {1}'.format(extension.name, depends_on_extension)
@@ -546,7 +546,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                     add_event(WALAEventOperation.ProvisionAfterExtensions, message=message, is_success=True, log_event=False)
             if len(extension.settings) == 0:
                 message = 'Extension {0} does not have any settings. Will ignore dependency (dependency level: {1})'.format(extension.name, dependency_level)
-                logger.warn(message)
+                logger.warning(message)
                 add_event(WALAEventOperation.ProvisionAfterExtensions, message=message, is_success=False, log_event=False)
             else:
                 extension.settings[0].dependencyLevel = dependency_level

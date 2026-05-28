@@ -155,7 +155,7 @@ class HealthService(object):
             restutil.http_post(self.endpoint, self.as_json, headers={'Content-Type': 'application/json'})
             logger.verbose('HealthService: Reported observations to {0}: {1}', self.endpoint, self.as_json)
         except HttpError as e:
-            logger.warn("HealthService: could not report observations: {0}", ustr(e))
+            logger.warning("HealthService: could not report observations: {0}", ustr(e))
         finally:
             # report any failures via telemetry
             self._report_failures()

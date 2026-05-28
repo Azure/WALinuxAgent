@@ -158,5 +158,5 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
     if distro_name == "fedora":
         return FedoraOSUtil()
 
-    logger.warn("Unable to load distro implementation for {0}. Using default distro implementation instead.", distro_name)
+    logger.warning("Unable to load distro implementation for {0}. Using default distro implementation instead.", distro_name)
     return DefaultOSUtil()

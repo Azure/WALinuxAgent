@@ -92,7 +92,7 @@ class SUSEOSUtil(SUSE11OSUtil):
                     logger.info("retrying in {0} seconds".format(wait))
                     time.sleep(wait)
                 else:
-                    logger.warn("exceeded restart retries")
+                    logger.warning("exceeded restart retries")
 
     @staticmethod
     def get_systemd_unit_file_install_path():

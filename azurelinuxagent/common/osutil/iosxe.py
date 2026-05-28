@@ -55,7 +55,7 @@ class IosxeOSUtil(DefaultOSUtil):
         try:
             shellutil.run_command(hostnamectl_cmd)
         except Exception as e:
-            logger.warn("[{0}] failed with error: {1}, attempting fallback".format(' '.join(hostnamectl_cmd), ustr(e)))
+            logger.warning("[{0}] failed with error: {1}, attempting fallback".format(' '.join(hostnamectl_cmd), ustr(e)))
             DefaultOSUtil.set_hostname(self, hostname)
 
     def publish_hostname(self, hostname, recover_nic=False):

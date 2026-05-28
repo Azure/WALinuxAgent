@@ -48,12 +48,12 @@ class FedoraOSUtil(DefaultOSUtil):
             return_code = shellutil.run("ip link set {0} down && ip link set {0} up".format(ifname))
             if return_code == 0:
                 return
-            logger.warn("failed to restart {0}: return code {1}".format(ifname, return_code))
+            logger.warning("failed to restart {0}: return code {1}".format(ifname, return_code))
             if attempt < retry_limit:
                 logger.info("retrying in {0} seconds".format(wait))
                 time.sleep(wait)
             else:
-                logger.warn("exceeded restart retries")
+                logger.warning("exceeded restart retries")
 
     def restart_ssh_service(self):
         shellutil.run('systemctl restart sshd')

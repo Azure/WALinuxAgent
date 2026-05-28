@@ -52,7 +52,7 @@ def set_properties(name, obj, data):
             try:
                 prob = getattr(obj, prob_name)
             except AttributeError:
-                logger.warn("Unknown property: {0}", prob_full_name)
+                logger.warning("Unknown property: {0}", prob_full_name)
                 continue
             prob = set_properties(prob_full_name, prob, prob_val)
             setattr(obj, prob_name, prob)

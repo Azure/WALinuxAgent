@@ -257,7 +257,7 @@ class BigIpOSUtil(DefaultOSUtil):
         :param chk_err: Whether or not to check for errors raised by the eject
                         command
         """
-        logger.warn("Eject is not supported on this platform")
+        logger.warning("Eject is not supported on this platform")
 
     def get_first_if(self):
         """Return the interface name, and ip addr of the management interface.
@@ -287,7 +287,7 @@ class BigIpOSUtil(DefaultOSUtil):
         ret = fcntl.ioctl(sock.fileno(), 0x8912, param)
         retsize = (struct.unpack('iL', ret)[0])
         if retsize == (expected * struct_size):
-            logger.warn(('SIOCGIFCONF returned more than {0} up '
+            logger.warning(('SIOCGIFCONF returned more than {0} up '
                          'network interfaces.'), expected)
 
         sock = array_to_bytes(buff)

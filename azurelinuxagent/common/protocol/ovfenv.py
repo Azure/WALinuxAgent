@@ -76,7 +76,7 @@ class OvfEnv(object):
         _validate_ovf(version, "Version not found")
 
         if version > OVF_VERSION:
-            logger.warn("Newer provisioning configuration detected. "
+            logger.warning("Newer provisioning configuration detected. "
                         "Please consider updating waagent")
         
         conf_set = find(section, "LinuxProvisioningConfigurationSet", 

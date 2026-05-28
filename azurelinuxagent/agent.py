@@ -288,7 +288,7 @@ class Agent(object):
                     event.add_event(op=event.WALAEventOperation.LogCollection, message=msg, log_event=False)
                 except Exception as e:
                     msg = "An error occurred while reporting log collector resource usage summary: {0}".format(ustr(e))
-                    logger.warn(msg)
+                    logger.warning(msg)
                     event.add_event(op=event.WALAEventOperation.LogCollection, is_success=False, message=msg, log_event=False)
 
         except Exception as e:

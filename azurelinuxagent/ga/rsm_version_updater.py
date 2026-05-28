@@ -136,7 +136,7 @@ class RSMVersionUpdater(GAVersionUpdater):
                 add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
                 current_agent.mark_failure(is_fatal=True, reason=msg, report_func=event.info)
             except StopIteration:
-                logger.warn(
+                logger.warning(
                     "Could not find a matching agent with current version {0} to blacklist, skipping it".format(
                         CURRENT_VERSION))
         else:

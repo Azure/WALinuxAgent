@@ -129,7 +129,7 @@ def _report_validation_event(op, level, message, name, version, duration):
         is_success = False
     elif level == logger.LogLevel.WARNING:
         message = "{0}\nThis failure can be safely ignored; will continue processing the package.".format(message)
-        logger.warn(message)
+        logger.warning(message)
         event_msg = "[WARNING] {0}".format(message)
         is_success = False
     else:

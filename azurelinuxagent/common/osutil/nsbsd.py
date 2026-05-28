@@ -83,13 +83,13 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         """
         Create user account with 'username'
         """
-        logger.warn("User creation disabled")
+        logger.warning("User creation disabled")
 
     def del_account(self, username):
-        logger.warn("User deletion disabled")
+        logger.warning("User deletion disabled")
 
     def conf_sudoer(self, username, nopasswd=False, remove=False):
-        logger.warn("Sudo is not enabled")
+        logger.warning("Sudo is not enabled")
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
         self._run_command_raising_OSUtilError(["/usr/Firewall/sbin/fwpasswd", "-p", password],
@@ -110,7 +110,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
                                                    ["/usr/Firewall/.ssh/authorized_keys", thumbprint, value])
 
     def del_root_password(self):
-        logger.warn("Root password deletion disabled")
+        logger.warning("Root password deletion disabled")
 
     def start_dhcp_service(self):
         shellutil.run("/usr/Firewall/sbin/nstart dhclient", chk_err=False)

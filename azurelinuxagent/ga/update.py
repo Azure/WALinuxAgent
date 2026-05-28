@@ -202,7 +202,7 @@ class UpdateHandler(object):
         both_auto_updates_used = conf.is_present("AutoUpdate.Enabled") and conf.is_present("AutoUpdate.UpdateToLatestVersion")
         if both_auto_updates_used:
             msg = u"The legacy AutoUpdate.Enabled configuration is also used, but it is ignored in favor of the new configuration (AutoUpdate.UpdateToLatestVersion)."
-            logger.warn(msg)
+            logger.warning(msg)
             add_event(
                 AGENT_NAME,
                 version=CURRENT_VERSION,
@@ -288,14 +288,14 @@ class UpdateHandler(object):
                             agent_name,
                             agent_cmd,
                             ret)
-                        logger.warn(msg)
+                        logger.warning(msg)
 
             else:
                 msg = u"Agent {0} launched with command '{1}' failed with return code: {2}".format(
                     agent_name,
                     agent_cmd,
                     ret)
-                logger.warn(msg)
+                logger.warning(msg)
                 add_event(
                     AGENT_NAME,
                     version=agent_version,
@@ -309,7 +309,7 @@ class UpdateHandler(object):
                 msg = u"Agent {0} launched with command '{1}' failed with exception: \n".format(
                     agent_name,
                     agent_cmd)
-                logger.warn(msg)
+                logger.warning(msg)
                 detailed_message = '{0} {1}'.format(msg, textutil.format_exception(e))
                 add_event(
                     AGENT_NAME,
@@ -433,8 +433,8 @@ class UpdateHandler(object):
         except Exception as error:
             msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(error))
             self._set_sentinel(msg=msg)
-            logger.warn(msg)
-            logger.warn(textutil.format_exception(error))
+            logger.warning(msg)
+            logger.warning(textutil.format_exception(error))
             sys.exit(1)
             # additional return here because sys.exit is mocked in unit tests
             return  # pylint: disable=unreachable
@@ -521,7 +521,7 @@ class UpdateHandler(object):
         # Check that all the threads are still running
         for thread_handler in all_thread_handlers:
             if thread_handler.keep_alive() and not thread_handler.is_alive():
-                logger.warn("{0} thread died, restarting".format(thread_handler.get_thread_name()))
+                logger.warning("{0} thread died, restarting".format(thread_handler.get_thread_name()))
                 thread_handler.start()
 
     def _try_update_goal_state(self, protocol):
@@ -640,7 +640,7 @@ class UpdateHandler(object):
             if self._processing_new_extensions_goal_state():
                 if not self._extensions_summary.converged:
                     message = "A new goal state was received, but not all the extensions in the previous goal state have completed: {0}".format(self._extensions_summary)
-                    logger.warn(message)
+                    logger.warning(message)
                     add_event(op=WALAEventOperation.GoalState, message=message, is_success=False, log_event=False)
                     if self._is_initial_goal_state:
                         self._on_initial_goal_state_completed(self._extensions_summary)
@@ -672,14 +672,14 @@ class UpdateHandler(object):
             archiver = StateArchiver(conf.get_lib_dir())
             archiver.archive()
         except Exception as exception:
-            logger.warn("Error cleaning up the goal state history: {0}", ustr(exception))
+            logger.warning("Error cleaning up the goal state history: {0}", ustr(exception))
 
     @staticmethod
     def _cleanup_legacy_goal_state_history():
         try:
             StateArchiver.purge_legacy_goal_state_history()
         except Exception as exception:
-            logger.warn("Error removing legacy history files: {0}", ustr(exception))
+            logger.warning("Error removing legacy history files: {0}", ustr(exception))
 
     def _report_status(self, exthandlers_handler, agent_update_handler):
         # report_ext_handlers_status does its own error handling and returns None if an error occurred
@@ -716,7 +716,7 @@ class UpdateHandler(object):
             if self._report_status_last_failed_goal_state != self._goal_state.extensions_goal_state.id:
                 self._report_status_last_failed_goal_state = self._goal_state.extensions_goal_state.id
                 msg = u"Error logging the goal state summary: {0}".format(textutil.format_exception(error))
-                logger.warn(msg)
+                logger.warning(msg)
                 add_event(op=WALAEventOperation.GoalState, is_success=False, message=msg)
 
     def _on_initial_goal_state_completed(self, extensions_summary):
@@ -830,7 +830,7 @@ class UpdateHandler(object):
 
             if conf.is_present("AutoUpdate.Enabled") and conf.get_autoupdate_enabled() != conf.get_auto_update_to_latest_version():
                 msg = "AutoUpdate.Enabled property is **Deprecated** now but it's set to different value from AutoUpdate.UpdateToLatestVersion. Please consider removing it if added by mistake"
-                logger.warn(msg)
+                logger.warning(msg)
                 add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=msg)
 
             if conf.enable_firewall():
@@ -848,7 +848,7 @@ class UpdateHandler(object):
             log_if_agent_versioning_feature_disabled()
 
         except Exception as e:
-            logger.warn("Failed to log changes in configuration: {0}", ustr(e))
+            logger.warning("Failed to log changes in configuration: {0}", ustr(e))
 
     def _ensure_no_orphans(self, orphan_wait_interval=ORPHAN_WAIT_INTERVAL):
         pid_files, ignored = self._write_pid_file()  # pylint: disable=W0612
@@ -860,7 +860,7 @@ class UpdateHandler(object):
                 while self.osutil.check_pid_alive(pid):
                     wait_interval -= ORPHAN_POLL_INTERVAL
                     if wait_interval <= 0:
-                        logger.warn(
+                        logger.warning(
                             u"{0} forcibly terminated orphan process {1}",
                             CURRENT_AGENT,
                             pid)
@@ -876,7 +876,7 @@ class UpdateHandler(object):
                 os.remove(pid_file)
 
             except Exception as e:
-                logger.warn(
+                logger.warning(
                     u"Exception occurred waiting for orphan agent to terminate: {0}",
                     ustr(e))
         return
@@ -932,7 +932,7 @@ class UpdateHandler(object):
             self._set_and_sort_agents(self._load_agents())
             self._filter_blacklisted_agents()
         except Exception as e:
-            logger.warn(u"Exception occurred loading available agents: {0}", ustr(e))
+            logger.warning(u"Exception occurred loading available agents: {0}", ustr(e))
         return
 
     def _get_pid_parts(self):
@@ -1002,7 +1002,7 @@ class UpdateHandler(object):
                         logger.info(u"Purging outdated Agent directory {0}", agent_path)
                         shutil.rmtree(agent_path)
             except Exception as e:
-                logger.warn(u"Purging {0} raised exception: {1}", agent_path, ustr(e))
+                logger.warning(u"Purging {0} raised exception: {1}", agent_path, ustr(e))
         return
 
     def _set_and_sort_agents(self, agents=None):
@@ -1018,7 +1018,7 @@ class UpdateHandler(object):
                 self._sentinel_file_path(),
                 "[{0}] [{1}]".format(agent, msg))
         except Exception as e:
-            logger.warn(
+            logger.warning(
                 u"Exception writing sentinel file {0}: {1}",
                 self._sentinel_file_path(),
                 str(e))
@@ -1042,7 +1042,7 @@ class UpdateHandler(object):
         try:
             os.remove(self._sentinel_file_path())
         except Exception as e:
-            logger.warn(
+            logger.warning(
                 u"Exception removing sentinel file {0}: {1}",
                 self._sentinel_file_path(),
                 str(e))
@@ -1064,7 +1064,7 @@ class UpdateHandler(object):
             logger.info(u"{0} running as process {1}", CURRENT_AGENT, ustr(os.getpid()))
         except Exception as e:
             pid_file = None
-            logger.warn(
+            logger.warning(
                 u"Expection writing goal state agent {0} pid to {1}: {2}",
                 CURRENT_AGENT,
                 pid_file,
@@ -1116,7 +1116,7 @@ class UpdateHandler(object):
             if self._check_memory_usage_last_error_report == datetime_min_utc or (self._check_memory_usage_last_error_report + timedelta(hours=6)) > datetime.now(UTC):
                 self._check_memory_usage_last_error_report = datetime.now(UTC)
                 msg = "Error checking the agent's memory usage: {0} --- [NOTE: Will not log the same error for the 6 hours]".format(ustr(exception))
-                logger.warn(msg)
+                logger.warning(msg)
                 add_event(AGENT_NAME, op=WALAEventOperation.AgentMemory, is_success=False, message=msg)
 
     @staticmethod
@@ -1141,7 +1141,7 @@ class UpdateHandler(object):
                     if etp_enabled and not(os.path.exists(events_dir)):
                         fileutil.mkdir(events_dir, mode=0o700)
             except Exception as e:
-                logger.warn(
+                logger.warning(
                     "Unable to re-create HandlerEnvironment file on service startup. Error: {0}".format(ustr(e)))
                 continue
 
@@ -1153,7 +1153,7 @@ class UpdateHandler(object):
                 for ext_dir in extension_event_dirs:
                     shutil.rmtree(ext_dir, ignore_errors=True)
         except Exception as e:
-            logger.warn("Error when trying to delete existing Extension events directory. Error: {0}".format(ustr(e)))
+            logger.warning("Error when trying to delete existing Extension events directory. Error: {0}".format(ustr(e)))
 
     @staticmethod
     def _initialize_firewall(wire_server_address):
