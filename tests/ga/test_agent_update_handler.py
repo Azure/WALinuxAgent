@@ -12,6 +12,7 @@ from azurelinuxagent.common.future import ustr, httpclient, datetime_min_utc
 from azurelinuxagent.common.protocol.wire import GoalState, GoalStateProperties
 from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses
 from azurelinuxagent.common.protocol.util import ProtocolUtil
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import CURRENT_VERSION, AGENT_NAME
 from azurelinuxagent.ga.agent_update_handler import get_agent_update_handler
 from azurelinuxagent.ga.guestagent import GuestAgent, INITIAL_UPDATE_STATE_FILE, RSM_UPDATE_STATE_FILE
@@ -320,7 +321,7 @@ class TestAgentUpdate(UpdateTestCase):
         self.prepare_agents()
         self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
 
-        downgrade_version = "2.5.0"
+        downgrade_version = "1.5.0"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgrade_version)
@@ -342,7 +343,7 @@ class TestAgentUpdate(UpdateTestCase):
         self.prepare_agents()
         self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
 
-        downgrade_version = "2.5.0"
+        downgrade_version = "1.5.0"
         from_version = "3.0.0"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
@@ -368,7 +369,7 @@ class TestAgentUpdate(UpdateTestCase):
         self.prepare_agents()
         self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
 
-        downgrade_version = "2.5.0"
+        downgrade_version = "1.5.0"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgrade_version)
@@ -472,27 +473,41 @@ class TestAgentUpdate(UpdateTestCase):
             package_version = args[0].version
             raise ExtensionDownloadError("Failed to download WALinuxAgent-{0} from all URIs".format(package_version))
 
+        # Versions in ga_manifest_no_uris.xml that are greater than CURRENT_VERSION should each be attempted,
+        # in descending order. All earlier attempts should emit "trying next largest version", and the final
+        # (smallest) attempt should emit the terminal "[SelfUpdate] Unable to update Agent" error.
+        all_manifest_versions = ["1.0.0", "1.1.0", "1.2.0", "2.0.0", "2.1.0", "9.9.9.10", "99999.0.0.0"]
+        candidates = sorted(
+            [v for v in all_manifest_versions if FlexibleVersion(v) > CURRENT_VERSION],
+            key=FlexibleVersion, reverse=True)
+        self.assertGreaterEqual(len(candidates), 2, "Test requires at least 2 candidate versions greater than current")
+        last_candidate = candidates[-1]
+
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             with patch("azurelinuxagent.ga.ga_version_updater.GAVersionUpdater.download_new_agent_pkg", side_effect=download_side_effect) as mock_download_new_agent:
                 agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
                 self._assert_update_discovered_from_agent_manifest(mock_telemetry, version="99999.0.0.0")
+                # All non-terminal candidates should emit "trying next largest version"
+                for version in candidates[:-1]:
+                    self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
+                                             "Self-update: failed to prepare version {0} for update, trying next largest version".format(version) in kwarg['message'] and kwarg[
+                                                 'op'] == WALAEventOperation.AgentUpgrade]),
+                                                    "{0} download should have failed".format(version))
+                    self._assert_update_discovered_from_agent_manifest(mock_telemetry, version=version)
+                # The last (smallest) candidate should fail with the terminal error
+                self._assert_update_discovered_from_agent_manifest(mock_telemetry, version=last_candidate)
                 self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                                         "Self-update: failed to prepare version 99999.0.0.0 for update, trying next largest version" in kwarg['message'] and kwarg[
+                                         "[SelfUpdate] Unable to update Agent: [ExtensionDownloadError] Failed to download WALinuxAgent-{0} from all URIs".format(last_candidate) in kwarg['message'] and kwarg[
                                              'op'] == WALAEventOperation.AgentUpgrade]),
-                                                "99999.0.0.0 download should have failed")
-                self._assert_update_discovered_from_agent_manifest(mock_telemetry, version="9.9.9.10")
-                self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                                         "[SelfUpdate] Unable to update Agent: [ExtensionDownloadError] Failed to download WALinuxAgent-9.9.9.10 from all URIs" in kwarg['message'] and kwarg[
-                                             'op'] == WALAEventOperation.AgentUpgrade]),
-                                                "9.9.9.10 download should have failed and been raised as error")
+                                                "{0} download should have failed and been raised as error".format(last_candidate))
                 self._assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION)])
-                self.assertEqual(2, mock_download_new_agent.call_count)
+                self.assertEqual(len(candidates), mock_download_new_agent.call_count)
 
     def test_it_should_not_update_to_version_if_version_not_from_rsm(self):
         self.prepare_agents(count=1)
         data_file = DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_version_not_from_rsm.xml"
-        downgrade_version = "2.5.0"
+        downgrade_version = "1.5.0"
 
         with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgrade_version)
