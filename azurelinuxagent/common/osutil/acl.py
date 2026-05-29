@@ -55,19 +55,17 @@ class AclOSUtil(DefaultOSUtil):
         Restart an interface by bouncing the link. systemd-networkd observes
         this event, and forces a renew of DHCP.
         """
-        retry_limit = retries + 1
-        for attempt in range(1, retry_limit):
+        for attempt in range(1, retries + 1):
             try:
                 shellutil.run_command(["ip", "link", "set", ifname, "down"])
                 shellutil.run_command(["ip", "link", "set", ifname, "up"])
                 return
             except CommandError as e:
                 logger.warn("failed to restart {0}: {1}".format(ifname, e))
-            if attempt < retry_limit:
-                logger.info("retrying in {0} seconds".format(wait))
-                time.sleep(wait)
-            else:
-                logger.warn("exceeded restart retries")
+                if attempt < retries:
+                    logger.info("retrying in {0} seconds".format(wait))
+                    time.sleep(wait)
+        logger.warn("exceeded restart retries for {0}".format(ifname))
 
     def restart_ssh_service(self):
         # ACL uses sshd.socket for socket-activated SSH (similar to
