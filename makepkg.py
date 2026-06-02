@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
-    AGENT_LONG_VERSION
+    AGENT_LONG_VERSION, AGENT_SIGNING_INFO_NAME
 from azurelinuxagent.ga.guestagent import AGENT_MANIFEST_FILE
 
 MANIFEST = '''[{{
@@ -23,6 +23,10 @@ MANIFEST = '''[{{
         "disableCommand": "",
         "rebootAfterInstall": false,
         "reportHeartbeat": false
+    }},
+    "signingInfo": {{
+        "version": "{2}",
+        "name": "{3}"
     }}
 }}]'''
 
@@ -86,7 +90,7 @@ def run(agent_family, output_directory, log):
 
     log.info("Writing {0}".format(manifest_path))
     with open(manifest_path, mode='w') as manifest:
-        manifest.write(MANIFEST.format(AGENT_NAME, egg_name))
+        manifest.write(MANIFEST.format(AGENT_NAME, egg_name, AGENT_VERSION, AGENT_SIGNING_INFO_NAME))
 
     log.info("Writing {0}".format(publish_manifest_path))
     with open(publish_manifest_path, mode='w') as publish_manifest:
