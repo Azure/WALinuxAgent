@@ -142,7 +142,7 @@ class CGroupConfigurator(object):
                 # PR #2015 introduced a check to disable cgroups when the Agent is not in the expected cgroup. Telemetry at the time indicated that in a small number of
                 # VMs the Agent was showing up directly under the root cgroup or system.slice. As we started moving the agent to its own slice, the check was eventually
                 # changed to use the Slice property as returned by systemctl show (PR #2160).
-                # Current telemetry doesn't reports any VMs where the Agent shows up in an unexpected Slice. The cgroups logic has had quite a few fixes since the original
+                # Current telemetry doesn't report any VMs where the Agent shows up in an unexpected Slice. The cgroups logic has had quite a few fixes since the original
                 # check was introduced, and very likely the issue causing the mismatch has been resolved. However, the check using the Slice property is not always accurate,
                 # for example when the dropin file that defines the slice has been created but the Agent service has not been restarted, so the Agent is still in the default
                 # slice.
