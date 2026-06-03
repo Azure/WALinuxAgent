@@ -48,39 +48,35 @@ class RsmUpdateWithSignatureBvt(RsmUpdateBvt):
     def _run_downgrade_scenario(self, arch_type: str) -> None:
         super()._run_downgrade_scenario(arch_type)
         # Downgrade downloads a new agent package, so signature should be validated
-        self._verify_agent_signature_validated(self._downgrade_version)
+        self._verify_agent_signature_and_manifest_validated(self._downgrade_version)
         self._verify_gs_signature_telemetry(rsm_requested_version=self._downgrade_version)
 
     def _run_upgrade_scenario(self, arch_type: str) -> None:
         super()._run_upgrade_scenario(arch_type)
         # Upgrade downloads a new agent package, so signature should be validated
-        upgrade_version = "2.3.16.1"
-        self._verify_agent_signature_validated(upgrade_version)
+        upgrade_version = "2.3.17.1"
+        self._verify_agent_signature_and_manifest_validated(upgrade_version)
         self._verify_gs_signature_telemetry(rsm_requested_version=upgrade_version)
 
     def _run_no_update_scenario(self, arch_type: str) -> None:
         super()._run_no_update_scenario(arch_type)
         # No download happens in this scenario (agent already on disk), so we only verify GS telemetry
-        current_version = "2.3.16.1"
+        current_version = "2.3.17.1"
         self._verify_gs_signature_telemetry(rsm_requested_version=current_version)
 
-    # Disable pylint warning about useless parent or super() delegation in this method. Once the TODO in this method is
-    # addressed, remove the pylint warning disablement
-    def _run_below_daemon_scenario(self, arch_type: str) -> None:   # pylint: disable=W0246
+    def _run_below_daemon_scenario(self, arch_type: str) -> None:
         super()._run_below_daemon_scenario(arch_type)
-        # TODO: Once signingInfo changes are implemented, publish a version of the agent with signature which is lower
-        # than the daemon version for this scenario and uncomment the below lines
         # No download happens in this scenario, so we only verify GS telemetry
-        # requested_version = "1.5.0.0"
-        # self._verify_gs_signature_telemetry(rsm_requested_version=requested_version)
+        requested_version = "1.7.0.0"
+        self._verify_gs_signature_telemetry(rsm_requested_version=requested_version)
 
-    def _verify_agent_signature_validated(self, version: str) -> None:
-        log.info("Verifying agent package signature was validated for version %s", version)
+    def _verify_agent_signature_and_manifest_validated(self, version: str) -> None:
+        log.info("Verifying agent package signature and handler manifest were validated for version %s", version)
         self._run_remote_test(
             self._ssh_client,
-            f"agent_update-check_agent_signature_validated.py --version {version}",
+            f"agent_update-check_signature_and_manifest_validated.py --version {version}",
             use_sudo=True)
-        log.info("Successfully verified agent signature validated for version %s", version)
+        log.info("Successfully verified agent signature and handler manifest validated for version %s", version)
 
     def _get_latest_manifest_versions(self) -> list:
         """

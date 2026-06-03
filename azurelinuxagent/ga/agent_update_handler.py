@@ -276,7 +276,7 @@ class AgentUpdateHandler(object):
                     created before the changes to include agent signatures in the goal state were rolled out to all
                     Prod. It will also be used in queries to assert which versions were published at the time of the
                     goal state creation.
-            3. Requested version if the version is from RSM, None otherwise
+            3. Requested version if the version is from RSM, "" otherwise
                 - This information will be used in monitoring queries to assert that the RSM requested version's
                     signature is always included in the goal state, even if it is not one of the latest two published.
             4. Extensions goal state activity id
