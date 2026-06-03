@@ -144,9 +144,13 @@ class CGroupConfigurator(object):
                 # though systemd has not moved the agent to azure.slice yet. Systemd will only move the agent to
                 # azure.slice after a vm restart.
                 agent_unit_name = systemd.get_agent_unit_name()
-                agent_slice = systemd.get_unit_property(agent_unit_name, "Slice")
-                if agent_slice not in (AZURE_SLICE, "system.slice"):
-                    log_cgroup_warning("The agent is within an unexpected slice: {0}".format(agent_slice))
+                try:
+                    agent_control_group = systemd.get_unit_property(agent_unit_name, "ControlGroup")
+                    if agent_control_group not in ("/{0}/{1}".format(AZURE_SLICE, agent_unit_name), "/system.slice/{0}".format(agent_unit_name)):
+                        log_cgroup_warning("The agent is within an unexpected control group: {0}".format(agent_control_group))
+                        return
+                except Exception as exception:
+                    log_cgroup_warning("Unable to verify the agent is in the expected control group; will skip this check: {0}".format(ustr(exception)))
                     return
 
                 # Before agent setup, cleanup the old agent setup (drop-in files) since new agent uses different approach(systemctl) to setup cgroups.
@@ -168,13 +172,13 @@ class CGroupConfigurator(object):
                 # Get agent cgroup
                 self._agent_cgroup = self._cgroups_api.get_unit_cgroup(unit_name=agent_unit_name, cgroup_name=AGENT_NAME_TELEMETRY)
 
-                if conf.get_cgroup_disable_on_process_check_failure() and self._check_fails_if_processes_found_in_agent_cgroup_before_enable(agent_slice):
+                if conf.get_cgroup_disable_on_process_check_failure() and self._check_fails_if_processes_found_in_agent_cgroup_before_enable():
                     reason = "Found unexpected processes in the agent cgroup before agent enable cgroups."
                     self.disable(reason, DisableCgroups.ALL)
                     return
 
                 # Get controllers to track
-                agent_controllers = self._agent_cgroup.get_controllers(expected_relative_path=os.path.join(agent_slice, agent_unit_name))
+                agent_controllers = self._agent_cgroup.get_controllers()
                 if len(agent_controllers) > 0:
                     self.enable()
                     self._enable_accounting(agent_unit_name)
@@ -538,7 +542,7 @@ class CGroupConfigurator(object):
             except Exception as exception:
                 log_cgroup_warning('Failed to reset resource quota: {0}'.format(ustr(exception)))
 
-        def _check_fails_if_processes_found_in_agent_cgroup_before_enable(self, agent_slice):
+        def _check_fails_if_processes_found_in_agent_cgroup_before_enable(self):
             """
             This check ensures that before we enable the agent's cgroups, there are no unexpected processes in the agent's cgroup already.
 
@@ -547,8 +551,6 @@ class CGroupConfigurator(object):
             2. Disabled agent cgroups due to check_cgroups regular check. Once we disable the cgroups we don't run the extensions in it's own slice, so they will be in agent cgroups.
             3. When ext_hanlder restart and enable the cgroups again, already running processes from step 2 still be in agent cgroups. This may cause the extensions run with agent limit.
             """
-            if agent_slice not in (AZURE_SLICE, "system.slice"):
-                return False
             try:
                 log_cgroup_info("Checking for unexpected processes in the agent's cgroup before enabling cgroups")
                 self._check_processes_in_agent_cgroup(True)
