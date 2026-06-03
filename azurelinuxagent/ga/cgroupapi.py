@@ -715,9 +715,6 @@ class Cgroup(object):
     def get_controllers(self):
         """
         Cgroup version specific. Returns a list of the agent supported controllers which are mounted/enabled for the cgroup.
-
-        :param expected_relative_path: The expected relative path of the cgroup. If provided, only controllers mounted
-        at this expected path will be returned.
         """
         raise NotImplementedError()
 
