@@ -21,7 +21,12 @@
 # inadvertently affect the immutable ACL image.
 #
 
+import time
+
+import azurelinuxagent.common.logger as logger
+import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
+from azurelinuxagent.common.utils.shellutil import CommandError
 
 
 class AclOSUtil(DefaultOSUtil):
@@ -45,8 +50,22 @@ class AclOSUtil(DefaultOSUtil):
     def start_network(self):
         self._run_command_without_raising(["systemctl", "start", "systemd-networkd"], log_error=False)
 
-    def restart_if(self, ifname=None, retries=None, wait=None):
-        self._run_command_without_raising(["systemctl", "restart", "systemd-networkd"])
+    def restart_if(self, ifname, retries=3, wait=5):
+        """
+        Restart an interface by bouncing the link. systemd-networkd observes
+        this event, and forces a renew of DHCP.
+        """
+        for attempt in range(1, retries + 1):
+            try:
+                shellutil.run_command(["ip", "link", "set", ifname, "down"])
+                shellutil.run_command(["ip", "link", "set", ifname, "up"])
+                return
+            except CommandError as e:
+                logger.warn("failed to restart {0}: {1}".format(ifname, e))
+                if attempt < retries:
+                    logger.info("retrying in {0} seconds".format(wait))
+                    time.sleep(wait)
+        logger.warn("exceeded restart retries for {0}".format(ifname))
 
     def restart_ssh_service(self):
         # ACL uses sshd.socket for socket-activated SSH (similar to
