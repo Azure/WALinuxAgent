@@ -139,18 +139,19 @@ class CGroupConfigurator(object):
                     self._reset_agent_cgroup_setup()
                     return
 
-                # We check the agent unit 'Slice' property before setting up azure.slice. This check is done first
-                # because the agent's Slice unit property will be 'azure.slice' if the slice drop-in file exists, even
-                # though systemd has not moved the agent to azure.slice yet. Systemd will only move the agent to
-                # azure.slice after a vm restart.
+                # PR #2015 introduced a check to disable cgroups when the Agent is not in the expected cgroup. Telemetry at the time indicated that in a small number of
+                # VMs the Agent was showing up directly under the root cgroup or system.slice. As we started moving the agent to its own slice, the check was eventually
+                # changed to use the Slice property as returned by systemctl show (PR #2160).
+                # Current telemetry doesn't reports any VMs where the Agent shows up in an unexpected Slice. The cgroups logic has had quite a few fixes since the original
+                # check was introduced, and very likely the issue causing the mismatch has been resolved. However, the check using the Slice property is not always accurate,
+                # for example when the dropin file that defines the slice has been created but the Agent service has not been restarted, so the Agent is still in the default
+                # slice.
+                # I am changing the check to use the ControlGroup property instead. Consider removing it after a few releases if telemetry does not show any VMs failing
+                # the check.
                 agent_unit_name = systemd.get_agent_unit_name()
-                try:
-                    agent_control_group = systemd.get_unit_property(agent_unit_name, "ControlGroup")
-                    if agent_control_group not in ("/{0}/{1}".format(AZURE_SLICE, agent_unit_name), "/system.slice/{0}".format(agent_unit_name)):
-                        log_cgroup_warning("The agent is within an unexpected control group: {0}".format(agent_control_group))
-                        return
-                except Exception as exception:
-                    log_cgroup_warning("Unable to verify the agent is in the expected control group; will skip this check: {0}".format(ustr(exception)))
+                agent_control_group = systemd.get_unit_property(agent_unit_name, "ControlGroup")
+                if agent_control_group not in ("/{0}/{1}".format(AZURE_SLICE, agent_unit_name), "/system.slice/{0}".format(agent_unit_name)):
+                    log_cgroup_warning("The agent is within an unexpected control group: {0}".format(agent_control_group))
                     return
 
                 # Before agent setup, cleanup the old agent setup (drop-in files) since new agent uses different approach(systemctl) to setup cgroups.
