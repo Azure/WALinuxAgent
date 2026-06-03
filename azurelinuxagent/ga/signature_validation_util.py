@@ -416,7 +416,7 @@ def validate_extension_manifest_signing_info(manifest, ext_handler):
     except Exception as ex:
         # Catch any exceptions unrelated to 'signingInfo' validation (e.g. incorrectly formatted extension name) and raise as a ManifestValidationError with zero duration.
         raise ManifestValidationError(msg="Error during manifest 'signingInfo' validation for extension '{0}'. Error: {1}".format(ext_handler, ustr(ex)),
-                                      operation=WALAEventOperation.SignatureValidation, duration=0)
+                                      operation=WALAEventOperation.PackageSigningInfoResult, duration=0)
 
 
 def validate_agent_manifest_signing_info(manifest, expected_agent_version):
@@ -479,7 +479,7 @@ def validate_agent_manifest_signing_info(manifest, expected_agent_version):
     except Exception as ex:
         # Catch any exceptions unrelated to 'signingInfo' validation and raise as a ManifestValidationError with zero duration.
         raise ManifestValidationError(msg="Error during manifest 'signingInfo' validation for agent '{0}'. Error: {1}".format(agent_full_name, ustr(ex)),
-                                      operation=WALAEventOperation.SignatureValidation, duration=0)
+                                      operation=WALAEventOperation.PackageSigningInfoResult, duration=0)
 
 
 def _should_delay_signature_validation():

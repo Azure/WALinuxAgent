@@ -1289,7 +1289,7 @@ class TestAgentUpdate(UpdateTestCase):
         """
         with self._setup_manifest_validation_test() as (agent_update_handler, mock_telemetry):
             # Patch json.load (used to parse HandlerManifest.json in ga_version_updater) to raise an
-            # unexpected exception. This exercises the defensive 'except Exception' block.
+            # unexpected exception.
             with patch("azurelinuxagent.ga.ga_version_updater.json.load", side_effect=Exception("unexpected parse failure")):
                 with self.assertRaises(AgentUpgradeExitException):
                     agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
