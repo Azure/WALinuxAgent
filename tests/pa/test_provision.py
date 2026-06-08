@@ -448,7 +448,7 @@ class TestProvision(AgentTestCase):
             protocol.set_http_handlers(http_get_handler=mock_http_get)
             with patch('azurelinuxagent.pa.provision.default.PROBE_INTERVAL', 0):  # set the delay between retries to 0
                 handler._download_ssh_keys_if_needed(ovfenv)
-        self.assertEqual(2 * MAX_RETRY, mock_http_get.call_count, "Expected maximum number of retries ({0}) to have been attempted".format(MAX_RETRY))  # times 2 since two cyphers are attempted for FIPS support
+        self.assertEqual(2 * MAX_RETRY, mock_http_get.call_count, "Expected maximum number of retries ({0}) to have been attempted".format(MAX_RETRY))  # times 2 since two ciphers are attempted for FIPS support
         ssh_key_path = os.path.join(conf.get_lib_dir(), '8979F1AC8C4215827BF3B5A403E6137B504D02A4.crt')
         self.assertFalse(os.path.exists(ssh_key_path), 'The SSH key should not have been downloaded, since all requests failed. Got: {0}'.format(ssh_key_path))
 
