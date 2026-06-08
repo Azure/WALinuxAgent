@@ -350,7 +350,7 @@ class AgentLog(object):
 
             # 2026-06-08T05:26:22.944493Z WARNING Daemon Daemon The legacy AutoUpdate.Enabled configuration is also used, but it is ignored in favor of the new configuration (AutoUpdate.UpdateToLatestVersion).
             {
-                'message': r"The legacy AutoUpdate.Enabled configuration is also used, but it is ignored in favor of the new configuration \(AutoUpdate.UpdateToLatestVersion\)",
+                'message': r"The legacy AutoUpdate\.Enabled configuration is also used, but it is ignored in favor of the new configuration \(AutoUpdate\.UpdateToLatestVersion\)",
                 'if': lambda r: r.prefix == 'Daemon' and r.thread == 'Daemon'
             },
             #
