@@ -484,6 +484,12 @@ def ext_signature_validation_enabled():
     - Initial delay period after agent start has passed (TODO: remove after telemetry release)
     - Signature validation feature is not expired according to Conf flag 'Debug.SignatureValidationTelemetryExpiryTime' (TODO: remove after telemetry release(s))
     - OpenSSL version supports required validation parameters (TODO: remove after timestamp validation implemented)
+
+    Note: If a customer's policy requires signature validation, the agent will still attempt to validate the signature of the extension 
+    even if this method returns False. Most of these checks are performance workarounds, and customers who explicitly require signature 
+    validation accept the performance cost. If the hard requirements for validation (i.e., ConfidentialVMInfo.is_confidential_vm() and 
+    openssl_version_supported_for_signature_validation()) are not met, the policy parsing would have failed before any ext installation
+    was attempted.
     """
     return conf.get_ext_signature_validation_enabled() and \
            ConfidentialVMInfo.is_confidential_vm() and \

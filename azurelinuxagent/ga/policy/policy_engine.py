@@ -26,6 +26,7 @@ from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
+from azurelinuxagent.ga.signature_validation_util import openssl_version_supported_for_signature_validation
 
 
 # Default policy values to be used when customer does not specify these attributes in the policy file.
@@ -298,8 +299,18 @@ class _PolicyEngine(object):
             if k not in valid_attributes:
                 raise InvalidPolicyError("unrecognized attribute '{0}' in {1}".format(k, object_name))
 
-        if object_.get("signatureRequired") is True and not ConfidentialVMInfo.is_confidential_vm():
-            raise InvalidPolicyError("setting 'signatureRequired' to true is only supported on confidential virtual machines (CVMs).")
+        if object_.get("signatureRequired") is True:
+            # Signature validation is currently only supported on CVMs. If a non-CVM user creates a policy with
+            # signatureRequired=true, reject the policy at parse time so the customer is informed up front rather
+            # than silently allowing unsigned extensions through.
+            # TODO: Remove once signature validation is supported on all VMs.
+            if not ConfidentialVMInfo.is_confidential_vm():
+                raise InvalidPolicyError("setting 'signatureRequired' to true is only supported on confidential virtual machines (CVMs).")
+            # Signature validation requires OpenSSL >= 1.1.0. If the system OpenSSL is too old, reject the policy at
+            # parse time rather than silently allowing unsigned extensions through at download time.
+            # TODO: Remove once signature validation no longer depends on the 'no_check_time' flag.
+            if not openssl_version_supported_for_signature_validation():
+                raise InvalidPolicyError("setting 'signatureRequired' to true requires OpenSSL >= 1.1.0; the OpenSSL version on this system does not support signature validation.")
 
     @staticmethod
     def _get_dictionary(object_, attribute, name_prefix="", optional=False, default=None):
