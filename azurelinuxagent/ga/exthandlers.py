@@ -1484,7 +1484,10 @@ class ExtHandlerInstance(object):
 
         # Validate signature if the extension is signed and the feature is enabled, OR if the caller requires
         # validation results (ignore_signature_validation_errors=False). 
-        should_validate_ext_signature = (ext_signature_validation_enabled() and self.ext_handler.encoded_signature != "") or not ignore_signature_validation_errors
+        if not ignore_signature_validation_errors:
+            should_validate_ext_signature = True
+        else:
+            should_validate_ext_signature = ext_signature_validation_enabled() and self.ext_handler.encoded_signature != ""
 
         signature_validation_succeeded = False
 
