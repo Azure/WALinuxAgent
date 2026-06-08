@@ -39,7 +39,7 @@ from azurelinuxagent.common.exception import ProvisionError, ProtocolError, \
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateProperties
 from azurelinuxagent.common.protocol.restapi import ProvisionStatus
-from azurelinuxagent.common.protocol.util import get_protocol_util
+from azurelinuxagent.common.protocol.util import get_protocol_util, MAX_RETRY, PROBE_INTERVAL
 from azurelinuxagent.common.version import AGENT_NAME
 from azurelinuxagent.pa.provision.cloudinitdetect import cloud_init_is_enabled
 
@@ -241,11 +241,11 @@ class ProvisionHandler(object):
         logger.info("Configure sshd")
         self.osutil.conf_sshd(ovfenv.disable_ssh_password_auth)
 
-        self._download_ssh_keys(ovfenv)
+        self._download_ssh_keys_if_needed(ovfenv)
         self.deploy_ssh_pubkeys(ovfenv)
         self.deploy_ssh_keypairs(ovfenv)
 
-    def _download_ssh_keys(self, ovfenv):
+    def _download_ssh_keys_if_needed(self, ovfenv):
         #
         # We need to download the Certificates package from the Wireserver if any public key in ovfenv.xml has only a thumbprint (i.e. no value for the key) or if any key pairs need to be installed
         #
@@ -254,18 +254,18 @@ class ProvisionHandler(object):
             return
 
         #
-        # Try to download the certificates a few times but continue execution if all attempts fail. The code that deploys the SSH keys will report that as a provisioning error.
+        # Try to download the certificates. The retry logic mimics ProtocolUtil._detect_protocol(), which can also download the certificates when detecting the WireServer endpoint.
+        # In this case, though we continue execution if all attempts fail and the code that deploys the SSH keys will report that as a provisioning error.
         #
-        max_attempts = 5
-        for attempt in range(max_attempts):
+        for retry in range(0, MAX_RETRY):
             try:
                 protocol = self.protocol_util.get_protocol(init_goal_state=False)
-                _ = GoalState(protocol.client, goal_state_properties=GoalStateProperties.Certificates)
+                _ = GoalState(protocol.client, goal_state_properties=GoalStateProperties.Certificates, ignore_certificate_download_errors=False)
                 return
-            except Exception as e:
-                if attempt < max_attempts - 1:
-                    logger.warn("Unable to download certificates; will retry after a short delay: {0}", ustr(e))
-                    time.sleep(30)
+            except ProtocolError as e:
+                if retry < MAX_RETRY - 1:
+                    logger.info("Unable to download certificates; will retry after a short delay: {0}", ustr(e))
+                    time.sleep(PROBE_INTERVAL)
                 else:
                     logger.error("Unable to download certificates: {0}", ustr(e))
 
