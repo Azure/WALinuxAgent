@@ -15,6 +15,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import contextlib
+import getpass
 import os
 import re
 import unittest
@@ -429,7 +430,7 @@ class TestProvision(AgentTestCase):
             protocol.set_http_handlers(http_get_handler=mock_http_get)
             with patch('azurelinuxagent.pa.provision.default.PROBE_INTERVAL', 0):  # set the delay between retries to 0
                 handler._download_ssh_keys_if_needed(ovfenv)
-        self.assertEqual(11, mock_http_get.call_count, "Expected 11 requests for Certificates (10 failed and retried requests, and 1 successful request")
+        self.assertEqual(11, mock_http_get.call_count, "Expected 11 requests for Certificates (10 failed and retried requests, and 1 successful request)")
         ssh_key_path = os.path.join(conf.get_lib_dir(), '8979F1AC8C4215827BF3B5A403E6137B504D02A4.crt')
         self.assertTrue(os.path.exists(ssh_key_path), 'The SSH key was not downloaded. Expected: {0}'.format(ssh_key_path))
 
@@ -453,7 +454,7 @@ class TestProvision(AgentTestCase):
 
     def test_deploy_ssh_pubkeys_should_raise_if_no_keys_have_been_downloaded(self):
         ovfenv_data = load_data("ovf-env_public_key_no_value.xml")
-        ovfenv_data = ovfenv_data.replace('<UserName>UserName</UserName>', '<UserName>{0}</UserName>'.format(os.getlogin()))
+        ovfenv_data = ovfenv_data.replace('<UserName>UserName</UserName>', '<UserName>{0}</UserName>'.format(getpass.getuser()))
         ovfenv_data = ovfenv_data.replace('<Path>$HOME/UserName/.ssh/authorized_keys</Path>', '<Path>{0}</Path>'.format(os.path.join(self.tmp_dir, "authorized_keys")))
         ovfenv = OvfEnv(ovfenv_data)
         with TestProvision._create_provision_handler_with_mock_protocol() as (handler, _):

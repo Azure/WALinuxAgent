@@ -618,7 +618,7 @@ class Certificates(LogEvent):
 
             return True
 
-        raise ProtocolError("Cannot download certificates using any of the supported cyphers")
+        raise ProtocolError("Cannot download certificates using any of the supported ciphers")
 
     @staticmethod
     def _create_p7m_file(data):
