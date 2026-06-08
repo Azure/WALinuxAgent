@@ -18,6 +18,12 @@
 /azurelinuxagent/pa/rdma/ @longlimsft
 
 #
+# Kernel event monitoring
+#
+/azurelinuxagent/ga/kernel_event_monitor.py @adityagarg0911
+/tests/ga/test_kernel_event_monitor.py @adityagarg0911
+
+#
 # Azure Container Linux (ACL)
 #
 /azurelinuxagent/common/osutil/acl.py @mayankfz

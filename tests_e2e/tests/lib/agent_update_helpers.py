@@ -14,14 +14,19 @@
 # limitations under the License.
 #
 import json
+import shutil
+from pathlib import Path
+from threading import RLock
 
 from assertpy import fail
 
+import azurelinuxagent
 import requests
 from azure.mgmt.compute.models import VirtualMachine
 
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
+from tests_e2e.tests.lib.shell import run_command
 from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 
@@ -119,3 +124,42 @@ def verify_agent_reported_supported_feature_flag(ssh_client: SshClient) -> None:
     log.info("Running remote script agent_update-verify_versioning_supported_feature.py to verify that the agent reports the supported feature flag required for CRP to send RSM update requests")
     ssh_client.run_command("agent_update-verify_versioning_supported_feature.py --supported True", use_sudo=True)
     log.info("Successfully verified that Agent reported VersioningGovernance supported feature flag")
+
+
+_build_lock = RLock()
+
+
+def build_agent_package(working_directory: Path, version: str, ssh_client, vm) -> str:
+    """
+    Builds a custom agent package from source with the specified version, then copies
+    the resulting zip to the test VM. Returns the package file name.
+    """
+    pkg_name = f"WALinuxAgent-{version}.zip"
+    with _build_lock:
+        agent_source_path: Path = working_directory / "source"
+        source_pkg_path: Path = agent_source_path / "eggs" / pkg_name
+        if source_pkg_path.exists():
+            log.info("The test pkg already exists at %s, skipping build", source_pkg_path)
+        else:
+            if agent_source_path.exists():
+                shutil.rmtree(agent_source_path)
+            source_directory: Path = Path(azurelinuxagent.__path__[0]).parent
+            copy_cmd: str = f"cp -r {source_directory} {agent_source_path}"
+            log.info("Copying agent source %s to %s", source_directory, agent_source_path)
+            run_command(copy_cmd, shell=True)
+            if not agent_source_path.exists():
+                raise Exception(f"The agent source was not copied to the expected path {agent_source_path}")
+            version_file: Path = agent_source_path / "azurelinuxagent" / "common" / "version.py"
+            version_cmd = rf"""sed -E -i "s/^AGENT_VERSION\s+=\s+'[0-9.]+'/AGENT_VERSION = '{version}'/g" {version_file}"""
+            log.info("Setting agent version to %s to build new pkg", version)
+            run_command(version_cmd, shell=True)
+            makepkg_file: Path = agent_source_path / "makepkg.py"
+            build_cmd: str = f"env PYTHONPATH={agent_source_path} python3 {makepkg_file} -o {agent_source_path}"
+            log.info("Building custom test agent pkg version %s", version)
+            run_command(build_cmd, shell=True)
+            if not source_pkg_path.exists():
+                raise Exception(f"The test pkg was not created at the expected path {source_pkg_path}")
+        target_path: Path = Path("~") / "tmp"
+        log.info("Copying %s to %s:%s", source_pkg_path, vm, target_path)
+        ssh_client.copy_to_node(source_pkg_path, target_path)
+    return pkg_name

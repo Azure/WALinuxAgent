@@ -34,7 +34,16 @@
             "uris": [
                 "http://mock-goal-state/manifest_of_ga.xml"
             ],
-            "versionToSignatureMappings": []
+            "versionToSignatureMappings": [
+                {
+                    "version": "99999.0.0.0",
+                    "encodedSignature": "MIInpwYJKoZIhvcNAQcCProd999900="
+                },
+                {
+                    "version": "9.9.9.10",
+                    "encodedSignature": "MIInpwYJKoZIhvcNAQcCProd99910="
+                }
+            ]
         },
         {
             "name": "Test",
@@ -46,23 +55,12 @@
             ],
             "versionToSignatureMappings": [
                 {
-                    "version": "9.9.9.10"
+                    "version": "99999.0.0.0",
+                    "encodedSignature": "MIInpwYJKoZIhvcNAQcCTest999900="
                 },
                 {
-                    "encodedSignature": "test_test_signature_for_invalid"
-                },
-                {},
-                {
-                    "version": 1.0,
-                    "encodedSignature": true
-                },
-                {
-                    "version": 123456,
-                    "encodedSignature": 1.0
-                },
-                {
-                    "version": true,
-                    "encodedSignature": 123456
+                    "version": "9.9.9.10",
+                    "encodedSignature": "MIInpwYJKoZIhvcNAQcCTest99910="
                 }
             ]
         }

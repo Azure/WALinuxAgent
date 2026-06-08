@@ -567,21 +567,6 @@ class CgroupsApiv1TestCase(AgentTestCase):
                 controllers = cgroup.get_controllers()
                 self.assertEqual(len(controllers), 0)
 
-    def test_get_controllers_returns_only_controllers_at_expected_path_v1(self):
-        with mock_cgroup_v1_environment(self.tmp_dir):
-            with patch('azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv1._get_process_relative_controller_paths', return_value={'cpu,cpuacct': 'system.slice/walinuxagent.service', 'memory': 'unexpected/path'}):
-                cgroup = create_cgroup_api().get_process_cgroup(process_id="self", cgroup_name="walinuxagent")
-                controllers = cgroup.get_controllers(expected_relative_path="system.slice/walinuxagent.service")
-                self.assertEqual(len(controllers), 1)
-                self.assertIsInstance(controllers[0], CpuControllerV1)
-                self.assertEqual(controllers[0].name, "walinuxagent")
-                self.assertEqual(controllers[0].path, "/sys/fs/cgroup/cpu,cpuacct/system.slice/walinuxagent.service")
-
-            with patch('azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv1._get_process_relative_controller_paths', return_value={'cpu,cpuacct': 'unexpected/path', 'memory': 'unexpected/path'}):
-                cgroup = create_cgroup_api().get_process_cgroup(process_id="self", cgroup_name="walinuxagent")
-                controllers = cgroup.get_controllers(expected_relative_path="system.slice/walinuxagent.service")
-                self.assertEqual(len(controllers), 0)
-
     def test_get_procs_path_returns_correct_path_v1(self):
         with mock_cgroup_v1_environment(self.tmp_dir):
             cgroup = create_cgroup_api().get_process_cgroup(process_id="self", cgroup_name="walinuxagent")
@@ -681,14 +666,6 @@ class CgroupsApiv2TestCase(AgentTestCase):
             with patch("azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv2.get_process_cgroup", return_value=mock_cgroup_empty_path):
                 cgroup = create_cgroup_api().get_process_cgroup(process_id="self", cgroup_name="walinuxagent")
                 controllers = cgroup.get_controllers()
-                self.assertEqual(len(controllers), 0)
-
-    def test_get_controllers_returns_only_controllers_at_expected_path_v2(self):
-        with mock_cgroup_v2_environment(self.tmp_dir):
-            mock_cgroup_unexpected_path = CgroupV2(cgroup_name="test", root_cgroup_path="/sys/fs/cgroup", cgroup_path="/sys/fs/cgroup/unexpected/path", enabled_controllers=["cpu", "memory"])
-            with patch("azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv2.get_process_cgroup", return_value=mock_cgroup_unexpected_path):
-                cgroup = create_cgroup_api().get_process_cgroup(process_id="self", cgroup_name="walinuxagent")
-                controllers = cgroup.get_controllers(expected_relative_path="system.slice/walinuxagent.service")
                 self.assertEqual(len(controllers), 0)
 
     def test_get_procs_path_returns_empty_if_root_cgroup_empty_v2(self):

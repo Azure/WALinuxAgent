@@ -45,8 +45,8 @@ def prepare_agent():
     log.info("Executing script update-waagent-conf to enable agent cgroups config flag")
     result = shellutil.run_command(["update-waagent-conf", "Debug.CgroupCheckPeriod=30", "Debug.CgroupLogMetrics=y",
                                     "Debug.CgroupDisableOnProcessCheckFailure=n",
-                                    "Debug.CgroupDisableOnQuotaCheckFailure=n",
-                                    "Debug.AgentMemoryQuota=104857600"])
+                                    "Debug.CgroupDisableOnQuotaCheckFailure=n"
+                                    ])
     log.info("Successfully enabled agent cgroups config flag: {0}".format(result))
 
     found: bool = retry_if_false(
@@ -55,24 +55,24 @@ def prepare_agent():
         fail("Agent cgroups not enabled")
 
 
-def verify_agent_has_memory_quota_set():
+def verify_agent_has_no_memory_quota_set():
     """
-    This method verifies that the agent's cgroup has memory quota set
+    This method verifies that the agent's cgroup does NOT have a memory quota set.
+    The agent no longer enforces a memory limit via systemd; MemoryHigh should be 'infinity'.
     """
-    log.info("** Verifying agent cgroup has memory quota set")
+    log.info("** Verifying agent cgroup has no memory quota set (MemoryHigh=infinity)")
 
-    def check_memory_quota() -> bool:
+    def check_no_memory_quota() -> bool:
         quota = get_agent_memory_quota()
-        if quota is None or quota == "infinity":
-            return False
-        return True
+        # 'infinity' means no memory limit is enforced.
+        return quota.strip().lower() == "infinity"
 
-    found: bool = retry_if_false(check_memory_quota)
+    found: bool = retry_if_false(check_no_memory_quota)
     if found:
         log.info("Agent Memory Quota: %s", get_agent_memory_quota())
-        log.info("Successfully verified agent cgroup has memory quota set")
+        log.info("Successfully verified agent cgroup has no memory quota set")
     else:
-        fail("The agent's cgroup doesn't seem to have memory quota set. Agent Memory Quota: {0}".format(get_agent_memory_quota()))
+        fail("The agent's cgroup should not have a memory quota set, but MemoryHigh={0}".format(get_agent_memory_quota()))
 
 
 def verify_agent_reported_memory_metrics():
@@ -105,41 +105,43 @@ def verify_agent_reported_memory_metrics():
 
 def verify_memory_throttling_check_on_agent_cgroups():
     """
-    This method verifies that the agent detects memory throttling on its cgroup
+    This method verifies that the agent reports memory throttling metrics on its cgroup,
+    and that all reported values are zero. Since the agent no longer enforces a memory limit
+    (MemoryHigh=infinity), there should be no memory throttling events.
     """
-    log.info("** Verifying agent detected memory throttling on its cgroup")
+    log.info("** Verifying agent reports zero memory throttling on its cgroup")
 
+    # Only consider records logged from now on; older entries (e.g. from before this test
+    # configured the agent) must not influence the assertion.
     throttled_events = []
-    pressure_time = []
 
     def check_agent_log_for_metrics() -> bool:
+        # Rebuild on every attempt so the assertion reflects only the latest scan window
+        # and does not accumulate values across retries.
+        del throttled_events[:]
         for record in AgentLog().read():
             match = re.search(r"Memory/Total Memory Throttled Events \s*\[walinuxagent.service\]\s*=\s*([0-9.]+)", record.message)
             if match is not None:
                 throttled_events.append(float(match.group(1)))
-            else:
-                match = re.search(r"Memory/Memory Pressure \(s\)\s*\[walinuxagent.service\]\s*=\s*([0-9.]+)", record.message)
-                if match is not None:
-                    pressure_time.append(float(match.group(1)))
-        if len(pressure_time) < 1 or len(throttled_events) < 1:
-            return False
-        return True
-
-    distro = shellutil.run_command("get_distro.py").rstrip().lower()
-
-    if "rhel" in distro:
-        log.info("Skipping memory throttling check verification on RHEL distros due to known issues with memory pressure file not present.")
-        return
+        return len(throttled_events) >= 1
 
     found: bool = retry_if_false(check_agent_log_for_metrics, delay=60)
-    if found:
-        log.info("Memory Throttle Events: %s", throttled_events)
-        log.info("Memory Pressure Time: %s", pressure_time)
-        log.info("Successfully verified agent reported memory throttling metrics")
-    else:
+    if not found:
         fail(
-            "The agent doesn't seem to be collecting Memory Throttling metrics. Agent found Memory Throttle Events: {0} and Pressure: {1}".format(
-                throttled_events, pressure_time))
+            "The agent doesn't seem to be collecting Memory Throttling metrics. Agent found Memory Throttle Events: {0}".format(
+                throttled_events))
+
+    log.info("Memory Throttle Events: %s", throttled_events)
+
+    # No memory quota is enforced, so every reported value must be zero.
+    non_zero_throttled = [v for v in throttled_events if v != 0.0]
+    if non_zero_throttled:
+        fail(
+            "Expected all memory throttling values to be zero (no memory limit is enforced), "
+            "but found non-zero Memory Throttle Events: {0}".format(
+                non_zero_throttled))
+
+    log.info("Successfully verified agent reported zero memory throttling metrics")
 
 
 def cleanup_test_setup():
@@ -161,7 +163,7 @@ def cleanup_test_setup():
 def main():
     skip_if_distro_not_supports_memory_quota()
     prepare_agent()
-    verify_agent_has_memory_quota_set()
+    verify_agent_has_no_memory_quota_set()
     verify_agent_reported_memory_metrics()
     verify_memory_throttling_check_on_agent_cgroups()
     cleanup_test_setup()

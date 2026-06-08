@@ -702,7 +702,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
 
     def test_it_should_send_telemetry_for_extension_signed_or_unsigned_if_validation_enabled(self):
         with patch("azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm", return_value=True):
-            with patch("azurelinuxagent.common.protocol.goal_state.signature_validation_enabled", return_value=True):
+            with patch("azurelinuxagent.common.protocol.goal_state.ext_signature_validation_enabled", return_value=True):
                 # Should send telemetry for signed extension for extensionsConfig goal state
                 with patch("azurelinuxagent.common.protocol.goal_state.add_event") as add_event:
                     with mock_wire_protocol(wire_protocol_data.DATA_FILE):

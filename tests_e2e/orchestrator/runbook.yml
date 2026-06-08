@@ -44,12 +44,10 @@ variable:
       - agent_persist_firewall
       - agent_status
       - agent_update
+      - agent_update_with_signature
       - ext_cgroups
-#
-# TODO: These tests are disabled temporarily since our test account does not have quota to create the Confidential VMs required by the tests.
-#
-#      - ext_policy
-#      - ext_policy_with_dependencies
+      - ext_policy
+      - ext_policy_with_dependencies
       - ext_sequencing
       - ext_signature_validation
       - ext_telemetry_pipeline
@@ -219,6 +217,15 @@ variable:
   #
   - name: c_is_vhd
     value: false
+    is_case_visible: true
+
+  #
+  # Security type to use when deploying the VM/VMSS resource (e.g. "ConfidentialVM"). Empty means use the default
+  # deployment behavior. Populated by the AgentTestSuiteCombinator from the 'security_type' property on the
+  # image in images.yml.
+  #
+  - name: c_security_type
+    value: ""
     is_case_visible: true
 
 environment: $(c_environment)

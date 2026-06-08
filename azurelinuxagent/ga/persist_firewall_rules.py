@@ -37,7 +37,7 @@ class PersistFirewallRulesHandler(object):
 # Do not edit.
 [Unit]
 Description=Setup network rules for WALinuxAgent
-After=local-fs.target 
+After={after_dependencies}
 Before=network-pre.target
 Wants=network-pre.target
 DefaultDependencies=no
@@ -70,7 +70,7 @@ if __name__ == '__main__':
 
     # The current version of the unit file; Update it whenever the unit file is modified to ensure Agent can dynamically
     # modify the unit file on VM too
-    _UNIT_VERSION = "1.4"
+    _UNIT_VERSION = "1.5"
 
     _DISTRO = get_distro()[0]
 
@@ -232,10 +232,17 @@ if __name__ == '__main__':
         service_unit_file = self.get_service_file_path()
         binary_path = os.path.join(conf.get_lib_dir(), self.BINARY_FILE_NAME)
         try:
-            fileutil.write_file(service_unit_file,
-                                self.__SERVICE_FILE_CONTENT.format(binary_path=binary_path,
-                                                                   py_path=sys.executable,
-                                                                   version=self._UNIT_VERSION))
+            # On Azure Container Linux, Python lives inside a sysext overlay that is only available after
+            # systemd-sysext.service merges it. Add an explicit ordering dependency so the service waits.
+            after_dependencies = "local-fs.target"
+            if self._DISTRO == "azurecontainerlinux":
+                after_dependencies = "local-fs.target systemd-sysext.service"
+
+            service_content = self.__SERVICE_FILE_CONTENT.format(binary_path=binary_path,
+                                                                 py_path=sys.executable,
+                                                                 version=self._UNIT_VERSION,
+                                                                 after_dependencies=after_dependencies)
+            fileutil.write_file(service_unit_file, service_content)
             fileutil.chmod(service_unit_file, 0o644)
 
             # Finally enable the service. This is needed to ensure the service is started on system boot

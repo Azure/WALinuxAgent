@@ -2,6 +2,7 @@ import contextlib
 import json
 import os
 import random
+import shutil
 import time
 
 from azurelinuxagent.common import conf
@@ -14,6 +15,8 @@ from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.version import CURRENT_VERSION, AGENT_NAME
 from azurelinuxagent.ga.agent_update_handler import get_agent_update_handler
 from azurelinuxagent.ga.guestagent import GuestAgent, INITIAL_UPDATE_STATE_FILE, RSM_UPDATE_STATE_FILE
+from azurelinuxagent.ga.signature_validation_util import SignatureValidationError, SignatureValidationTimeoutError, \
+    SignatureValidationTimeout
 
 from tests.ga.test_update import UpdateTestCase
 from tests.lib.http_request_predicates import HttpRequestPredicates
@@ -80,10 +83,14 @@ class TestAgentUpdate(UpdateTestCase):
                     with patch("azurelinuxagent.ga.self_update_version_updater.random.randint", side_effect=_mock_random_update_time):
                         with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
                             with patch("azurelinuxagent.common.conf.get_enable_ga_versioning", return_value=True):
-                                with patch("azurelinuxagent.common.event.EventLogger.add_event") as mock_telemetry:
-                                    agent_update_handler = get_agent_update_handler(protocol)
-                                    agent_update_handler._protocol = protocol
-                                    yield agent_update_handler, mock_telemetry
+                                # Patch validate_signature so that the function is mocked in these UTs. The actual
+                                # signature validation logic is unit tested in test_signature_validation.py and
+                                # test_signature_validation_sudo.py
+                                with patch("azurelinuxagent.common.protocol.wire.validate_signature"):
+                                    with patch("azurelinuxagent.common.event.EventLogger.add_event") as mock_telemetry:
+                                        agent_update_handler = get_agent_update_handler(protocol)
+                                        agent_update_handler._protocol = protocol
+                                        yield agent_update_handler, mock_telemetry
 
     def _assert_agent_directories_available(self, versions):
         for version in versions:
@@ -801,3 +808,415 @@ class TestAgentUpdate(UpdateTestCase):
                                      "VM enabled for RSM updates, switching to RSM update mode" in kwarg['message'] and kwarg[
                                          'op'] == WALAEventOperation.AgentUpgrade]),
                                             "rsm mode should be used for update")
+
+    def _get_signature_telemetry_events(self, mock_telemetry):
+        """Helper to extract AgentSignature events from the mock telemetry call list."""
+        return [kwarg for _, kwarg in mock_telemetry.call_args_list
+                if kwarg.get('op') == WALAEventOperation.AgentSignature]
+
+    def test_it_should_not_send_signature_telemetry_when_goal_state_not_updated(self):
+        """
+        When ext_gs_updated is False (not a new goal state), no signature telemetry should be emitted.
+        """
+        data_file = DATA_FILE.copy()
+        # This goal state is for a VM enrolled into RSM but the agent version in the goal state is not from RSM, so it
+        # should not result in an agent update. This unit test is only testing the agent logic to send telemetry on
+        # agent signatures in the goal state, so an actual agent update is not needed.
+        data_file["ext_conf"] = "wire/ext_conf-two_ga_dummy_signatures.xml"
+
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
+            # the signature validation flow
+            with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
+                with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
+                    agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+                    sig_events = self._get_signature_telemetry_events(mock_telemetry)
+                    self.assertEqual(1, len(sig_events), "Expected exactly one AgentSignature event. Got: {0}".format(len(sig_events)))
+
+                    # Run the agent update handler again, but let ext_gs_updated be False. This should not create any new AgentSignature telemetry
+                    agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), False)
+                    sig_events = self._get_signature_telemetry_events(mock_telemetry)
+                    self.assertEqual(1, len(sig_events), "Expected exactly one AgentSignature event. Got: {0}".format(len(sig_events)))
+
+    def test_it_should_not_send_signature_telemetry_when_agent_signature_goal_state_telemetry_disabled(self):
+        """
+        When agent signature goal state telemetry is disabled, no telemetry on agent signature should be emitted.
+        """
+        data_file = DATA_FILE.copy()
+        # This goal state is for a VM enrolled into RSM but the agent version in the goal state is not from RSM, so it
+        # should not result in an agent update. This unit test is only testing the agent logic to send telemetry on
+        # agent signatures in the goal state, so an actual agent update is not needed.
+        data_file["ext_conf"] = "wire/ext_conf-two_ga_dummy_signatures.xml"
+
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
+            # the signature validation flow
+            with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=False):
+                with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
+                    agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+            sig_events = self._get_signature_telemetry_events(mock_telemetry)
+            self.assertEqual(0, len(sig_events), "No AgentSignature events should be emitted when signature validation is disabled")
+
+    def test_it_should_not_send_signature_telemetry_when_goal_state_does_not_support_mapping(self):
+        """
+        When the extensions goal state does not support agent signature mapping, no telemetry should be emitted.
+        """
+        data_file = DATA_FILE.copy()
+        # This goal state is for a VM enrolled into RSM but the agent version in the goal state is not from RSM, so it
+        # should not result in an agent update. This unit test is only testing the agent logic to send telemetry on
+        # agent signatures in the goal state, so an actual agent update is not needed.
+        data_file["ext_conf"] = "wire/ext_conf-two_ga_dummy_signatures.xml"
+
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
+            # the signature validation flow
+            with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
+                with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=False):
+                    agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+            sig_events = self._get_signature_telemetry_events(mock_telemetry)
+            self.assertEqual(0, len(sig_events), "No AgentSignature events should be emitted when goal state doesn't support signature mapping")
+
+    def test_it_should_send_signature_telemetry_on_new_goal_state_with_rsm_version(self):
+        """
+        When signature validation is enabled, goal state supports agent signature mapping, and this is an RSM
+        request with signatures, telemetry should include the signed versions in the goal state and the RSM requested
+        version.
+        """
+        self.prepare_agents(count=1)
+
+        data_file = DATA_FILE.copy()
+        # This goal state is for a VM enrolled into RSM where the agent version in the goal state is from RSM. As a
+        # result, the agent should update to the requested version (9.9.9.10)
+        data_file["ext_conf"] = "wire/ext_conf-agent_dummy_signatures_and_version_from_rsm.xml"
+
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
+            # the signature validation flow
+            with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
+                with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
+                    with self.assertRaises(AgentUpgradeExitException):
+                        agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+            sig_events = self._get_signature_telemetry_events(mock_telemetry)
+            self.assertEqual(1, len(sig_events), "Expected exactly one AgentSignature event. Got: {0}".format(len(sig_events)))
+
+            telemetry_data = json.loads(sig_events[0]['message'])
+            self.assertEqual(["9.9.9.9", "9.9.9.10"], telemetry_data["versions_with_signatures"], "Telemetry should contain the versions with signatures in the goal state")
+            self.assertEqual("9.9.9.10", telemetry_data["rsm_requested_version"], "RSM requested version should be included when this is an RSM request")
+            self.assertIsNotNone(telemetry_data["created_on_timestamp"], "Goal state created_on_timestamp should be present")
+            self.assertIsNotNone(telemetry_data["activity_id"], "Activity id should be present")
+
+    def test_it_should_send_signature_telemetry_with_empty_signatures(self):
+        """
+        When signature validation is enabled and goal state supports agent signature mapping but no signatures
+        are present, telemetry should be sent with an empty versions_with_signatures list.
+        """
+        self.prepare_agents(count=1)
+
+        data_file = DATA_FILE.copy()
+        # The default ext_conf.xml has no VersionToSignatureMappings element, so the parsed signature mapping
+        # will be empty.
+        data_file["ext_conf"] = "wire/ext_conf.xml"
+
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
+            # the signature validation flow
+            with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
+                with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
+                    with self.assertRaises(AgentUpgradeExitException):
+                        agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+            sig_events = self._get_signature_telemetry_events(mock_telemetry)
+            self.assertEqual(1, len(sig_events), "Expected exactly one AgentSignature event. Got: {0}".format(sig_events))
+
+            telemetry_data = json.loads(sig_events[0]['message'])
+            self.assertEqual([], telemetry_data["versions_with_signatures"], "versions_with_signatures should be empty when no signatures are present")
+            self.assertEqual("", telemetry_data["rsm_requested_version"], "RSM requested version should be empty str if goal state is not an RSM request")
+            self.assertIsNotNone(telemetry_data["created_on_timestamp"], "Goal state created_on_timestamp should be present")
+            self.assertIsNotNone(telemetry_data["activity_id"], "Activity id should be present")
+
+    def test_it_should_send_signature_telemetry_with_no_rsm_version_for_update(self):
+        """
+        When the goal state is not an RSM request, rsm_requested_version should be None.
+        """
+        data_file = DATA_FILE.copy()
+        # This goal state is for a VM enrolled into RSM but the agent version in the goal state is not from RSM, so it
+        # should not result in an agent update. This unit test is only testing the agent logic to send telemetry on
+        # agent signatures in the goal state, so an actual agent update is not needed.
+        data_file["ext_conf"] = "wire/ext_conf-two_ga_dummy_signatures.xml"
+
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            # Patch agent_signature_goal_state_telemetry_enabled() and supports_agent_signature_mapping() so that the agent takes
+            # the signature validation flow
+            with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
+                with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
+                    agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+            sig_events = self._get_signature_telemetry_events(mock_telemetry)
+            self.assertEqual(1, len(sig_events), "Expected exactly one AgentSignature event. Got: {0}".format(len(sig_events)))
+
+            telemetry_data = json.loads(sig_events[0]['message'])
+            self.assertEqual(["9.9.9.10", "99999.0.0.0"], telemetry_data["versions_with_signatures"], "Telemetry should contain the versions with signatures in the goal state")
+            self.assertEqual("", telemetry_data["rsm_requested_version"], "RSM requested version should be empty str when this is not an RSM request")
+            self.assertIsNotNone(telemetry_data["created_on_timestamp"], "Goal state created_on_timestamp should be present")
+            self.assertIsNotNone(telemetry_data["activity_id"], "Activity id should be present")
+
+    def test_it_should_pass_signature_to_download_when_validation_enabled_and_signature_in_goal_state(self):
+        """
+        When agent signature validation is enabled and the goal state has a signature for the target version,
+        the signature should be passed through to download_zip_package.
+        """
+        data_file = DATA_FILE.copy()
+        # This goal state is for a VM enrolled into RSM where the agent version in the goal state is from RSM. As a
+        # result, the agent should update to the requested version (9.9.9.10)
+        data_file["ext_conf"] = "wire/ext_conf-agent_dummy_signatures_and_version_from_rsm.xml"
+
+        self.prepare_agents(count=1)
+
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, _):
+            with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
+                with patch("azurelinuxagent.ga.ga_version_updater.agent_signature_validation_enabled", return_value=True):
+                    with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
+                        with patch.object(agent_update_handler._protocol.client, "download_zip_package", wraps=agent_update_handler._protocol.client.download_zip_package) as mock_download:
+                            with self.assertRaises(AgentUpgradeExitException):
+                                agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+                            self.assertEqual(1, mock_download.call_count, "download_zip_package should have been called once")
+                            call_kwargs = mock_download.call_args[1]
+                            self.assertEqual("MIInpwYJKoZIhvcNAQcCProd99910=", call_kwargs['signature'],
+                                                "Signature from the goal state should be passed to download_zip_package")
+                            self.assertTrue(call_kwargs['ignore_signature_validation_errors'],
+                                            "ignore_signature_validation_errors should be True during telemetry release")
+
+    def test_it_should_pass_empty_signature_to_download_when_validation_disabled(self):
+        """
+        When agent signature validation is disabled, an empty signature should be passed to download_zip_package.
+        """
+        data_file = DATA_FILE.copy()
+        # This goal state is for a VM enrolled into RSM where the agent version in the goal state is from RSM. As a
+        # result, the agent should update to the requested version (9.9.9.10)
+        data_file["ext_conf"] = "wire/ext_conf-agent_dummy_signatures_and_version_from_rsm.xml"
+
+        self.prepare_agents(count=1)
+
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, _):
+            with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
+                with patch("azurelinuxagent.ga.ga_version_updater.agent_signature_validation_enabled", return_value=False):
+                    with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
+                        with patch.object(agent_update_handler._protocol.client, "download_zip_package", wraps=agent_update_handler._protocol.client.download_zip_package) as mock_download:
+                            with self.assertRaises(AgentUpgradeExitException):
+                                agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+                            self.assertEqual(1, mock_download.call_count, "download_zip_package should have been called once")
+                            call_kwargs = mock_download.call_args[1]
+                            self.assertEqual("", call_kwargs['signature'],
+                                             "Signature should be empty when validation is disabled")
+
+    def test_it_should_pass_empty_signature_when_version_not_in_goal_state_mapping(self):
+        """
+        When agent signature validation is enabled but the version being downloaded is not in the goal state
+        signature mapping, an empty signature should be passed and telemetry should be sent.
+        """
+        data_file = DATA_FILE.copy()
+        # This goal state is for a VM enrolled into RSM where the agent version in the goal state is from RSM. As a
+        # result, the agent should update to the requested version (9.9.9.10). However, the signature for 9.9.9.10 is
+        # not in the goal state. As a result, agent signature validation should be skipped and telemetry should be sent.
+        data_file["ext_conf"] = "wire/ext_conf-agent_dummy_signature_missing_from_gs.xml"
+
+        self.prepare_agents(count=1)
+
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
+                with patch("azurelinuxagent.ga.ga_version_updater.agent_signature_validation_enabled", return_value=True):
+                    with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
+                        with patch.object(agent_update_handler._protocol.client, "download_zip_package", wraps=agent_update_handler._protocol.client.download_zip_package) as mock_download:
+                            with self.assertRaises(AgentUpgradeExitException):
+                                agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+                            self.assertEqual(1, mock_download.call_count, "download_zip_package should have been called once")
+                            call_kwargs = mock_download.call_args[1]
+                            self.assertEqual("", call_kwargs['signature'],
+                                             "Signature should be empty when version is not in the goal state mapping")
+
+                            # Check that telemetry was sent about the missing signature
+                            sig_events = [kwarg for _, kwarg in mock_telemetry.call_args_list
+                                          if kwarg.get('op') == WALAEventOperation.SignatureValidation and
+                                          "No signature found for agent version" in kwarg.get('message', '')]
+                            self.assertEqual(1, len(sig_events),
+                                             "Expected one AgentSignature event about missing signature. Got: {0}".format(sig_events))
+
+    def test_it_should_pass_empty_signature_when_goal_state_does_not_support_mapping(self):
+        """
+        When agent signature validation is enabled but the goal state does not support agent signature mapping,
+        an empty signature should be passed and telemetry should be sent.
+        """
+        data_file = DATA_FILE.copy()
+        # This goal state is for a VM enrolled into RSM where the agent version in the goal state is from RSM. As a
+        # result, the agent should update to the requested version (9.9.9.10)
+        data_file["ext_conf"] = "wire/ext_conf-agent_dummy_signatures_and_version_from_rsm.xml"
+
+        self.prepare_agents(count=1)
+
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
+                with patch("azurelinuxagent.ga.ga_version_updater.agent_signature_validation_enabled", return_value=True):
+                    with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=False):
+                        with patch.object(agent_update_handler._protocol.client, "download_zip_package", wraps=agent_update_handler._protocol.client.download_zip_package) as mock_download:
+                            with self.assertRaises(AgentUpgradeExitException):
+                                agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+                            self.assertEqual(1, mock_download.call_count, "download_zip_package should have been called once")
+                            call_kwargs = mock_download.call_args[1]
+                            self.assertEqual("", call_kwargs['signature'],
+                                             "Signature should be empty when goal state does not support signature mapping")
+
+                            # Check that telemetry was sent about unsupported mapping
+                            sig_events = [kwarg for _, kwarg in mock_telemetry.call_args_list
+                                          if kwarg.get('op') == WALAEventOperation.SignatureValidation and
+                                          "Goal state does not support agent signature mapping, skipping agent package " \
+                                          "signature validation." in kwarg.get('message', '')]
+                            self.assertEqual(1, len(sig_events),
+                                             "Expected one AgentSignature event about unsupported mapping. Got: {0}".format(sig_events))
+
+    def test_it_should_pass_empty_signature_when_exception_is_raised_getting_package_signature(self):
+        """
+        When agent signature validation is enabled but the logic to get the agent package signature from the goal state
+        results in an unexpected Exception, an empty signature should be passed and telemetry should be sent.
+        """
+        data_file = DATA_FILE.copy()
+        # This goal state is for a VM enrolled into RSM where the agent version in the goal state is from RSM. As a
+        # result, the agent should update to the requested version (9.9.9.10)
+        data_file["ext_conf"] = "wire/ext_conf-agent_dummy_signatures_and_version_from_rsm.xml"
+
+        self.prepare_agents(count=1)
+
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
+                with patch("azurelinuxagent.ga.ga_version_updater.agent_signature_validation_enabled", return_value=True):
+                    with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
+                        with patch("azurelinuxagent.ga.ga_version_updater.GAVersionUpdater._get_agent_package_signature", side_effect=Exception("test error")):
+                            with patch.object(agent_update_handler._protocol.client, "download_zip_package", wraps=agent_update_handler._protocol.client.download_zip_package) as mock_download:
+                                with self.assertRaises(AgentUpgradeExitException):
+                                    agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+                                self.assertEqual(1, mock_download.call_count, "download_zip_package should have been called once")
+                                call_kwargs = mock_download.call_args[1]
+                                self.assertEqual("", call_kwargs['signature'],
+                                                 "Signature should be empty when goal state does not support signature mapping")
+
+                                # Check that telemetry was sent about unsupported mapping
+                                sig_events = [kwarg for _, kwarg in mock_telemetry.call_args_list
+                                              if kwarg.get('op') == WALAEventOperation.SignatureValidation and
+                                              "Unexpected error getting the agent package signature, skipping agent " \
+                                              "package signature validation:" in kwarg.get('message', '')]
+                                self.assertEqual(1, len(sig_events),
+                                                 "Expected one AgentSignature event about unexpected error. Got: {0}".format(sig_events))
+
+    def test_it_should_continue_update_on_signature_validation_error(self):
+        """
+        When agent signature validation is enabled but a SignatureValidationError is raised when downloading the agent
+        package, the agent should continue the update but send telemetry on the error
+        """
+        data_file = DATA_FILE.copy()
+        # This goal state is for a VM enrolled into RSM where the agent version in the goal state is from RSM. As a
+        # result, the agent should update to the requested version (9.9.9.10)
+        data_file["ext_conf"] = "wire/ext_conf-agent_dummy_signatures_and_version_from_rsm.xml"
+
+        self.prepare_agents(count=1)
+
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
+                with patch("azurelinuxagent.ga.ga_version_updater.agent_signature_validation_enabled", return_value=True):
+                    with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
+                        with patch("azurelinuxagent.common.protocol.wire.validate_signature", side_effect=SignatureValidationError(msg="test error", operation=WALAEventOperation.PackageSignatureResult, duration=0)):
+                            with patch.object(agent_update_handler._protocol.client, "download_zip_package", wraps=agent_update_handler._protocol.client.download_zip_package) as mock_download:
+                                with self.assertRaises(AgentUpgradeExitException):
+                                    agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+                                self.assertEqual(1, mock_download.call_count, "download_zip_package should have been called once")
+                                call_kwargs = mock_download.call_args[1]
+                                self.assertEqual("MIInpwYJKoZIhvcNAQcCProd99910=", call_kwargs['signature'],
+                                                 "Signature from the goal state should be passed to download_zip_package")
+                                self.assertTrue(call_kwargs['ignore_signature_validation_errors'],
+                                                "ignore_signature_validation_errors should be True during telemetry release")
+
+                                # Check that telemetry was sent about the validation error
+                                sig_events = [kwarg for _, kwarg in mock_telemetry.call_args_list
+                                              if kwarg.get('op') == WALAEventOperation.PackageSignatureResult and
+                                              "test error" in kwarg.get('message', '')]
+                                self.assertEqual(1, len(sig_events),
+                                                 "Expected one PackageSignatureResult event about validation error. Got: {0}".format(sig_events))
+
+    def test_it_should_continue_update_on_signature_validation_timeout_error_and_disable_feature(self):
+        """
+        When agent signature validation is enabled but a SignatureValidationTimeoutError is raised when downloading the
+        agent package, the agent should continue the update but send telemetry on the error and disable the feature.
+        """
+        data_file = DATA_FILE.copy()
+        # This goal state is for a VM enrolled into RSM where the agent version in the goal state is from RSM. As a
+        # result, the agent should update to the requested version (9.9.9.10)
+        data_file["ext_conf"] = "wire/ext_conf-agent_dummy_signatures_and_version_from_rsm.xml"
+
+        self.prepare_agents(count=1)
+
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            with patch("azurelinuxagent.ga.agent_update_handler.agent_signature_goal_state_telemetry_enabled", return_value=True):
+                with patch("azurelinuxagent.ga.signature_validation_util.conf.get_agent_signature_validation_enabled", return_value=True):
+                    with patch("azurelinuxagent.ga.signature_validation_util._should_delay_signature_validation", return_value=False):
+                        with patch("azurelinuxagent.ga.signature_validation_util.openssl_version_supported_for_signature_validation", return_value=True):
+                            with patch("azurelinuxagent.ga.signature_validation_util.ConfidentialVMInfo.is_confidential_vm", return_value=True):
+                                with patch("azurelinuxagent.ga.signature_validation_util._is_signature_validation_telemetry_expired", return_value=False):
+                                    with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
+                                        with patch("azurelinuxagent.common.protocol.wire.validate_signature", side_effect=SignatureValidationTimeoutError(msg="test error", operation=WALAEventOperation.PackageSignatureResult, duration=0)):
+                                            with patch.object(agent_update_handler._protocol.client, "download_zip_package", wraps=agent_update_handler._protocol.client.download_zip_package) as mock_download:
+                                                # Agent validation should not be disabled due to timeout before the validation attempt
+                                                self.assertFalse(SignatureValidationTimeout.is_agent_validation_disabled())
+                                                with self.assertRaises(AgentUpgradeExitException):
+                                                    agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+                                                self.assertEqual(1, mock_download.call_count, "download_zip_package should have been called once")
+                                                call_kwargs = mock_download.call_args[1]
+                                                self.assertEqual("MIInpwYJKoZIhvcNAQcCProd99910=", call_kwargs['signature'],
+                                                                 "Signature from the goal state should be passed to download_zip_package")
+                                                self.assertTrue(call_kwargs['ignore_signature_validation_errors'],
+                                                                "ignore_signature_validation_errors should be True during telemetry release")
+
+                                                # Check that package signature result telemetry was sent about the validation timeout error
+                                                sig_events = [kwarg for _, kwarg in mock_telemetry.call_args_list
+                                                              if kwarg.get('op') == WALAEventOperation.PackageSignatureResult and
+                                                              "test error" in kwarg.get('message', '')]
+                                                self.assertEqual(1, len(sig_events), "Expected one PackageSignatureResult event about unexpected error. Got: {0}".format(sig_events))
+
+                                                # Check that agent validation was disabled due to the timeout
+                                                self.assertTrue(SignatureValidationTimeout.is_agent_validation_disabled())
+                                                sig_events = [kwarg for _, kwarg in mock_telemetry.call_args_list
+                                                              if kwarg.get('op') == WALAEventOperation.SignatureValidation and
+                                                              "Agent signature validation timeout exceeded. Disabling " \
+                                                              "agent signature validation until agent restart" in kwarg.get('message', '')]
+                                                self.assertEqual(1, len(sig_events),
+                                                                 "Expected one SignatureValidation event about timeout error. Got: {0}".format(
+                                                                     sig_events))
+
+                                            with patch.object(agent_update_handler._protocol.client, "download_zip_package", wraps=agent_update_handler._protocol.client.download_zip_package) as mock_download:
+                                                # The signature passed to download_zip_package on this invocation of run should be "" since
+                                                # agent package validation is disabled now
+                                                # Remove the agent directory to trigger the update logic again
+                                                agent_dir = self.agent_dir("9.9.9.10")
+                                                if os.path.exists(agent_dir):
+                                                    shutil.rmtree(agent_dir)
+                                                with self.assertRaises(AgentUpgradeExitException):
+                                                    agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+                                                self.assertEqual(1, mock_download.call_count, "download_zip_package should have been called once")
+                                                call_kwargs = mock_download.call_args[1]
+                                                self.assertEqual("",
+                                                                 call_kwargs['signature'],
+                                                                 "Signature should be empty string since timeout is exceeded")
+                                                self.assertTrue(call_kwargs['ignore_signature_validation_errors'],
+                                                                "ignore_signature_validation_errors should be True during telemetry release")
+
+                                            # Reset the timeout flag so it doesn't affect other unit tests
+                                            SignatureValidationTimeout._agent_validation_disabled = False

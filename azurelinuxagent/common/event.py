@@ -92,6 +92,7 @@ class WALAEventOperation:
     ExtensionPolicy = "ExtensionPolicy"                                 # Event for any extension policy-related operations (e.g., extension not in allowlist).
     ExtensionSignaturePolicy = "ExtensionSignaturePolicy"               # Event for unsigned extension blocked due to extension signature policy.
     ExtensionSigned = "ExtensionSigned"                                 # Event indicating whether an extension is signed.
+    AgentSignature = "AgentSignature"                                   # Event indicating which agent signatures are delivered in the goal state.
     ExtensionProcessing = "ExtensionProcessing"
     ExtensionResourceGovernance = "ExtensionResourceGovernance"
     ExtensionTelemetryEventProcessing = "ExtensionTelemetryEventProcessing"
@@ -114,6 +115,7 @@ class WALAEventOperation:
     ImdsHeartbeat = "ImdsHeartbeat"
     Install = "Install"
     InitializeHostPlugin = "InitializeHostPlugin"
+    KernelSoftLockup = "KernelSoftLockup"
     Log = "Log"
     LogCollection = "LogCollection"
     NoExec = "NoExec"
@@ -137,6 +139,7 @@ class WALAEventOperation:
     RequestedStateDisabled = "RequestedStateDisabled"
     RequestedVersionMismatch = "RequestedVersionMismatch"
     ResetFirewall = "ResetFirewall"
+    ResetMemory = "ResetMemory"
     Restart = "Restart"
     SetCGroupsLimits = "SetCGroupsLimits"
     SignatureValidation = "SignatureValidation"                         # Event for general logs related to package signature or manifest validation that don't fall under a specific operation.

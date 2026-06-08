@@ -9,7 +9,12 @@
         <Uri>http://mock-goal-state/manifest_of_ga.xml</Uri>
       </Uris>
       <Version>9.9.9.10</Version>
-      <VersionToSignatureMappings/>
+      <VersionToSignatureMappings>
+        <GASignature>
+          <EncodedSignature>MIInpwYJKoZIhvcNAQcCProd99910=</EncodedSignature>
+          <Version>9.9.9.10</Version>
+        </GASignature>
+      </VersionToSignatureMappings>
     </GAFamily>
     <GAFamily>
       <IsVMEnabledForRSMUpgrades>true</IsVMEnabledForRSMUpgrades>
@@ -21,12 +26,9 @@
       <Version>9.9.9.10</Version>
       <VersionToSignatureMappings>
         <GASignature>
+          <EncodedSignature>MIInpwYJKoZIhvcNAQcCTest99910=</EncodedSignature>
           <Version>9.9.9.10</Version>
         </GASignature>
-        <GASignature>
-          <EncodedSignature>test_test_signature_for_invalid</EncodedSignature>
-        </GASignature>
-        <GASignature/>
       </VersionToSignatureMappings>
     </GAFamily>
   </GAFamilies>
