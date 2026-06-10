@@ -80,19 +80,19 @@ class RsmUpdateBvt(AgentVmTest):
         # Allow agent to send supported feature flag
         self._verify_agent_reported_supported_feature_flag(supported=True)
 
-        self._run_downgrade_scenario(arch_type)         # tests downgrade from 9.9.9.9 -> 2.3.16.0
+        self._run_downgrade_scenario(arch_type)         # tests downgrade from 9.9.9.9 -> 2.3.17.0
         sleep(60)  # sleep to allow the CRP finish processing the previous req before we attempt next update
-        self._run_upgrade_scenario(arch_type)           # tests upgrade from 2.3.16.0 -> 2.3.16.1
+        self._run_upgrade_scenario(arch_type)           # tests upgrade from 2.3.17.0 -> 2.3.17.1
         sleep(60)  # sleep to allow the CRP finish processing the previous req before we attempt next update
-        self._run_no_update_scenario(arch_type)         # tests that no update happens when current version is 2.3.16.1 and requested version is 2.3.16.1
+        self._run_no_update_scenario(arch_type)         # tests that no update happens when current version is 2.3.17.1 and requested version is 2.3.17.1
         sleep(60)  # sleep to allow the CRP finish processing the previous req before we attempt next update
-        self._run_below_daemon_scenario(arch_type)      # tests that no update happens when current version is 2.3.16.1 and requested version is 1.5.0.0
+        self._run_below_daemon_scenario(arch_type)      # tests that no update happens when current version is 2.3.17.1 and requested version is 1.7.0.0
 
     def _run_downgrade_scenario(self, arch_type: str) -> None:
         log.info("*******Verifying the Agent Downgrade scenario*******")
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
         log.info("Current agent version running on the vm before update is \n%s", stdout)
-        self._downgrade_version: str = "2.3.16.0"   # 2.3.16.0 (Test type only) is published with signature to Canary. It is based on version 2.15.2.0
+        self._downgrade_version: str = "2.3.17.0"   # 2.3.17.0 (Test type only) is published with signature to Canary - https://github.com/Azure/WALinuxAgent/tree/v2.3.17.0
         log.info("Attempting downgrade version %s", self._downgrade_version)
         request_rsm_update(self._downgrade_version, self._context.vm, arch_type, is_downgrade=True, downgrade_from=self._installed_agent_version)
         self._check_rsm_gs(self._downgrade_version)
@@ -101,13 +101,13 @@ class RsmUpdateBvt(AgentVmTest):
         self._verify_agent_reported_update_status(self._downgrade_version)
 
     def _run_upgrade_scenario(self, arch_type: str) -> None:
-        # Install the source agent as 2.3.16.0 so that the upgrade test exercises the source agent's upgrade logic,
-        # not the published 2.3.16.0 agent's logic.
+        # Install the source agent as 2.3.17.0 so that the upgrade test exercises the source agent's upgrade logic,
+        # not the published 2.3.17.0 agent's logic.
         log.info("*******Verifying the Agent Upgrade scenario*******")
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
         log.info("Current agent version running on the vm before update is \n%s", stdout)
-        upgrade_from_version: str = "2.3.16.0"
-        upgrade_version: str = "2.3.16.1"           # 2.3.16.1 (Test type only) is published with signature to Canary. It is based on version 2.15.2.0
+        upgrade_from_version: str = "2.3.17.0"
+        upgrade_version: str = "2.3.17.1"           # 2.3.17.1 (Test type only) is published with signature to Canary - https://github.com/Azure/WALinuxAgent/tree/v2.3.17.1
         self._install_test_agent(upgrade_from_version)
         log.info("Attempting upgrade version %s", upgrade_version)
         request_rsm_update(upgrade_version, self._context.vm, arch_type, is_downgrade=False)
@@ -116,12 +116,12 @@ class RsmUpdateBvt(AgentVmTest):
         self._verify_agent_reported_update_status(upgrade_version)
 
     def _run_no_update_scenario(self, arch_type: str) -> None:
-        # Install the source agent as 2.3.16.1 so that the upgrade test exercises the source agent's upgrade logic,
-        # not the published 2.3.16.1 agent's logic.
+        # Install the source agent as 2.3.17.1 so that the upgrade test exercises the source agent's upgrade logic,
+        # not the published 2.3.17.1 agent's logic.
         log.info("*******Verifying the no version update scenario*******")
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
         log.info("Current agent version running on the vm before update is \n%s", stdout)
-        current_version: str = "2.3.16.1"
+        current_version: str = "2.3.17.1"
         self._install_test_agent(current_version)
         log.info("Attempting update version same as current version %s", current_version)
         request_rsm_update(current_version, self._context.vm, arch_type, is_downgrade=False)
@@ -134,8 +134,8 @@ class RsmUpdateBvt(AgentVmTest):
         log.info("*******Verifying requested version below daemon version scenario*******")
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
         log.info("Current agent version running on the vm before update is \n%s", stdout)
-        requested_version: str = "1.5.0.0"
-        expected_version: str = "2.3.16.1"  # The version is expected to stay the same, since the requested version is less than the daemon version
+        requested_version: str = "1.7.0.0"  # 1.7.0.0 (Test type only) is published with signature to Canary - https://github.com/Azure/WALinuxAgent/tree/v1.7.0.0
+        expected_version: str = "2.3.17.1"  # The version is expected to stay the same, since the requested version is less than the daemon version
         log.info("Attempting requested version %s", requested_version)
         request_rsm_update(requested_version, self._context.vm, arch_type, is_downgrade=True,
                            downgrade_from=self._installed_agent_version)

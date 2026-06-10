@@ -17,6 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import glob
+import json
 import os
 import shutil
 
@@ -28,9 +29,11 @@ from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSourc
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_DIR_PATTERN, CURRENT_VERSION
+from azurelinuxagent.ga.exthandlers import HandlerManifest
 from azurelinuxagent.ga.guestagent import GuestAgent, AGENT_MANIFEST_FILE
 from azurelinuxagent.ga.signature_validation_util import agent_signature_validation_enabled, report_validation_event, \
-    SignatureValidationError, SignatureValidationTimeoutError, SignatureValidationTimeout
+    SignatureValidationError, SignatureValidationTimeoutError, SignatureValidationTimeout, \
+    validate_agent_manifest_signing_info, ManifestValidationError
 
 
 class GAVersionUpdater(object):
@@ -147,6 +150,37 @@ class GAVersionUpdater(object):
             except Exception as err:
                 logger.warn("Unable to delete Agent directory: {0}".format(err))
             raise AgentUpdateError("Downloaded agent package: {0} is missing agent handler manifest file: {1}".format(agent_name, agent_handler_manifest_file))
+
+        # If the signature is not an empty string, validate the HandlerManifest 'signingInfo' as well.
+        #
+        # Until the feature is considered stable, any errors validating the handler manifest should not prevent the agent from updating.
+        # TODO: Once agent signature validation is enforced before update, manifest validation errors should be
+        # surfaced to prevent update to the package.
+        if signature != "":
+            try:
+                with open(agent_handler_manifest_file, "r") as manifest_file:
+                    manifest_data = json.load(manifest_file)
+                if isinstance(manifest_data, list):
+                    if len(manifest_data) == 0:
+                        raise ManifestValidationError(
+                            msg="HandlerManifest.json is empty for package '{0}'".format(agent_name),
+                            operation=WALAEventOperation.PackageSigningInfoResult,
+                            duration=0)
+                    else:
+                        manifest_data = manifest_data[0]
+                validate_agent_manifest_signing_info(HandlerManifest(manifest_data), ustr(package_to_download.version))
+            except ManifestValidationError as ex:
+                report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING,
+                                        message=ustr(ex),
+                                        name=AGENT_NAME, version=package_to_download.version, duration=ex.duration)
+            except Exception as ex:
+                # Defensive catch-all: validate_agent_manifest_signing_info() only raises ManifestValidationError,
+                # but reading/parsing the manifest file above may raise other exceptions. We catch anything else here
+                # to guarantee that manifest validation cannot block the agent update.
+                msg = "Unexpected error validating agent handler manifest 'signingInfo' for package '{0}'. Error: {1}".format(agent_name, ustr(ex))
+                report_validation_event(op=WALAEventOperation.PackageSigningInfoResult, level=logger.LogLevel.WARNING,
+                                        message=msg,
+                                        name=AGENT_NAME, version=package_to_download.version, duration=0)
 
     def _download_and_get_new_agent(self, protocol, agent_family, goal_state):
         """
