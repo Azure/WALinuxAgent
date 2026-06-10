@@ -347,6 +347,12 @@ class AgentLog(object):
                 'message': r"AutoUpdate.Enabled property is \*\*Deprecated\*\* now but it's set to different value from AutoUpdate.UpdateToLatestVersion",
                 'if': lambda r: r.prefix == 'ExtHandler' and r.thread == 'ExtHandler'
             },
+
+            # 2026-06-08T05:26:22.944493Z WARNING Daemon Daemon The legacy AutoUpdate.Enabled configuration is also used, but it is ignored in favor of the new configuration (AutoUpdate.UpdateToLatestVersion).
+            {
+                'message': r"The legacy AutoUpdate\.Enabled configuration is also used, but it is ignored in favor of the new configuration \(AutoUpdate\.UpdateToLatestVersion\)",
+                'if': lambda r: r.prefix == 'Daemon' and r.thread == 'Daemon'
+            },
             #
             # Some distros are running older agents, which do not add the DNS rule
             #

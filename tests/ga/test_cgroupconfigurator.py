@@ -255,7 +255,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
     def test_agent_should_reset_cpu_quota_when_previously_set_and_agent_not_enabled_now(self):
         command_mocks = [
                  MockCommand(r"^systemctl show walinuxagent\.service --property ControlGroup$",
-                             '''ControlGroup=/azure.slice/walinuxagent.service
+                             '''ControlGroup=/system.slice
                              '''),
                  MockCommand(r"^systemctl show (.+) --property CPUQuotaPerSecUSec$",
                              '''CPUQuotaPerSecUSec=5ms
