@@ -301,13 +301,12 @@ class _PolicyEngine(object):
 
         if object_.get("signatureRequired") is True:
             # Signature validation is currently only supported on CVMs. If a non-CVM user creates a policy with
-            # signatureRequired=true, reject the policy at parse time so the customer is informed up front rather
-            # than silently allowing unsigned extensions through.
+            # signatureRequired=true, reject the policy at parse time.
             # TODO: Remove once signature validation is supported on all VMs.
             if not ConfidentialVMInfo.is_confidential_vm():
                 raise InvalidPolicyError("setting 'signatureRequired' to true is only supported on confidential virtual machines (CVMs).")
             # Signature validation requires OpenSSL >= 1.1.0. If the system OpenSSL is too old, reject the policy at
-            # parse time rather than silently allowing unsigned extensions through at download time.
+            # parse time.
             # TODO: Remove once signature validation no longer depends on the 'no_check_time' flag.
             if not openssl_version_supported_for_signature_validation():
                 raise InvalidPolicyError("setting 'signatureRequired' to true requires OpenSSL >= 1.1.0; the OpenSSL version on this system does not support signature validation.")
