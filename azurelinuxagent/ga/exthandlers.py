@@ -855,6 +855,9 @@ class ExtHandlersHandler(object):
                 except ExtensionSignaturePolicyError:
                     # Already-installed path: the signature for the installed (old) handler was never validated by the agent.
                     raise ExtensionSignatureNotValidatedError()
+
+                # This is a special case, we need to update the handler version here but to do that we need to also
+                # disable each enabled extension of this handler.
                 uninstall_exit_code = ExtHandlersHandler._update_extension_handler_and_return_if_failed(
                     old_ext_handler_i, ext_handler_i, extension)
         else:
