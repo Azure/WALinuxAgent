@@ -42,7 +42,7 @@ from azurelinuxagent.common.agent_supported_feature import get_agent_supported_f
 from azurelinuxagent.common.utils.textutil import redact_sas_token
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, ExtensionDisallowedError, \
-    ExtensionSignaturePolicyError
+    ExtensionSignaturePolicyError, ExtensionUnsignedError, ExtensionSignatureNotValidatedError
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEventOperation, \
@@ -722,11 +722,20 @@ class ExtHandlersHandler(object):
             ).format(operation, ext_handler_i.ext_handler.name, conf.get_policy_file_path())
             self.__handle_ext_disallowed_error(ext_handler_i, error_code, report_op=WALAEventOperation.ExtensionPolicy, message=msg,
                                                extension=extension)
-        except ExtensionSignaturePolicyError:
+        except ExtensionUnsignedError:
             operation, error_code = _EXT_DISALLOWED_ERROR_MAP.get(ext_handler_i.ext_handler.state)
             msg = (
                 "Extension will not be processed: failed to {0} extension '{1}' because policy specifies that extension must be signed, "
                 "but extension package signature could not be found. To {0}, set 'signatureRequired' to false in the policy file ('{2}')."
+            ).format(operation, ext_handler_i.ext_handler.name, conf.get_policy_file_path())
+            self.__handle_ext_disallowed_error(ext_handler_i, error_code, report_op=WALAEventOperation.ExtensionSignaturePolicy, message=msg,
+                                               extension=extension)
+        except ExtensionSignatureNotValidatedError:
+            operation, error_code = _EXT_DISALLOWED_ERROR_MAP.get(ext_handler_i.ext_handler.state)
+            msg = (
+                "Extension will not be processed: failed to {0} extension '{1}' because policy specifies that extension must be signed, "
+                "but the installed extension's signature was not validated by the agent. To {0}, remove and reinstall the extension so that "
+                "its signature can be validated, or set 'signatureRequired' to false in the policy file ('{2}')."
             ).format(operation, ext_handler_i.ext_handler.name, conf.get_policy_file_path())
             self.__handle_ext_disallowed_error(ext_handler_i, error_code, report_op=WALAEventOperation.ExtensionSignaturePolicy, message=msg,
                                                extension=extension)
@@ -825,22 +834,38 @@ class ExtHandlersHandler(object):
 
             # Check extension policy and raise error if disallowed (e.g., not in allowlist, unsigned when policy requires signature).
             extension_is_signed = ext_handler_i.ext_handler.encoded_signature != ""
-            self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
+            try:
+                self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
+            except ExtensionSignaturePolicyError:
+                # New installation path: the downloaded package itself is unsigned.
+                raise ExtensionUnsignedError()
 
             self.__setup_new_handler(ext_handler_i, extension, self.__should_ignore_ext_signature_validation_errors(ext_handler_i))
 
             if old_ext_handler_i is None:
                 ext_handler_i.install(extension=extension)
             elif ext_handler_i.version_ne(old_ext_handler_i):
-                # This is a special case, we need to update the handler version here but to do that we need to also
-                # disable each enabled extension of this handler.
+                # Before running any commands on the old handler (disable/update/uninstall), check that the old
+                # handler is allowed by the current policy. The old handler may violate the current policy (e.g.,
+                # it is no longer in the allowlist, or its signature was never validated by the agent). Treat the
+                # old handler as signed if its signature was previously validated on download.
+                old_extension_is_signed = old_ext_handler_i.signature_validated
+                try:
+                    self._policy_engine.check_extension_policy(old_ext_handler_i.ext_handler.name, old_extension_is_signed)
+                except ExtensionSignaturePolicyError:
+                    # Already-installed path: the signature for the installed (old) handler was never validated by the agent.
+                    raise ExtensionSignatureNotValidatedError()
                 uninstall_exit_code = ExtHandlersHandler._update_extension_handler_and_return_if_failed(
                     old_ext_handler_i, ext_handler_i, extension)
         else:
             # Check extension policy and raise error if disallowed. Since the extension is not being re-downloaded, treat it
             # as signed if its signature was previously validated on download.
             extension_is_signed = ext_handler_i.signature_validated
-            self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
+            try:
+                self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
+            except ExtensionSignaturePolicyError:
+                # Already-installed path: the signature for the installed extension was never validated by the agent.
+                raise ExtensionSignatureNotValidatedError()
 
             ext_handler_i.ensure_consistent_data_for_mc()
             ext_handler_i.update_settings(extension)
@@ -976,7 +1001,11 @@ class ExtHandlersHandler(object):
             # If extension is installed, check policy and raise an error if the extension is disallowed (e.g., not in allowlist, signature not previously validated when required).
             # Uninstall extension goal states do not include encoded signature, so if the extension signature was previously validated, we treat it as signed.
             extension_is_signed = ext_handler_i.signature_validated
-            self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
+            try:
+                self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
+            except ExtensionSignaturePolicyError:
+                # Already-installed path: the signature for the installed extension was never validated by the agent.
+                raise ExtensionSignatureNotValidatedError()
 
             if handler_state == ExtHandlerState.Enabled:
 

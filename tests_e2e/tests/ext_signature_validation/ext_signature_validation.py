@@ -153,7 +153,8 @@ class ExtSignatureValidation(AgentVmTest):
 
             # Confirm that agent log contains error message that uninstall was blocked due to policy.
             # The script will check for a log message such as "Extension will not be processed: failed to uninstall
-            # extension 'Microsoft.Azure.Extensions.CustomScript' because policy specifies that extension must be signed, but extension package signature could not be found."
+            # extension 'Microsoft.Azure.Extensions.CustomScript' because policy specifies that extension must be signed,
+            # but the installed extension's signature was not validated by the agent."
             log.info("Checking agent log to confirm that delete operation failed due to signature policy.")
             self._ssh_client.run_command(f"ext_signature_validation-check_uninstall_blocked.py --extension-name '{extension_case.extension._identifier}' --after-timestamp '{delete_start_time}'", use_sudo=True)
 

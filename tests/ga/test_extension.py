@@ -48,7 +48,7 @@ from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 
-from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, migrate_handler_state, \
+from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, ExtHandlersHandler, migrate_handler_state, \
     get_exthandlers_handler, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
     ExtensionStatusValue, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, GoalStateStatus, ExtHandlerState
 from azurelinuxagent.ga.policy.policy_engine import _PolicyEngine
@@ -3791,6 +3791,114 @@ class TestExtensionPolicy(TestExtensionBase):
             vm_status = args[0]
             self.assertEqual(0, len(vm_status.vmAgent.extensionHandlers))
 
+    def test_upgrade_should_succeed_if_old_and_new_extension_versions_are_allowed_by_policy(self):
+        """
+        During an upgrade, if both the previously-installed (old) handler and the new handler are
+        allowed by the current policy, the upgrade should succeed.
+
+        Upgrade tested:
+            OSTCExtensions.ExampleHandlerLinux 1.0.0 (unsigned, allowed by policy)
+                -> OSTCExtensions.ExampleHandlerLinux 1.0.1 (unsigned, allowed by policy)
+        """
+        policy = \
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "signatureRequired": False
+                }
+            }
+        self._create_policy_file(policy)
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            protocol.aggregate_status = None
+            protocol.report_vm_status = MagicMock()
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            # Install the initial version.
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+            self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
+
+            # Trigger an upgrade by bumping the version in the goal state.
+            protocol.mock_wire_data.set_incarnation(2)
+            protocol.mock_wire_data.set_extensions_config_version("1.0.1")
+            protocol.mock_wire_data.set_manifest_version("1.0.1")
+            protocol.client.update_goal_state()
+
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+            self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.1")
+
+    def test_upgrade_should_fail_if_installed_extension_signature_was_not_previously_validated(self):
+        """
+        During an upgrade, if the previously-installed (old) extension's signature was never
+        validated by the agent but the policy now requires signed extensions, the upgrade should
+        fail before any commands are invoked on the old handler. The new handler passes the policy
+        check because the new goal state includes an encoded signature; the old handler fails the
+        policy check because its persisted signature_validated state is False.
+
+        Upgrade tested:
+            OSTCExtensions.ExampleHandlerLinux 1.0.0 (unsigned, signature_validated=False)
+                -> OSTCExtensions.ExampleHandlerLinux 1.0.1 (signed, encodedSignature in goal state)
+        """
+        data_file = DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf-no_encoded_signature.xml"
+
+        with mock_wire_protocol(data_file) as protocol:
+            protocol.aggregate_status = None
+            protocol.report_vm_status = MagicMock()
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            # Policy allowing unsigned extensions: install unsigned 1.0.0. The handler's persisted
+            # signature_validated state will be False.
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "signatureRequired": False
+                    }
+                }
+            self._create_policy_file(policy)
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+            self._assert_handler_status(protocol.report_vm_status, "Ready",
+                                        expected_ext_count=1,
+                                        version="1.0.0", expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
+                                        expected_msg="Plugin enabled", expected_code=0, expected_validation_state=False)
+
+            # Update policy to require signature.
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "signatureRequired": True
+                    }
+                }
+            self._create_policy_file(policy)
+
+            # Swap to an ext_conf that includes an encodedSignature on the Plugin element and bump
+            # the version to 1.0.1 to trigger an upgrade. The new handler will pass the policy check
+            # because encoded_signature is non-empty; the old handler will fail the policy check
+            # because its persisted signature_validated is False.
+            protocol.mock_wire_data.set_extension_config("wire/ext_conf.xml")
+            protocol.mock_wire_data.set_incarnation(2)
+            protocol.mock_wire_data.set_extensions_config_version("1.0.1")
+            protocol.mock_wire_data.set_manifest_version("1.0.1")
+            protocol.client.update_goal_state()
+
+            # Patch __setup_new_handler so the upgrade does not attempt actual signature validation
+            # of the new package (test fixtures do not have a real matching signature). The intent of
+            # this test is to verify that the OLD handler's policy check is enforced before any
+            # operation is invoked on the old handler.
+            with patch.object(ExtHandlersHandler, "_ExtHandlersHandler__setup_new_handler"):
+                exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
+
+            expected_err_msg = "policy specifies that extension must be signed, but the installed extension's signature was not validated by the agent."
+            self._assert_handler_status(protocol.report_vm_status, expected_status="NotReady", expected_ext_count=1,
+                                        expected_msg=expected_err_msg,
+                                        expected_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
+                                        version="1.0.1")
+
     def test_should_report_both_policy_failure_and_heartbeat_in_status(self):
         """
         If an extension reporting heartbeat is blocked by policy, the agent should report policy failure status and
@@ -4585,9 +4693,67 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
         data_file = DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf-no_encoded_signature.xml"
 
+        expected_err_msg = "policy specifies that extension must be signed, but extension package signature could not be found."
         self._test_enable_extension(data_file=data_file, signature_validation_should_succeed=False,
                                     expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
-                                    expected_handler_status='NotReady', expected_ext_count=1)
+                                    expected_handler_status='NotReady', expected_ext_count=1,
+                                    expected_status_msg=expected_err_msg)
+
+    def test_enable_should_fail_if_signature_not_previously_validated(self):
+        # If signature was not previously validated, and policy is updated to require signature, re-enable of an
+        # already-installed extension should fail with ExtensionSignatureNotValidatedError (distinct from the
+        # "package signature could not be found" message used for fresh installs).
+        data_file = DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf-no_encoded_signature.xml"
+
+        with mock_wire_protocol(data_file) as protocol:
+            protocol.aggregate_status = None
+            protocol.report_vm_status = MagicMock()
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            # Create policy that allows unsigned extensions so initial enable succeeds without setting validation state.
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "signatureRequired": False
+                    }
+                }
+            self._create_policy_file(policy)
+
+            # Enable unsigned extension - should succeed, validation state should not be set.
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+            report_vm_status = protocol.report_vm_status
+            self.assertTrue(report_vm_status.called)
+            self._assert_handler_status(report_vm_status, "Ready",
+                                        expected_ext_count=1,
+                                        version="1.0.0", expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
+                                        expected_msg="Plugin enabled", expected_code=0, expected_validation_state=False)
+
+            # Update policy to require signature.
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "signatureRequired": True
+                    }
+                }
+            self._create_policy_file(policy)
+
+            # Bump incarnation but keep the requested state as Enabled. This drives handle_enable down its
+            # already-installed branch, which should translate the policy error to ExtensionSignatureNotValidatedError.
+            protocol.mock_wire_data.set_incarnation(2)
+            protocol.client.update_goal_state()
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+
+            expected_err_msg = "policy specifies that extension must be signed, but the installed extension's signature was not validated by the agent."
+            report_vm_status = protocol.report_vm_status
+            self._assert_handler_status(report_vm_status, expected_status="NotReady", expected_ext_count=1,
+                                        expected_msg=expected_err_msg,
+                                        expected_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
+                                        version="1.0.0")
 
     def test_enable_should_succeed_for_extension_with_invalid_signature_if_conf_flag_disabled(self):
         # If 'Debug.EnableExtSignatureValidation' flag is set to false, enable should succeed for an extension with
@@ -4716,7 +4882,7 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
             exthandlers_handler.report_ext_handlers_status()
 
             # Uninstall should fail.
-            expected_err_msg = "policy specifies that extension must be signed, but extension package signature could not be found."
+            expected_err_msg = "policy specifies that extension must be signed, but the installed extension's signature was not validated by the agent."
             report_vm_status = protocol.report_vm_status
             self._assert_handler_status(report_vm_status, expected_status="NotReady", expected_ext_count=1,
                                         expected_msg=expected_err_msg,
@@ -4770,7 +4936,7 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
             exthandlers_handler.report_ext_handlers_status()
 
             # Uninstall should fail.
-            expected_err_msg = "policy specifies that extension must be signed, but extension package signature could not be found."
+            expected_err_msg = "policy specifies that extension must be signed, but the installed extension's signature was not validated by the agent."
             report_vm_status = protocol.report_vm_status
             self._assert_handler_status(report_vm_status, expected_status="NotReady", expected_ext_count=1,
                                         expected_msg=expected_err_msg,

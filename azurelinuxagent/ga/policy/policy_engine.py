@@ -61,11 +61,28 @@ class InvalidPolicyError(PolicyError):
 
 class ExtensionSignaturePolicyError(PolicyError):
     """
-    Error raised when policy requires signature, but extension is not signed and was not previously validated.
+    Base error raised when policy requires signature, but the extension is not signed or was not previously validated.
+    Callers should raise one of the more specific subclasses (ExtensionUnsignedError or ExtensionSignatureNotValidatedError)
+    so that the appropriate message can be reported.
     This error does not accept a message.
     """
     def __init__(self):
         super(ExtensionSignaturePolicyError, self).__init__()
+
+
+class ExtensionUnsignedError(ExtensionSignaturePolicyError):
+    """
+    Raised when policy requires a signature during install, but the extension is not signed.
+    This error does not accept a message.
+    """
+
+
+class ExtensionSignatureNotValidatedError(ExtensionSignaturePolicyError):
+    """
+    Raised when policy requires a signature for an already-installed extension whose signature was never validated by the agent
+    (e.g. the extension was installed before signature validation was enabled, or before policy enforcement was turned on).
+    This error does not accept a message.
+    """
 
 
 class ExtensionDisallowedError(PolicyError):
@@ -358,7 +375,7 @@ class ExtensionPolicyEngine(_PolicyEngine):
         Return whether we should allow extension download based on policy.
         If policy feature not enabled, return True.
         If allowListedExtensionsOnly=true, return true only if extension present in "extensions" allowlist.
-        If allowListedExtensions=false, return true always.
+        If allowListedExtensionsOnly=false, return true always.
         """
         if not self._policy_enforcement_enabled:
             return True
@@ -390,7 +407,9 @@ class ExtensionPolicyEngine(_PolicyEngine):
         :param extension_name: extension name (string).
         :param extension_is_signed: Boolean indicating whether the extension is signed (or signature was previously validated, if extension is not being installed).
         :raises ExtensionDisallowedError: If the extension is not allowed by policy.
-        :raises ExtensionSignaturePolicyError: If the extension is required to be signed but is not.
+        :raises ExtensionSignaturePolicyError: If the extension is required to be signed but is not. The caller is expected to
+            translate this into one of the more specific subclasses (ExtensionUnsignedError or ExtensionSignatureNotValidatedError)
+            so that the appropriate message can be reported.
         """
         if not self._policy_enforcement_enabled:
             return
@@ -399,10 +418,8 @@ class ExtensionPolicyEngine(_PolicyEngine):
         if not extension_allowed:
             raise ExtensionDisallowedError()      # Caller sets message and error code, based on requested extension operation
 
-        # TODO: Differentiate error handling:
-        #   (1) New installation: extension is unsigned -> raise ExtensionUnsignedError
-        #   (2) Existing installation: signature was never validated -> raise ExtensionSignatureNotValidatedError
-        # Currently both cases raise the same error. They should use distinct exceptions/messages.
+        # Raises the generic ExtensionSignaturePolicyError; the caller has the context to translate this into a more
+        # specific exception (ExtensionUnsignedError vs. ExtensionSignatureNotValidatedError) for clearer diagnostics.
         enforce_signature = self.should_enforce_signature_validation(extension_name)
         if enforce_signature and not extension_is_signed:
             raise ExtensionSignaturePolicyError() # Caller sets message and error code, based on requested extension operation
