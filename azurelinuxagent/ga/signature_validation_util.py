@@ -30,7 +30,7 @@ from azurelinuxagent.ga.signing_certificate_util import get_microsoft_signing_ce
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
-from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
+from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME, AGENT_SIGNING_INFO_NAME
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, PKG_SIGNATURE_VALIDATION_CPU_QUOTA, PKG_SIGNATURE_VALIDATION_SLICE_NAME, PKG_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME, DisableCgroups
 from azurelinuxagent.common.osutil.systemd import is_systemd_run_failure
 from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
@@ -363,7 +363,7 @@ def validate_signature(package_path, signature, package_full_name):
                                     name=name, version=version, duration=0)
 
 
-def validate_handler_manifest_signing_info(manifest, ext_handler):
+def validate_extension_manifest_signing_info(manifest, ext_handler):
     """
     For signed extensions, the handler manifest includes a "signingInfo" section that specifies
     the type, publisher, and version of the extension. During signature validation (after extracting zip package),
@@ -381,9 +381,9 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
                                 name=ext_handler.name, version=ext_handler.version, duration=0)
 
         # Check that 'signingInfo' exists in the manifest structure
-        man_signing_info = manifest.data.get("signingInfo")
+        man_signing_info = manifest.get_signing_info()
         if man_signing_info is None:
-            raise ManifestValidationError(msg="HandlerManifest.json does not contain 'signingInfo'",
+            raise ManifestValidationError(msg="HandlerManifest.json does not contain 'signingInfo' for extension '{0}'".format(ext_handler),
                                           operation=WALAEventOperation.PackageSigningInfoResult, duration=elapsed_milliseconds(start_time))
 
         def validate_attribute(attribute, extension_value):
@@ -391,12 +391,12 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
             # If not, raise a ManifestValidationError.
             signing_info_value = man_signing_info.get(attribute)
             if signing_info_value is None:
-                raise ManifestValidationError(msg="HandlerManifest.json does not contain attribute 'signingInfo.{0}'".format(attribute),
+                raise ManifestValidationError(msg="HandlerManifest.json does not contain attribute 'signingInfo.{0}' for extension '{1}'".format(attribute, ext_handler),
                                               operation=WALAEventOperation.PackageSigningInfoResult, duration=elapsed_milliseconds(start_time))
 
             # Comparison should be case-insensitive, because CRP ignores case for extension name.
             if extension_value.lower() != signing_info_value.lower():
-                raise ManifestValidationError(msg="expected extension {0} '{1}' does not match downloaded package {0} '{2}'".format(attribute, extension_value, signing_info_value),
+                raise ManifestValidationError(msg="expected extension {0} '{1}' does not match downloaded package {0} '{2}' for extension '{3}'".format(attribute, extension_value, signing_info_value, ext_handler),
                                               operation=WALAEventOperation.PackageSigningInfoResult, duration=elapsed_milliseconds(start_time))
 
         # Compare extension attributes against the attributes specified in 'signingInfo'
@@ -416,7 +416,70 @@ def validate_handler_manifest_signing_info(manifest, ext_handler):
     except Exception as ex:
         # Catch any exceptions unrelated to 'signingInfo' validation (e.g. incorrectly formatted extension name) and raise as a ManifestValidationError with zero duration.
         raise ManifestValidationError(msg="Error during manifest 'signingInfo' validation for extension '{0}'. Error: {1}".format(ext_handler, ustr(ex)),
-                                      operation=WALAEventOperation.SignatureValidation, duration=0)
+                                      operation=WALAEventOperation.PackageSigningInfoResult, duration=0)
+
+
+def validate_agent_manifest_signing_info(manifest, expected_agent_version):
+    """
+    For signed agent packages, the handler manifest includes a "signingInfo" section that specifies
+    the 'name' and 'version' of the agent.
+
+    During agent package validation, we check the 'signingInfo' attributes against the
+    expected values. If there is a mismatch, raise a ManifestValidationError.
+
+    Unlike extensions, the agent's "signingInfo" does not include 'publisher' or 'type'. Those values are
+    not delivered in the goal state for the agent, so there would be no value in checking those from the
+    handler manifest. Instead the agent expects a 'name' attribute which should match the expected name.
+
+    :param manifest: HandlerManifest object
+    :param expected_agent_version: the expected agent version string (e.g., "9.9.9.9")
+    :raises ManifestValidationError: if handler manifest validation fails
+    """
+    start_time = datetime_min_utc
+    agent_full_name = "{0}-{1}".format(AGENT_NAME, expected_agent_version)
+    try:
+        start_time = datetime.datetime.now(UTC)
+        report_validation_event(op=WALAEventOperation.SignatureValidation, level=logger.LogLevel.INFO,
+                                message="Validating handler manifest 'signingInfo' of agent '{0}'".format(agent_full_name),
+                                name=AGENT_NAME, version=expected_agent_version, duration=0)
+
+        # Check that 'signingInfo' exists in the manifest structure
+        man_signing_info = manifest.get_signing_info()
+        if man_signing_info is None:
+            raise ManifestValidationError(msg="HandlerManifest.json does not contain 'signingInfo' for agent '{0}'".format(agent_full_name),
+                                          operation=WALAEventOperation.PackageSigningInfoResult, duration=elapsed_milliseconds(start_time))
+
+        def validate_attribute(attribute, expected_value):
+            # Validate that the specified 'attribute' exists in 'signingInfo', and that it matches the expected 'expected_value'.
+            # If not, raise a ManifestValidationError.
+            signing_info_value = man_signing_info.get(attribute)
+            if signing_info_value is None:
+                raise ManifestValidationError(msg="HandlerManifest.json does not contain attribute 'signingInfo.{0}' for agent '{1}'".format(attribute, agent_full_name),
+                                              operation=WALAEventOperation.PackageSigningInfoResult, duration=elapsed_milliseconds(start_time))
+            
+            # Case-sensitive comparison, unlike the extensions signingInfo comparison which is case-insensitive.
+            # AGENT_SIGNING_INFO_NAME is hardcoded and the manifest is generated from the same constant that we use for comparison and
+            # version is numeric, so any case difference should be surfaced.
+            if ustr(expected_value) != ustr(signing_info_value):
+                raise ManifestValidationError(msg="expected agent {0} '{1}' does not match downloaded package {0} '{2}' for agent '{3}'".format(attribute, expected_value, signing_info_value, agent_full_name),
+                                              operation=WALAEventOperation.PackageSigningInfoResult, duration=elapsed_milliseconds(start_time))
+
+        # Compare agent attributes against the attributes specified in 'signingInfo'
+        validate_attribute(attribute="name", expected_value=AGENT_SIGNING_INFO_NAME)
+        validate_attribute(attribute="version", expected_value=expected_agent_version)
+
+        report_validation_event(op=WALAEventOperation.PackageSigningInfoResult, level=logger.LogLevel.INFO,
+                                message="Successfully validated handler manifest 'signingInfo' for agent '{0}'".format(agent_full_name),
+                                name=AGENT_NAME, version=expected_agent_version, duration=elapsed_milliseconds(start_time))
+
+    except ManifestValidationError:
+        # Should not be caught by the general Exception block
+        raise
+
+    except Exception as ex:
+        # Catch any exceptions unrelated to 'signingInfo' validation and raise as a ManifestValidationError with zero duration.
+        raise ManifestValidationError(msg="Error during manifest 'signingInfo' validation for agent '{0}'. Error: {1}".format(agent_full_name, ustr(ex)),
+                                      operation=WALAEventOperation.PackageSigningInfoResult, duration=0)
 
 
 def _should_delay_signature_validation():

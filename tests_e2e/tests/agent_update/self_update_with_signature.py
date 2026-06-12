@@ -52,16 +52,16 @@ class SelfUpdateWithSignatureBvt(SelfUpdateBvt):
         goal state signature telemetry was sent.
         """
         super()._verify_agent_updated_to_latest_version()
-        self._verify_agent_signature_validated(self._latest_version)
+        self._verify_agent_signature_and_manifest_validated(self._latest_version)
         self._verify_gs_signature_telemetry()
 
-    def _verify_agent_signature_validated(self, version: str) -> None:
-        log.info("Verifying agent package signature was validated for version %s", version)
+    def _verify_agent_signature_and_manifest_validated(self, version: str) -> None:
+        log.info("Verifying agent package signature and handler manifest were validated for version %s", version)
         self._run_remote_test(
             self._ssh_client,
-            f"agent_update-check_agent_signature_validated.py --version {version}",
+            f"agent_update-check_signature_and_manifest_validated.py --version {version}",
             use_sudo=True)
-        log.info("Successfully verified agent signature validated for version %s", version)
+        log.info("Successfully verified agent signature and handler manifest validated for version %s", version)
 
     def _get_latest_manifest_versions(self) -> list:
         """

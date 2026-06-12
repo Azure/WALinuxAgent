@@ -16,7 +16,7 @@ from azurelinuxagent.common.version import CURRENT_VERSION, AGENT_NAME
 from azurelinuxagent.ga.agent_update_handler import get_agent_update_handler
 from azurelinuxagent.ga.guestagent import GuestAgent, INITIAL_UPDATE_STATE_FILE, RSM_UPDATE_STATE_FILE
 from azurelinuxagent.ga.signature_validation_util import SignatureValidationError, SignatureValidationTimeoutError, \
-    SignatureValidationTimeout
+    SignatureValidationTimeout, ManifestValidationError
 
 from tests.ga.test_update import UpdateTestCase
 from tests.lib.http_request_predicates import HttpRequestPredicates
@@ -87,10 +87,13 @@ class TestAgentUpdate(UpdateTestCase):
                                 # signature validation logic is unit tested in test_signature_validation.py and
                                 # test_signature_validation_sudo.py
                                 with patch("azurelinuxagent.common.protocol.wire.validate_signature"):
-                                    with patch("azurelinuxagent.common.event.EventLogger.add_event") as mock_telemetry:
-                                        agent_update_handler = get_agent_update_handler(protocol)
-                                        agent_update_handler._protocol = protocol
-                                        yield agent_update_handler, mock_telemetry
+                                    # Patch validate_agent_manifest_signing_info so it is mocked in these UTs. The actual
+                                    # manifest validation logic is unit tested in test_signature_validation.py
+                                    with patch("azurelinuxagent.ga.ga_version_updater.validate_agent_manifest_signing_info"):
+                                        with patch("azurelinuxagent.common.event.EventLogger.add_event") as mock_telemetry:
+                                            agent_update_handler = get_agent_update_handler(protocol)
+                                            agent_update_handler._protocol = protocol
+                                            yield agent_update_handler, mock_telemetry
 
     def _assert_agent_directories_available(self, versions):
         for version in versions:
@@ -423,12 +426,12 @@ class TestAgentUpdate(UpdateTestCase):
             self.assertFalse(os.path.exists(self.agent_dir(downgrade_version)),
                              "New agent directory should not be found")
             self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                                     "new version {0} is below than daemon version".format(downgrade_version) in kwarg['message'] and kwarg[
+                                     "new version {0} is below the daemon version".format(downgrade_version) in kwarg['message'] and kwarg[
                                          'op'] == WALAEventOperation.AgentUpgrade]), "downgrade should not be allowed below daemon version")
             vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
             self.assertEqual(1, vm_agent_update_status.code)
             self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
-            self.assertIn("new version {0} is below than daemon version".format(downgrade_version), vm_agent_update_status.message)
+            self.assertIn("new version {0} is below the daemon version".format(downgrade_version), vm_agent_update_status.message)
 
     def test_it_should_self_update_to_largest_version_if_vm_not_enabled_for_rsm_upgrades(self):
         self.prepare_agents(count=1)
@@ -1046,7 +1049,7 @@ class TestAgentUpdate(UpdateTestCase):
                                           if kwarg.get('op') == WALAEventOperation.SignatureValidation and
                                           "No signature found for agent version" in kwarg.get('message', '')]
                             self.assertEqual(1, len(sig_events),
-                                             "Expected one AgentSignature event about missing signature. Got: {0}".format(sig_events))
+                                             "Expected one SignatureValidation event about missing signature. Got: {0}".format(sig_events))
 
     def test_it_should_pass_empty_signature_when_goal_state_does_not_support_mapping(self):
         """
@@ -1079,7 +1082,7 @@ class TestAgentUpdate(UpdateTestCase):
                                           "Goal state does not support agent signature mapping, skipping agent package " \
                                           "signature validation." in kwarg.get('message', '')]
                             self.assertEqual(1, len(sig_events),
-                                             "Expected one AgentSignature event about unsupported mapping. Got: {0}".format(sig_events))
+                                             "Expected one SignatureValidation event about unsupported mapping. Got: {0}".format(sig_events))
 
     def test_it_should_pass_empty_signature_when_exception_is_raised_getting_package_signature(self):
         """
@@ -1113,7 +1116,7 @@ class TestAgentUpdate(UpdateTestCase):
                                               "Unexpected error getting the agent package signature, skipping agent " \
                                               "package signature validation:" in kwarg.get('message', '')]
                                 self.assertEqual(1, len(sig_events),
-                                                 "Expected one AgentSignature event about unexpected error. Got: {0}".format(sig_events))
+                                                 "Expected one SignatureValidation event about unexpected error. Got: {0}".format(sig_events))
 
     def test_it_should_continue_update_on_signature_validation_error(self):
         """
@@ -1220,3 +1223,112 @@ class TestAgentUpdate(UpdateTestCase):
 
                                             # Reset the timeout flag so it doesn't affect other unit tests
                                             SignatureValidationTimeout._agent_validation_disabled = False
+
+    @contextlib.contextmanager
+    def _setup_manifest_validation_test(self, signature_validation_enabled=True):
+        """
+        Sets up the common context for handler manifest validation tests during agent update:
+        prepares the goal state with a signature and toggles signature validation, then yields
+        (agent_update_handler, mock_telemetry). When signature_validation_enabled is True (the default),
+        the manifest validation code path runs; when False, an empty signature is passed to download
+        and manifest validation is skipped.
+        """
+        data_file = DATA_FILE.copy()
+        # Goal state with agent signature so the manifest validation code path is exercised.
+        data_file["ext_conf"] = "wire/ext_conf-agent_dummy_signatures_and_version_from_rsm.xml"
+
+        self.prepare_agents(count=1)
+
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            with patch("azurelinuxagent.ga.ga_version_updater.agent_signature_validation_enabled", return_value=signature_validation_enabled):
+                with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.ExtensionsGoalStateFromExtensionsConfig.supports_agent_signature_mapping", return_value=True):
+                    yield agent_update_handler, mock_telemetry
+
+    def test_it_should_continue_update_when_handler_manifest_validation_succeeds(self):
+        """
+        When agent handler manifest validation succeeds, the agent should proceed with the update
+        and no PackageSigningInfoResult warning telemetry should be emitted from download_new_agent_pkg.
+        """
+        with self._setup_manifest_validation_test() as (agent_update_handler, mock_telemetry):
+            with patch("azurelinuxagent.ga.ga_version_updater.validate_agent_manifest_signing_info") as mock_validate:
+                with self.assertRaises(AgentUpgradeExitException):
+                    agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+                self.assertEqual(1, mock_validate.call_count, "validate_agent_manifest_signing_info should have been called once")
+
+                # No warning telemetry events for PackageSigningInfoResult should have been emitted
+                warning_events = [kwarg for _, kwarg in mock_telemetry.call_args_list
+                                  if kwarg.get('op') == WALAEventOperation.PackageSigningInfoResult
+                                  and kwarg.get('is_success') is False]
+                self.assertEqual(0, len(warning_events),
+                                 "No PackageSigningInfoResult warning telemetry events should have been emitted when manifest validation succeeds. Got: {0}".format(warning_events))
+
+    def test_it_should_continue_update_on_handler_manifest_validation_error(self):
+        """
+        When agent handler manifest validation raises a ManifestValidationError, the agent should
+        continue with the update and send telemetry about the error.
+        """
+        with self._setup_manifest_validation_test() as (agent_update_handler, mock_telemetry):
+            with patch("azurelinuxagent.ga.ga_version_updater.validate_agent_manifest_signing_info",
+                       side_effect=ManifestValidationError(msg="test manifest error", operation=WALAEventOperation.PackageSigningInfoResult, duration=0)):
+                with self.assertRaises(AgentUpgradeExitException):
+                    agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+                # Telemetry should report the manifest validation error
+                manifest_events = [kwarg for _, kwarg in mock_telemetry.call_args_list
+                                   if kwarg.get('op') == WALAEventOperation.PackageSigningInfoResult and
+                                   "test manifest error" in kwarg.get('message', '')]
+                self.assertEqual(1, len(manifest_events),
+                                 "Expected one PackageSigningInfoResult event about manifest validation error. Got: {0}".format(manifest_events))
+
+    def test_it_should_continue_update_on_unexpected_error_during_handler_manifest_validation(self):
+        """
+        When an unexpected (non-ManifestValidationError) exception is raised while reading/parsing the
+        handler manifest file, the agent should defensively catch it, continue with the update, and
+        send telemetry reporting the error.
+        """
+        with self._setup_manifest_validation_test() as (agent_update_handler, mock_telemetry):
+            # Patch json.load (used to parse HandlerManifest.json in ga_version_updater) to raise an
+            # unexpected exception.
+            with patch("azurelinuxagent.ga.ga_version_updater.json.load", side_effect=Exception("unexpected parse failure")):
+                with self.assertRaises(AgentUpgradeExitException):
+                    agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+                # Telemetry should report the unexpected error
+                manifest_events = [kwarg for _, kwarg in mock_telemetry.call_args_list
+                                   if kwarg.get('op') == WALAEventOperation.PackageSigningInfoResult and
+                                   "Unexpected error validating agent handler manifest" in kwarg.get('message', '') and
+                                   "unexpected parse failure" in kwarg.get('message', '')]
+                self.assertEqual(1, len(manifest_events),
+                                 "Expected one PackageSigningInfoResult event about unexpected manifest validation error. Got: {0}".format(manifest_events))
+
+    def test_it_should_not_validate_handler_manifest_when_signature_is_empty(self):
+        """
+        Handler manifest validation should only occur when a non-empty signature is present (i.e., when signature
+        validation runs). When agent signature validation is disabled (signature passed to download function is ""),
+        validate_agent_manifest_signing_info should not be called.
+        """
+        # Disable agent signature validation so an empty signature is passed to download_zip_package.
+        with self._setup_manifest_validation_test(signature_validation_enabled=False) as (agent_update_handler, _):
+            with patch("azurelinuxagent.ga.ga_version_updater.validate_agent_manifest_signing_info") as mock_validate:
+                with self.assertRaises(AgentUpgradeExitException):
+                    agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+                self.assertEqual(0, mock_validate.call_count,
+                                 "validate_agent_manifest_signing_info should NOT be called when signature is empty")
+
+    def test_it_should_validate_handler_manifest_even_when_signature_validation_fails(self):
+        """
+        Handler manifest validation is independent of signature validation: even when signature validation raises an
+        error, the manifest validation step should still run (and the update should still proceed).
+        """
+        with self._setup_manifest_validation_test() as (agent_update_handler, _):
+            # Cause signature validation to fail
+            with patch("azurelinuxagent.common.protocol.wire.validate_signature",
+                       side_effect=SignatureValidationError(msg="test sig error", operation=WALAEventOperation.PackageSignatureResult, duration=0)):
+                with patch("azurelinuxagent.ga.ga_version_updater.validate_agent_manifest_signing_info") as mock_validate:
+                    with self.assertRaises(AgentUpgradeExitException):
+                        agent_update_handler.run(GoalState(agent_update_handler._protocol.client, GoalStateProperties.ExtensionsGoalState), True)
+
+                    self.assertEqual(1, mock_validate.call_count,
+                                     "validate_agent_manifest_signing_info should still be called when signature validation fails")

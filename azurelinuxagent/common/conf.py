@@ -145,6 +145,7 @@ __SWITCH_OPTIONS__ = {
     "Debug.CgroupDisableOnProcessCheckFailure": True,
     "Debug.CgroupDisableOnQuotaCheckFailure": True,
     "Debug.EnableAgentMemoryUsageCheck": False,
+    "Debug.EnableAgentSignatureValidation": False,
     "Debug.EnableFastTrack": True,
     "Debug.EnableGAVersioning": True,
     "Debug.EnableCgroupV2ResourceLimiting": False,
@@ -211,7 +212,8 @@ __INTEGER_OPTIONS__ = {
     "Debug.AutoUpdateNormalFrequency": 86400,
     "Debug.FirewallRulesLogPeriod": 86400,
     "Debug.LogCollectorInitialDelay": 5 * 60,
-    "Debug.SignatureValidationInitialDelay": 10 * 60
+    "Debug.SignatureValidationInitialDelay": 10 * 60,
+    "Debug.SignatureValidationTimeout": 10
 }
 
 

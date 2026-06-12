@@ -58,7 +58,7 @@ from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
-from azurelinuxagent.ga.signature_validation_util import validate_handler_manifest_signing_info, SignatureValidationError, \
+from azurelinuxagent.ga.signature_validation_util import validate_extension_manifest_signing_info, SignatureValidationError, \
     PackageValidationError, ManifestValidationError, ext_signature_validation_enabled, validate_signature, \
     cleanup_package_with_invalid_signature, report_validation_event, SignatureValidationTimeoutError, SignatureValidationTimeout
 
@@ -1536,13 +1536,13 @@ class ExtHandlerInstance(object):
         # Validate 'signingInfo' - the publisher, type, and version specified in handler manifest 'signingInfo' should match the extension
         if should_validate_ext_signature:
             try:
-                validate_handler_manifest_signing_info(self.load_manifest(), self.ext_handler)
+                validate_extension_manifest_signing_info(self.load_manifest(), self.ext_handler)
                 # If both manifest and signature were validated successfully, update self._signature_validated. This
                 # attribute will be saved to the HandlerStatus file during status reporting.
                 self._signature_validated = signature_validation_succeeded
 
             except ManifestValidationError as ex:
-                # validate_handler_manifest_signing_info() raises only ManifestValidationError.
+                # validate_extension_manifest_signing_info() raises only ManifestValidationError.
                 if not ignore_signature_validation_errors:
                     raise
                 report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING, message=ustr(ex), name=self.ext_handler.name,
@@ -2575,6 +2575,11 @@ class HandlerManifest(object):
 
     def get_resource_limits(self):
         return ResourceLimits(self.data.get('resourceLimits', None))
+
+    def get_signing_info(self):
+        # Returns the 'signingInfo' dict from the manifest, or None if not present. The 'signingInfo' section is only
+        # included in signed packages, so callers must handle the None case.
+        return self.data.get('signingInfo', None)
 
     def report_invalid_boolean_properties(self, ext_name):
         """
