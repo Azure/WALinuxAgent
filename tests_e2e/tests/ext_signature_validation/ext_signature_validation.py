@@ -111,7 +111,13 @@ class ExtSignatureValidation(AgentVmTest):
         except Exception as error:
             # We exclude the extension name from regex because CRP sometimes installs test extensions with different
             # names (ex: Microsoft.Azure.Extensions.Edp.RunCommandHandlerLinuxTest instead of Microsoft.CPlat.Core.RunCommandHandlerLinux)
-            pattern = r".*Extension will not be processed: failed to run extension .* because policy specifies that extension must be signed, but extension package signature could not be found.*"
+            # The agent reports one of two messages depending on whether the extension is being newly installed
+            # ("extension package signature could not be found") or was previously installed without signature
+            # validation ("the installed extension's signature was not validated by the agent").
+            pattern = (
+                r".*Extension will not be processed: failed to run extension .* because policy specifies that extension must be signed, "
+                r"but (extension package signature could not be found|the installed extension's signature was not validated by the agent).*"
+            )
             assert_that(re.search(pattern, str(error))) \
                 .described_as(
                 f"Error message is expected to contain '{pattern}', but actual error message was '{error}'").is_not_none()
