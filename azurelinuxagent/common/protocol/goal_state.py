@@ -63,7 +63,7 @@ class GoalStateProperties(object):
 
 
 class GoalState(object):
-    def __init__(self, wire_client, goal_state_properties=GoalStateProperties.All, silent=False, save_to_history=False):
+    def __init__(self, wire_client, goal_state_properties=GoalStateProperties.All, silent=False, save_to_history=False, ignore_certificate_download_errors=True):
         """
         Fetches the goal state using the given wire client.
 
@@ -78,6 +78,7 @@ class GoalState(object):
             self._wire_client = wire_client
             self._history = None
             self._save_to_history = save_to_history
+            self._ignore_certificate_download_errors = ignore_certificate_download_errors
             self._extensions_goal_state = None  # populated from vmSettings or extensionsConfig
             self._goal_state_properties = goal_state_properties
             self.logger = logger.Logger(logger.DEFAULT_LOGGER)
@@ -303,7 +304,7 @@ class GoalState(object):
                 self._check_and_download_missing_certs_on_disk()
 
     def _download_certificates(self, certs_uri):
-        certs = Certificates(self._wire_client, certs_uri, self.logger)
+        certs = Certificates(self._wire_client, certs_uri, self.logger, ignore_download_errors=self._ignore_certificate_download_errors)
         # Save the certificates summary (i.e. the thumbprints but not the certificates themselves) to the goal state history
         if self._save_to_history:
             self._history.save_certificates(json.dumps(certs.summary))
@@ -526,8 +527,9 @@ class SharedConfig(object):
 
 
 class Certificates(LogEvent):
-    def __init__(self, wire_client, uri, logger_):
+    def __init__(self, wire_client, uri, logger_, ignore_download_errors=True):
         super(Certificates, self).__init__(logger_)
+        self._ignore_download_errors = ignore_download_errors
         self.summary = []
         self._crypt_util = CryptUtil(conf.get_openssl_cmd())
 
@@ -543,9 +545,12 @@ class Certificates(LogEvent):
             self._convert_certificates_pfx_to_pem(pfx_file, pem_file)
         except Exception as e:
             # A failure to download the certificates won't necessarily produce an error. Certificates do not change often and they may have
-            # already been saved to disk on a previous goal state. We simply report the error and continue processing the goal_state; later on,
+            # already been saved to disk on a previous goal state. Re-raise the exception only if explicitly requested via the ignore_download_errors
+            # parameter, otherwise simply report the error and continue processing the goal_state; later on,
             # before extensions are processed, the Agent checks whether the required certificates are already on disk and refreshes the goal
-            # state if they are not.
+            # state if they are not
+            if not self._ignore_download_errors:
+                raise
             self.error(WALAEventOperation.GoalStateCertificates, "Error fetching the goal state certificates: {0}", ustr(e))
             create_empty_pem_file = True
             return
@@ -613,7 +618,7 @@ class Certificates(LogEvent):
 
             return True
 
-        raise Exception("Cannot download certificates using any of the supported cyphers")
+        raise ProtocolError("Cannot download certificates using any of the supported ciphers")
 
     @staticmethod
     def _create_p7m_file(data):

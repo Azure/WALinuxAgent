@@ -14,20 +14,26 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+import contextlib
+import getpass
 import os
 import re
 import unittest
 
 import azurelinuxagent.common.conf as conf
-from azurelinuxagent.common.exception import ProvisionError
+from azurelinuxagent.common.exception import ProvisionError, OSUtilError
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
-from azurelinuxagent.common.protocol.util import OVF_FILE_NAME
+from azurelinuxagent.common.protocol.ovfenv import OvfEnv
+from azurelinuxagent.common.protocol.util import OVF_FILE_NAME, MAX_RETRY
 from azurelinuxagent.pa.provision import get_provision_handler
 from azurelinuxagent.pa.provision.cloudinit import CloudInitProvisionHandler
 from azurelinuxagent.pa.provision.default import ProvisionHandler
 from azurelinuxagent.common.utils import fileutil
+from tests.lib import wire_protocol_data
+from tests.lib.http_request_predicates import HttpRequestPredicates
 from tests.lib.tools import AgentTestCase, distros, load_data, MagicMock, Mock, patch
+from tests.lib.mock_wire_protocol import mock_wire_protocol
 
 
 class TestProvision(AgentTestCase):
@@ -375,6 +381,86 @@ class TestProvision(AgentTestCase):
             patch_get_provisioning_agent):  # pylint: disable=unused-argument
         provisioning_handler = get_provision_handler()
         self.assertIsInstance(provisioning_handler, CloudInitProvisionHandler, 'Provisioning handler should be cloud-init if agent is set to cloud-init')
+
+
+    @staticmethod
+    @contextlib.contextmanager
+    def _create_provision_handler_with_mock_protocol():
+        handler = ProvisionHandler()
+        handler.protocol_util = Mock()
+
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, detect_protocol=False) as mock_protocol:
+            handler.protocol_util.get_protocol = Mock(return_value=mock_protocol)
+            yield handler, mock_protocol
+
+    def test_it_should_not_download_certificates_when_the_public_key_has_a_value(self):
+        ovfenv = OvfEnv(load_data("ovf-env_public_key.xml"))
+        with TestProvision._create_provision_handler_with_mock_protocol() as (handler, protocol):
+            handler._download_ssh_keys_if_needed(ovfenv)
+        self.assertEqual(0, protocol.mock_wire_data.call_counts['certificates'], "The Certificates package should not have been retrieved")
+
+    def test_it_should_download_certificates_when_the_public_key_does_not_have_a_value(self):
+        ovfenv = OvfEnv(load_data("ovf-env_public_key_no_value.xml"))
+        with TestProvision._create_provision_handler_with_mock_protocol() as (handler, protocol):
+            handler._download_ssh_keys_if_needed(ovfenv)
+        self.assertEqual(1, protocol.mock_wire_data.call_counts['certificates'], "The Certificates package should have been retrieved")
+        ssh_key_path = os.path.join(conf.get_lib_dir(), '8979F1AC8C4215827BF3B5A403E6137B504D02A4.crt')
+        self.assertTrue(os.path.exists(ssh_key_path), 'The SSH key was not downloaded. Expected: {0}'.format(ssh_key_path))
+
+    def test_it_should_download_certificates_when_key_pairs_need_to_be_deployed(self):
+        ovfenv = OvfEnv(load_data("ovf-env_key_pair.xml"))
+        with TestProvision._create_provision_handler_with_mock_protocol() as (handler, protocol):
+            handler._download_ssh_keys_if_needed(ovfenv)
+        self.assertEqual(1, protocol.mock_wire_data.call_counts['certificates'], "The Certificates package should have been retrieved")
+        ssh_key_path = os.path.join(conf.get_lib_dir(), '8979F1AC8C4215827BF3B5A403E6137B504D02A4.crt')
+        self.assertTrue(os.path.exists(ssh_key_path), 'The SSH key was not downloaded. Expected: {0}'.format(ssh_key_path))
+
+    def test_it_should_retry_downloading_the_certificates(self):
+        ovfenv = OvfEnv(load_data("ovf-env_public_key_no_value.xml"))
+
+        def mock_http_get(url, *_, **__):
+            if HttpRequestPredicates.is_certificates_request(url):
+                mock_http_get.call_count += 1
+                if mock_http_get.call_count <= 10:
+                    return Exception("Mock failure")
+            return None
+        mock_http_get.call_count = 0
+
+        with TestProvision._create_provision_handler_with_mock_protocol() as (handler, protocol):
+            protocol.set_http_handlers(http_get_handler=mock_http_get)
+            with patch('azurelinuxagent.pa.provision.default.PROBE_INTERVAL', 0):  # set the delay between retries to 0
+                handler._download_ssh_keys_if_needed(ovfenv)
+        self.assertEqual(11, mock_http_get.call_count, "Expected 11 requests for Certificates (10 failed and retried requests, and 1 successful request)")
+        ssh_key_path = os.path.join(conf.get_lib_dir(), '8979F1AC8C4215827BF3B5A403E6137B504D02A4.crt')
+        self.assertTrue(os.path.exists(ssh_key_path), 'The SSH key was not downloaded. Expected: {0}'.format(ssh_key_path))
+
+    def test_it_should_retry_downloading_the_certificates_the_maximum_number_of_retries(self):
+        ovfenv = OvfEnv(load_data("ovf-env_public_key_no_value.xml"))
+
+        def mock_http_get(url, *_, **__):
+            if HttpRequestPredicates.is_certificates_request(url):
+                mock_http_get.call_count += 1
+                return Exception("Mock failure")
+            return None
+        mock_http_get.call_count = 0
+
+        with TestProvision._create_provision_handler_with_mock_protocol() as (handler, protocol):
+            protocol.set_http_handlers(http_get_handler=mock_http_get)
+            with patch('azurelinuxagent.pa.provision.default.PROBE_INTERVAL', 0):  # set the delay between retries to 0
+                handler._download_ssh_keys_if_needed(ovfenv)
+        self.assertEqual(2 * MAX_RETRY, mock_http_get.call_count, "Expected maximum number of retries ({0}) to have been attempted".format(MAX_RETRY))  # times 2 since two ciphers are attempted for FIPS support
+        ssh_key_path = os.path.join(conf.get_lib_dir(), '8979F1AC8C4215827BF3B5A403E6137B504D02A4.crt')
+        self.assertFalse(os.path.exists(ssh_key_path), 'The SSH key should not have been downloaded, since all requests failed. Got: {0}'.format(ssh_key_path))
+
+    def test_deploy_ssh_pubkeys_should_raise_if_no_keys_have_been_downloaded(self):
+        ovfenv_data = load_data("ovf-env_public_key_no_value.xml")
+        ovfenv_data = ovfenv_data.replace('<UserName>UserName</UserName>', '<UserName>{0}</UserName>'.format(getpass.getuser()))
+        ovfenv_data = ovfenv_data.replace('<Path>$HOME/UserName/.ssh/authorized_keys</Path>', '<Path>{0}</Path>'.format(os.path.join(self.tmp_dir, "authorized_keys")))
+        ovfenv = OvfEnv(ovfenv_data)
+        with TestProvision._create_provision_handler_with_mock_protocol() as (handler, _):
+            with self.assertRaises(OSUtilError) as context:
+                handler.deploy_ssh_pubkeys(ovfenv)
+            self.assertIn("Can't find 8979F1AC8C4215827BF3B5A403E6137B504D02A4.crt", ustr(context.exception))
 
 
 if __name__ == '__main__':
