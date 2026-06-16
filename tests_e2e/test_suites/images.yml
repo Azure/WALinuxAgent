@@ -310,6 +310,15 @@ images:
          AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
          AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
          AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
+   rhel_10_cvm:
+      urn: "RedHat:rhel-cvm:10_2_cvm:latest"
+      security_type: "ConfidentialVM"
+      vm_sizes:
+         - "Standard_DC2ads_v5" # TODO: The sku for this image should be updated to 'Standard_DC2as_v6' once we have capacity for it in our test subs, since it is available in more regions
+      locations:
+         AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
+         AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
+         AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
    rocky_9:
       urn: "ciq:rocky-community-editions:rocky-community-9:latest"
       locations:
