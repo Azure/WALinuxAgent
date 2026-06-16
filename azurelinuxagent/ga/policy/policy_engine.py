@@ -242,6 +242,7 @@ class _PolicyEngine(object):
         extension_policies = _PolicyEngine._get_dictionary(policy, attribute="extensionPolicies", optional=True, default={})
 
         _PolicyEngine._check_attributes(extension_policies, object_name="extensionPolicies", valid_attributes=["allowListedExtensionsOnly", "signatureRequired", "extensions"])
+        _PolicyEngine._validate_signature_required(extension_policies)
 
         return {
             "allowListedExtensionsOnly": _PolicyEngine._get_boolean(extension_policies, attribute="allowListedExtensionsOnly", name_prefix="extensionPolicies.", optional=True, default=_DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY),
@@ -274,6 +275,7 @@ class _PolicyEngine(object):
         extension_attribute_name = "extensionPolicies.extensions.{0}".format(extension)
 
         _PolicyEngine._check_attributes(extension, object_name=extension_attribute_name, valid_attributes=["signatureRequired", "runtimePolicy"])
+        _PolicyEngine._validate_signature_required(extension)
 
         return_value = {}
 
@@ -299,6 +301,12 @@ class _PolicyEngine(object):
             if k not in valid_attributes:
                 raise InvalidPolicyError("unrecognized attribute '{0}' in {1}".format(k, object_name))
 
+    @staticmethod
+    def _validate_signature_required(object_):
+        """
+        Validates that 'signatureRequired' can be set to true.
+        Raises InvalidPolicyError if signatureRequired is true but the system does not support signature validation.
+        """
         if object_.get("signatureRequired") is True:
             # Signature validation is currently only supported on CVMs. If a non-CVM user creates a policy with
             # signatureRequired=true, reject the policy at parse time.
