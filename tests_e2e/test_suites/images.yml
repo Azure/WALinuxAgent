@@ -260,6 +260,7 @@ images:
       urn: "RedHat:RHEL:7.5:latest"
       locations:
          AzureChinaCloud: []
+         AzureUSGovernment: []
    rhel_79:
       urn: "RedHat:RHEL:7_9:latest"
       locations:
@@ -268,6 +269,7 @@ images:
       urn: "RedHat:RHEL:8.2:latest"
       locations:
          AzureChinaCloud: []
+         AzureUSGovernment: []
       vm_sizes:
       # Previously one user reported agent hang on this VM size for redhat 7+ but not observed in rhel 8. So I'm using same vm size to test agent cgroups scenario for rhel 8 to make sure we don't see any issue in automation.
          - "Standard_B2s"
