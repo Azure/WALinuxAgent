@@ -11,9 +11,8 @@
         <SSH>
           <PublicKeys>
             <PublicKey>
-              <Fingerprint>EB0C0AB4B2D5FC35F2F0658D19F44C8283E2DD62</Fingerprint>
+              <Fingerprint>8979F1AC8C4215827BF3B5A403E6137B504D02A4</Fingerprint>
               <Path>$HOME/UserName/.ssh/authorized_keys</Path>
-              <Value>ssh-rsa AAAANOTAREALKEY== foo@bar.local</Value>
             </PublicKey>
           </PublicKeys>
         </SSH>
