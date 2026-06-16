@@ -297,7 +297,7 @@ class GoalState(object):
                 # The local log message indicates whether the extension signature is present or not.
                 telemetry_msg = json.dumps({
                     "activity_id": self._extensions_goal_state.activity_id,
-                    "created_on_timestamp": self._extensions_goal_state.created_on_timestamp,
+                    "created_on_timestamp": str(self._extensions_goal_state.created_on_timestamp),
                 })
                 for ext in self._extensions_goal_state.extensions:
                     if ext.state == "uninstall":
