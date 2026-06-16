@@ -113,10 +113,10 @@ class ExtSignatureValidation(AgentVmTest):
             # names (ex: Microsoft.Azure.Extensions.Edp.RunCommandHandlerLinuxTest instead of Microsoft.CPlat.Core.RunCommandHandlerLinux)
             # The agent reports one of two messages depending on whether the extension is being newly installed
             # ("extension package signature could not be found") or was previously installed without signature
-            # validation ("the installed extension's signature was not validated by the agent").
+            # validation ("the installed extension's signature was not previously validated by the agent").
             pattern = (
                 r".*Extension will not be processed: failed to run extension .* because policy specifies that extension must be signed, "
-                r"but (extension package signature could not be found|the installed extension's signature was not validated by the agent).*"
+                r"but (extension package signature could not be found|the installed extension's signature was not previously validated by the agent).*"
             )
             assert_that(re.search(pattern, str(error))) \
                 .described_as(
