@@ -4602,7 +4602,7 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
         handler_version = "1.7.0"
 
         expected_err_msg = "Signature validation failed for package"
-        with patch('azurelinuxagent.ga.signature_validation_util.ext_signature_validation_enabled', return_value=False):
+        with patch('azurelinuxagent.ga.exthandlers.ext_signature_validation_enabled', return_value=False):
             self._test_enable_extension(data_file=data_file,
                                         signature_validation_should_succeed=False,
                                         expected_status_code=ExtensionErrorCodes.PluginInstallProcessingFailed,
