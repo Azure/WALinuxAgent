@@ -734,8 +734,8 @@ class ExtHandlersHandler(object):
             operation, error_code = _EXT_DISALLOWED_ERROR_MAP.get(ext_handler_i.ext_handler.state)
             msg = (
                 "Extension will not be processed: failed to {0} extension '{1}' because policy specifies that extension must be signed, "
-                "but the installed extension's signature was not validated by the agent. To {0}, remove and reinstall the extension so that "
-                "its signature can be validated, or set 'signatureRequired' to false in the policy file ('{2}')."
+                "but the installed extension's signature was not previously validated by the agent. To {0}, set 'signatureRequired' "
+                "to false in the policy file ('{2}'), then retry the operation."
             ).format(operation, ext_handler_i.ext_handler.name, conf.get_policy_file_path())
             self.__handle_ext_disallowed_error(ext_handler_i, error_code, report_op=WALAEventOperation.ExtensionSignaturePolicy, message=msg,
                                                extension=extension)
@@ -837,7 +837,8 @@ class ExtHandlersHandler(object):
             try:
                 self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
             except ExtensionSignaturePolicyError:
-                # New installation path: the downloaded package itself is unsigned.
+                # check_extension_policy() raises ExtensionSignaturePolicyError only when policy requires a signature
+                # AND extension_is_signed is False, so this error should be raised to prevent installation of unsigned package.
                 raise ExtensionUnsignedError()
 
             self.__setup_new_handler(ext_handler_i, extension, self.__should_ignore_ext_signature_validation_errors(ext_handler_i))
@@ -853,7 +854,9 @@ class ExtHandlersHandler(object):
                 try:
                     self._policy_engine.check_extension_policy(old_ext_handler_i.ext_handler.name, old_extension_is_signed)
                 except ExtensionSignaturePolicyError:
-                    # Already-installed path: the signature for the installed (old) handler was never validated by the agent.
+                    # check_extension_policy() raises ExtensionSignaturePolicyError only when policy requires a signature
+                    # AND old_extension_is_signed is False, so this error should be raised to prevent operations on the
+                    # old handler whose signature was never validated by the agent.
                     raise ExtensionSignatureNotValidatedError()
 
                 # This is a special case, we need to update the handler version here but to do that we need to also
@@ -867,7 +870,9 @@ class ExtHandlersHandler(object):
             try:
                 self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
             except ExtensionSignaturePolicyError:
-                # Already-installed path: the signature for the installed extension was never validated by the agent.
+                # check_extension_policy() raises ExtensionSignaturePolicyError only when policy requires a signature
+                # AND extension_is_signed is False, so this error should be raised to prevent operations on an
+                # extension whose signature was never validated by the agent.
                 raise ExtensionSignatureNotValidatedError()
 
             ext_handler_i.ensure_consistent_data_for_mc()
@@ -1007,7 +1012,9 @@ class ExtHandlersHandler(object):
             try:
                 self._policy_engine.check_extension_policy(ext_handler_i.ext_handler.name, extension_is_signed)
             except ExtensionSignaturePolicyError:
-                # Already-installed path: the signature for the installed extension was never validated by the agent.
+                # check_extension_policy() raises ExtensionSignaturePolicyError only when policy requires a signature
+                # AND extension_is_signed is False, so this error should be raised to prevent operations on an
+                # extension whose signature was never validated by the agent.
                 raise ExtensionSignatureNotValidatedError()
 
             if handler_state == ExtHandlerState.Enabled:

@@ -3893,7 +3893,7 @@ class TestExtensionPolicy(TestExtensionBase):
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
 
-            expected_err_msg = "policy specifies that extension must be signed, but the installed extension's signature was not validated by the agent."
+            expected_err_msg = "policy specifies that extension must be signed, but the installed extension's signature was not previously validated by the agent."
             self._assert_handler_status(protocol.report_vm_status, expected_status="NotReady", expected_ext_count=1,
                                         expected_msg=expected_err_msg,
                                         expected_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
@@ -4748,7 +4748,7 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
 
-            expected_err_msg = "policy specifies that extension must be signed, but the installed extension's signature was not validated by the agent."
+            expected_err_msg = "policy specifies that extension must be signed, but the installed extension's signature was not previously validated by the agent."
             report_vm_status = protocol.report_vm_status
             self._assert_handler_status(report_vm_status, expected_status="NotReady", expected_ext_count=1,
                                         expected_msg=expected_err_msg,
@@ -4882,7 +4882,7 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
             exthandlers_handler.report_ext_handlers_status()
 
             # Uninstall should fail.
-            expected_err_msg = "policy specifies that extension must be signed, but the installed extension's signature was not validated by the agent."
+            expected_err_msg = "policy specifies that extension must be signed, but the installed extension's signature was not previously validated by the agent."
             report_vm_status = protocol.report_vm_status
             self._assert_handler_status(report_vm_status, expected_status="NotReady", expected_ext_count=1,
                                         expected_msg=expected_err_msg,
@@ -4936,7 +4936,7 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
             exthandlers_handler.report_ext_handlers_status()
 
             # Uninstall should fail.
-            expected_err_msg = "policy specifies that extension must be signed, but the installed extension's signature was not validated by the agent."
+            expected_err_msg = "policy specifies that extension must be signed, but the installed extension's signature was not previously validated by the agent."
             report_vm_status = protocol.report_vm_status
             self._assert_handler_status(report_vm_status, expected_status="NotReady", expected_ext_count=1,
                                         expected_msg=expected_err_msg,

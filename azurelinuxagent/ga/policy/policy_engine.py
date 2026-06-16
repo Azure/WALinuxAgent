@@ -62,8 +62,10 @@ class InvalidPolicyError(PolicyError):
 class ExtensionSignaturePolicyError(PolicyError):
     """
     Base error raised when policy requires signature, but the extension is not signed or was not previously validated.
-    Callers should raise one of the more specific subclasses (ExtensionUnsignedError or ExtensionSignatureNotValidatedError)
-    so that the appropriate message can be reported.
+    The policy engine raises this base type because it does not have context about the specific operation (install, enable,
+    upgrade, etc.). Callers of the policy engine are expected to catch this exception and translate it into one of the more
+    specific subclasses (ExtensionUnsignedError or ExtensionSignatureNotValidatedError) so that the appropriate message
+    can be reported.
     This error does not accept a message.
     """
     def __init__(self):
