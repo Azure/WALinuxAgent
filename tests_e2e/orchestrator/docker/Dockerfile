@@ -89,8 +89,8 @@ RUN \
     #                                                                                                            \
     # Download Pypy to a known location, from which it will be installed to the test VMs.                        \
     #                                                                                                            \
-    wget https://dcrdata.blob.core.windows.net/python/pypy3.7-x64.tar.bz2 -O /tmp/pypy3.7-x64.tar.bz2         && \
-    wget https://dcrdata.blob.core.windows.net/python/pypy3.7-arm64.tar.bz2 -O /tmp/pypy3.7-arm64.tar.bz2     && \
+    wget https://pythonenv.blob.core.windows.net/e2e/pypy3.7-x64.tar.bz2 -O /tmp/pypy3.7-x64.tar.bz2         && \
+    wget https://pythonenv.blob.core.windows.net/e2e/pypy3.7-arm64.tar.bz2 -O /tmp/pypy3.7-arm64.tar.bz2     && \
                                                                                                                  \
     #                                                                                                            \
     # Install pudb, which can be useful to debug issues in the image                                             \
