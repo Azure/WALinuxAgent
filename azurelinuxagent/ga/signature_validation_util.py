@@ -219,8 +219,8 @@ def report_validation_event(op, level, message, name, version, duration):
     # Prefix log messages with the package identifier for easy correlation in the local log. Telemetry events have
     # structured name/version columns so the prefix is not applied there.
     log_prefix = ""
-    if name != "":
-        log_prefix = "[{0}-{1}] ".format(name, version) if version != "" else "[{0}] ".format(name)
+    if name is not None and name != "":
+        log_prefix = "[{0}-{1}] ".format(name, version) if version is not None and version != "" else "[{0}] ".format(name)
 
     if level == logger.LogLevel.ERROR:
         logger.error("{0}{1}".format(log_prefix, message))
