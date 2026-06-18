@@ -1447,7 +1447,7 @@ class ExtHandlerInstance(object):
             # if-block so timeout is treated like any other signature validation failure (extension should fail).
             SignatureValidationTimeout.disable_ext_validation()
             report_validation_event(op=WALAEventOperation.SignatureValidation, level=logger.LogLevel.WARNING,
-                                    message="Extension signature validation timeout exceeded. Disabling extension signature validation until agent restart.",
+                                    message="Extension signature validation timeout exceeded. Skipping further extension signature validation until agent restart, unless required by policy.",
                                     name=self.ext_handler.name, version=self.ext_handler.version, duration=0)
         report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING, message=ustr(ex),
                                 name=self.ext_handler.name, version=self.ext_handler.version, duration=ex.duration)
@@ -1461,6 +1461,11 @@ class ExtHandlerInstance(object):
         If signature validation fails:
          - if 'ignore_signature_validation_errors' is false, download is blocked.
          - if 'ignore_signature_validation_errors' is true, the error is captured and reported via telemetry, but download and extraction proceed.
+
+        When 'ignore_signature_validation_errors' is False, signature validation is performed even if the signature
+        validation feature would otherwise be disabled (e.g. Debug.EnableExtSignatureValidation=False, initial delay
+        window, telemetry expiry, prior validation timeout, etc.). Customers who require signatures via policy opt
+        into validation regardless of these conditions.
         """
         begin_utc = datetime.datetime.now(UTC)
         self.set_operation(WALAEventOperation.Download)
@@ -1470,7 +1475,20 @@ class ExtHandlerInstance(object):
 
         package_file = os.path.join(conf.get_lib_dir(), self.get_extension_package_zipfile_name())
 
-        should_validate_ext_signature = ext_signature_validation_enabled() and self.ext_handler.encoded_signature != ""
+        # If validation is required (e.g. ignore_signature_validation_errors is False) but signature wasn't provided,
+        # fail immediately rather than silently downloading an unsigned package.
+        if not ignore_signature_validation_errors and self.ext_handler.encoded_signature == "":
+            raise SignatureValidationError(
+                msg="Signature validation is required for extension '{0}', but no signature was provided in the goal state.".format(self.get_full_name()),
+                operation=WALAEventOperation.SignatureValidation, duration=0)
+
+        # Validate signature if the extension is signed and the feature is enabled, OR if the caller requires
+        # validation results (ignore_signature_validation_errors=False). 
+        if not ignore_signature_validation_errors:
+            should_validate_ext_signature = True
+        else:
+            should_validate_ext_signature = ext_signature_validation_enabled() and self.ext_handler.encoded_signature != ""
+
         signature_validation_succeeded = False
 
         # Handle case where extension zip package already exists, but has not been extracted. If signature is present,

@@ -4589,23 +4589,27 @@ class TestSignatureValidationEnforced(_TestSignatureValidationBase):
                                     expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
                                     expected_handler_status='NotReady', expected_ext_count=1)
 
-    def test_enable_should_succeed_for_extension_with_invalid_signature_if_conf_flag_disabled(self):
-        # If 'Debug.EnableExtSignatureValidation' flag is set to false, enable should succeed for an extension with
-        # invalid signature, even with enforcement enabled.
+    def test_enable_should_fail_for_extension_with_invalid_signature_if_validation_disabled(self):
+        # If ext_signature_validation_enabled() returns false but the customer's policy requires signature
+        # validation, the agent should still validate the signature. Enable should fail for an extension with an
+        # invalid signature.
         data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["test_ext"] = "signing/Microsoft.OSTCExtensions.Edp.VMAccessForLinux__1.7.0.zip"
         data_file["ext_conf"] = "wire/ext_conf-vm_access_with_invalid_signature.xml"
         data_file["manifest"] = "wire/manifest_vm_access.xml"
 
-        with patch('azurelinuxagent.ga.exthandlers.conf.get_ext_signature_validation_enabled', return_value=False):
+        handler_name = "Microsoft.OSTCExtensions.Edp.VMAccessForLinux"
+        handler_version = "1.7.0"
+
+        expected_err_msg = "Signature validation failed for package"
+        with patch('azurelinuxagent.ga.exthandlers.ext_signature_validation_enabled', return_value=False):
             self._test_enable_extension(data_file=data_file,
                                         signature_validation_should_succeed=False,
-                                        expected_status_code=0,
-                                        expected_handler_status='Ready',
-                                        expected_ext_count=1,
-                                        expected_status_msg='Plugin enabled',
-                                        expected_handler_name="Microsoft.OSTCExtensions.Edp.VMAccessForLinux",
-                                        expected_version="1.7.0")
+                                        expected_status_code=ExtensionErrorCodes.PluginInstallProcessingFailed,
+                                        expected_handler_status='NotReady',
+                                        expected_ext_count=1, expected_status_msg=expected_err_msg,
+                                        expected_handler_name=handler_name,
+                                        expected_version=handler_version)
 
     def test_enable_should_fail_for_existing_zip_package_if_signature_validation_fails(self):
         # Signature validation fails for existing zip package -> block extension

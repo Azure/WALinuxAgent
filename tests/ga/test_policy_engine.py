@@ -340,6 +340,32 @@ class TestPolicyEngine(_TestPolicyBase):
         ]
         self._run_test_cases_should_fail_to_parse(cases, "Expected an error indicating that 'signatureRequired' can be used only on confidential virtual machines")
 
+    def test_should_raise_error_for_signatureRequired_when_openssl_version_unsupported(self):
+        # When OpenSSL is too old to support signature validation, policy parsing should reject 'signatureRequired=true'
+        # rather than silently allowing unsigned extensions through at download time.
+        with patch('azurelinuxagent.ga.policy.policy_engine.openssl_version_supported_for_signature_validation', return_value=False):
+            cases = [
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "allowListedExtensionsOnly": True,
+                        "signatureRequired": True,
+                        "extensions": {}
+                    }
+                },
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "extensions": {
+                            TEST_EXTENSION_NAME: {
+                                "signatureRequired": True
+                            }
+                        }
+                    }
+                },
+            ]
+            self._run_test_cases_should_fail_to_parse(cases, "Expected an error indicating that 'signatureRequired' requires a supported OpenSSL version")
+
 
 class TestExtensionPolicyEngine(_TestPolicyBase):
     """
