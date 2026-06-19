@@ -289,12 +289,23 @@ class GoalState(object):
             #   - Extension requested state is *not* 'uninstall' (uninstall goal states never include signature).
             #
             if ext_signature_validation_enabled() and self._extensions_goal_state.supports_encoded_signature():
+                # The telemetry message includes activity ID and created-on timestamp, and the 
+                # 'is_success' column conveys whether the extension signature is present.
+                #   - The activity Id is included to quickly correlate with CRP/HGAP telemetry for a particular goal 
+                #       state without needing to infer the activity id from other guest agent events.
+                #   - The created_on_timestamp is included so that we can filter out old goal states (created before CRP
+                #       started including signatures in GS) in our queries.
+                # The local log message indicates whether the extension signature is present or not.
+                telemetry_msg = json.dumps({
+                    "activity_id": self._extensions_goal_state.activity_id,
+                    "created_on_timestamp": str(self._extensions_goal_state.created_on_timestamp),
+                })
                 for ext in self._extensions_goal_state.extensions:
                     if ext.state == "uninstall":
                         continue
-                    msg = "Goal state {0} signature for extension package".format("contains" if ext.encoded_signature else "does not contain")
-                    self.logger.info("{0} {1} (version: {2})".format(msg, ext.name, ext.version))
-                    add_event(op=WALAEventOperation.ExtensionSigned, message=msg, name=ext.name, version=ext.version, is_success=ext.encoded_signature != "", log_event=False)
+                    log_msg = "Goal state {0} signature for extension package".format("contains" if ext.encoded_signature else "does not contain")
+                    self.logger.info("{0} {1} (version: {2})".format(log_msg, ext.name, ext.version))
+                    add_event(op=WALAEventOperation.ExtensionSigned, message=telemetry_msg, name=ext.name, version=ext.version, is_success=ext.encoded_signature != "", log_event=False)
 
             # Ensure all certificates are downloaded on Fast Track goal states in order to maintain backwards compatibility with previous
             # versions of the Agent, which used to download certificates from the WireServer on every goal state. Some customer applications
