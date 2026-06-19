@@ -206,28 +206,36 @@ def report_validation_event(op, level, message, name, version, duration):
     'level' is expected to be one of logger.LogLevel.INFO, WARNING, or ERROR. If level is WARNING, prefix with "[WARNING]"
     in telemetry, and append a message that failure can be ignored.
 
+    Log messages are prefixed with the package identifier '[Name-Version] ' (or '[Name] ' if version is empty) so that
+    messages can easily be correlated to a specific package in the local log. The prefix is not applied to
+    the telemetry message because telemetry events already have 'name' and 'version' columns.
+
     Telemetry 'is_success' behavior based on log level:
         - ERROR: is_success=False, these should surface in release error monitoring queries.
         - WARNING: is_success=True. WARNING-level events should not surface in release error monitoring queries while
             we are collecting telemetry for this feature. TODO: is_success = False once we start enforcing signature validation
         - INFO: is_success=True.
-
-    TODO: for extension signature validation, add '[Name-Version]' prefix to log messages
     """
+    # Prefix log messages with the package identifier for easy correlation in the local log. Telemetry events have
+    # structured name/version columns so the prefix is not applied there.
+    log_prefix = ""
+    if name is not None and name != "":
+        log_prefix = "[{0}-{1}] ".format(name, version) if version is not None and version != "" else "[{0}] ".format(name)
+
     if level == logger.LogLevel.ERROR:
-        logger.error(message)
+        logger.error("{0}{1}".format(log_prefix, message))
         event_msg = message
         is_success = False
     elif level == logger.LogLevel.WARNING:
-        message = "{0}\nThis failure can be safely ignored; will continue processing the package.".format(message)
-        logger.warn(message)
-        event_msg = "[WARNING] {0}".format(message)
+        suffix = "\nThis failure can be safely ignored; will continue processing the package."
+        logger.warn("{0}{1}{2}".format(log_prefix, message, suffix))
+        event_msg = "[WARNING] {0}{1}".format(message, suffix)
         is_success = True
     else:
         # Log as INFO. If the level is invalid (i.e., not INFO, WARNING, or ERROR), treat it as INFO and prepend a warning to the message.
         if level != logger.LogLevel.INFO:
             message = "Invalid log level '{0}', reporting event at 'INFO' level instead. {1}".format(level, message)
-        logger.info(message)
+        logger.info("{0}{1}".format(log_prefix, message))
         event_msg = message
         is_success = True
 
@@ -547,6 +555,12 @@ def ext_signature_validation_enabled():
     - Initial delay period after agent start has passed (TODO: remove after telemetry release)
     - Signature validation feature is not expired according to Conf flag 'Debug.SignatureValidationTelemetryExpiryTime' (TODO: remove after telemetry release(s))
     - OpenSSL version supports required validation parameters (TODO: remove after timestamp validation implemented)
+
+    Note: If a customer's policy requires signature validation, the agent will still attempt to validate the signature of the extension
+    even if this method returns False. Most of these checks are performance workarounds; customers who explicitly require signature
+    validation accept the performance cost. If a policy requires signature validation but the hard requirements for validation
+    (ConfidentialVMInfo.is_confidential_vm() and openssl_version_supported_for_signature_validation()) are not met, policy parsing fails
+    before any extension installation is attempted.
     """
     return conf.get_ext_signature_validation_enabled() and \
            ConfidentialVMInfo.is_confidential_vm() and \

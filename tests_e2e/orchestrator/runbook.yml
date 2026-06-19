@@ -44,7 +44,10 @@ variable:
       - agent_persist_firewall
       - agent_status
       - agent_update
-      - agent_update_with_signature
+#      Disabling agent_update_with_signature test suite. The changes in CRP to include the agent signatures in the goal
+#      state were disabled due to concerns with svd size for uniform scalesets. Once CRP re-enables the agent signatures
+#      in the goal state, we can re-enable this test suite.
+#      - agent_update_with_signature
       - ext_cgroups
       - ext_policy
       - ext_policy_with_dependencies
