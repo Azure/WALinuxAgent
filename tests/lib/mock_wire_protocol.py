@@ -20,9 +20,8 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.protocol.wire import WireProtocol, TRANSPORT_PRV_FILE_NAME, TRANSPORT_CERT_FILE_NAME
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
-from tests.lib.tools import patch
+from tests.lib.tools import patch, Mock
 from tests.lib import wire_protocol_data
-from unittest.mock import Mock
 
 
 @contextlib.contextmanager
