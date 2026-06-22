@@ -81,7 +81,17 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
 
     def setUp(self):
         super(TestWireProtocol, self).setUp()
+        # Tests in this class directly instantiate WireProtocol and call detect(), which fetches the entire
+        # goal state. Updating the goal state calls ext_signature_validation_enabled(), which requires
+        # ConfidentialVMInfo to be initialized. ConfidentialVMInfo is only initialized in UpdateHandler.run(),
+        # so we mock it here to prevent exceptions due to lack of initialization.
+        self.patch_is_cvm = patch("azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm", return_value=False)
+        self.patch_is_cvm.start()
         HostPluginProtocol.is_default_channel = False
+
+    def tearDown(self):
+        self.patch_is_cvm.stop()
+        super(TestWireProtocol, self).tearDown()
 
     def _test_getters(self, test_data, certsMustBePresent, __, MockCryptUtil, _):
         MockCryptUtil.side_effect = test_data.mock_crypt_util

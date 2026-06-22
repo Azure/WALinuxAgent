@@ -479,13 +479,11 @@ class ExtSignatureValidation(AgentVmTest):
             self._should_fail_to_uninstall_extension(custom_script_unsigned)
 
         finally:
-            # Disable policy enforcement via conf and delete policy file
+            # Delete policy file
             log.info("")
             log.info("*** Begin test cleanup")
-            self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
             self._ssh_client.run_command("rm -f /etc/waagent_policy.json", use_sudo=True)
-            log.info(
-                "Successfully disabled policy via config (Debug.EnableExtensionPolicy=n) and removed policy file at /etc/waagent_policy.json")
+            log.info("Successfully removed policy file at /etc/waagent_policy.json")
             log.info("*** Test cleanup complete.")
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:

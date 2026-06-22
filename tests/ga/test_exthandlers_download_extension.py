@@ -34,6 +34,11 @@ class DownloadExtensionTestCase(AgentTestCase):
 
     def setUp(self):
         AgentTestCase.setUp(self)
+        # Tests in this class call ext_signature_validation_enabled() during extension download, which requires
+        # ConfidentialVMInfo to be initialized. ConfidentialVMInfo is only initialized in UpdateHandler.run(),
+        # so we mock it here to prevent exceptions due to lack of initialization.
+        self.patch_is_cvm = patch("azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm", return_value=False)
+        self.patch_is_cvm.start()
 
         ext_handler = Extension(name='Microsoft.CPlat.Core.RunCommandLinux')
         ext_handler.version = "1.0.0"
@@ -71,6 +76,7 @@ class DownloadExtensionTestCase(AgentTestCase):
         self.mock_get_lib_dir.start()
 
     def tearDown(self):
+        self.patch_is_cvm.stop()
         self.mock_get_lib_dir.stop()
         self.mock_get_log_dir.stop()
         self.mock_get_base_dir.stop()

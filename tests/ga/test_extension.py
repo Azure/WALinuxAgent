@@ -465,6 +465,16 @@ class TestExtensionBase(AgentTestCase):
 class TestExtension_Deprecated(TestExtensionBase):
     def setUp(self):
         AgentTestCase.setUp(self)
+        # Tests in this class directly instantiate WireProtocol and call detect(), which fetches the entire
+        # goal state. Updating the goal state calls ext_signature_validation_enabled(), which requires
+        # ConfidentialVMInfo to be initialized. ConfidentialVMInfo is only initialized in UpdateHandler.run(),
+        # so we mock it here to prevent exceptions due to lack of initialization.
+        self.patch_is_cvm = patch("azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm", return_value=False)
+        self.patch_is_cvm.start()
+
+    def tearDown(self):
+        self.patch_is_cvm.stop()
+        AgentTestCase.tearDown(self)
 
     def _assert_ext_pkg_file_status(self, expected_to_be_present=True, extension_version="1.0.0",
                                     extension_handler_name="OSTCExtensions.ExampleHandlerLinux"):
@@ -2388,6 +2398,19 @@ class TestExtension_Deprecated(TestExtensionBase):
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtensionSequencing(AgentTestCase):
+
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        # Tests in this class directly instantiate WireProtocol and call detect(), which fetches the entire
+        # goal state. Updating the goal state calls ext_signature_validation_enabled(), which requires
+        # ConfidentialVMInfo to be initialized. ConfidentialVMInfo is only initialized in UpdateHandler.run(),
+        # so we mock it here to prevent exceptions due to lack of initialization.
+        self.patch_is_cvm = patch("azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm", return_value=False)
+        self.patch_is_cvm.start()
+
+    def tearDown(self):
+        self.patch_is_cvm.stop()
+        AgentTestCase.tearDown(self)
 
     def _create_mock(self, mock_http_get, MockCryptUtil):
         test_data = wire_protocol_data.WireProtocolData(wire_protocol_data.DATA_FILE)

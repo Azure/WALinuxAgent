@@ -19,8 +19,10 @@ import os
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.protocol.wire import WireProtocol, TRANSPORT_PRV_FILE_NAME, TRANSPORT_CERT_FILE_NAME
 from azurelinuxagent.common.utils import restutil
+from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 from tests.lib.tools import patch
 from tests.lib import wire_protocol_data
+from unittest.mock import Mock
 
 
 @contextlib.contextmanager
@@ -126,10 +128,23 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
         patched = patch("azurelinuxagent.common.protocol.wire.CryptUtil", side_effect=protocol.mock_wire_data.mock_crypt_util)
         patched.start()
         start.crypt_util_patch = patched
+
+        # mock_wire_protocol calls protocol.detect(), which fetches the entire goal state. Updating the goal
+        # state calls ext_signature_validation_enabled(), which requires ConfidentialVMInfo to be initialized.
+        # ConfidentialVMInfo is only initialized in UpdateHandler.run(), so we mock it here to prevent exceptions
+        # due to lack of initialization. We only patch if is_confidential_vm is not already mocked because some
+        # tests already mock is_confidential_vm and we don't want to override that.
+        if not isinstance(ConfidentialVMInfo.is_confidential_vm, Mock):
+            patched = patch("azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm", return_value=False)
+            patched.start()
+            start.is_cvm_patch = patched
     start.http_request_patch = None
     start.crypt_util_patch = None
+    start.is_cvm_patch = None
 
     def stop():
+        if start.is_cvm_patch is not None:
+            start.is_cvm_patch.stop()
         if start.crypt_util_patch is not None:
             start.crypt_util_patch.stop()
         if start.http_request_patch is not None:

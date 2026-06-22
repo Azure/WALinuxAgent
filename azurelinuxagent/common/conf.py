@@ -149,8 +149,8 @@ __SWITCH_OPTIONS__ = {
     "Debug.EnableFastTrack": True,
     "Debug.EnableGAVersioning": True,
     "Debug.EnableCgroupV2ResourceLimiting": False,
-    "Debug.EnableExtensionPolicy": False,
-    "Debug.EnableExtSignatureValidation": False,
+    "Debug.EnableExtensionPolicy": True,
+    "Debug.EnableExtSignatureValidation": True,
     "Debug.IgnoreExtSignatureValidationErrors": True
 }
 
@@ -699,7 +699,7 @@ def get_extension_policy_enabled(conf=__conf__):
     Determine whether extension policy is enabled. If true, policy will be enforced before installing any extensions.
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.EnableExtensionPolicy", False)
+    return conf.get_switch("Debug.EnableExtensionPolicy", True)
 
   
 def get_enable_cgroup_v2_resource_limiting(conf=__conf__):
@@ -725,7 +725,7 @@ def get_ext_signature_validation_enabled(conf=__conf__):
     before installing any signed extensions.
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.EnableExtSignatureValidation", False)
+    return conf.get_switch("Debug.EnableExtSignatureValidation", True)
 
 
 def get_agent_signature_validation_enabled(conf=__conf__):

@@ -268,12 +268,11 @@ class ExtPolicyWithDependencies(AgentVmssTest):
                 log.info("---------------------------------------------")
 
         finally:
-            # Disable policy via conf file and delete policy file.
+            # Delete policy file
             for ssh_client in ssh_clients.values():
-                ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
                 ssh_client.run_command("rm -f /etc/waagent_policy.json", use_sudo=True)
                 log.info("")
-                log.info("Successfully disabled policy via config (Debug.EnableExtensionPolicy=n) and removed policy file at /etc/waagent_policy.json")
+                log.info("Successfully removed policy file at /etc/waagent_policy.json")
 
     def get_ignore_errors_before_timestamp(self) -> datetime:
         # Ignore errors in the agent log before the first test case starts
