@@ -180,7 +180,7 @@ __STRING_OPTIONS__ = {
     # "Debug" options are experimental and may be removed in later
     # versions of the Agent.
     #
-    "Debug.SignatureValidationTelemetryExpiryTime": "2026-12-01"
+    "Debug.SignatureValidationTelemetryExpiryTime": "2027-02-01"
 }
 
 
