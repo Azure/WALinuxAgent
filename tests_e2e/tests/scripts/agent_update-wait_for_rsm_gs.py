@@ -23,6 +23,7 @@ import argparse
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateProperties
 from azurelinuxagent.common.protocol.wire import WireProtocol
+from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import run_remote_test
 from tests_e2e.tests.lib.retry import retry_if_false, retry
@@ -56,6 +57,10 @@ def main():
     parser.add_argument('-v', '--version', required=True)
     args = parser.parse_args()
 
+    # Initialize CVM info before fetching goal state, since updating the goal state calls
+    # ext_signature_validation_enabled() which requires ConfidentialVMInfo to be initialized.
+    # In the agent, this is done in UpdateHandler.run(), but this script runs standalone.
+    ConfidentialVMInfo.fetch_and_initialize_cvm_info()
     protocol = get_protocol_util().get_protocol(init_goal_state=False)
     retry(lambda: protocol.client.reset_goal_state(
         goal_state_properties=GoalStateProperties.ExtensionsGoalState))
