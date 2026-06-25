@@ -9,11 +9,14 @@ images: "endorsed"
 # This scenario is executed on instances of a scaleset created by the agent test suite.
 executes_on_scale_set: true
 
-# TODO: Currently AlmaLinux is not available for scale sets; enable this image when it is available.
 skip_on_images:
+  # TODO: Currently AlmaLinux is not available for scale sets; enable this image when it is available.
   - "alma_8"
   - "alma_9"
   - "alma_10"
+  # The test depends on Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, which does not support these distros since version 1.43
+  - "centos_79"
+  - "centos_82"
 
 # TODO: The current deployment of VmAccess 1.5.22 prevents the extension from uninstalling; enable this test when the issue is fixed
 skip_on_clouds:
