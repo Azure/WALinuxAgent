@@ -269,8 +269,11 @@ class GoalState(object):
             # Lastly, decide whether to use the vmSettings or extensionsConfig for the extensions goal state
             #
             if goal_state_updated:
-                # On rotation of the tenant certificate the vmSettings and extensionsConfig are not updated. However, the incarnation of the WS goal state is update so 'goal_state_updated' will be True.
-                # In this case, we should use the most recent of vmSettigns and extensionsConfig.
+                # The agent may get one or more FastTrack goal states from VmSettings with changes to the extension
+                # goal state that did not go through Fabric. It is possible for the incarnation of the WS goal state to
+                # be updated (on tenant certificate rotation, for example) after these FastTrack goal states, which
+                # may result in the extensionsConfig from the WS goal state to be stale. In this case, we should use
+                # the most recent of vmSettigns and ExtensionsConfig for the extensions goal state.
                 if vm_settings is not None:
                     most_recent = vm_settings if vm_settings.created_on_timestamp > extensions_config.created_on_timestamp else extensions_config
                 else:
