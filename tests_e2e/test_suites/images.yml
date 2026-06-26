@@ -53,7 +53,8 @@ image-sets:
    # As of today agent only support and enabled resource governance feature on following distros
    cgroups-endorsed:
       - "azure-linux_3"
-      - "centos_82"
+      # TODO: Microsoft.Azure.Monitor.AzureMonitorLinuxAgent does not support these CentOS 8.2 since version 1.43. We need to reconsider the use of this extension on the tests for cgroups. In the meanwhile, we are skipping that distro from the test run.
+      # - "centos_82"
       - "rhel_82"
       - "rhel_95"
       - "rhel_95_arm64"
