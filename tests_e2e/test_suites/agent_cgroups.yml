@@ -14,5 +14,4 @@ images:
   - "ubuntu_2510"
 owns_vm: true
 skip_on_images: # AMA extension used in agent_cgroups_process_check, and it is not supported on these images
-  - "centos_82"
   - "rhel_95_arm64"
