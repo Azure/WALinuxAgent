@@ -269,8 +269,14 @@ class GoalState(object):
             # Lastly, decide whether to use the vmSettings or extensionsConfig for the extensions goal state
             #
             if goal_state_updated:
-                # On rotation of the tenant certificate the vmSettings and extensionsConfig are not updated. However, the incarnation of the WS goal state is update so 'goal_state_updated' will be True.
-                # In this case, we should use the most recent of vmSettigns and extensionsConfig.
+                #
+                # On rotation of the tenant certificate, the incarnation of the WS goal state is updated but the extensionsConfig in the Fabric goal state is not. This can cause issues if CRP
+                # was initially using Fabric (time T0), and then switched to Fast Track on subsequent goal states (times T1 and T2). When the certificate is rotated and we get a new incarnation,
+                # we want to execute the most recent of vmSettings and extensionsConfig (in this example, the Fast Track goal state at T2). This is important in several scenarios; for example,
+                # T0 may not include any extensions, and then T1 and T2 may include RunCommand. If the Agent executed T0, it would delete all installed extensions, since there were no extensions
+                # on that initial goal state. Then, on the next goal state (at time T3), the Agent would re-install RunCommand, which would re-execute the command that it already executed as part
+                # of T1 or T2.
+                #
                 if vm_settings is not None:
                     most_recent = vm_settings if vm_settings.created_on_timestamp > extensions_config.created_on_timestamp else extensions_config
                 else:
