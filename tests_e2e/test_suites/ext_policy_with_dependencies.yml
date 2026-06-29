@@ -15,6 +15,8 @@ skip_on_images:
   - "alma_8"
   - "alma_9"
   - "alma_10"
+  # TODO: The test depends on Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, which currently does not support Azure Linux 4. Remove this exclusion when the issue is fixed.
+  - "azure-linux_4"
   # The test depends on Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, which does not support these distros since version 1.43
   - "centos_79"
   - "centos_82"
