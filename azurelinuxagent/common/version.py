@@ -223,7 +223,7 @@ AGENT_LONG_NAME = "Azure Linux Agent"
 # - During release: Use the actual agent version (e.g., 2.4.0.0)
 #   Update this value before creating a release.
 #
-AGENT_VERSION = '2.16.0.0'
+AGENT_VERSION = '2.16.0.1'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """
 The Azure Linux Agent supports the provisioning and running of Linux
