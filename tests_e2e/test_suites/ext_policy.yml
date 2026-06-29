@@ -10,8 +10,10 @@ images:
   - "cvm-endorsed"
 owns_vm: false
 skip_on_images:
+  # TODO: The ConfigurationforLinux-1.26.109 extension is failing on Debian 11 in China cloud only; skip this image until the issue in the extension is fixed
+  - "AzureChinaCloud:debian_11"
+  # TODO: The test depends on Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, which currently does not support Azure Linux 4. Remove this exclusion when the issue is fixed.
+  - "azure-linux_4"
   # The test depends on Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, which does not support these distros since version 1.43
   - "centos_79"
   - "centos_82"
-  # TODO: The ConfigurationforLinux-1.26.109 extension is failing on Debian 11 in China cloud only; skip this image until the issue in the extension is fixed
-  - "AzureChinaCloud:debian_11"
