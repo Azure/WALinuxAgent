@@ -33,15 +33,26 @@ class InstallExtensions:
         self._context = context
         self._ssh_client = self._context.create_ssh_client()
 
-    def run(self):
+    def run(self) -> bool:
         # Install the GATest extension to test service cgroups
         self._install_gatest_extension()
-        # Install the Azure Monitor Agent to test long running process cgroup
-        self._install_ama()
+        # Install the Azure Monitor Agent to test long running process cgroup.
+        # AMA is not supported on all distros (e.g. it dropped centos_82 support in v1.43),
+        # so skip the install where it would fail.
+        distro = self._ssh_client.get_distro()
+        ama_installed = False
+        if distro != "centos_82":
+            self._install_ama()
+            ama_installed = True
+        else:
+            log.info(
+                "Skipping install of %s: not supported on distro '%s'",
+                VmExtensionIds.AzureMonitorLinuxAgent, distro)
         # Install the VM Access extension to test sample extension
         self._install_vmaccess()
         # Install the CSE extension to test extension cgroup
         self._install_cse()
+        return ama_installed
 
     def _install_ama(self):
         ama_extension = VirtualMachineExtensionClient(

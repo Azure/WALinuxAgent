@@ -27,7 +27,9 @@ from azurelinuxagent.common.version import get_distro
 def main():
     # Prints '<distro>_<version>'
     distro = get_distro()
-    print(distro[0] + "_" + distro[1].replace('.', ''))
+    version_parts = distro[1].split('.')
+    version = ''.join(version_parts[:2])
+    print(distro[0] + "_" + version)
     sys.exit(0)
 
 

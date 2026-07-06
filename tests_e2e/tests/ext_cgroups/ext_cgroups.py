@@ -33,9 +33,14 @@ class ExtCgroups(AgentVmTest):
 
     def run(self):
         log.info("=====Installing extensions to validate ext cgroups scenario")
-        InstallExtensions(self._context).run()
+        ama_installed = InstallExtensions(self._context).run()
         log.info("=====Executing remote script check_cgroups_extensions.py to validate extension cgroups")
-        self._run_remote_test(self._ssh_client, "ext_cgroups-check_cgroups_extensions.py", use_sudo=True)
+        # If AMA was not installed (e.g. distro not supported by AMA), tell the remote script to
+        # skip the AMA-specific validations but still run all other cgroup checks.
+        command = "ext_cgroups-check_cgroups_extensions.py"
+        if not ama_installed:
+            command += " --skip-ama"
+        self._run_remote_test(self._ssh_client, command, use_sudo=True)
         log.info("Successfully verified that extensions present in correct cgroup")
 
 
