@@ -19,7 +19,6 @@
 import datetime
 import re
 import socket
-import threading
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -30,7 +29,7 @@ from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common.future import UTC
 from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError, IptablesInconsistencyError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
+from azurelinuxagent.ga.thread_handler_base import ThreadHandlerBase
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
@@ -238,7 +237,7 @@ class MonitorHostNameChanges(PeriodicOperation):
             self._hostname = curr_hostname
 
 
-class EnvHandler(ThreadHandlerInterface):
+class EnvHandler(ThreadHandlerBase):
     """
     Monitor changes to dhcp and hostname.
     If dhcp client process re-start has occurred, reset routes, dhcp with fabric.
@@ -254,27 +253,16 @@ class EnvHandler(ThreadHandlerInterface):
         return EnvHandler._THREAD_NAME
 
     def __init__(self):
-        self.stopped = True
+        super(EnvHandler, self).__init__()
         self.hostname = None
-        self.env_thread = None
 
     def run(self):
-        if not self.stopped:
+        # If a previous worker thread is still alive, stop it cleanly before starting a new one.
+        if self.is_alive():
             logger.info("Stop existing env monitor service.")
-            self.stop()
-
-        self.stopped = False
+            self.stop_and_join()
         logger.info("Starting env monitor service.")
         self.start()
-
-    def is_alive(self):
-        return self.env_thread.is_alive()
-
-    def start(self):
-        self.env_thread = threading.Thread(target=self.daemon)
-        self.env_thread.daemon = True
-        self.env_thread.name = self.get_thread_name()
-        self.env_thread.start()
 
     def daemon(self):
         try:
@@ -296,21 +284,14 @@ class EnvHandler(ThreadHandlerInterface):
                 periodic_operations.append(SetRootDeviceScsiTimeout(osutil))
             if conf.get_monitor_hostname():
                 periodic_operations.append(MonitorHostNameChanges(osutil))
-            while not self.stopped:
+            while not self.stopped():
                 try:
-                    for op in periodic_operations:
-                        op.run()
+                    # Do not start the next operation if the thread has been signaled to stop.
+                    self._run_periodic_operations(periodic_operations)
                 except Exception as e:
                     logger.error("An error occurred in the environment thread main loop; will skip the current iteration.\n{0}", ustr(e))
                 finally:
-                    PeriodicOperation.sleep_until_next_operation(periodic_operations)
+                    PeriodicOperation.sleep_until_next_operation(periodic_operations, self._stop_event)
         except Exception as e:
             logger.error("An error occurred in the environment thread; will exit the thread.\n{0}", ustr(e))
 
-    def stop(self):
-        """
-        Stop server communication and join the thread to main thread.
-        """
-        self.stopped = True
-        if self.env_thread is not None:
-            self.env_thread.join()

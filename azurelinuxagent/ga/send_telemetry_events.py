@@ -17,14 +17,13 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import datetime
-import threading
 import time
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ServiceStoppedError
 from azurelinuxagent.common.future import ustr, UTC, Queue, Empty
-from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
+from azurelinuxagent.ga.thread_handler_base import ThreadHandlerBase
 from azurelinuxagent.common.utils import textutil
 
 
@@ -32,7 +31,7 @@ def get_send_telemetry_events_handler(protocol_util):
     return SendTelemetryEventsHandler(protocol_util)
 
 
-class SendTelemetryEventsHandler(ThreadHandlerInterface):
+class SendTelemetryEventsHandler(ThreadHandlerBase):
     """
     This Handler takes care of sending all telemetry out of the agent to Wireserver. It sends out data as soon as
     there's any data available in the queue to send.
@@ -44,9 +43,8 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
     _MIN_BATCH_WAIT_TIME = datetime.timedelta(seconds=5)
 
     def __init__(self, protocol_util):
+        super(SendTelemetryEventsHandler, self).__init__()
         self._protocol = protocol_util.get_protocol()
-        self.should_run = True
-        self._thread = None
 
         # We're using a Queue for handling the communication between threads. We plan to remove any dependency on the
         # filesystem in the future and use add_event to directly queue events into the queue rather than writing to
@@ -55,6 +53,11 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
         # Once we move add_event to directly queue events, we need to add a maxsize here to ensure some limitations are
         # being set (currently our limits are enforced by collector_threads but that would become obsolete once we
         # start enqueuing events directly).
+        #
+        # Note on shutdown: the inherited join() does NOT call self._queue.join() (which has no timeout support and
+        # could hang shutdown if the worker is stuck on a network call). The worker loop in daemon() already drains
+        # the queue before exiting (its exit condition is `while not self.stopped() or not self._queue.empty()`),
+        # so a timed thread join is sufficient.
         self._queue = Queue()
 
     @staticmethod
@@ -64,30 +67,6 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
     def run(self):
         logger.info("Start SendTelemetryHandler service.")
         self.start()
-
-    def is_alive(self):
-        return self._thread is not None and self._thread.is_alive()
-
-    def start(self):
-        self._thread = threading.Thread(target=self._process_telemetry_thread)
-        self._thread.daemon = True
-        self._thread.name = self.get_thread_name()
-        self._thread.start()
-
-    def stop(self):
-        """
-        Stop server communication and join the thread to main thread.
-        """
-        self.should_run = False
-        if self.is_alive():
-            self.join()
-
-    def join(self):
-        self._queue.join()
-        self._thread.join()
-
-    def stopped(self):
-        return not self.should_run
 
     def enqueue_event(self, event):
         # Add event to queue and set event
@@ -121,7 +100,7 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
 
         return event
 
-    def _process_telemetry_thread(self):
+    def daemon(self):
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         try:
             # On demand wait, start processing as soon as there is any data available in the queue. In worst case,

@@ -15,6 +15,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import datetime
+import threading
 import time
 from azurelinuxagent.common.future import UTC
 from azurelinuxagent.ga.monitor import PeriodicOperation
@@ -146,12 +147,13 @@ class TestPeriodicOperation(AgentTestCase):
         for op in operations:
             op.run()
 
-        def mock_sleep(seconds):
-            mock_sleep.seconds = seconds
-        mock_sleep.seconds = 0
+        def mock_wait(seconds):
+            mock_wait.seconds = seconds
+        mock_wait.seconds = 0
 
-        with patch("azurelinuxagent.ga.periodic_operation.time.sleep", side_effect=mock_sleep):
-            PeriodicOperation.sleep_until_next_operation(operations)
-            self.assertAlmostEqual(mock_sleep.seconds, 10, 0, "did not sleep for the expected time")
+        stop_event = threading.Event()
+        with patch.object(stop_event, "wait", side_effect=mock_wait):
+            PeriodicOperation.sleep_until_next_operation(operations, stop_event)
+            self.assertAlmostEqual(mock_wait.seconds, 10, 0, "did not sleep for the expected time")
 
 

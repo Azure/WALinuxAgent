@@ -59,13 +59,14 @@ from azurelinuxagent.common.version import AGENT_LONG_NAME, AGENT_NAME, AGENT_DI
     has_logrotate, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, get_daemon_version
 from azurelinuxagent.ga.agent_update_handler import get_agent_update_handler
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
-from azurelinuxagent.ga.collect_telemetry_events import get_collect_telemetry_events_handler
+from azurelinuxagent.ga.collect_telemetry_events import get_collect_telemetry_events_handler, \
+    CollectTelemetryEventsHandler
 from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, list_agent_lib_directory, \
     ExtensionStatusValue, ExtHandlerStatusValue
 from azurelinuxagent.ga.guestagent import GuestAgent
 from azurelinuxagent.ga.monitor import get_monitor_handler
-from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
+from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler, SendTelemetryEventsHandler
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates, get_microsoft_signing_certificate_path
 from azurelinuxagent.ga import state_dir
 from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
@@ -179,6 +180,9 @@ class UpdateHandler(object):
         self._extensions_summary = ExtensionsSummary()
 
         self._is_initial_goal_state = not os.path.exists(self._initial_goal_state_file_path())
+
+        # List of thread handlers managed by this UpdateHandler; populated in run() and used during shutdown
+        self._all_thread_handlers = []
 
         if not conf.get_extensions_enabled():
             self._goal_state_period = GOAL_STATE_PERIOD_EXTENSIONS_DISABLED
@@ -459,7 +463,7 @@ class UpdateHandler(object):
 
             # Get all thread handlers
             telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)
-            all_thread_handlers = [
+            self._all_thread_handlers = [
                 get_monitor_handler(),
                 get_env_handler(),
                 telemetry_handler,
@@ -467,16 +471,16 @@ class UpdateHandler(object):
             ]
 
             if is_log_collection_allowed():
-                all_thread_handlers.append(get_collect_logs_handler())
+                self._all_thread_handlers.append(get_collect_logs_handler())
 
             # Launch all monitoring threads
-            self._start_threads(all_thread_handlers)
+            self._start_threads()
 
             logger.info("Goal State Period: {0} sec. This indicates how often the agent checks for new goal states and reports status.", self._goal_state_period)
 
             while self.is_running:
                 self._check_daemon_running(debug)
-                self._check_threads_running(all_thread_handlers)
+                self._check_threads_running()
                 self._process_goal_state(exthandlers_handler, remote_access_handler, agent_update_handler)
                 self._send_heartbeat_telemetry(agent_update_handler)
                 self._check_agent_memory_usage()
@@ -584,13 +588,13 @@ class UpdateHandler(object):
         if not debug and self._is_orphaned:
             raise ExitException("Agent {0} is an orphan -- exiting".format(CURRENT_AGENT))
 
-    def _start_threads(self, all_thread_handlers):
-        for thread_handler in all_thread_handlers:
+    def _start_threads(self):
+        for thread_handler in self._all_thread_handlers:
             thread_handler.run()
 
-    def _check_threads_running(self, all_thread_handlers):
+    def _check_threads_running(self):
         # Check that all the threads are still running
-        for thread_handler in all_thread_handlers:
+        for thread_handler in self._all_thread_handlers:
             if thread_handler.keep_alive() and not thread_handler.is_alive():
                 logger.warn("{0} thread died, restarting".format(thread_handler.get_thread_name()))
                 thread_handler.start()
@@ -1113,9 +1117,51 @@ class UpdateHandler(object):
         return os.path.join(conf.get_lib_dir(), INITIAL_GOAL_STATE_FILE)
 
     def _shutdown(self):
-        # Todo: Ensure all threads stopped when shutting down the main extension handler to ensure that the state of
-        # all threads is clean.
+        # _shutdown() is invoked from the ext-handler's run() loop when it exits naturally
+        # (normal completion, ExitException, or AgentUpgradeExitException). It stops all worker
+        # threads started by run() in dependency order so they can finish their in-flight work.
+        #
+        # Note: when the ext-handler is killed via SIGTERM (e.g., systemctl stop), this method is
+        # NOT invoked in the ext-handler process - the process is terminated abruptly. The same
+        # method is also called from the daemon's forward_signal(), but in the daemon process
+        # _all_thread_handlers is empty, so it only cleans up the sentinel file.
         self.is_running = False
+
+        # Build an explicit shutdown order, so we don't rely on the order of items in self._all_thread_handlers.
+        #
+        # Inter-thread dependencies handled here:
+        #   * CollectTelemetryEventsHandler ("TelemetryEventsCollector") produces events into the queue owned by
+        #     SendTelemetryEventsHandler ("SendTelemetryHandler"). The collector parses extension event files and,
+        #     for each event, calls SendTelemetryEventsHandler.enqueue_event(); enqueue_event() raises
+        #     ServiceStoppedError as soon as the sender is signaled to stop. The collector deletes the event file
+        #     in a finally block regardless of whether enqueue succeeded, so signaling the sender while the
+        #     collector is mid-iteration causes telemetry events to be silently dropped.
+        #
+        #     To avoid that, we treat the collector and sender as a strictly-ordered dependency pair and stop them
+        #     sequentially: stop+join the collector first (so it can no longer produce events), then stop+join the
+        #     sender (so it can drain its queue). We do NOT broadcast stop() across the entire handler list up-front
+        #     because that would re-introduce the race above.
+        #
+        # All remaining thread handlers are independent of each other; for those we broadcast stop() first and only
+        # then join, so their join timeouts overlap rather than serializing.
+        ordered_thread_names = [CollectTelemetryEventsHandler.get_thread_name(), SendTelemetryEventsHandler.get_thread_name()]
+        handlers_by_name = dict((h.get_thread_name(), h) for h in self._all_thread_handlers)
+
+        # Phase 1: dependency-ordered handlers -- stop+join each one fully before moving to the next.
+        for name in ordered_thread_names:
+            handler = handlers_by_name.pop(name, None)
+            if handler is None:
+                continue
+            self._stop_handler(handler)
+            self._wait_for_handler(handler)
+
+        # Phase 2 + 3: independent handlers -- broadcast stop() first, then join. Doing all stop() calls before
+        # any join() lets the threads wind down concurrently, instead of paying the join timeout one at a time.
+        independent_handlers = list(handlers_by_name.values())
+        for handler in independent_handlers:
+            self._stop_handler(handler)
+        for handler in independent_handlers:
+            self._wait_for_handler(handler)
 
         if not os.path.isfile(self._sentinel_file_path()):
             return
@@ -1128,6 +1174,35 @@ class UpdateHandler(object):
                 self._sentinel_file_path(),
                 str(e))
         return
+
+    @staticmethod
+    def _stop_handler(handler):
+        """
+        Signals the given handler to stop. Non-blocking; pair with _wait_for_handler() to wait for the
+        thread to actually exit.
+        """
+        try:
+            logger.info("Signaling {0} thread to stop...", handler.get_thread_name())
+            handler.stop()
+        except Exception as e:
+            logger.warn(u"Exception signaling thread {0} to stop: {1}", handler.get_thread_name(), ustr(e))
+
+    @staticmethod
+    def _wait_for_handler(handler):
+        """
+        Waits for the given handler's thread to exit, with a bounded timeout, and logs the outcome.
+        Assumes _stop_handler() has already been called on the handler.
+        """
+        thread_name = handler.get_thread_name()
+        try:
+            logger.info("Waiting for {0} thread to stop...", thread_name)
+            handler.join()
+            if handler.is_alive():
+                logger.warn("{0} thread did not stop within the timeout", thread_name)
+            else:
+                logger.info("{0} thread stopped successfully", thread_name)
+        except Exception as e:
+            logger.warn(u"Exception waiting for thread {0} to stop: {1}", thread_name, ustr(e))
 
     def _write_pid_file(self):
         pid_files = self._get_pid_files()

@@ -16,7 +16,6 @@
 #
 
 import datetime
-import time
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.future import ustr, UTC
@@ -65,10 +64,14 @@ class PeriodicOperation(object):
         raise NotImplementedError()
 
     @staticmethod
-    def sleep_until_next_operation(operations):
+    def sleep_until_next_operation(operations, stop_event):
         """
         Takes a list of operations, finds the operation that should be executed next (that with the closest next_run_time)
         and sleeps until it is time to execute that operation.
+
+        stop_event (threading.Event) is required: the sleep is implemented via stop_event.wait(), so setting the
+        event from another thread interrupts the sleep immediately. This is what allows handlers to wake up
+        promptly when shutdown is signaled instead of sleeping through the shutdown window.
         """
         next_operation_time = min(op.next_run_time() for op in operations)
 
@@ -77,5 +80,6 @@ class PeriodicOperation(object):
         sleep_seconds = ((sleep_timedelta.days * 24 * 3600 + sleep_timedelta.seconds) * 10.0 ** 6 + sleep_timedelta.microseconds) / 10.0 ** 6
 
         if sleep_seconds > 0:
-            time.sleep(sleep_seconds)
+            stop_event.wait(sleep_seconds)
+
 

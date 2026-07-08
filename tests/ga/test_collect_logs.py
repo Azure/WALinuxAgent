@@ -56,40 +56,48 @@ def _create_collect_logs_handler(iterations=1, cgroup_version=CgroupVersions.V1,
         protocol_util = MagicMock()
         protocol_util.get_protocol = Mock(return_value=protocol)
         with patch("azurelinuxagent.ga.collect_logs.get_protocol_util", return_value=protocol_util):
+            # CollectLogsHandler.daemon() calls self.stopped() twice per requested iteration:
+            #   1. Once for the early-exit check right after the initial delay, so that a shutdown
+            #      signaled while the daemon is sleeping causes it to return immediately without
+            #      starting a fresh log-collection cycle.
+            #   2. Once per turn of the `while not self.stopped()` main loop.
+            # So we need 1 (early exit) + N (loop enters) + 1 (loop exits) = N + 2 mocked values,
+            # where N is the requested iteration count.
             with patch("azurelinuxagent.ga.collect_logs.CollectLogsHandler.stopped",
-                       side_effect=[False] * iterations + [True]):
-                with patch("time.sleep"):
-                    with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=collect_logs_conf):
+                       side_effect=[False] * (iterations + 1) + [True]):
+                with patch("azurelinuxagent.ga.collect_logs.conf.get_log_collector_initial_delay", return_value=0):
+                    with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs_period", return_value=0):
+                        with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=collect_logs_conf):
 
-                        # Grab the singleton to patch it
-                        cgroups_configurator_singleton = CGroupConfigurator.get_instance()
-                        mock_cgroups_api = MagicMock()
-                        mock_cgroups_api.get_accounting_properties.return_value = ((), ())
+                            # Grab the singleton to patch it
+                            cgroups_configurator_singleton = CGroupConfigurator.get_instance()
+                            mock_cgroups_api = MagicMock()
+                            mock_cgroups_api.get_accounting_properties.return_value = ((), ())
 
-                        if cgroup_version == CgroupVersions.V1:
-                            with patch.object(cgroups_configurator_singleton, "enabled", return_value=cgroups_enabled):
-                                with patch.object(cgroups_configurator_singleton, "_cgroups_api", mock_cgroups_api, create=True):
-                                    def run_and_wait():
-                                        collect_logs_handler.run()
-                                        collect_logs_handler.join()
-
-                                    collect_logs_handler = get_collect_logs_handler()
-                                    collect_logs_handler.get_mock_wire_protocol = lambda: protocol
-                                    collect_logs_handler.run_and_wait = run_and_wait
-                                    yield collect_logs_handler
-                        else:
-                            with patch("azurelinuxagent.ga.collect_logs.conf.get_enable_cgroup_v2_resource_limiting", return_value=cgroupv2_resource_limiting_conf):
-                                with patch.object(cgroups_configurator_singleton, "enabled", return_value=False):
+                            if cgroup_version == CgroupVersions.V1:
+                                with patch.object(cgroups_configurator_singleton, "enabled", return_value=cgroups_enabled):
                                     with patch.object(cgroups_configurator_singleton, "_cgroups_api", mock_cgroups_api, create=True):
-                                        with patch("azurelinuxagent.ga.cgroupconfigurator.CGroupConfigurator._Impl.using_cgroup_v2", return_value=True):
-                                            def run_and_wait():
-                                                collect_logs_handler.run()
-                                                collect_logs_handler.join()
+                                        def run_and_wait():
+                                            collect_logs_handler.run()
+                                            collect_logs_handler.join()
 
-                                            collect_logs_handler = get_collect_logs_handler()
-                                            collect_logs_handler.get_mock_wire_protocol = lambda: protocol
-                                            collect_logs_handler.run_and_wait = run_and_wait
-                                            yield collect_logs_handler
+                                        collect_logs_handler = get_collect_logs_handler()
+                                        collect_logs_handler.get_mock_wire_protocol = lambda: protocol
+                                        collect_logs_handler.run_and_wait = run_and_wait
+                                        yield collect_logs_handler
+                            else:
+                                with patch("azurelinuxagent.ga.collect_logs.conf.get_enable_cgroup_v2_resource_limiting", return_value=cgroupv2_resource_limiting_conf):
+                                    with patch.object(cgroups_configurator_singleton, "enabled", return_value=False):
+                                        with patch.object(cgroups_configurator_singleton, "_cgroups_api", mock_cgroups_api, create=True):
+                                            with patch("azurelinuxagent.ga.cgroupconfigurator.CGroupConfigurator._Impl.using_cgroup_v2", return_value=True):
+                                                def run_and_wait():
+                                                    collect_logs_handler.run()
+                                                    collect_logs_handler.join()
+
+                                                collect_logs_handler = get_collect_logs_handler()
+                                                collect_logs_handler.get_mock_wire_protocol = lambda: protocol
+                                                collect_logs_handler.run_and_wait = run_and_wait
+                                                yield collect_logs_handler
 
 
 @skip_if_predicate_true(is_python_version_26, "Disabled on Python 2.6")

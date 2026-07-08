@@ -1,0 +1,22 @@
+#
+# This test validates that the ext-handler shuts down gracefully on the natural exit paths
+# (AgentUpgradeExitException / ExitException) by triggering a self-update and then verifying
+# in waagent.log that:
+#   1. Every thread started by UpdateHandler.run() is signaled to stop
+#   2. Every thread either finishes cleanly or is reported as not stopping within the timeout
+#
+name: "AgentGracefulShutdown"
+tests:
+  - "agent_graceful_shutdown/agent_graceful_shutdown.py"
+images:
+  - "endorsed"
+  - "endorsed-arm64"
+locations: "AzureCloud:eastus2euap"
+owns_vm: true
+skip_on_clouds:
+  - "AzureChinaCloud"
+  - "AzureUSGovernment"
+# Flatcar uses a read-only filesystem so we cannot rebuild the agent zip with a custom version.
+skip_on_images:
+  - "flatcar"
+  - "flatcar_arm64"

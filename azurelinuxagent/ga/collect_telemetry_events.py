@@ -20,7 +20,6 @@ import datetime
 import json
 import os
 import re
-import threading
 import time
 from collections import defaultdict
 
@@ -33,7 +32,7 @@ from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_I
 from azurelinuxagent.common.exception import InvalidExtensionEventError, ServiceStoppedError, EventError
 from azurelinuxagent.common.future import ustr, is_file_not_found_error, UTC
 from azurelinuxagent.common.utils.textutil import redact_sas_token
-from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
+from azurelinuxagent.ga.thread_handler_base import ThreadHandlerBase
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
     GuestAgentGenericLogsSchema, GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import textutil
@@ -569,7 +568,7 @@ class _CollectAndEnqueueEvents(PeriodicOperation):
         event.parameters = trimmed_params
 
 
-class CollectTelemetryEventsHandler(ThreadHandlerInterface):
+class CollectTelemetryEventsHandler(ThreadHandlerBase):
     """
     This Handler takes care of fetching the Extension Telemetry events from the {extension_events_dir} and sends it to
     Kusto for advanced debuggability.
@@ -578,8 +577,7 @@ class CollectTelemetryEventsHandler(ThreadHandlerInterface):
     _THREAD_NAME = "TelemetryEventsCollector"
 
     def __init__(self, send_telemetry_events_handler):
-        self.should_run = True
-        self.thread = None
+        super(CollectTelemetryEventsHandler, self).__init__()
         self._send_telemetry_events_handler = send_telemetry_events_handler
 
     @staticmethod
@@ -589,26 +587,6 @@ class CollectTelemetryEventsHandler(ThreadHandlerInterface):
     def run(self):
         logger.info("Start Extension Telemetry service.")
         self.start()
-
-    def is_alive(self):
-        return self.thread is not None and self.thread.is_alive()
-
-    def start(self):
-        self.thread = threading.Thread(target=self.daemon)
-        self.thread.daemon = True
-        self.thread.name = CollectTelemetryEventsHandler.get_thread_name()
-        self.thread.start()
-
-    def stop(self):
-        """
-        Stop server communication and join the thread to main thread.
-        """
-        self.should_run = False
-        if self.is_alive():
-            self.thread.join()
-
-    def stopped(self):
-        return not self.should_run
 
     def daemon(self):
         periodic_operations = [
@@ -623,15 +601,15 @@ class CollectTelemetryEventsHandler(ThreadHandlerInterface):
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         while not self.stopped():
             try:
-                for periodic_op in periodic_operations:
-                    periodic_op.run()
+                # Do not start the next operation if the thread has been signaled to stop.
+                self._run_periodic_operations(periodic_operations)
 
             except Exception as error:
                 logger.warn(
                     "An error occurred in the Telemetry Extension thread main loop; will skip the current iteration.\n{0}",
                     ustr(error))
             finally:
-                PeriodicOperation.sleep_until_next_operation(periodic_operations)
+                PeriodicOperation.sleep_until_next_operation(periodic_operations, self._stop_event)
 
     @staticmethod
     def add_common_params_to_telemetry_event(event, event_time):

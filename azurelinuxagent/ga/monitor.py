@@ -18,7 +18,6 @@
 import datetime
 import os
 import platform
-import threading
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -29,7 +28,7 @@ from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
 from azurelinuxagent.common.future import ustr, UTC
-from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
+from azurelinuxagent.ga.thread_handler_base import ThreadHandlerBase
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
@@ -252,39 +251,12 @@ class SendImdsHeartbeat(PeriodicOperation):
             raise
 
 
-class MonitorHandler(ThreadHandlerInterface):
+class MonitorHandler(ThreadHandlerBase):
     _THREAD_NAME = "MonitorHandler"
 
     @staticmethod
     def get_thread_name():
         return MonitorHandler._THREAD_NAME
-
-    def __init__(self):
-        self.monitor_thread = None
-        self.should_run = True
-
-    def run(self):
-        self.start()
-
-    def stop(self):
-        self.should_run = False
-        if self.is_alive():
-            self.join()
-
-    def join(self):
-        self.monitor_thread.join()
-
-    def stopped(self):
-        return not self.should_run
-
-    def is_alive(self):
-        return self.monitor_thread is not None and self.monitor_thread.is_alive()
-
-    def start(self):
-        self.monitor_thread = threading.Thread(target=self.daemon)
-        self.monitor_thread.daemon = True
-        self.monitor_thread.name = self.get_thread_name()
-        self.monitor_thread.start()
 
     def daemon(self):
         try:
@@ -320,10 +292,10 @@ class MonitorHandler(ThreadHandlerInterface):
 
             while not self.stopped():
                 try:
-                    for op in periodic_operations:
-                        op.run()
+                    # Do not start the next operation if the thread has been signaled to stop.
+                    self._run_periodic_operations(periodic_operations)
                 finally:
-                    PeriodicOperation.sleep_until_next_operation(periodic_operations)
+                    PeriodicOperation.sleep_until_next_operation(periodic_operations, self._stop_event)
         except Exception as e:
             logger.error("An error occurred in the monitor thread; will exit the thread.\n{0}", ustr(e))
 

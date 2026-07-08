@@ -899,6 +899,147 @@ class TestUpdate(UpdateTestCase):
         self.assertFalse(self.update_handler.is_running)
         self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
 
+    def test_shutdown_stops_all_threads(self):
+        # Verifies the two-phase shutdown contract documented in UpdateHandler._shutdown():
+        #
+        #   Phase A (dependency-ordered handlers, sequential):
+        #       TelemetryEventsCollector is stopped and joined before SendTelemetryHandler is even stopped.
+        #       This protects the producer/consumer relationship between the two telemetry threads -- the
+        #       collector enqueues events into the sender's queue and would silently drop events (deleting
+        #       the event files in its finally block) if the sender were signaled while it was still
+        #       iterating.
+        #
+        #   Phase B (independent handlers, broadcast-then-join):
+        #       Every other handler is stopped (signal-only) up-front, and only then are their joins awaited,
+        #       so their join timeouts overlap rather than serialize.
+        #
+        # We deliberately list the telemetry pair *before* the independent handlers in the input list, to
+        # verify that _shutdown() does not rely on input order and instead uses the explicit ordering above.
+        call_order = []
+        mock_handlers = []
+        for name in ["SendTelemetryHandler", "TelemetryEventsCollector", "MonitorHandler", "EnvHandler"]:
+            handler = MagicMock()
+            handler.get_thread_name.return_value = name
+            handler.is_alive.return_value = False
+            handler.stop.side_effect = lambda n=name: call_order.append(("stop", n))
+            handler.join.side_effect = lambda n=name: call_order.append(("join", n))
+            mock_handlers.append(handler)
+
+        self.update_handler._all_thread_handlers = mock_handlers
+        self.update_handler._shutdown()
+
+        # Sanity: stop() and join() were each called once on every handler.
+        for handler in mock_handlers:
+            self.assertEqual(1, handler.stop.call_count)
+            self.assertEqual(1, handler.join.call_count)
+
+        # Phase A assertions: the telemetry pair is fully sequential.
+        # The expected prefix of call_order is:
+        #     [("stop", "TelemetryEventsCollector"), ("join", "TelemetryEventsCollector"),
+        #      ("stop", "SendTelemetryHandler"),     ("join", "SendTelemetryHandler"),
+        #      ...]
+        self.assertEqual(("stop", "TelemetryEventsCollector"), call_order[0],
+            "TelemetryEventsCollector must be the first thread signaled to stop")
+        self.assertEqual(("join", "TelemetryEventsCollector"), call_order[1],
+            "TelemetryEventsCollector must be fully joined before SendTelemetryHandler is signaled, "
+            "otherwise the collector can hit ServiceStoppedError mid-iteration and silently drop telemetry")
+        self.assertEqual(("stop", "SendTelemetryHandler"), call_order[2],
+            "SendTelemetryHandler must be signaled only after TelemetryEventsCollector has stopped")
+        self.assertEqual(("join", "SendTelemetryHandler"), call_order[3],
+            "SendTelemetryHandler must drain its queue and join before any independent handler is touched")
+
+        # Phase B assertions: independent handlers are broadcast-stopped before any of them is joined.
+        independent_events = call_order[4:]
+        independent_stop_indices = [i for i, (kind, _) in enumerate(independent_events) if kind == "stop"]
+        independent_join_indices = [i for i, (kind, _) in enumerate(independent_events) if kind == "join"]
+        self.assertEqual(2, len(independent_stop_indices),
+            "Both independent handlers must be signaled to stop")
+        self.assertEqual(2, len(independent_join_indices),
+            "Both independent handlers must be joined")
+        self.assertLess(max(independent_stop_indices), min(independent_join_indices),
+            "All independent handlers must be stopped before any of them is joined, so their join "
+            "timeouts can overlap")
+
+        # The two independent handlers may be stopped/joined in either order.
+        self.assertEqual(set(["MonitorHandler", "EnvHandler"]),
+            set(name for kind, name in independent_events if kind == "stop"))
+        self.assertEqual(set(["MonitorHandler", "EnvHandler"]),
+            set(name for kind, name in independent_events if kind == "join"))
+
+        self.assertFalse(self.update_handler.is_running)
+
+    def test_shutdown_logs_warning_if_thread_does_not_stop(self):
+        # Create a mock handler that reports it's still alive after join()
+        handler = MagicMock()
+        handler.get_thread_name.return_value = "StuckThread"
+        handler.is_alive.return_value = True  # Thread didn't stop within timeout
+
+        self.update_handler._all_thread_handlers = [handler]
+
+        with patch('azurelinuxagent.ga.update.logger') as mock_logger:
+            self.update_handler._shutdown()
+            self.assertEqual(1, handler.stop.call_count)
+            self.assertEqual(1, handler.join.call_count)
+            # Verify that a warning was logged about the thread not stopping
+            mock_logger.warn.assert_any_call("{0} thread did not stop within the timeout", "StuckThread")
+
+    def test_shutdown_continues_if_thread_stop_raises_exception(self):
+        # This test verifies that an exception during one handler's stop() does not prevent the
+        # remaining handlers from being stopped.
+        good_handler = MagicMock()
+        good_handler.get_thread_name.return_value = "GoodThread"
+        good_handler.is_alive.return_value = False
+
+        failing_handler = MagicMock()
+        failing_handler.get_thread_name.return_value = "FailingThread"
+        failing_handler.stop.side_effect = Exception("test error")
+
+        self.update_handler._all_thread_handlers = [failing_handler, good_handler]
+        self.update_handler._shutdown()
+
+        # Both stop() methods must have been called, despite the exception raised by failing_handler
+        self.assertEqual(1, failing_handler.stop.call_count,
+            "FailingThread.stop() should have been called")
+        self.assertEqual(1, good_handler.stop.call_count,
+            "GoodThread.stop() should have been called even though FailingThread.stop() raised an exception")
+        self.assertFalse(self.update_handler.is_running)
+
+    def test_shutdown_signals_in_parallel_before_joining(self):
+        """
+        Verifies that stop() is broadcast to every independent handler before join() is called on any
+        of them. This is what allows healthy threads to wind down concurrently rather than serializing
+        each handler's join timeout.
+        """
+        call_order = []
+
+        def make_handler(name):
+            handler = MagicMock()
+            handler.get_thread_name.return_value = name
+            handler.is_alive.return_value = False
+            handler.stop.side_effect = lambda n=name: call_order.append("stop:" + n)
+            handler.join.side_effect = lambda n=name: call_order.append("join:" + n)
+            return handler
+
+        handlers = [make_handler("HandlerA"), make_handler("HandlerB"), make_handler("HandlerC")]
+        self.update_handler._all_thread_handlers = handlers
+        self.update_handler._shutdown()
+
+        # Sanity check: every handler was both stopped and joined exactly once.
+        self.assertEqual(
+            sorted(call_order),
+            sorted(["stop:HandlerA", "stop:HandlerB", "stop:HandlerC",
+                    "join:HandlerA", "join:HandlerB", "join:HandlerC"]),
+            "Each handler should be stopped and joined exactly once; got {0}".format(call_order))
+
+        # Parallelism guarantee: every stop() must appear before the first join() -- i.e. the index
+        # of the last "stop:*" entry must be less than the index of the first "join:*" entry.
+        # Otherwise shutdown is interleaving stop/join per handler.
+        last_stop_index = max(i for i, tag in enumerate(call_order) if tag.startswith("stop:"))
+        first_join_index = min(i for i, tag in enumerate(call_order) if tag.startswith("join:"))
+        self.assertLess(
+            last_stop_index, first_join_index,
+            "All stop() calls must happen before any join() begins; call_order={0}".format(call_order))
+
     def test_shutdown_ignores_missing_sentinel_file(self):
         self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
         self.update_handler._shutdown()
@@ -1922,7 +2063,8 @@ class MonitorThreadTest(AgentTestCase):
                                         with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
                                             with patch('time.sleep'):
                                                 with patch('sys.exit'):
-                                                    self.update_handler.run()
+                                                    with patch.object(UpdateHandler, '_shutdown'):
+                                                        self.update_handler.run()
 
     def _setup_mock_thread_and_start_test_run(self, mock_thread, is_alive=True, invocations=0):
         thread = MagicMock()

@@ -90,9 +90,10 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
 
     @staticmethod
     def _stop_handler(telemetry_handler, timeout=0.001):
-        # Giving it some grace time to finish execution and then stopping thread
+        # Give the worker thread a tiny bit of grace time to pull queued events, then signal the
+        # handler to stop and wait for it to actually exit.
         time.sleep(timeout)
-        telemetry_handler.stop()
+        telemetry_handler.stop_and_join()
 
     def _assert_test_data_in_event_body(self, telemetry_handler, test_events):
         # Stop the thread and Wait for the queue and thread to join

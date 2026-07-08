@@ -280,7 +280,7 @@ class Agent(object):
                   "and detailed log output can be found at {1}".format(archive, OUTPUT_RESULTS_FILE_PATH))
 
             if log_collector_monitor is not None:
-                log_collector_monitor.stop()
+                log_collector_monitor.stop_and_join()
                 try:
                     metrics_summary = log_collector_monitor.get_max_recorded_metrics()
                     metrics_summary['Total Uncompressed File Size (B)'] = total_uncompressed_size
@@ -298,7 +298,7 @@ class Agent(object):
             sys.exit(1)
         finally:
             if log_collector_monitor is not None:
-                log_collector_monitor.stop()
+                log_collector_monitor.stop_and_join()
 
     @staticmethod
     def setup_firewall(endpoint):

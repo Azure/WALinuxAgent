@@ -59,58 +59,66 @@ def _mock_wire_protocol():
 
 class MonitorHandlerTestCase(AgentTestCase):
     def test_it_should_invoke_all_periodic_operations(self):
+        # The patched PeriodicOperation.run records which operations were invoked. Once all
+        # expected operations have run, we signal the handler to stop -- the daemon will then
+        # exit its main loop on the next iteration. We deliberately do NOT patch
+        # MonitorHandler.stopped() with a fixed side_effect list: MonitorHandler.daemon() uses
+        # the inherited _run_periodic_operations() helper, which checks stopped() per operation
+        # Driving the lifecycle through the real stop()/stopped() API is robust regardless of
+        # how many operations are registered.
         def periodic_operation_run(self):
             invoked_operations.append(self.__class__.__name__)
+            if len(invoked_operations) >= len(expected_operations):
+                monitor_handler.stop()
 
         with _mock_wire_protocol():
-            with patch("azurelinuxagent.ga.monitor.MonitorHandler.stopped", side_effect=[False, True] * 2):
-                with patch("time.sleep"):
-                    with patch.object(PeriodicOperation, "run", side_effect=periodic_operation_run, autospec=True):
-                        with patch("azurelinuxagent.common.conf.get_monitor_network_configuration_changes") as monitor_network_changes:
-                            for network_changes in [True, False]:
-                                monitor_network_changes.return_value = network_changes
+            with patch("time.sleep"):
+                with patch.object(PeriodicOperation, "run", side_effect=periodic_operation_run, autospec=True):
+                    with patch("azurelinuxagent.common.conf.get_monitor_network_configuration_changes") as monitor_network_changes:
+                        for network_changes in [True, False]:
+                            monitor_network_changes.return_value = network_changes
 
-                                invoked_operations = []
+                            invoked_operations = []
 
-                                monitor_handler = get_monitor_handler()
-                                monitor_handler.run()
-                                monitor_handler.join()
+                            expected_operations = [
+                                PollResourceUsage.__name__,
+                                PollSystemWideResourceUsage.__name__,
+                                ReportNetworkErrors.__name__,
+                                ResetPeriodicLogMessages.__name__,
+                                SendHostPluginHeartbeat.__name__,
+                                SendImdsHeartbeat.__name__,
+                            ]
 
-                                expected_operations = [
-                                    PollResourceUsage.__name__,
-                                    PollSystemWideResourceUsage.__name__,
-                                    ReportNetworkErrors.__name__,
-                                    ResetPeriodicLogMessages.__name__,
-                                    SendHostPluginHeartbeat.__name__,
-                                    SendImdsHeartbeat.__name__,
-                                ]
+                            if network_changes:
+                                expected_operations.append(ReportNetworkConfigurationChanges.__name__)
 
-                                if network_changes:
-                                    expected_operations.append(ReportNetworkConfigurationChanges.__name__)
+                            if 'Linux' in platform.system():
+                                expected_operations.append(MonitorKernelSoftLockup.__name__)
 
-                                if 'Linux' in platform.system():
-                                    expected_operations.append(MonitorKernelSoftLockup.__name__)
+                            monitor_handler = get_monitor_handler()
+                            monitor_handler.run()
+                            monitor_handler.join()
 
-                                invoked_operations.sort()
-                                expected_operations.sort()
+                            invoked_operations.sort()
+                            expected_operations.sort()
 
-                                self.assertEqual(invoked_operations, expected_operations, "The monitor thread did not invoke the expected operations")
+                            self.assertEqual(invoked_operations, expected_operations, "The monitor thread did not invoke the expected operations")
 
     def test_it_should_skip_kernel_soft_lockup_when_not_available(self):
         def periodic_operation_run(self):
             invoked_operations.append(self.__class__.__name__)
+            monitor_handler.stop()
 
         with _mock_wire_protocol():
-            with patch("azurelinuxagent.ga.monitor.MonitorHandler.stopped", side_effect=[False, True]):
-                with patch("time.sleep"):
-                    with patch.object(PeriodicOperation, "run", side_effect=periodic_operation_run, autospec=True):
-                        with patch("azurelinuxagent.ga.monitor.platform.system", return_value="Linux"):
-                            with patch.object(MonitorKernelSoftLockup, "_is_dmesg_available", return_value=False):
-                                invoked_operations = []
-                                monitor_handler = get_monitor_handler()
-                                monitor_handler.run()
-                                monitor_handler.join()
-                                self.assertNotIn(MonitorKernelSoftLockup.__name__, invoked_operations)
+            with patch("time.sleep"):
+                with patch.object(PeriodicOperation, "run", side_effect=periodic_operation_run, autospec=True):
+                    with patch("azurelinuxagent.ga.monitor.platform.system", return_value="Linux"):
+                        with patch.object(MonitorKernelSoftLockup, "_is_dmesg_available", return_value=False):
+                            invoked_operations = []
+                            monitor_handler = get_monitor_handler()
+                            monitor_handler.run()
+                            monitor_handler.join()
+                            self.assertNotIn(MonitorKernelSoftLockup.__name__, invoked_operations)
 
 
 class SendHostPluginHeartbeatOperationTestCase(AgentTestCase, HttpRequestPredicates):
