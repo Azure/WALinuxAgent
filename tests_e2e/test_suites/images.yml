@@ -175,7 +175,7 @@ images:
          - "Standard_DC2as_v6"
       locations:
          AzureCloud: ["westus2", "westcentralus", "southcentralus", "eastus2euap"] # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Public test sub.
-         AzureUSGovernment: ["usgovarizona"]       # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Gov test sub.
+         AzureUSGovernment: []                     # TODO: This image is not available in Gov cloud. Update this once the image is available in Gov cloud.
          AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
    azure-linux_4:
       urn: "microsoftazurelinux:azurelinux-4:4:latest"
