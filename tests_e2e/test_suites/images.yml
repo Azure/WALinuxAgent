@@ -172,10 +172,10 @@ images:
       urn: "microsoftcblmariner azure-linux-3 azure-linux-3-cvm latest"
       security_type: "ConfidentialVM"
       vm_sizes:
-         - "Standard_DC2ads_v5" # TODO: The sku for this image should be updated to 'Standard_DC2as_v6' once we have capacity for it in our test subs, since it is available in more regions
+         - "Standard_DC2as_v6"
       locations:
-         AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
-         AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
+         AzureCloud: ["westus2", "westcentralus", "southcentralus", "eastus2euap"] # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Public test sub.
+         AzureUSGovernment: ["usgovarizona"]       # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Gov test sub.
          AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
    azure-linux_4:
       urn: "microsoftazurelinux:azurelinux-4:4:latest"
@@ -313,28 +313,28 @@ images:
       urn: "RedHat rhel-cvm 9_4_cvm latest"
       security_type: "ConfidentialVM"
       vm_sizes:
-         - "Standard_DC2ads_v5" # TODO: The sku for this image should be updated to 'Standard_DC2as_v6' once we have capacity for it in our test subs, since it is available in more regions
+         - "Standard_DC2as_v6"
       locations:
-         AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
-         AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
+         AzureCloud: ["westus2", "westcentralus", "southcentralus", "eastus2euap"] # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Public test sub.
+         AzureUSGovernment: ["usgovarizona"]       # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Gov test sub.
          AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
    rhel_95_cvm:
       urn: "RedHat rhel-cvm 9_5_cvm latest"
       security_type: "ConfidentialVM"
       vm_sizes:
-         - "Standard_DC2ads_v5" # TODO: The sku for this image should be updated to 'Standard_DC2as_v6' once we have capacity for it in our test subs, since it is available in more regions
+         - "Standard_DC2as_v6"
       locations:
-         AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
-         AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
+         AzureCloud: ["westus2", "westcentralus", "southcentralus", "eastus2euap"] # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Public test sub.
+         AzureUSGovernment: ["usgovarizona"]       # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Gov test sub.
          AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
    rhel_10_cvm:
       urn: "RedHat:rhel-cvm:10_2_cvm:latest"
       security_type: "ConfidentialVM"
       vm_sizes:
-         - "Standard_DC2ads_v5" # TODO: The sku for this image should be updated to 'Standard_DC2as_v6' once we have capacity for it in our test subs, since it is available in more regions
+         - "Standard_DC2as_v6"
       locations:
-         AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
-         AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
+         AzureCloud: ["westus2", "westcentralus", "southcentralus", "eastus2euap"] # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Public test sub.
+         AzureUSGovernment: ["usgovarizona"]       # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Gov test sub.
          AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
    rocky_9:
       urn: "ciq:rocky-community-editions:rocky-community-9:latest"
@@ -345,10 +345,10 @@ images:
       urn: "ciq:rocky-lts:ciqrl94lts-cvm:latest"
       security_type: "ConfidentialVM"
       vm_sizes:
-         - "Standard_DC2ads_v5" # TODO: The sku for this image should be updated to 'Standard_DC2as_v6' once we have capacity for it in our test subs, since it is available in more regions
+         - "Standard_DC2as_v6"
       locations:
-         AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
-         AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
+         AzureCloud: ["westus2", "westcentralus", "southcentralus", "eastus2euap"] # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Public test sub.
+         AzureUSGovernment: ["usgovarizona"]       # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Gov test sub.
          AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
    suse_12:
       urn: "SUSE:sles-12-sp5:gen1:latest"
@@ -392,27 +392,27 @@ images:
       urn: "Canonical 0001-com-ubuntu-confidential-vm-focal 20_04-lts-cvm latest"
       security_type: "ConfidentialVM"
       vm_sizes:
-         - "Standard_DC2ads_v5" # TODO: The sku for this image should be updated to 'Standard_DC2as_v6' once we have capacity for it in our test subs, since it is available in more regions
+         - "Standard_DC2as_v6"
       locations:
-         AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
-         AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
+         AzureCloud: ["westus2", "westcentralus", "southcentralus", "eastus2euap"] # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Public test sub.
+         AzureUSGovernment: ["usgovarizona"]       # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Gov test sub.
          AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
    ubuntu_2204_cvm:
       urn: "Canonical 0001-com-ubuntu-confidential-vm-jammy 22_04-lts-cvm latest"
       security_type: "ConfidentialVM"
       vm_sizes:
-         - "Standard_DC2ads_v5" # TODO: The sku for this image should be updated to 'Standard_DC2as_v6' once we have capacity for it in our test subs, since it is available in more regions
+         - "Standard_DC2as_v6"
       locations:
-         AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
-         AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
+         AzureCloud: ["westus2", "westcentralus", "southcentralus", "eastus2euap"] # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Public test sub.
+         AzureUSGovernment: ["usgovarizona"]       # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Gov test sub.
          AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
    ubuntu_2404_cvm:
       urn: "Canonical ubuntu-24_04-lts cvm latest"
       security_type: "ConfidentialVM"
       vm_sizes:
-         - "Standard_DC2ads_v5" # TODO: The sku for this image should be updated to 'Standard_DC2as_v6' once we have capacity for it in our test subs, since it is available in more regions
+         - "Standard_DC2as_v6"
       locations:
-         AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
-         AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
+         AzureCloud: ["westus2", "westcentralus", "southcentralus", "eastus2euap"] # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Public test sub.
+         AzureUSGovernment: ["usgovarizona"]       # If additional regions are required, we will need to request additional capacity for 'Standard DCasv6 Family vCPUs' in our Gov test sub.
          AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
    ubuntu_2510: "Canonical:ubuntu-25_10:server:latest"
