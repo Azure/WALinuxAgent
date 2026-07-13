@@ -15,6 +15,7 @@ image-sets:
       - "mariner_2" # azure linux 2
       - "azure-linux_3"
       - "azure-linux_3_fips"
+      - "azure-linux_4"
       - "centos_79"
       - "centos_82"
       - "debian_9"
@@ -46,6 +47,7 @@ image-sets:
       - "flatcar_arm64"
       - "mariner_2_arm64"
       - "azure-linux_3_arm64"
+      - "azure-linux_4_arm64"
       - "rhel_95_arm64"
       - "ubuntu_2204_arm64"
       - "ubuntu_2404_arm64"
@@ -175,6 +177,19 @@ images:
          AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
          AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
          AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
+   azure-linux_4:
+      urn: "microsoftazurelinux:azurelinux-4:4:latest"
+      locations:
+         AzureUSGovernment: []
+         AzureChinaCloud: []
+   azure-linux_4_arm64:
+      urn: "microsoftazurelinux:azurelinux-4:4-arm64:latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
+      locations:
+         AzureUSGovernment: []
+         AzureChinaCloud: []
    centos_610: "OpenLogic:CentOS:6.10:latest"
    centos_75: "OpenLogic:CentOS:7.5:latest"
    centos_79: "OpenLogic:CentOS:7_9:latest"
