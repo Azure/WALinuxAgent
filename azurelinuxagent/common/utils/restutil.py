@@ -529,7 +529,7 @@ def http_request(method,
             # If the error was an IOError and fail_fast_on_timeout is True, check if the error message contains
             # "timed out" or "timeout" and break the loop to fail fast in the case of no outbound connection on the VM.
             # Otherwise, continue with the retries.
-            if fail_fast_on_timeout and "timed out" in ustr(e) or "timeout" in ustr(e):
+            if fail_fast_on_timeout and ("timed out" in ustr(e) or "timeout" in ustr(e)):
                 break
             continue
 
