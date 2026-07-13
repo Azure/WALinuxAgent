@@ -685,6 +685,17 @@ class TestHttpOperations(AgentTestCase):
         self.assertRaises(HttpError, restutil.http_get, "https://foo.bar", fail_fast_on_timeout=True)
         self.assertEqual(1, _http_request.call_count)
 
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_fails_fast_for_timeout_ioerror(self, _http_request):
+        ioerror = IOError("timeout")
+
+        _http_request.side_effect = [
+            ioerror
+        ]
+
+        self.assertRaises(HttpError, restutil.http_get, "https://foo.bar", fail_fast_on_timeout=True)
+        self.assertEqual(1, _http_request.call_count)
+
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
     def test_http_request_retries_for_non_timed_out_ioerror(self, _http_request, _sleep):
@@ -697,6 +708,49 @@ class TestHttpOperations(AgentTestCase):
         ]
 
         restutil.http_get("https://foo.bar", fail_fast_on_timeout=True)
+        self.assertEqual(2, _http_request.call_count)
+        self.assertEqual(1, _sleep.call_count)
+
+    @patch("time.sleep")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_retries_timed_out_ioerror_when_fail_fast_disabled(self, _http_request, _sleep):
+        ioerror = IOError("timed out")
+
+        _http_request.side_effect = [
+            ioerror,
+            Mock(status=httpclient.OK)
+        ]
+
+        restutil.http_get("https://foo.bar", fail_fast_on_timeout=False)
+        self.assertEqual(2, _http_request.call_count)
+        self.assertEqual(1, _sleep.call_count)
+
+    @patch("time.sleep")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_retries_timeout_ioerror_when_fail_fast_disabled(self, _http_request, _sleep):
+        ioerror = IOError("timeout")
+
+        _http_request.side_effect = [
+            ioerror,
+            Mock(status=httpclient.OK)
+        ]
+
+        restutil.http_get("https://foo.bar", fail_fast_on_timeout=False)
+        self.assertEqual(2, _http_request.call_count)
+        self.assertEqual(1, _sleep.call_count)
+
+    @patch("time.sleep")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_retries_non_timed_out_ioerror_when_fail_fast_disabled(self, _http_request, _sleep):
+        ioerror = IOError()
+        ioerror.errno = 42
+
+        _http_request.side_effect = [
+            ioerror,
+            Mock(status=httpclient.OK)
+        ]
+
+        restutil.http_get("https://foo.bar", fail_fast_on_timeout=False)
         self.assertEqual(2, _http_request.call_count)
         self.assertEqual(1, _sleep.call_count)
 
