@@ -24,13 +24,17 @@ locations:
   - "AzureCloud:westus2"
 
 #
-# Support for FIPS 140-3 has not been deployed AzureChinaCloud.
+# Support for FIPS 140-3 has been deployed AzureChinaCloud, but none of the images which this suite runs on are
+# available in China cloud (oracle_95 and rhel_95 are not available in China cloud, and our China test subscription
+# does not have access to the ubuntu pro images).
+# TODO: Once the China test sub has access to Ubuntu PRO images, we should run this suite in China cloud.
 #
 skip_on_clouds:
   - "AzureChinaCloud"
 
 #
 # The Ubuntu images required by the test are not available on AzureUSGovernment
+# TODO: Remove these once the Gov test sub has access to Ubuntu PRO images.
 #
 skip_on_images:
   - "AzureUSGovernment:ubuntu_pro_fips_2204"
