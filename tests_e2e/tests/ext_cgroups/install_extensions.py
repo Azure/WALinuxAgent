@@ -17,9 +17,10 @@
 # limitations under the License.
 #
 from pathlib import Path
+from typing import List
 
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
-from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
+from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIdentifier, VmExtensionIds
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
@@ -33,15 +34,39 @@ class InstallExtensions:
         self._context = context
         self._ssh_client = self._context.create_ssh_client()
 
-    def run(self):
+    def run(self) -> List[VmExtensionIdentifier]:
+        """
+        Installs the extensions used to validate cgroups and returns the list of extensions
+        that were actually installed. Callers can check membership (e.g. AMA) to decide
+        which validations to run.
+        """
+        installed_extensions: List[VmExtensionIdentifier] = []
+
         # Install the GATest extension to test service cgroups
         self._install_gatest_extension()
-        # Install the Azure Monitor Agent to test long running process cgroup
-        self._install_ama()
+        installed_extensions.append(VmExtensionIds.GATestExtension)
+
+        # Install the Azure Monitor Agent to test long running process cgroup.
+        # AMA is not supported on all distros (e.g. it dropped centos_82 support in v1.43),
+        # so skip the install where it would fail.
+        distro = self._ssh_client.get_distro()
+        if distro != "centos_82":
+            self._install_ama()
+            installed_extensions.append(VmExtensionIds.AzureMonitorLinuxAgent)
+        else:
+            log.info(
+                "Skipping install of %s: not supported on distro '%s'",
+                VmExtensionIds.AzureMonitorLinuxAgent, distro)
+
         # Install the VM Access extension to test sample extension
         self._install_vmaccess()
+        installed_extensions.append(VmExtensionIds.VmAccess)
+
         # Install the CSE extension to test extension cgroup
         self._install_cse()
+        installed_extensions.append(VmExtensionIds.CustomScript)
+
+        return installed_extensions
 
     def _install_ama(self):
         ama_extension = VirtualMachineExtensionClient(

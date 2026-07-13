@@ -42,8 +42,13 @@ class AgentCgroupsProcessCheck(AgentVmTest):
         3. Restart the ext_handler process to re-initialize the cgroups setup
         4. Verify that agent detects extension processes and will not enable the cgroups
         """
-        if self._ssh_client.get_distro() == "ubuntu_2510":
-            log.info("Skipping test on ubuntu_2510 as AMA extension is not supported to test this scenario")
+        distro = self._ssh_client.get_distro()
+        # AMA is required to trigger the "unexpected process in agent cgroup" scenario validated below.
+        # Skip on distros where AMA is not available:
+        #   - ubuntu_2510: AMA is not yet supported
+        #   - centos_82:   AMA no longer supports this distro since version 1.43
+        if distro in ("ubuntu_2510", "centos_82"):
+            log.info("Skipping test on %s as AMA extension is not supported to test this scenario", distro)
             return
 
         log.info("=====Validating agent cgroups process check")
