@@ -19,6 +19,7 @@ skip_on_images:
   # The test depends on Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, which does not support these distros since version 1.43
   - "centos_79"
   - "centos_82"
+  - "suse_12"
 
 # TODO: The current deployment of VmAccess 1.5.22 prevents the extension from uninstalling; enable this test when the issue is fixed
 skip_on_clouds:
