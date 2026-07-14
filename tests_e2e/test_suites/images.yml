@@ -18,7 +18,6 @@ image-sets:
       - "azure-linux_4"
       - "centos_79"
       - "centos_82"
-      - "debian_9"
       - "debian_10"
       - "debian_11"
       - "flatcar"
@@ -201,7 +200,6 @@ images:
    databricks_ubuntu:
       urn: "AzureDatabricks:Databricks:DatabricksWorker:latest"
    debian_8: "credativ:Debian:8:latest"
-   debian_9: "credativ:Debian:9:latest"
    debian_10: "Debian:debian-10:10:latest"
    debian_11: "Debian:debian-11:11:latest"
    debian_11_arm64:
