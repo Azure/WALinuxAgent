@@ -68,7 +68,7 @@ class PublishHostname(AgentVmTest):
             if "dig: command not found" in e.stderr:
                 distro = self._ssh_client.run_command("get_distro.py").rstrip().lower()
                 if distro.startswith("debian_10"):
-                    # Debian 9 hostname look up needs to be done with "host" instead of dig
+                    # Debian 10 hostname look up needs to be done with "host" instead of dig
                     lookup_cmd = "host {0}".format(self._private_ip)
                     dns_regex = r".*pointer\s(?P<hostname>.*)\.internal\.(cloudapp\.net|chinacloudapp\.cn|usgovcloudapp\.net).*"
                 elif "debian" in distro:
