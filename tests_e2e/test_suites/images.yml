@@ -55,7 +55,6 @@ image-sets:
    cgroups-endorsed:
       - "azure-linux_3"
       - "centos_82"
-      - "rhel_810"
       - "rhel_95"
       - "rhel_95_arm64"
       - "ubuntu_1604"

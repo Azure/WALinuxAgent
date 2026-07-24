@@ -10,7 +10,6 @@ images:
   - "centos_75"
   - "centos_82"
   - "rhel_79"
-  - "rhel_810"
   - "oracle_75"
   - "oracle_79"
   - "oracle_82"
