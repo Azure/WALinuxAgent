@@ -55,6 +55,7 @@ image-sets:
    cgroups-endorsed:
       - "azure-linux_3"
       - "centos_82"
+      - "rhel_83"
       - "rhel_95"
       - "rhel_95_arm64"
       - "ubuntu_1604"
@@ -79,6 +80,7 @@ image-sets:
    log-collector-endorsed:
       - "azure-linux_3"
       - "centos_82"
+      - "rhel_83"
       - "rhel_810"
       - "rhel_95"
       - "ubuntu_1604"
@@ -194,9 +196,7 @@ images:
    centos_82:
       urn: "OpenLogic:CentOS:8_2:latest"
       vm_sizes:
-         # Previously one user reported agent hang on this VM size for redhat 7+ but not observed in rhel 8. Since
-         # centos is derived from redhat, we use the same vm size to test agent cgroups scenario to make sure we don't
-         # see any issue in automation.
+         # Since centos derived from redhat, please see the comment for vm size in rhel_83
          - "Standard_B2s"
    databricks_ubuntu:
       urn: "AzureDatabricks:Databricks:DatabricksWorker:latest"
@@ -274,6 +274,14 @@ images:
       urn: "RedHat:RHEL:7_9:latest"
       locations:
          AzureChinaCloud: []
+   rhel_83:
+      urn: "RedHat:RHEL:8_3:latest"
+      locations:
+         AzureChinaCloud: []
+         AzureUSGovernment: []
+      vm_sizes:
+         # Previously one user reported agent hang on this VM size for redhat 7+ but not observed in rhel 8. So I'm using same vm size to test agent cgroups scenario for rhel 8 to make sure we don't see any issue in automation.
+         - "Standard_B2s"
    rhel_810:
       urn: "RedHat:RHEL:8_10:latest"
       locations:
