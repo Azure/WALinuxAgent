@@ -33,14 +33,6 @@ skip_on_clouds:
   - "AzureChinaCloud"
 
 #
-# The Ubuntu images required by the test are not available on AzureUSGovernment
-# TODO: Remove these once the Gov test sub has access to Ubuntu PRO images.
-#
-skip_on_images:
-  - "AzureUSGovernment:ubuntu_pro_fips_2204"
-  - "AzureUSGovernment:ubuntu_pro_2404"
-
-#
 # The test VM could be shared with other test suites, but we want to ensure there is a mix of FIPS and non-FIPS environments in the test run,
 # so we take ownership of the VM for this test suite.
 #
