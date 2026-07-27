@@ -11,6 +11,3 @@ images:
   - "centos_82"
   - "rhel_79"
   - "rhel_83"
-  - "oracle_75"
-  - "oracle_79"
-  - "oracle_82"
