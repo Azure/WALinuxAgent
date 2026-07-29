@@ -18,19 +18,20 @@ images:
   - "rhel_95"
 
 #
-# The test uses a keyvault located on westus2.
+# The test uses keyvaults in each of our test subscriptions. Those keyvaults are located in AzureCloud:westus2,
+# AzureUSGovernment:usgovarizona, and AzureChinaCloud:chinanorth2
 #
 locations:
   - "AzureCloud:westus2"
+  - "AzureUSGovernment:usgovarizona"
+  - "AzureChinaCloud:chinanorth2"
 
 #
-# Support for FIPS 140-3 has been deployed AzureChinaCloud, but none of the images which this suite runs on are
-# available in China cloud (oracle_95 and rhel_95 are not available in China cloud, and our China test subscription
-# does not have access to the ubuntu pro images).
-# TODO: Once the China test sub has access to Ubuntu PRO images, we should run this suite in China cloud.
+# The oracle_95 and rhel_95 images are not available in China cloud, so we skip the suite on those images.
 #
-skip_on_clouds:
-  - "AzureChinaCloud"
+skip_on_images:
+  - "AzureChinaCloud:oracle_95"
+  - "AzureChinaCloud:rhel_95"
 
 #
 # The test VM could be shared with other test suites, but we want to ensure there is a mix of FIPS and non-FIPS environments in the test run,
