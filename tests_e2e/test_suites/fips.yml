@@ -12,8 +12,10 @@ name: "FIPS"
 tests:
   - source: "fips/fips.py"
 images:
-  - "ubuntu_pro_fips_2204" # FIPS is pre-enabled on these "fips" images.
-  - "ubuntu_pro_2404" # Enabling FIPS on Ubuntu requires the "pro" client to be enabled. There is not an Ubuntu 24 image which comes with FIPS pre-enabled, since it is not certified for FIPS yet, but we can enable FIPS manually on these pro VMs.
+  - "ubuntu_pro_fips_2204"        # FIPS is pre-enabled on these "fips" images.
+  - "ubuntu_pro_2404"             # Enabling FIPS on Ubuntu requires the "pro" client to be enabled. There is not an Ubuntu 24 image which comes with FIPS pre-enabled, since it is not certified for FIPS yet, but we can enable FIPS manually on these pro VMs.
+  - "ubuntu_pro_fips_2204_china"  # China cloud has different urns for ubuntu pro images, so we include those here as well.
+  - "ubuntu_pro_2404_china"       # China cloud has different urns for ubuntu pro images, so we include those here as well.
   - "oracle_95"
   - "rhel_95"
 
@@ -32,6 +34,12 @@ locations:
 skip_on_images:
   - "AzureChinaCloud:oracle_95"
   - "AzureChinaCloud:rhel_95"
+  - "AzureChinaCloud:ubuntu_pro_fips_2204"          # We use a different ubuntu pro image in China cloud, so we skip this one.
+  - "AzureChinaCloud:ubuntu_pro_2404"               # We use a different ubuntu pro image in China cloud, so we skip this one.
+  - "AzureCloud:ubuntu_pro_fips_2204_china"         # We use a different ubuntu pro image in Public cloud, so we skip this one.
+  - "AzureCloud:ubuntu_pro_2404_china"              # We use a different ubuntu pro image in Public cloud, so we skip this one.
+  - "AzureUSGovernment:ubuntu_pro_fips_2204_china"  # We use a different ubuntu pro image in USGov cloud, so we skip this one.
+  - "AzureUSGovernment:ubuntu_pro_2404_china"       # We use a different ubuntu pro image in USGov cloud, so we skip this one.
 
 #
 # The test VM could be shared with other test suites, but we want to ensure there is a mix of FIPS and non-FIPS environments in the test run,

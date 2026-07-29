@@ -357,6 +357,12 @@ images:
       urn: "Canonical:0001-com-ubuntu-pro-microsoft:pro-fips-22_04:latest"
       locations:
          AzureChinaCloud: []
+   ubuntu_pro_fips_2204_china:
+      # The ubuntu_pro_fips_2204 urn above is not available in China cloud, so we use a different urn for that cloud.
+      urn: "Canonical:ubuntu-22_04-lts:ubuntu-pro-fips:latest"
+      locations:
+         AzureCloud: []
+         AzureUSGovernment: []
    ubuntu_2204_arm64:
       urn: "Canonical:0001-com-ubuntu-server-jammy:22_04-lts-arm64:latest"
       vm_sizes:
@@ -371,6 +377,12 @@ images:
       urn: "Canonical:0001-com-ubuntu-pro-microsoft:pro-24_04:latest"
       locations:
          AzureChinaCloud: []
+   ubuntu_pro_2404_china:
+      # The ubuntu_pro_2404 urn above is not available in China cloud, so we use a different urn for that cloud.
+      urn: "Canonical:ubuntu-24_04-lts:ubuntu-pro:latest"
+      locations:
+         AzureCloud: []
+         AzureUSGovernment: []
    ubuntu_2404_arm64:
       urn: "Canonical:ubuntu-24_04-lts:server-arm64:latest"
       vm_sizes:
