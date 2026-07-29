@@ -30,16 +30,18 @@ locations:
 
 #
 # The oracle_95 and rhel_95 images are not available in China cloud, so we skip the suite on those images.
+# Additionally, there are two different urns for each Ubuntu Pro image because different clouds have different urns. We
+#   skip the images that are not available in each cloud.
 #
 skip_on_images:
   - "AzureChinaCloud:oracle_95"
   - "AzureChinaCloud:rhel_95"
-  - "AzureChinaCloud:ubuntu_pro_fips_2204"          # We use a different ubuntu pro image in China cloud, so we skip this one.
-  - "AzureChinaCloud:ubuntu_pro_2404"               # We use a different ubuntu pro image in China cloud, so we skip this one.
-  - "AzureCloud:ubuntu_pro_fips_2204_china"         # We use a different ubuntu pro image in Public cloud, so we skip this one.
-  - "AzureCloud:ubuntu_pro_2404_china"              # We use a different ubuntu pro image in Public cloud, so we skip this one.
-  - "AzureUSGovernment:ubuntu_pro_fips_2204_china"  # We use a different ubuntu pro image in USGov cloud, so we skip this one.
-  - "AzureUSGovernment:ubuntu_pro_2404_china"       # We use a different ubuntu pro image in USGov cloud, so we skip this one.
+  - "AzureChinaCloud:ubuntu_pro_fips_2204"
+  - "AzureChinaCloud:ubuntu_pro_2404"
+  - "AzureCloud:ubuntu_pro_fips_2204_china"
+  - "AzureCloud:ubuntu_pro_2404_china"
+  - "AzureUSGovernment:ubuntu_pro_fips_2204_china"
+  - "AzureUSGovernment:ubuntu_pro_2404_china"
 
 #
 # The test VM could be shared with other test suites, but we want to ensure there is a mix of FIPS and non-FIPS environments in the test run,

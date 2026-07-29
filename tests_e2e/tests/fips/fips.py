@@ -211,7 +211,7 @@ class Fips(AgentVmTest):
                 },
                 'AzureChinaCloud': {
                     'source_vault': f"/subscriptions/{self._context.vm.subscription}/resourceGroups/waagent-tests/providers/Microsoft.KeyVault/vaults/waagenttests",
-                    'certificate_url': 'https://waagenttests.vault.azure.cn/certificates/rsa-cert/a1a6047c02d84d2da5300fec70b0d070'
+                    'certificate_url': 'https://waagenttests.vault.azure.cn/secrets/rsa-cert/a1a6047c02d84d2da5300fec70b0d070'
                 }
             }
             certificate = certificates_by_cloud[self._context.vm.cloud]
