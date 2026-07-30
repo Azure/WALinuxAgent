@@ -21,7 +21,6 @@ image-sets:
       - "debian_10"
       - "debian_11"
       - "flatcar"
-      - "oracle_79"
       - "oracle_810"
       - "oracle_95"
       - "oracle_10"
@@ -238,20 +237,6 @@ images:
          AzureChinaCloud: []
          AzureUSGovernment: []
    oracle_610: "Oracle:Oracle-Linux:6.10:latest" # Python 2.6.6; not in test run
-   oracle_75: # Python: 2.7.5; used for the recover_network_interface test
-      urn: "Oracle:Oracle-Linux:7.5:latest"
-      locations:
-         AzureChinaCloud: []
-         AzureUSGovernment: []
-   oracle_79: # Python: 2.7.5
-      urn: "Oracle:Oracle-Linux:ol79-gen2:latest"
-      locations:
-         AzureChinaCloud: []
-   oracle_82: # Python: 3.6.8; used for the recover_network_interface test
-      urn: "Oracle:Oracle-Linux:ol82-gen2:latest"
-      locations:
-         AzureChinaCloud: []
-         AzureUSGovernment: []
    oracle_810: # Python: 3.6.8
       urn: "Oracle:Oracle-Linux:ol810-lvm-gen2:latest"
       locations:
