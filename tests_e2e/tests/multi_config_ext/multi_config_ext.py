@@ -161,6 +161,29 @@ class MultiConfigExt(AgentVmTest):
         self.enable_and_assert_test_cases(cases_to_enable=sc_test_cases, cases_to_assert=sc_test_cases,
                                           delete_extensions=True)
 
+        # Enable multiple instances of RCv2, verify, disable one of them, verify, re-enable the disabled instance, verify, and delete all extensions
+        log.info("")
+        log.info("Add multiple instances of RCv2 to the VM...")
+        rc_test_case_1: Dict[str, MultiConfigExt.TestCase] = {
+            "MCExt7": MultiConfigExt.TestCase(
+                VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="MCExt7"), mc_settings)}
+        self.enable_and_assert_test_cases(cases_to_enable=rc_test_case_1, cases_to_assert=rc_test_case_1)
+
+        rc_test_case_2: Dict[str, MultiConfigExt.TestCase] = {
+            "MCExt8": MultiConfigExt.TestCase(
+                VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="MCExt8"), mc_settings)}
+        self.enable_and_assert_test_cases(cases_to_enable=rc_test_case_2, cases_to_assert=rc_test_case_2, delete_extensions=True)
+
+        log.info("")
+        log.info("Re-add deleted extension to the VM...")
+        self.enable_and_assert_test_cases(cases_to_enable=rc_test_case_2, cases_to_assert=rc_test_case_2)
+
+        log.info("")
+        log.info("Cleanup all extensions from the VM...")
+        self.delete_extensions(rc_test_case_1 | rc_test_case_2)
+
 
 if __name__ == "__main__":
     MultiConfigExt.run_from_command_line()

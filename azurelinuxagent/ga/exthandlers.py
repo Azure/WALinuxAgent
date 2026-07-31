@@ -2392,8 +2392,9 @@ class ExtHandlerInstance(object):
     def __remove_extension_state_files(self, extension):
         self.logger.info("Removing states files for disabled extension: {0}".format(extension.name))
         try:
-            # MultiConfig: Remove all config/<extName>.*.settings, status/<extName>.*.status and config/<extName>.HandlerState files
+            # MultiConfig: Remove all <extName>.mrseq, config/<extName>.*.settings, status/<extName>.*.status and config/<extName>.HandlerState files
             files_to_delete = [
+                os.path.join(self.get_base_dir(), "{0}.mrseq".format(extension.name)),
                 os.path.join(self.get_conf_dir(), "{0}.*.settings".format(extension.name)),
                 os.path.join(self.get_status_dir(), "{0}.*.status".format(extension.name)),
                 os.path.join(self.get_conf_dir(), self.__get_handler_state_file_name(extension))
