@@ -161,7 +161,8 @@ class MultiConfigExt(AgentVmTest):
         self.enable_and_assert_test_cases(cases_to_enable=sc_test_cases, cases_to_assert=sc_test_cases,
                                           delete_extensions=True)
 
-        # Enable multiple instances of RCv2, verify, disable one of them, verify, re-enable the disabled instance, verify, and delete all extensions
+        # Enable multiple instances of RCv2, verify, delete one of them, verify the remaining instance, re-add the deleted
+        # instance, verify again, and delete all extensions
         log.info("")
         log.info("Add multiple instances of RCv2 to the VM...")
         rc_test_case_1: Dict[str, MultiConfigExt.TestCase] = {
@@ -174,15 +175,24 @@ class MultiConfigExt(AgentVmTest):
             "MCExt8": MultiConfigExt.TestCase(
                 VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
                                               resource_name="MCExt8"), mc_settings)}
-        self.enable_and_assert_test_cases(cases_to_enable=rc_test_case_2, cases_to_assert=rc_test_case_2, delete_extensions=True)
+        all_rc_test_cases: Dict[str, MultiConfigExt.TestCase] = {**rc_test_case_1, **rc_test_case_2}
+        self.enable_and_assert_test_cases(cases_to_enable=rc_test_case_2, cases_to_assert=all_rc_test_cases)
+
+        log.info("")
+        log.info("Delete one RCv2 extension from the VM...")
+        self.delete_extensions(rc_test_case_2)
+
+        log.info("")
+        log.info("Verify the remaining RCv2 extension is still healthy...")
+        self.enable_and_assert_test_cases(cases_to_enable={}, cases_to_assert=rc_test_case_1)
 
         log.info("")
         log.info("Re-add deleted extension to the VM...")
-        self.enable_and_assert_test_cases(cases_to_enable=rc_test_case_2, cases_to_assert=rc_test_case_2)
+        self.enable_and_assert_test_cases(cases_to_enable=rc_test_case_2, cases_to_assert=all_rc_test_cases)
 
         log.info("")
         log.info("Cleanup all extensions from the VM...")
-        self.delete_extensions(rc_test_case_1 | rc_test_case_2)
+        self.delete_extensions(all_rc_test_cases)
 
 
 if __name__ == "__main__":
