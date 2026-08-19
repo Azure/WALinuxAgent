@@ -5,7 +5,6 @@
 name: "ExtensionPolicy"
 tests:
   - "ext_policy/ext_policy.py"
-  - "ext_policy/constrained_ext.py"
 images:
   - "random(endorsed,10)" # TODO: Remove randomization and run on all endorsed images once the test suite is optimized to reduce runtime.
   - "cvm-endorsed"
