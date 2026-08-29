@@ -40,14 +40,14 @@ jobs:
 
     steps:
     - name: Checkout WALinuxAgent
-      uses: actions/checkout@v3
+      uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
     #
     # We either install Python and the test dependencies, or download a pre-built virtual environment, depending on the
     # use_virtual_environment flag.
     #
     - name: Setup Python ${{ matrix.python-version }}
       if: (!matrix.use_virtual_environment)
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -173,6 +173,6 @@ jobs:
 
     - name: Upload Code Coverage
       if: matrix.python-version ==  '3.9'
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@ab904c41d6ece82784817410c45d8b8c02684457 # v3.1.6
       with:
         file: ./coverage.xml
