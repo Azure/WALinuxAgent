@@ -1,12 +1,14 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 
+import errno
 import os
 import shutil
 import sys
 
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerPackage
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
+from azurelinuxagent.ga.policy.policy_engine import ExtensionRuntimePolicyError
 from tests.lib.tools import AgentTestCase, patch
 
 
@@ -30,6 +32,23 @@ class ExtHandlerInstanceTestCase(AgentTestCase):
     def tearDown(self):
         self.mock_get_base_dir.stop()
         super(ExtHandlerInstanceTestCase, self).tearDown()
+
+    def test_create_runtime_policy_file_should_raise_runtime_policy_error_on_ioerror(self):
+        # Return a path with a nonexistent parent directory to force fileutil.write_file() to raise IOError.
+        with patch.object(self.ext_handler_instance, "get_runtime_policy_file",
+                          return_value="/nonexistent/path/waagent_runtime_policy.json"):
+            with self.assertRaises(ExtensionRuntimePolicyError):
+                self.ext_handler_instance.update_runtime_policy({"allowDirectScripts": False})
+
+    def test_remove_runtime_policy_should_ignore_file_not_found_error(self):
+        file_not_found_error = OSError(errno.ENOENT, "mocked error")
+        with patch("azurelinuxagent.ga.exthandlers.fileutil.rm_files", side_effect=file_not_found_error):
+            self.ext_handler_instance.remove_runtime_policy()
+
+    def test_remove_runtime_policy_should_raise_runtime_policy_error_on_oserror(self):
+        with patch("azurelinuxagent.ga.exthandlers.fileutil.rm_files", side_effect=OSError(errno.EACCES, "mocked error")):
+            with self.assertRaises(ExtensionRuntimePolicyError):
+                self.ext_handler_instance.remove_runtime_policy()
 
     def test_rm_ext_handler_dir_should_remove_the_extension_packages(self):
         os.mkdir(self.extension_directory)
@@ -126,4 +145,3 @@ class ExtHandlerInstanceTestCase(AgentTestCase):
 
         args, kwargs = mock_report_event.call_args  # pylint: disable=unused-variable
         self.assertTrue("A mocked error" in kwargs["message"])
-

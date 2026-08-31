@@ -48,7 +48,7 @@ from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates
 
-from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, ExtHandlersHandler, migrate_handler_state, \
+from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, migrate_handler_state, \
     get_exthandlers_handler, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
     ExtensionStatusValue, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, GoalStateStatus, ExtHandlerState
 from azurelinuxagent.ga.policy.policy_engine import _PolicyEngine
@@ -3510,6 +3510,7 @@ class TestExtensionHandlerManifest(AgentTestCase):
             self.assertTrue(manifest.is_continue_on_update_failure())
             self.assertTrue(manifest.is_report_heartbeat())
             self.assertTrue(manifest.supports_multiple_extensions())
+            self.assertTrue(manifest.supports_policy())
 
     def test_handler_manifest_defaults(self):
         # Set only the required fields
@@ -3519,6 +3520,15 @@ class TestExtensionHandlerManifest(AgentTestCase):
             self.assertFalse(manifest.is_continue_on_update_failure())
             self.assertFalse(manifest.is_report_heartbeat())
             self.assertFalse(manifest.supports_multiple_extensions())
+            self.assertFalse(manifest.supports_policy())
+
+    def test_supports_policy_requires_boolean_value(self):
+        # Unlike legacy properties in extension manifest which allow string for bool type properties, the
+        # supportsPolicy property only allows boolean. Any non-boolean value should be treated as False.
+        self.assertTrue(HandlerManifest({"handlerManifest": {"supportsPolicy": True}}).supports_policy())
+        self.assertFalse(HandlerManifest({"handlerManifest": {"supportsPolicy": False}}).supports_policy())
+        self.assertFalse(HandlerManifest({"handlerManifest": {"supportsPolicy": "true"}}).supports_policy())
+        self.assertFalse(HandlerManifest({"handlerManifest": {"supportsPolicy": 1}}).supports_policy())
 
     def test_handler_manifest_boolean_fields(self):
         # Set the boolean fields to strings
@@ -3528,6 +3538,7 @@ class TestExtensionHandlerManifest(AgentTestCase):
             self.assertTrue(manifest.is_continue_on_update_failure())
             self.assertTrue(manifest.is_report_heartbeat())
             self.assertTrue(manifest.supports_multiple_extensions())
+            self.assertFalse(manifest.supports_policy())    # Unlike legacy manifest properties, non-bool values are not accepted for supportsPolicy so they should be evaluated to False
 
         # set the boolean fields to invalid values
         shutil.copyfile(os.path.join(data_dir, "ext", "handler_manifest", "manifest_boolean_fields_invalid.json"), self.test_file)
@@ -3536,6 +3547,7 @@ class TestExtensionHandlerManifest(AgentTestCase):
             self.assertFalse(manifest.is_continue_on_update_failure())
             self.assertFalse(manifest.is_report_heartbeat())
             self.assertFalse(manifest.supports_multiple_extensions())
+            self.assertFalse(manifest.supports_policy())
 
         # set the boolean fields to 'false' string
         shutil.copyfile(os.path.join(data_dir, "ext", "handler_manifest", "manifest_boolean_fields_false.json"), self.test_file)
@@ -3544,6 +3556,7 @@ class TestExtensionHandlerManifest(AgentTestCase):
             self.assertFalse(manifest.is_continue_on_update_failure())
             self.assertFalse(manifest.is_report_heartbeat())
             self.assertFalse(manifest.supports_multiple_extensions())
+            self.assertFalse(manifest.supports_policy())
 
     def test_report_msg_if_handler_manifest_contains_invalid_values(self):
         # Set the boolean fields to invalid values
@@ -3553,10 +3566,11 @@ class TestExtensionHandlerManifest(AgentTestCase):
                 manifest = self.ext_handler_instance.load_manifest()
                 manifest.report_invalid_boolean_properties("test_ext")
                 kw_messages = [kw for _, kw in mock_add_event.call_args_list if kw.get('op') == 'ExtensionHandlerManifest']
-                self.assertEqual(3, len(kw_messages))
+                self.assertEqual(4, len(kw_messages))
                 self.assertIn("'reportHeartbeat' has a non-boolean value", kw_messages[0]['message'])
                 self.assertIn("'continueOnUpdateFailure' has a non-boolean value", kw_messages[1]['message'])
                 self.assertIn("'supportsMultipleExtensions' has a non-boolean value", kw_messages[2]['message'])
+                self.assertIn("'supportsPolicy' has a non-boolean value", kw_messages[3]['message'])
 
 
 class TestExtensionPolicy(TestExtensionBase):
@@ -3576,6 +3590,8 @@ class TestExtensionPolicy(TestExtensionBase):
         self.patch_is_cvm = patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm', return_value=True)
         self.patch_is_cvm.start()
         self.maxDiff = None     # When long error messages don't match, display the entire diff.
+
+        self.runtime_policy_path = os.path.join(conf.get_lib_dir(), "OSTCExtensions.ExampleHandlerLinux-1.0.0", "config", "waagent_runtime_policy.json")
 
     def tearDown(self):
         self.mock_sleep.stop()
@@ -3908,13 +3924,13 @@ class TestExtensionPolicy(TestExtensionBase):
             protocol.mock_wire_data.set_manifest_version("1.0.1")
             protocol.client.update_goal_state()
 
-            # Patch __setup_new_handler so the upgrade does not attempt actual signature validation
-            # of the new package (test fixtures do not have a real matching signature). The intent of
-            # this test is to verify that the OLD handler's policy check is enforced before any
-            # operation is invoked on the old handler.
-            with patch.object(ExtHandlersHandler, "_ExtHandlersHandler__setup_new_handler"):
-                exthandlers_handler.run()
-                exthandlers_handler.report_ext_handlers_status()
+            # Patch signature and manifest validation so the upgrade does not attempt actual validation of the new
+            # package (test fixtures do not have a real matching signature for this package). The intent of this test is
+            # to verify that the OLD handler's policy check is enforced before any operation is invoked on the old handler.
+            with patch("azurelinuxagent.common.protocol.wire.validate_signature"):
+                with patch("azurelinuxagent.ga.exthandlers.validate_extension_manifest_signing_info"):
+                    exthandlers_handler.run()
+                    exthandlers_handler.report_ext_handlers_status()
 
             expected_err_msg = "policy specifies that extension must be signed, but the installed extension's signature was not previously validated by the agent."
             self._assert_handler_status(protocol.report_vm_status, expected_status="NotReady", expected_ext_count=1,
@@ -4005,6 +4021,198 @@ class TestExtensionPolicy(TestExtensionBase):
             self.assertTrue(os.path.exists(file_path), "Policy file was not copied to history folder")
             with open(file_path, mode='r') as f:
                 self.assertEqual(policy, json.load(f))
+
+    def test_should_create_runtime_policy_file_before_enabling(self):
+        # If "runtimePolicy" is specified in policy file, and "supportsPolicy" is true in handler manifest, create runtime policy file.
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    "OSTCExtensions.ExampleHandlerLinux": {
+                        "runtimePolicy": {
+                            "allowDirectScripts": False
+                        }
+                    }
+                }
+            }
+        }
+
+        with patch("azurelinuxagent.ga.exthandlers.HandlerManifest.supports_policy", return_value=True):
+            self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=0,
+                                   expected_handler_status='Ready', expected_ext_count=1)
+            self.assertTrue(os.path.exists(self.runtime_policy_path), "Runtime policy file was not created")
+            with open(self.runtime_policy_path, mode='r') as f:
+                expected_policy = {
+                    "allowDirectScripts": False
+                }
+                self.assertEqual(expected_policy, json.load(f))
+
+    def test_should_create_empty_runtime_policy_file_if_not_specified(self):
+        # If "runtimePolicy" is not specified in policy file, and "supportsPolicy" is true in handler manifest, create empty runtime policy file.
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    "OSTCExtensions.ExampleHandlerLinux": {}
+                }
+            }
+        }
+
+        with patch("azurelinuxagent.ga.exthandlers.HandlerManifest.supports_policy", return_value=True):
+            self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=0,
+                                   expected_handler_status='Ready', expected_ext_count=1)
+            self.assertTrue(os.path.exists(self.runtime_policy_path), "Runtime policy file was not created")
+            with open(self.runtime_policy_path, mode='r') as f:
+                expected_policy = {}
+                self.assertEqual(expected_policy, json.load(f))
+
+    def test_should_create_empty_runtime_policy_file_if_extension_not_in_policy(self):
+        # If extension is not restricted in policy file, and "supportsPolicy" is true in handler manifest, create empty runtime policy file.
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {}
+            }
+        }
+
+        with patch("azurelinuxagent.ga.exthandlers.HandlerManifest.supports_policy", return_value=True):
+            self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=0,
+                                   expected_handler_status='Ready', expected_ext_count=1)
+            self.assertTrue(os.path.exists(self.runtime_policy_path), "Runtime policy file was not created")
+            with open(self.runtime_policy_path, mode='r') as f:
+                self.assertEqual({}, json.load(f))
+
+    def test_enable_should_fail_if_supportsPolicy_false_but_runtime_policy_specified(self):
+        # If "runtimePolicy" is specified in policy file, and "supportsPolicy" is false in handler manifest, fail extension.
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    "OSTCExtensions.ExampleHandlerLinux": {
+                        "runtimePolicy": {
+                            "allowDirectScripts": False
+                        }
+                    }
+                }
+            }
+        }
+
+        with patch("azurelinuxagent.ga.exthandlers.HandlerManifest.supports_policy", return_value=False):
+            expected_msg = "Runtime policy is specified for extension 'OSTCExtensions.ExampleHandlerLinux', but this extension does not support runtime policy enforcement."
+            self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled,
+                                   expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
+                                   expected_handler_status='NotReady', expected_ext_count=1,
+                                   expected_status_msg=expected_msg)
+            self.assertFalse(os.path.exists(self.runtime_policy_path), "Runtime policy file should not have been created")
+
+    def test_should_not_create_runtime_policy_file_if_supportsPolicy_false_and_not_specified(self):
+        # If "runtimePolicy" is not specified in policy file, and "supportsPolicy" is false in handler manifest, do not create runtime policy file.
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    "OSTCExtensions.ExampleHandlerLinux": {}
+                }
+            }
+        }
+
+        with patch("azurelinuxagent.ga.exthandlers.HandlerManifest.supports_policy", return_value=False):
+            self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=0,
+                                   expected_handler_status='Ready', expected_ext_count=1)
+            self.assertFalse(os.path.exists(self.runtime_policy_path), "Runtime policy file should not have been created")
+
+    def test_should_not_check_supports_policy_or_create_runtime_policy_file_if_policy_enforcement_is_disabled(self):
+        # When no agent policy file exists, runtime policy processing should not inspect the extension manifest or
+        # create an extension runtime policy file.
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            with patch.object(ExtHandlerInstance, "supports_policy") as supports_policy:
+                exthandlers_handler.run()
+
+            supports_policy.assert_not_called()
+            self.assertFalse(os.path.exists(self.runtime_policy_path))
+
+    def test_should_synchronize_runtime_policy_file_on_each_enable(self):
+        # Synchronize the runtime policy file on every enable so policy updates and removals are applied before the
+        # extension runs.
+        initial_policy_with_runtime_policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    "OSTCExtensions.ExampleHandlerLinux": {
+                        "runtimePolicy": {
+                            "allowDirectScripts": False
+                        }
+                    }
+                }
+            }
+        }
+
+        updated_policy_with_runtime_policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    "OSTCExtensions.ExampleHandlerLinux": {
+                        "runtimePolicy": {
+                            "allowDirectScripts": True,
+                            "maxExecutionTime": 300
+                        }
+                    }
+                }
+            }
+        }
+
+        updated_policy_without_runtime_policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    "OSTCExtensions.ExampleHandlerLinux": {}
+                }
+            }
+        }
+
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            protocol.aggregate_status = None
+            protocol.report_vm_status = MagicMock()
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            with patch("azurelinuxagent.ga.exthandlers.HandlerManifest.supports_policy", return_value=True):
+                # First enable - initial policy
+                self._create_policy_file(initial_policy_with_runtime_policy)
+                exthandlers_handler.run()
+
+                self.assertTrue(os.path.exists(self.runtime_policy_path), "Runtime policy file was not created on first enable")
+                with open(self.runtime_policy_path, mode='r') as f:
+                    self.assertEqual({"allowDirectScripts": False}, json.load(f), "Runtime policy file content does not match initial policy")
+
+                # Second enable - updated policy (extension already installed)
+                self._create_policy_file(updated_policy_with_runtime_policy)
+                protocol.mock_wire_data.set_incarnation(2)
+                protocol.client.update_goal_state()
+                exthandlers_handler.run()
+
+                self.assertTrue(os.path.exists(self.runtime_policy_path), "Runtime policy file was not created on second enable")
+                with open(self.runtime_policy_path, mode='r') as f:
+                    self.assertEqual({"allowDirectScripts": True, "maxExecutionTime": 300}, json.load(f), "Runtime policy file was not updated on second enable")
+
+                # Third enable - runtime policy removed from the extension policy
+                self._create_policy_file(updated_policy_without_runtime_policy)
+                protocol.mock_wire_data.set_incarnation(3)
+                protocol.client.update_goal_state()
+                exthandlers_handler.run()
+
+                self.assertTrue(os.path.exists(self.runtime_policy_path), "Empty runtime policy file was not created")
+                with open(self.runtime_policy_path, mode='r') as f:
+                    self.assertEqual({}, json.load(f), "Removed runtime policy was not replaced with an empty object")
+
+                # Fourth enable - policy enforcement disabled
+                os.remove(self.policy_path)
+                protocol.mock_wire_data.set_incarnation(4)
+                protocol.client.update_goal_state()
+                exthandlers_handler.run()
+
+                self.assertFalse(os.path.exists(self.runtime_policy_path), "Stale runtime policy file was not removed")
 
 
 class _TestSignatureValidationBase(TestExtensionBase):
