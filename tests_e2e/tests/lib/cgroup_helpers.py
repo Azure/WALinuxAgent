@@ -1,9 +1,10 @@
+import datetime
 import os
 import re
 
 from assertpy import assert_that, fail
 
-from azurelinuxagent.common.future import datetime_min_utc
+from azurelinuxagent.common.future import datetime_min_utc, UTC
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import shellutil, fileutil
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
@@ -12,6 +13,7 @@ from azurelinuxagent.ga.cpucontroller import CpuControllerV1, CpuControllerV2
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
+from tests_e2e.tests.lib.test_result import TestSkipped
 
 BASE_CGROUP = '/sys/fs/cgroup'
 AGENT_CGROUP_NAME = 'WALinuxAgent'
@@ -236,6 +238,22 @@ def using_cgroupv2():
     return isinstance(cgroups_api, SystemdCgroupApiv2)
 
 
+def cleanup_cgroups_test_setup():
+    log.info("Cleaning up test setup")
+    drop_in_file = os.path.join(systemd.get_agent_drop_in_path(), "99-ExecStart.conf")
+    if os.path.exists(drop_in_file):
+        log.info("Removing %s...", drop_in_file)
+        os.remove(drop_in_file)
+        shellutil.run_command(["systemctl", "daemon-reload"])
+
+    check_time = datetime.datetime.now(UTC)
+    shellutil.run_command(["agent-service", "restart"])
+
+    found: bool = retry_if_false(lambda: check_log_message(" Agent cgroups enabled: True", after_timestamp=check_time))
+    if not found:
+        fail("Agent cgroups not enabled yet")
+
+
 def verify_controllers_available(expected_controllers):
     """
     Verifies that the expected controllers are enabled at the root cgroup.
@@ -259,3 +277,13 @@ def verify_controllers_available(expected_controllers):
             log.info("Controller {0} not enabled at root cgroup path".format(controller))
             return False
     return True
+
+
+def skip_if_memory_controller_is_not_enabled():
+    # The memory controller is only used for reporting memory metrics. If it is not enabled, it is okay to skip the test.
+    found: bool = retry_if_false(lambda: verify_controllers_available(["memory"]), delay=60)
+    if not found:
+        cleanup_cgroups_test_setup()
+        raise TestSkipped("The distro does not have Memory controller enabled. Skipping the test.")
+
+    log.info("Verified memory controller mounted on the system")

@@ -13,4 +13,8 @@ images:
   - "cgroups-endorsed"
   # TODO : Currently some extensions(AMA, VMAccess) do not support 25_10. Move this image to the "cgroups-endorsed" image set once those issues have been fixed.
   - "ubuntu_2510"
+skip_on_images:
+  # The cpu and memory controllers not populated within the test timeout window, so skip running test in those distros.
+  - "AzureChinaCloud:suse_15"
+  - "AzureUSGovernment:suse_15"
 owns_vm: true
