@@ -129,7 +129,7 @@ class Fips(AgentVmTest):
 
             The 'distro' parameter is expected to be in the format {name}_{version}, as returned by get_distro.py.
         """
-        return distro in ("rhel_95", "oracle_95")
+        return distro in ("rhel_95", "oracle_97")
 
     def _enable_fips_on_ubuntu(self) -> None:
         #
@@ -279,7 +279,7 @@ class Fips(AgentVmTest):
             #
             {
                 'message': 'Failed to decrypt /var/lib/waagent/Certificates.p7m',
-                'if': lambda r: self._distro in ['rhel_95', 'oracle_95'] and r.prefix == "Daemon"
+                'if': lambda r: self._distro in ['rhel_95', 'oracle_97'] and r.prefix == "Daemon"
             },
             #
             # There are several extensions that are installed by policy, which is executed asynchronously to the test. If these extensions are installed before a new PFX has been generated, the Agent may issue those warnings, and the extensions may fail.

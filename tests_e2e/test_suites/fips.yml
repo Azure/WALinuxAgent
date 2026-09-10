@@ -16,7 +16,7 @@ images:
   - "ubuntu_pro_2404"             # Enabling FIPS on Ubuntu requires the "pro" client to be enabled. There is not an Ubuntu 24 image which comes with FIPS pre-enabled, since it is not certified for FIPS yet, but we can enable FIPS manually on these pro VMs.
   - "ubuntu_pro_fips_2204_china"  # China cloud has different urns for ubuntu pro images, so we include those here as well.
   - "ubuntu_pro_2404_china"       # China cloud has different urns for ubuntu pro images, so we include those here as well.
-  - "oracle_95"
+  - "oracle_97"
   - "rhel_95"
 
 #
@@ -29,12 +29,12 @@ locations:
   - "AzureChinaCloud:chinanorth2"
 
 #
-# The oracle_95 and rhel_95 images are not available in China cloud, so we skip the suite on those images.
+# The oracle_97 and rhel_95 images are not available in China cloud, so we skip the suite on those images.
 # Additionally, there are two different urns for each Ubuntu Pro image because different clouds have different urns. We
 #   skip the images that are not available in each cloud.
 #
 skip_on_images:
-  - "AzureChinaCloud:oracle_95"
+  - "AzureChinaCloud:oracle_97"
   - "AzureChinaCloud:rhel_95"
   - "AzureChinaCloud:ubuntu_pro_fips_2204"
   - "AzureChinaCloud:ubuntu_pro_2404"
