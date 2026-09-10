@@ -18,11 +18,13 @@
 #
 # This script verifies firewalld rules set on the vm if firewalld service is running and if it's not running, it verifies network-setup service is enabled by the agent
 #
+import argparse
+
 from assertpy import fail
 
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import shellutil
-from tests_e2e.tests.lib.firewall_manager import Firewalld
+from tests_e2e.tests.lib.firewall_manager import FirewallManager, Firewalld, NfTables
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
 
@@ -53,18 +55,47 @@ def verify_network_setup_service_enabled():
     log.info("network-setup.service is enabled")
 
 
-def verify_firewall_service_running():
+def verify_firewalld_rules_not_present():
+    firewall = Firewalld()
+    rules = [Firewalld.ACCEPT_DNS, Firewalld.ACCEPT, Firewalld.DROP]
+
+    rules_are_not_present = retry_if_false(
+        lambda: all(not firewall.check_rule(rule) for rule in rules),
+        attempts=5,
+        delay=30)
+
+    if not rules_are_not_present:
+        fail("Agent-owned firewalld passthrough rules should not be present when runtime uses nftables. Current state: {0}".format(
+            firewall.get_state()))
+
+    log.info("Asserted that agent-owned firewalld passthrough rules are not present")
+
+
+def verify_firewall_service_running(expect_firewalld_running):
     log.info("Ensure test agent initialize the firewalld/network service setup")
 
-    log.info("Checking if the firewalld service is active on the VM")
-    if Firewalld.is_service_running():
-        # Checking if firewalld rules are present in the rule set if firewall service is active
-        Firewalld().assert_all_rules_are_set()
-    else:
-        # Checking if network-setup service is enabled if firewall service is not active
-        log.info("Checking if network-setup service is enabled by the agent since firewall service is not active")
+    firewall_manager = FirewallManager.create()
+    firewalld_service_running = Firewalld.is_service_running()
+    if expect_firewalld_running and not firewalld_service_running:
+        fail("Firewalld was running before test setup, but it is no longer running")
+
+    if isinstance(firewall_manager, NfTables) or not firewalld_service_running:
+        # Checking if network-setup service is enabled if firewall service is not active or Nftables in use
+        log.info("Checking if network setup service is enabled by the agent since firewall service is not active or Nftables in use")
         verify_network_setup_service_enabled()
+    else:
+        # Checking if firewalld rules are present in the rule set if firewall service is active and Nftables not in use
+        Firewalld().assert_all_rules_are_set()
+
+    if isinstance(firewall_manager, NfTables) and firewalld_service_running:
+        # The agent should not create any firewalld passthrough rules when NfTables is the selected firewall manager,
+        # since those rules are only compatible with iptables.
+        log.info("Asserting that firewalld passthrough rules do not exist when custom setup network service is used for persistent rules")
+        verify_firewalld_rules_not_present()
 
 
 if __name__ == "__main__":
-    verify_firewall_service_running()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--expect-firewalld-running", action="store_true")
+    args = parser.parse_args()
+    verify_firewall_service_running(args.expect_firewalld_running)
