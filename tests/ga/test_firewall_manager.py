@@ -19,10 +19,11 @@ import os
 import unittest
 
 from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.ga.firewall_manager import FirewallManager, IpTables, FirewallCmd, NfTables, FirewallStateError, FirewallManagerNotAvailableError, event as firewall_manager_event
 
 from tests.lib.event import get_events_from_mock
-from tests.lib.tools import AgentTestCase, patch
+from tests.lib.tools import AgentTestCase, MagicMock, patch
 from tests.lib.mock_firewall_command import MockIpTables, MockFirewallCmd, MockNft
 
 
@@ -52,9 +53,54 @@ def firewall_command_exists_mock(iptables_exist=True, firewallcmd_exist=True, nf
 
 class TestFirewallManager(AgentTestCase):
     def test_create_should_prefer_iptables_when_both_iptables_and_nftables_exist(self):
-        with firewall_command_exists_mock(iptables_exist=True, nft_exists=True):
-            firewall = FirewallManager.create('168.63.129.16')
-            self.assertIsInstance(firewall, IpTables)
+        with patch.object(IpTables, "get_unresolved_modules", return_value=[]):
+            with firewall_command_exists_mock(iptables_exist=True, nft_exists=True):
+                firewall = FirewallManager.create('168.63.129.16')
+                self.assertIsInstance(firewall, IpTables)
+
+    def test_create_should_use_nftables_and_remove_iptables_rules_when_required_modules_are_unresolved(self):
+        iptables = MagicMock()
+        iptables.get_unresolved_modules.return_value = ["xt_owner", "xt_conntrack"]
+        nftables = MagicMock()
+
+        with patch("azurelinuxagent.ga.firewall_manager.IpTables", return_value=iptables):
+            with patch("azurelinuxagent.ga.firewall_manager.NfTables", return_value=nftables):
+                with patch.object(firewall_manager_event, "warn") as warn:
+                    firewall_manager = FirewallManager.create('168.63.129.16')
+
+        self.assertEqual(nftables, firewall_manager)
+        iptables.remove.assert_called_once_with()
+        warning_messages = [message for _, message in get_events_from_mock(warn)]
+        self.assertTrue(any("Falling back to nftables because required iptables kernel modules are unresolved" in message for message in warning_messages))
+
+    def test_create_should_use_nftables_even_if_removing_iptables_rules_fails(self):
+        iptables = MagicMock()
+        iptables.get_unresolved_modules.return_value = ["xt_owner", "xt_conntrack"]
+        iptables.remove.side_effect = Exception("iptables cleanup failed")
+        nftables = MagicMock()
+
+        with patch("azurelinuxagent.ga.firewall_manager.IpTables", return_value=iptables):
+            with patch("azurelinuxagent.ga.firewall_manager.NfTables", return_value=nftables):
+                with patch.object(firewall_manager_event, "warn") as warn:
+                    firewall = FirewallManager.create('168.63.129.16')
+
+        self.assertEqual(nftables, firewall)
+        warning_messages = [message for _, message in get_events_from_mock(warn)]
+        self.assertTrue(any("Unable to remove existing iptables rules while switching to nft: iptables cleanup failed" in message for message in warning_messages))
+
+    def test_create_should_use_iptables_as_best_effort_when_required_modules_are_unresolved_and_nftables_is_unavailable(self):
+        iptables = MagicMock()
+        iptables.get_unresolved_modules.return_value = ["xt_owner", "xt_conntrack"]
+
+        with patch("azurelinuxagent.ga.firewall_manager.IpTables", return_value=iptables):
+            with patch("azurelinuxagent.ga.firewall_manager.NfTables", side_effect=FirewallManagerNotAvailableError("nft is not available")):
+                with patch.object(firewall_manager_event, "warn") as warn:
+                    firewall = FirewallManager.create('168.63.129.16')
+
+        self.assertEqual(iptables, firewall)
+        iptables.remove.assert_not_called()
+        warning_messages = [message for _, message in get_events_from_mock(warn)]
+        self.assertTrue(any("continuing with iptables as best effort" in message for message in warning_messages))
 
     def test_create_should_use_nftables_when_iptables_does_not_exist(self):
         with firewall_command_exists_mock(iptables_exist=False, nft_exists=True):
@@ -195,6 +241,36 @@ class _TestFirewallCommand(AgentTestCase):
 
 
 class TestIpTables(_TestFirewallCommand):
+    def test_get_unresolved_modules_should_return_modules_modinfo_cannot_resolve(self):
+        def mock_run_command(command, *_, **__):
+            if command == ["modinfo", "--version"]:
+                return "kmod version 31"
+            if command == ["modinfo", "xt_owner"]:
+                raise CommandError(command=["modinfo", "xt_owner"], return_code=1, stdout="", stderr="module not found")
+            if command == ["modinfo", "xt_conntrack"]:
+                raise CommandError(command=["modinfo", "xt_conntrack"], return_code=1, stdout="", stderr="module not found")
+            raise Exception("Unexpected command: {0}".format(command))
+
+        with patch("azurelinuxagent.ga.firewall_manager.shellutil.run_command", side_effect=mock_run_command):
+            self.assertEqual(["xt_owner", "xt_conntrack"], IpTables.get_unresolved_modules())
+
+    def test_get_unresolved_modules_should_return_empty_list_when_modinfo_is_unavailable(self):
+        with patch("azurelinuxagent.ga.firewall_manager.shellutil.run_command", side_effect=OSError("modinfo unavailable")):
+            self.assertEqual([], IpTables.get_unresolved_modules())
+
+    def test_get_unresolved_modules_should_not_treat_unexpected_errors_as_unresolved(self):
+        def mock_run_command(command, *_, **__):
+            if command == ["modinfo", "--version"]:
+                return "kmod version 31"
+            if command == ["modinfo", "xt_owner"]:
+                raise Exception("unexpected error")
+            if command == ["modinfo", "xt_conntrack"]:
+                raise CommandError(command=["modinfo", "xt_conntrack"], return_code=1, stdout="", stderr="module not found")
+            return ""
+
+        with patch("azurelinuxagent.ga.firewall_manager.shellutil.run_command", side_effect=mock_run_command):
+            self.assertEqual(['xt_conntrack'], IpTables.get_unresolved_modules())
+
     def test_it_should_raise_FirewallManagerNotAvailableError_when_the_command_is_not_available(self):
         with firewall_command_exists_mock(iptables_exist=False):
             with self.assertRaises(FirewallManagerNotAvailableError):

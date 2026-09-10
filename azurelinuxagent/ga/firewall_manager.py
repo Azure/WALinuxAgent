@@ -86,21 +86,46 @@ class FirewallManager(object):
     @staticmethod
     def create(wire_server_address):
         """
-        Creates the appropriate FirewallManager implementation depending on the availability of the underlying command-line tools.
+        Creates the appropriate FirewallManager implementation depending on the availability of the underlying
+        command-line tools and the kernel modules required by iptables.
 
-        NOTE: Currently this method checks only for iptables and nftables, giving precedence to the former.
+        NOTE: Currently this method checks only for iptables and nft, giving precedence to the former. There are
+        some images (Rhel 10.2/Alma 10/Rocky 10), where iptables exists but the required modules (xt_owner and
+        xt_conntrack) to create the agent rules don't exist. This method now handles that case and cleans up the
+        remaining IpTables rules when we fall back to nft on those machines.
         """
         try:
-            manager = IpTables(wire_server_address)
-            event.info(WALAEventOperation.Firewall, "Using iptables [version {0}] to manage firewall rules", manager.version)
-            return manager
+            iptables_manager = IpTables(wire_server_address)
+
+            # Some distros (like RHEL 10.2) ship iptables but not the xt_owner and xt_conntrack kernel modules. As a
+            # result, the iptables commands to create the UID-based allow rule and conntrack-based drop rule will fail.
+            # In this case if nft is available, the agent should try to clean up the leftover iptables rules (since the
+            # DNS rule may exist) and fall back to nft for firewall management.
+            unresolved_modules = iptables_manager.get_unresolved_modules()
+            if len(unresolved_modules) > 0:
+                try:
+                    nftables_manager = NfTables(wire_server_address)
+                    event.warn(WALAEventOperation.Firewall, "Falling back to nftables because required iptables kernel modules are unresolved: {0}", unresolved_modules)
+
+                    try:
+                        iptables_manager.remove()
+                    except Exception as error:
+                        event.warn(WALAEventOperation.Firewall, "Unable to remove existing iptables rules while switching to nft: {0}", ustr(error))
+
+                    event.info(WALAEventOperation.Firewall, "Using nft [version {0}] to manage firewall rules", nftables_manager.version)
+                    return nftables_manager
+                except FirewallManagerNotAvailableError:
+                    event.warn(WALAEventOperation.Firewall, "Required iptables kernel modules are unresolved ({0}) and nft is not available, continuing with iptables as best effort", ", ".join(unresolved_modules))
+
+            event.info(WALAEventOperation.Firewall, "Using iptables [version {0}] to manage firewall rules", iptables_manager.version)
+            return iptables_manager
         except FirewallManagerNotAvailableError:
             pass
 
         try:
-            manager = NfTables(wire_server_address)
-            event.info(WALAEventOperation.Firewall, "Using nft [version {0}] to manage firewall rules", manager.version)
-            return manager
+            nftables_manager = NfTables(wire_server_address)
+            event.info(WALAEventOperation.Firewall, "Using nft [version {0}] to manage firewall rules", nftables_manager.version)
+            return nftables_manager
         except FirewallManagerNotAvailableError:
             pass
 
@@ -389,6 +414,31 @@ class IpTables(_FirewallManagerIndividualRules):
                     raise IptablesInconsistencyError(e.missing_rules, output_chain)
             raise
 
+    @staticmethod
+    def get_unresolved_modules():
+        """
+        Returns a list of the required iptables modules that modinfo cannot resolve. If modinfo is not available for
+        the check, returns an empty list because the modules cannot be confirmed as unresolved.
+
+        The list of modules this helper checks may not be exhaustive. It checks for the modules which are known to be
+        missing on the latest EL10 distros.
+        """
+        try:
+            shellutil.run_command(["modinfo", "--version"])
+        except Exception:
+            return []
+
+        unresolved_modules = []
+        for module_name in ["xt_owner", "xt_conntrack"]:
+            try:
+                shellutil.run_command(["modinfo", module_name])
+            except CommandError:
+                unresolved_modules.append(module_name)
+            except Exception:
+                pass
+
+        return unresolved_modules
+
     def load_conntrack(self):
         """
         Forces the conntrack module to be loaded by executing "iptables -C -m conntrack..."
@@ -450,7 +500,7 @@ class FirewallCmd(_FirewallManagerIndividualRules):
             self._version = shellutil.run_command(["firewall-cmd", "--version"]).strip()
         except Exception as exception:
             if isinstance(exception, OSError) and exception.errno == errno.ENOENT:  # pylint: disable=no-member
-                raise FirewallManagerNotAvailableError("nft is not available")
+                raise FirewallManagerNotAvailableError("firewall-cmd is not available")
             self._version = "unknown"
 
     @property
@@ -629,8 +679,3 @@ class NfTables(FirewallManager):
 
     def _get_state_command(self):
         return ['nft', 'list', 'table', 'walinuxagent']
-
-
-
-
-
