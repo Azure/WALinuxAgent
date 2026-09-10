@@ -61,7 +61,7 @@ class PublishHostname(AgentVmTest):
         lookup_cmd = "dig -x {0}".format(self._private_ip)
         dns_regex = r"[\S\s]*;; ANSWER SECTION:\s.*PTR\s*(?P<hostname>.*)\.internal\.(cloudapp\.net|chinacloudapp\.cn|usgovcloudapp\.net).*[\S\s]*"
 
-        # Not all distros come with dig. Use another DNS lookup tool or install dig if needed
+        # Not all distros come with dig. Install dig if not on machine or use host command
         try:
             self._ssh_client.run_command("dig -v")
         except CommandError as e:
