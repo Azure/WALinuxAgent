@@ -420,13 +420,20 @@ class AgentLog(object):
             # /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-extension: Text file busy
             # [stderr]
             #
+            # 2026-09-02T04:23:48.958247Z ERROR ExtHandler ExtHandler Event: name=Microsoft.GuestConfiguration.ConfigurationforLinux, op=Install, message=[ExtensionOperationError] Non-zero exit code: 1, /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.117/guest-configuration-shim gc_extension.py install
+            # [stdout]
+            #
+            # [stderr]
+            # [2026-09-02T04:23:46+0000]: Unexpected architecture aarch64. Expected architectures include only x86_64.
+            # /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.117/guest-configuration-shim: line 73: LINUX_DISTRO_VERSION: unbound variable
+            #
             # Also, enable not always completes before the new goal state is received
             #
             # 2025-01-07T13:33:25.636847Z WARNING ExtHandler ExtHandler A new goal state was received, but not all the extensions in the previous goal state have completed:
             # [('Microsoft.Azure.Extensions.CustomScript', 'success'), ('Microsoft.GuestConfiguration.ConfigurationforLinux', 'transitioning'), ('RunCommandHandler', 'success')]
             #
             {
-                'message': r"(?s)name=Microsoft.GuestConfiguration.ConfigurationforLinux.*op=Install.*Non-zero exit code: (1.*Text file busy|51.*Unexpected Linux distribution|126.*Exec format error)",
+                'message': r"(?s)name=Microsoft\.GuestConfiguration\.ConfigurationforLinux.*op=Install.*Non-zero exit code: (1.*(Text file busy|Unexpected architecture aarch64)|51.*Unexpected Linux distribution|126.*Exec format error)",
             },
             {
                 'message': r"A new goal state was received, but not all the extensions in the previous goal state have completed.*'Microsoft.GuestConfiguration.ConfigurationforLinux',\s+u?'transitioning'",
