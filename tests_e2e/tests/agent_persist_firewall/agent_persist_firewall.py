@@ -65,6 +65,9 @@ class AgentPersistFirewallTest(AgentVmTest):
         # Test case 4: perform firewalld rules deletion and ensure deleted rules added back to rule set after agent start
         self._verify_firewall_rules_readded()
 
+        # Test case 5: ensure stale firewalld rules created by an older agent are removed when nftables is in use
+        self._verify_stale_firewalld_rules_removed()
+
     def _test_setup(self):
         log.info("Doing test setup")
         output = self._ssh_client.run_command(f"agent_persist_firewall-test_setup {self._context.username}", use_sudo=True)
@@ -95,6 +98,11 @@ class AgentPersistFirewallTest(AgentVmTest):
         log.info("Verifying firewall rules readded")
         self._run_remote_test(self._ssh_client, "agent_persist_firewall-verify_firewalld_rules_readded.py", use_sudo=True)
         log.info("Successfully verified firewall rules readded\n")
+
+    def _verify_stale_firewalld_rules_removed(self):
+        log.info("Verifying stale firewalld rules removed when nftables is the firewall manager")
+        self._run_remote_test(self._ssh_client, "agent_persist_firewall-verify_stale_firewalld_rules_removed.py", use_sudo=True)
+        log.info("Successfully verified stale firewalld rules removed when nftables is the firewall manager\n")
 
     def _enable_agent(self):
         log.info("Enabling agent")
