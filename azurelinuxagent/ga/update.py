@@ -42,7 +42,7 @@ from azurelinuxagent.ga.agent_memory_restart_history import AgentMemoryRestartHi
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters_and_protocol, \
     WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExitException, AgentUpgradeExitException, AgentMemoryExceededException
-from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError, IptablesInconsistencyError
+from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError, IptablesInconsistencyError, NfTables
 from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.ga.persist_firewall_rules import PersistFirewallRulesHandler
@@ -1450,7 +1450,7 @@ class UpdateHandler(object):
             #
             event.info(WALAEventOperation.PersistFirewallRules, "Setting up persistent firewall rules")
             try:
-                PersistFirewallRulesHandler(dst_ip=wire_server_address).setup()
+                PersistFirewallRulesHandler(dst_ip=wire_server_address).setup(runtime_uses_nftables=isinstance(firewall_manager, NfTables))
             except Exception as error:
                 event.error(WALAEventOperation.PersistFirewallRules, "Unable to setup the persistent firewall rules: {0}", ustr(error))
 

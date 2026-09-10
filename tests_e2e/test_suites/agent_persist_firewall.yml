@@ -9,6 +9,7 @@ tests:
 images:
   - "endorsed"
   - "endorsed-arm64"
+#  - "rocky_10"  # TODO: Rocky 10 does not ship the required kernel modules for iptables or nft by default. Once the distro fixes the dependency issue, this image needs to be tested
 owns_vm: true  # This vm cannot be shared with other tests because it modifies the firewall rules and agent status.
 # agent persist firewall service not running on flatcar distro since agent can't install custom service due to read only filesystem.
 # so skipping the test run on flatcar distro.
@@ -16,3 +17,4 @@ owns_vm: true  # This vm cannot be shared with other tests because it modifies t
 skip_on_images:
   - "flatcar"
   - "flatcar_arm64"
+  - "alma_10"   # TODO: Alma 10 does not ship the required kernel modules for iptables or nft by default. Once the distro fixes the dependency issue, this image needs to be tested
