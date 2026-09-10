@@ -88,6 +88,12 @@ class AgentFirewall:
 
     @staticmethod
     def _verify_iptables_rules_removed() -> None:
+        try:
+            shellutil.run_command(["sudo", "iptables", "--version"])
+        except shellutil.CommandError:
+            log.info("iptables is not available; there are no iptables rules to verify")
+            return
+
         iptables = IpTables()
         for rule in [IpTables.ACCEPT_DNS, IpTables.ACCEPT, IpTables.DROP]:
             iptables.verify_rule_is_not_set(rule)
