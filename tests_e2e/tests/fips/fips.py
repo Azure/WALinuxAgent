@@ -264,7 +264,7 @@ class Fips(AgentVmTest):
                 'if': lambda r: r.level == "ERROR"
             },
             #
-            # The current Daemon on RHEL/Oracle 9.5 tries to fetch the certificates during initialization and has not been updated to support FIPS 140-3
+            # The current Daemon on RHEL 9.5 and Oracle 9.7 tries to fetch the certificates during initialization and has not been updated to support FIPS 140-3
             #
             #		2025-07-31T19:06:59.878313Z ERROR Daemon Daemon Failed to decrypt /var/lib/waagent/Certificates.p7m (return code: 1)
             #
