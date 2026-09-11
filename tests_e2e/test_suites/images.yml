@@ -4,11 +4,6 @@
 image-sets:
    # Endorsed distros that are tested on the daily runs
    endorsed:
-#
-# TODO: Add Debian 8
-#
-#      - "debian_8"
-#
       - "alma_8"
       - "alma_9"
       - "alma_10"
@@ -20,6 +15,8 @@ image-sets:
       - "centos_82"
       - "debian_10"
       - "debian_11"
+      - "debian_12"
+      - "debian_13"
       - "flatcar"
       - "oracle_810"
       - "oracle_95"
@@ -43,6 +40,8 @@ image-sets:
    # Endorsed distros (ARM64) that are tested on the daily runs
    endorsed-arm64:
       - "debian_11_arm64"
+      - "debian_12_arm64"
+      - "debian_13_arm64"
       - "flatcar_arm64"
       - "mariner_2_arm64"
       - "azure-linux_3_arm64"
@@ -212,11 +211,28 @@ images:
          - "Standard_B2s"
    databricks_ubuntu:
       urn: "AzureDatabricks:Databricks:DatabricksWorker:latest"
-   debian_8: "credativ:Debian:8:latest"
    debian_10: "Debian:debian-10:10:latest"
    debian_11: "Debian:debian-11:11:latest"
    debian_11_arm64:
       urn: "Debian:debian-11:11-backports-arm64-v2:latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
+      locations:
+         AzureUSGovernment: []
+         AzureChinaCloud: []
+   debian_12: "Debian:debian-12:12:latest"
+   debian_12_arm64:
+      urn: "Debian:debian-12:12-arm64:latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
+      locations:
+         AzureUSGovernment: []
+         AzureChinaCloud: []
+   debian_13: "Debian:debian-13:13:latest"
+   debian_13_arm64:
+      urn: "Debian:debian-13:13-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
          - "Standard_B2pls_v2"
