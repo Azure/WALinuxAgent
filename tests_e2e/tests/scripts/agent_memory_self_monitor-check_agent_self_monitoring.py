@@ -53,7 +53,8 @@ from azurelinuxagent.ga.update import CHILD_LAUNCH_INTERVAL
 from azurelinuxagent.common.version import CURRENT_VERSION
 
 from tests_e2e.tests.lib.agent_log import AgentLog
-from tests_e2e.tests.lib.cgroup_helpers import check_log_message, using_cgroupv2
+from tests_e2e.tests.lib.cgroup_helpers import check_log_message, using_cgroupv2, \
+    skip_if_memory_controller_is_not_enabled
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import run_remote_test
 from tests_e2e.tests.lib.retry import retry_if_false
@@ -268,6 +269,7 @@ def cleanup():
 
 def main():
     _skip_if_unsupported()
+    skip_if_memory_controller_is_not_enabled()
 
     try:
         # Baseline: nothing recorded, capture the timestamp so all log assertions

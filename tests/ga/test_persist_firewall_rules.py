@@ -25,8 +25,9 @@ import uuid
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
-from azurelinuxagent.ga.persist_firewall_rules import PersistFirewallRulesHandler
+from azurelinuxagent.ga.persist_firewall_rules import PersistFirewallRulesHandler, event as persist_firewall_event
 from azurelinuxagent.common.utils import fileutil, shellutil
+from tests.lib.event import get_events_from_mock
 from tests.lib.tools import AgentTestCase, MagicMock, patch
 
 
@@ -156,7 +157,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
     def __setup_and_assert_network_service_setup_scenario(self, handler, mock_popen=None):
         mock_popen = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled if mock_popen is None else mock_popen
         self.__replace_popen_cmd = mock_popen
-        handler.setup()
+        handler.setup(runtime_uses_nftables=False)
 
         self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
         self.__assert_systemctl_called(cmd="enable", validate_command_called=True)
@@ -169,7 +170,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
     def test_it_should_skip_setup_if_firewalld_already_enabled(self):
         self.__replace_popen_cmd = lambda cmd: ("firewall-cmd" in cmd, ["echo", "running"])
         with self._get_persist_firewall_rules_handler() as handler:
-            handler.setup()
+            handler.setup(runtime_uses_nftables=False)
 
         # Assert we verified that rules were set using firewall-cmd
         self.__assert_firewall_called(cmd="--query-passthrough", validate_command_called=True)
@@ -189,7 +190,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
             self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_enabled
             # Reset state
             self._executed_commands = []
-            handler.setup()
+            handler.setup(runtime_uses_nftables=False)
 
             self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
             self.__assert_systemctl_called(cmd="enable", validate_command_called=False)
@@ -218,7 +219,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         with self._get_persist_firewall_rules_handler() as handler:
             self.assertFalse(os.path.exists(self._binary_file), "Binary file should not be there")
             self.assertFalse(os.path.exists(self._network_service_unit_file), "Unit file should not be present")
-            handler.setup()
+            handler.setup(runtime_uses_nftables=False)
 
         orig_service_file_contents = "ExecStart={py_path} {binary_path}".format(py_path=sys.executable,
                                                                                 binary_path=self._binary_file)
@@ -239,7 +240,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         with self._get_persist_firewall_rules_handler() as handler:
             # The Binary file should be available on the 2nd run
             self.assertTrue(os.path.exists(self._binary_file), "Binary file should be there")
-            handler.setup()
+            handler.setup(runtime_uses_nftables=False)
 
         self.assertTrue(_find_in_file(
                 self._binary_file,
@@ -253,7 +254,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
         self.__replace_popen_cmd = self.__mock_firewalld_running_and_not_applied
         with self._get_persist_firewall_rules_handler() as handler:
-            handler.setup()
+            handler.setup(runtime_uses_nftables=False)
 
         self.__assert_firewall_cmd_running_called(validate_command_called=True)
         self.__assert_firewall_called(cmd="--query-passthrough", validate_command_called=True)
@@ -261,12 +262,71 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         self.__assert_firewall_called(cmd="--remove-passthrough", validate_command_called=True)
         self.assertFalse(any("systemctl" in cmd for cmd in self._executed_commands), "Systemctl shouldn't be called")
 
+    def test_it_should_remove_firewalld_rules_and_set_up_custom_service_when_runtime_uses_nftables(self):
+        firewall_cmd = MagicMock()
+
+        with self._get_persist_firewall_rules_handler() as handler:
+            with patch.object(handler, "_is_firewall_service_running", return_value=True):
+                with patch("azurelinuxagent.ga.persist_firewall_rules.FirewallCmd", return_value=firewall_cmd):
+                    with patch.object(handler, "_setup_network_setup_service") as setup_network_service:
+                        with patch.object(persist_firewall_event, "warn") as warn:
+                            handler.setup(runtime_uses_nftables=True)
+
+        firewall_cmd.remove_legacy_rule.assert_called_once_with()
+        firewall_cmd.remove.assert_called_once_with()
+        firewall_cmd.setup.assert_not_called()
+        setup_network_service.assert_called_once_with()
+        warning_messages = [message for _, message in get_events_from_mock(warn)]
+        self.assertTrue(any("Firewalld service is running, but runtime firewall rules use nftables" in message for message in warning_messages))
+
+    def test_it_should_set_up_custom_service_even_when_firewalld_handler_cannot_be_initialized_for_cleanup(self):
+        with self._get_persist_firewall_rules_handler() as handler:
+            with patch.object(handler, "_is_firewall_service_running", return_value=True):
+                with patch("azurelinuxagent.ga.persist_firewall_rules.FirewallCmd", side_effect=Exception("initialization failed")):
+                    with patch.object(handler, "_setup_network_setup_service") as setup_network_service:
+                        with patch.object(persist_firewall_event, "error") as error:
+                            handler.setup(runtime_uses_nftables=True)
+
+        setup_network_service.assert_called_once_with()
+        error_messages = [message for _, message in get_events_from_mock(error)]
+        self.assertEqual(["Unable to check for iptables-based firewalld passthrough rules. Error: initialization failed"], error_messages)
+
+    def test_it_should_set_up_custom_service_when_removing_firewalld_rules_fails(self):
+        firewall_cmd = MagicMock()
+        firewall_cmd.remove_legacy_rule.side_effect = Exception("legacy cleanup failed")
+        firewall_cmd.remove.side_effect = Exception("cleanup failed")
+
+        with self._get_persist_firewall_rules_handler() as handler:
+            with patch.object(handler, "_is_firewall_service_running", return_value=True):
+                with patch("azurelinuxagent.ga.persist_firewall_rules.FirewallCmd", return_value=firewall_cmd):
+                    with patch.object(handler, "_setup_network_setup_service") as setup_network_service:
+                        with patch.object(persist_firewall_event, "error") as error:
+                            handler.setup(runtime_uses_nftables=True)
+
+        firewall_cmd.remove_legacy_rule.assert_called_once_with()
+        firewall_cmd.remove.assert_called_once_with()
+        setup_network_service.assert_called_once_with()
+        error_messages = [message for _, message in get_events_from_mock(error)]
+        self.assertEqual([
+                "Unable to remove legacy firewall rule. Error: legacy cleanup failed",
+                "Unable to remove firewalld passthrough rules previously created by the agent: cleanup failed"
+            ],
+            error_messages)
+
+    def test_it_should_set_up_custom_service_when_firewalld_is_not_running_and_runtime_uses_nftables(self):
+        with self._get_persist_firewall_rules_handler() as handler:
+            with patch.object(handler, "_is_firewall_service_running", return_value=False):
+                with patch.object(handler, "_setup_network_setup_service") as setup_network_service:
+                    handler.setup(runtime_uses_nftables=True)
+
+        setup_network_service.assert_called_once_with()
+
     def test_it_should_set_up_custom_service_if_no_firewalld(self):
         self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled
         with self._get_persist_firewall_rules_handler() as handler:
             self.assertFalse(os.path.exists(self._network_service_unit_file), "Service unit file should not be there")
             self.assertFalse(os.path.exists(self._binary_file), "Binary file should not be there")
-            handler.setup()
+            handler.setup(runtime_uses_nftables=False)
 
         self.__assert_network_service_setup_properly()
 
@@ -288,7 +348,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
                 with patch("azurelinuxagent.ga.persist_firewall_rules.fileutil.write_file",
                            side_effect=mock_write_file):
                     with self.assertRaises(Exception) as context_manager:
-                        handler.setup()
+                        handler.setup(runtime_uses_nftables=False)
                     self.assertIn("Invalid file: {0}".format(file_to_fail), ustr(context_manager.exception))
                     self.assertFalse(os.path.exists(file_to_fail), "File should be deleted: {0}".format(file_to_fail))
 
@@ -304,7 +364,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled
         with self._get_persist_firewall_rules_handler() as handler:
             self.assertFalse(os.path.exists(self._binary_file), "Binary file should not be there")
-            handler.setup()
+            handler.setup(runtime_uses_nftables=False)
 
             self.assertTrue(os.path.exists(self._binary_file), "Binary file not set properly")
 
@@ -316,7 +376,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         with patch("sys.argv", [test_str]):
             with self._get_persist_firewall_rules_handler() as handler:
                 self.assertFalse(os.path.exists(self._binary_file), "Binary file should not be there")
-                handler.setup()
+                handler.setup(runtime_uses_nftables=False)
                 output = shellutil.run_command([sys.executable, self._binary_file], stderr=subprocess.STDOUT)
                 expected_str = "{0} file not found, skipping execution of firewall execution setup for this boot".format(
                     os.path.join(os.getcwd(), test_str))
@@ -330,7 +390,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
             # 2nd run - Enable Firewalld and ensure the agent sets firewall rules using firewalld and deletes custom service
             self._executed_commands = []
             self.__replace_popen_cmd = self.__mock_firewalld_running_and_not_applied
-            handler.setup()
+            handler.setup(runtime_uses_nftables=False)
 
             self.__assert_firewall_cmd_running_called(validate_command_called=True)
             self.__assert_firewall_called(cmd="--query-passthrough", validate_command_called=True)

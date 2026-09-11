@@ -137,6 +137,8 @@ class MockIpTables(_MockFirewallCommand):
         self._check_matches_list = check_matches_list
 
     def _mock_run_command(self, command, *args, **kwargs):
+        if command[0] == 'modinfo':
+            return 'modinfo mocked'
         if command[0] == 'iptables' and command[1] == '--version':
             return self._original_run_command(['echo', 'iptables v{0} (nf_tables)'.format(self._version)], *args, **kwargs)
         return super(MockIpTables, self)._mock_run_command(command, *args, **kwargs)

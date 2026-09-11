@@ -61,14 +61,16 @@ class PublishHostname(AgentVmTest):
         lookup_cmd = "dig -x {0}".format(self._private_ip)
         dns_regex = r"[\S\s]*;; ANSWER SECTION:\s.*PTR\s*(?P<hostname>.*)\.internal\.(cloudapp\.net|chinacloudapp\.cn|usgovcloudapp\.net).*[\S\s]*"
 
-        # Not all distros come with dig. Install dig if not on machine
+        # Not all distros come with dig. Install dig if not on machine or use host command
         try:
             self._ssh_client.run_command("dig -v")
         except CommandError as e:
             if "dig: command not found" in e.stderr:
                 distro = self._ssh_client.run_command("get_distro.py").rstrip().lower()
                 if "debian" in distro:
-                    self._ssh_client.run_command("apt install -y dnsutils", use_sudo=True)
+                    # Debian includes host command, so we use it to avoid installing dig from repositories
+                    lookup_cmd = "host {0}".format(self._private_ip)
+                    dns_regex = r".*pointer\s(?P<hostname>.*)\.internal\.(cloudapp\.net|chinacloudapp\.cn|usgovcloudapp\.net).*"
                 elif "alma" in distro or "rocky" in distro:
                     self._ssh_client.run_command("dnf install -y bind-utils", use_sudo=True)
                 else:

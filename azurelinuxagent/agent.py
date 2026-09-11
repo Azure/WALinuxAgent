@@ -307,18 +307,18 @@ class Agent(object):
         logger.info("Setting up firewall during boot. Endpoint: {0}", ustr(endpoint))
 
         try:
-            run_command(['systemctl', 'is-enabled', '--type=service', 'firewalld.service']).rstrip()
-            logger.info("Firewalld is enabled. Will not setup the firewall rules to avoid conflicts.")
-            sys.exit(0)
-        except CommandError:
-            # Differences across versions of systemd make hard to determine whether the command failed because firewalld is not installed
-            # or for another reason. Assume it is not installed and continue.
-            pass
-
-        try:
             firewall_manager = FirewallManager.create(endpoint)
             firewall_manager.verbose = True
             if isinstance(firewall_manager, IpTables):
+                try:
+                    run_command(['systemctl', 'is-enabled', '--type=service', 'firewalld.service']).rstrip()
+                    logger.info("Firewalld is enabled. Will not setup the firewall rules to avoid conflicts.")
+                    sys.exit(0)
+                except CommandError:
+                    # Differences across versions of systemd make hard to determine whether the command failed because firewalld is not installed
+                    # or for another reason. Assume it is not installed and continue.
+                    pass
+
                 try:
                     #
                     # We execute "iptables -C -m conntrack" to force loading of the conntrack module with the intention of avoiding the

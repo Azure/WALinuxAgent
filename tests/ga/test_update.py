@@ -46,6 +46,7 @@ from azurelinuxagent.ga.update import  \
     get_update_handler, ORPHAN_POLL_INTERVAL, ORPHAN_WAIT_INTERVAL, \
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, \
     READONLY_FILE_GLOBS, ExtensionsSummary
+from azurelinuxagent.ga.firewall_manager import IpTables, NfTables
 from azurelinuxagent.ga.signing_certificate_util import _MICROSOFT_ROOT_CERT_2011_03_22, get_microsoft_signing_certificate_path
 from tests.lib.mock_firewall_command import MockIpTables, MockFirewallCmd
 from tests.lib.mock_update_handler import mock_update_handler
@@ -1221,6 +1222,30 @@ class TestUpdate(UpdateTestCase):
                             ],
                             mock_firewall_cmd.call_list,
                             "Expected 2 calls for the legacy rule (-C and -D), followed by 3 sets of calls for the current rules (-C and -A)")
+
+    def test_initialize_firewall_should_pass_True_to_persistence_when_nftables_is_selected(self):
+        firewall_manager = MagicMock(spec=NfTables)
+        firewall_manager.check.return_value = True
+        persistence_handler = MagicMock()
+
+        with patch("azurelinuxagent.ga.update.conf.enable_firewall", return_value=True):
+            with patch("azurelinuxagent.ga.update.FirewallManager.create", return_value=firewall_manager):
+                with patch("azurelinuxagent.ga.update.PersistFirewallRulesHandler", return_value=persistence_handler):
+                    UpdateHandler._initialize_firewall("168.63.129.16")
+
+        persistence_handler.setup.assert_called_once_with(runtime_uses_nftables=True)
+
+    def test_initialize_firewall_should_pass_False_to_persistence_when_iptables_is_selected(self):
+        firewall_manager = MagicMock(spec=IpTables)
+        firewall_manager.check.return_value = True
+        persistence_handler = MagicMock()
+
+        with patch("azurelinuxagent.ga.update.conf.enable_firewall", return_value=True):
+            with patch("azurelinuxagent.ga.update.FirewallManager.create", return_value=firewall_manager):
+                with patch("azurelinuxagent.ga.update.PersistFirewallRulesHandler", return_value=persistence_handler):
+                    UpdateHandler._initialize_firewall("168.63.129.16")
+
+        persistence_handler.setup.assert_called_once_with(runtime_uses_nftables=False)
 
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
