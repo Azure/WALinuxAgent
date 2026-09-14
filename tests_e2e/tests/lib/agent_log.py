@@ -332,7 +332,7 @@ class AgentLog(object):
                 'message': r"Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent.*op=Install.*Non-zero exit code: 56,",
             },
             #
-            # AMA uninstall occassionally times out on Oracle/RHEL 8.10.
+            # AMA uninstall occasionally times out on Oracle/RHEL 8.10.
             #
             # 2026-09-13T05:29:40.941381Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, op=UnInstall, message=[ExtensionError] Timeout(300): /var/lib/waagent/Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.45.0/./shim.sh -uninstall
             # 		[stdout]
@@ -489,7 +489,7 @@ class AgentLog(object):
             # 		[stderr]
             {
                 'message': r"(?s)^Command: guest-configuration-shim gc_extension\.py enable\n\[stdout\]\n.*Linux distribution is Debian\..*Installation of package 'gnupg' failed after 'apt update'\..*Object of type bytes is not JSON serializable",
-                'if': lambda r: r.level == "INFO" and r.thread == "ExtHandler" and r.prefix is not None and r.prefix.startswith("[Microsoft.GuestConfiguration.ConfigurationforLinux-")
+                'if': lambda r: r.level == "INFO" and DISTRO_NAME == "debian" and FlexibleVersion(DISTRO_VERSION).major == 11
             },
             {
                 'message': r"A new goal state was received, but not all the extensions in the previous goal state have completed.*'Microsoft.GuestConfiguration.ConfigurationforLinux',\s+u?'transitioning'",
