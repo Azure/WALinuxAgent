@@ -332,6 +332,20 @@ class AgentLog(object):
                 'message': r"Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent.*op=Install.*Non-zero exit code: 56,",
             },
             #
+            # AMA uninstall occassionally times out on Oracle/RHEL 8.10.
+            #
+            # 2026-09-13T05:29:40.941381Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, op=UnInstall, message=[ExtensionError] Timeout(300): /var/lib/waagent/Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.45.0/./shim.sh -uninstall
+            # 		[stdout]
+            #
+            #
+            # 		[stderr]
+            # 		, duration=0
+            #
+            {
+                'message': r"name=Microsoft\.Azure\.Monitor\.AzureMonitorLinuxAgent, op=UnInstall, message=\[ExtensionError\] Timeout\(300\)(;CPUThrottledTime\([0-9.]+secs\))?: /var/lib/waagent/Microsoft\.Azure\.Monitor\.AzureMonitorLinuxAgent-[^/]+/\./shim\.sh -uninstall",
+                'if': lambda r: r.level == "ERROR" and DISTRO_NAME in ["oracle", "rhel", "redhat"] and FlexibleVersion(DISTRO_VERSION) == FlexibleVersion("8.10")
+            },
+            #
             # Ignore LogCollector failure to fetch vmSettings if it recovers
             #
             #     2023-08-27T08:13:42.520557Z WARNING MainThread LogCollector Fetch failed: [HttpError] [HTTP Failed] GET https://md-hdd-tkst3125n3x0.blob.core.chinacloudapi.cn/$system/lisa-WALinuxAgent-20230827-080144-029-e0-n0.cb9a406f-584b-4702-98bb-41a3ad5e334f.vmSettings -- IOError timed out -- 6 attempts made
@@ -460,6 +474,22 @@ class AgentLog(object):
             #
             {
                 'message': r"(?s)name=Microsoft\.GuestConfiguration\.ConfigurationforLinux.*op=Install.*Non-zero exit code: (1.*(Text file busy|Unexpected architecture aarch64)|51.*Unexpected Linux distribution|126.*Exec format error)",
+            },
+            #
+            # GuestConfigurationForLinux stdout/stderr has a failure which is causing noise in agent log on Debian 11. Ignore this failure
+            #
+            # 2026-09-13T05:02:52.515855Z INFO ExtHandler [Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.118] Command: guest-configuration-shim gc_extension.py enable
+            # 		[stdout]
+            # 		...
+            # 		Error: b"[2026-09-13T05:02:52+0000]: Installation of package 'gnupg' failed after 'apt update'.\n"
+            # 		Error: b"[2026-09-13T05:02:52+0000]: Installation of package 'gnupg' failed after 'apt update'.\n"
+            # 		Error: Enable failed with error: Object of type bytes is not JSON serializable
+            # 		...
+            # 		Error: Enable failed with error: Object of type bytes is not JSON serializable
+            # 		[stderr]
+            {
+                'message': r"(?s)^Command: guest-configuration-shim gc_extension\.py enable\n\[stdout\]\n.*Linux distribution is Debian\..*Installation of package 'gnupg' failed after 'apt update'\..*Object of type bytes is not JSON serializable",
+                'if': lambda r: r.level == "INFO" and r.thread == "ExtHandler" and r.prefix is not None and r.prefix.startswith("[Microsoft.GuestConfiguration.ConfigurationforLinux-")
             },
             {
                 'message': r"A new goal state was received, but not all the extensions in the previous goal state have completed.*'Microsoft.GuestConfiguration.ConfigurationforLinux',\s+u?'transitioning'",
