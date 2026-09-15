@@ -568,12 +568,20 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             with patch("azurelinuxagent.common.event.LogEvent.error") as log_error_patch:
-                with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", mock_fail_popen):
-                    goal_state = GoalState(protocol.client)
+                with patch("azurelinuxagent.common.event.LogEvent.warn") as log_warn_patch:
+                    with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", mock_fail_popen):
+                        goal_state = GoalState(protocol.client)
 
         log_error_args, _ = log_error_patch.call_args
+        log_warn_args = [args for args, _ in log_warn_patch.call_args_list]
 
         self.assertEqual(nomacver, [True, False], "There should have been 2 attempts to parse the PFX (with and without -nomacver)")
+        # Assert that the pfx password is redacted from the warning event message
+        self.assertEqual(2, len(log_warn_args), "There should have been a warning for each PFX parsing attempt")
+        for log_warn_arg in log_warn_args:
+            self.assertIn("Invalid command 'fake_openssl_command'", log_warn_arg[3], "The diagnostic stderr should be preserved after the redaction")
+            self.assertIn("<redacted>", log_warn_arg[3], "The PFX password should have been redacted in the log message")
+            self.assertNotIn("-password pass:", log_warn_arg[3], "The PFX password should have been redacted in the log message")
         self.assertEqual(log_error_args[0], "GoalStateCertificates", "An error fetching the goal state Certificates should have been reported")
         self.assertEqual(0, len(goal_state.certs.summary), "Certificates should be empty")
 
