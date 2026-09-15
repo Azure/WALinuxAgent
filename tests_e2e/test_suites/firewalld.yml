@@ -5,5 +5,5 @@ name: "Firewalld"
 tests:
   - "firewalld/boot_conflicts.py"
 images:
-  - "oracle_95"
+  - "oracle_97"
   - "rhel_95"

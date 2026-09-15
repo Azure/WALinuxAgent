@@ -10,11 +10,8 @@ images:
   - "cvm-endorsed"
 owns_vm: true   # This test owns the VM because it is causing environment timeouts when shared with other tests. TODO: Remove this once the test suite is optimized to reduce runtime and can run on all endorsed images.
 skip_on_images:
-  # TODO: The ConfigurationforLinux-1.26.109 extension is failing on Debian 11 in China cloud only; skip this image until the issue in the extension is fixed
-  - "AzureChinaCloud:debian_11"
-  # TODO: The test depends on Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, which currently does not support Azure Linux 4. Remove this exclusion when the issue is fixed.
-  - "azure-linux_4"
+  - "debian_11" # TODO: AzureSecurityLinuxAgent-2.39.1433 extension is failing on Debian 11; skip this image until the issue in the extension is fixed
+  - "AzureUSGovernment:suse_12" # TODO: Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.44.0 extension does not support Suse 12; skip this image until v1.45.0 of the extension is deployed in Gov
   # The test depends on Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, which does not support these distros since version 1.43
   - "centos_79"
   - "centos_82"
-  - "suse_12"
