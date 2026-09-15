@@ -222,18 +222,16 @@ images:
       urn: "Debian:debian-12:12-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
-         - "Standard_B2pls_v2"
+         - "Standard_D2ps_v6"
       locations:
-         AzureUSGovernment: []
          AzureChinaCloud: []
    debian_13: "Debian:debian-13:13:latest"
    debian_13_arm64:
       urn: "Debian:debian-13:13-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
-         - "Standard_B2pls_v2"
+         - "Standard_D2ps_v6"
       locations:
-         AzureUSGovernment: []
          AzureChinaCloud: []
    flatcar:
       urn: "kinvolk:flatcar-container-linux-free:stable:latest"
