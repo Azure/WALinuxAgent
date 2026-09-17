@@ -51,6 +51,7 @@ image-sets:
       - "ubuntu_2204_arm64"
       - "ubuntu_2404_arm64"
       - "ubuntu_2604_arm64"
+      - "oracle_10_arm64"
 
    # As of today agent only support and enabled resource governance feature on following distros
    cgroups-endorsed:
@@ -156,8 +157,7 @@ image-sets:
 #
 # NOTE ON VM SIZE FOR ARM64 VMs:
 #      The VM size chosen by LISA for ARM64 VMs has recently produced VM that do not start, so we explicitly use
-#      Standard_B2pls_v2 (which was the size LISA was using previously). Consider removing this explicit size
-#      if/when the issue with the size selected by LISA is fixed.
+#      Standard_D2ps_v6. Consider removing this explicit size if/when the issue with the size selected by LISA is fixed.
 #
 #
 images:
@@ -181,9 +181,8 @@ images:
       urn: "microsoftcblmariner:azure-linux-3:azure-linux-3-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
-         - "Standard_B2pls_v2"
+         - "Standard_D2ps_v6"
       locations:
-         AzureUSGovernment: []
          AzureChinaCloud: []
    azure-linux_3_cvm:
       urn: "microsoftcblmariner azure-linux-3 azure-linux-3-cvm latest"
@@ -203,9 +202,9 @@ images:
       urn: "microsoftazurelinux:azurelinux-4:4-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
-         - "Standard_B2pls_v2"
+         - "Standard_D2ps_v6"
       locations:
-         AzureUSGovernment: []
+         AzureUSGovernment: []   # TODO: This image is not available in Gov cloud. Update this once the image is available in Gov cloud.
          AzureChinaCloud: []
    centos_610: "OpenLogic:CentOS:6.10:latest"
    centos_75: "OpenLogic:CentOS:7.5:latest"
@@ -222,27 +221,24 @@ images:
       urn: "Debian:debian-11:11-backports-arm64-v2:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
-         - "Standard_B2pls_v2"
+         - "Standard_D2ps_v6"
       locations:
-         AzureUSGovernment: []
          AzureChinaCloud: []
    debian_12: "Debian:debian-12:12:latest"
    debian_12_arm64:
       urn: "Debian:debian-12:12-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
-         - "Standard_B2pls_v2"
+         - "Standard_D2ps_v6"
       locations:
-         AzureUSGovernment: []
          AzureChinaCloud: []
    debian_13: "Debian:debian-13:13:latest"
    debian_13_arm64:
       urn: "Debian:debian-13:13-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
-         - "Standard_B2pls_v2"
+         - "Standard_D2ps_v6"
       locations:
-         AzureUSGovernment: []
          AzureChinaCloud: []
    flatcar:
       urn: "kinvolk:flatcar-container-linux-free:stable:latest"
@@ -253,10 +249,9 @@ images:
       urn: "kinvolk:flatcar-container-linux-corevm:stable:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
-         - "Standard_B2pls_v2"
+         - "Standard_D2ps_v6"
       locations:
          AzureChinaCloud: []
-         AzureUSGovernment: []
    mariner_1:
       urn: "microsoftcblmariner:cbl-mariner:cbl-mariner-1:latest"
       locations:
@@ -266,10 +261,9 @@ images:
       urn: "microsoftcblmariner:cbl-mariner:cbl-mariner-2-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
-         - "Standard_B2pls_v2"
+         - "Standard_D2ps_v6"
       locations:
          AzureChinaCloud: []
-         AzureUSGovernment: []
    oracle_610: "Oracle:Oracle-Linux:6.10:latest" # Python 2.6.6; not in test run
    oracle_810: # Python: 3.6.8
       urn: "Oracle:Oracle-Linux:ol810-lvm-gen2:latest"
@@ -283,11 +277,13 @@ images:
       urn: "Oracle:Oracle-Linux:ol10-lvm-gen2:latest"
       locations:
          AzureChinaCloud: []
-   oracle_10_arm64: # TODO: Oracle 10 ARM64 is failing to deploy; add to 'endorsed-arm64' once it is fixed.
+   oracle_10_arm64:
       urn: "Oracle:Oracle-Linux:ol10-arm64-lvm-gen2:latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_D2ps_v6"
       locations:
          AzureChinaCloud: []
-         AzureUSGovernment: [] # TODO: Our test subscription does not have quota to create VMs with this image. Remove once we update our subscription.
    rhel_610: "RedHat:RHEL:6.10:latest"
    rhel_79:
       urn: "RedHat:RHEL:7_9:latest"
@@ -313,10 +309,9 @@ images:
       urn: "RedHat:rhel-arm64:9_5-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
-         - "Standard_B2pls_v2"
+         - "Standard_D2ps_v6"
       locations:
          AzureChinaCloud: []
-         AzureUSGovernment: []
    rhel_10_0:
       urn: "RedHat:RHEL:10_0:latest"
       locations:
@@ -395,10 +390,9 @@ images:
       urn: "Canonical:0001-com-ubuntu-server-jammy:22_04-lts-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
-         - "Standard_B2pls_v2"
+         - "Standard_D2ps_v6"
       locations:
          AzureChinaCloud: []
-         AzureUSGovernment: []
    ubuntu_2204_minimal: "Canonical:0001-com-ubuntu-minimal-jammy:minimal-22_04-lts-gen2:latest"
    ubuntu_2404: "Canonical:ubuntu-24_04-lts:server:latest"
    ubuntu_pro_2404:
@@ -415,10 +409,9 @@ images:
       urn: "Canonical:ubuntu-24_04-lts:server-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
-         - "Standard_B2pls_v2"
+         - "Standard_D2ps_v6"
       locations:
          AzureChinaCloud: []
-         AzureUSGovernment: []
    ubuntu_2404_minimal: "Canonical:ubuntu-24_04-lts:minimal:latest"
    ubuntu_2604: "Canonical:ubuntu-26_04-lts:server:latest"
    ubuntu_2604_arm64:
