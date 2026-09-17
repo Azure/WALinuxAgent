@@ -36,7 +36,7 @@ class VmExtensionIdentifier(object):
         "Microsoft.OSTCExtensions.VMAccessForLinux": ["flatcar"],
         "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent": ["flatcar", "mariner_1", "ubuntu_2404", "sles_15", "rhel_10", "almalinux_10", "oracle_10"],
         "Microsoft.GuestConfiguration.ConfigurationforLinux": ["flatcar"],
-        "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent": ["flatcar"],
+        "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent": ["flatcar", "azurelinux_4"],
         # TODO: RCv2 currently fails on AzureCloud on the distros below due to GLIBC < 2.34. Once the extension is fixed to support older GLIB versions, remove this entry.
         "Microsoft.CPlat.Core.RunCommandHandlerLinux": ["almalinux_810", "centos_82", "debian_11", "redhat_810", "ubuntu_1804", "ubuntu_2004"]
     }
