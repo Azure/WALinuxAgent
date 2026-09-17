@@ -418,10 +418,9 @@ images:
       urn: "Canonical:ubuntu-26_04-lts:server-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
-         - "Standard_B2pls_v2"
+         - "Standard_D2ps_v6"
       locations:
          AzureChinaCloud: []
-         AzureUSGovernment: []
    ubuntu_2604_minimal: "Canonical:ubuntu-26_04-lts:minimal:latest"
    ubuntu_2004_cvm:
       urn: "Canonical 0001-com-ubuntu-confidential-vm-focal 20_04-lts-cvm latest"
