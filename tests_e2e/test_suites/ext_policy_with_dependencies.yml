@@ -9,7 +9,6 @@ images:
   - "cvm-endorsed"
 executes_on_scale_set: true
 owns_vm: false
-
 skip_on_images:
   # TODO: Currently AlmaLinux is not available for scale sets; enable this image when it is available.
   - "alma_8"
@@ -21,7 +20,8 @@ skip_on_images:
   - "centos_79"
   - "centos_82"
   - "suse_12"
-
-# TODO: The current deployment of VmAccess 1.5.22 prevents the extension from uninstalling; enable this test when the issue is fixed
-skip_on_clouds:
-  - "AzureUSGovernment"
+  # TODO: AzureMonitorLinuxAgent does not support Ubuntu 26.04 in the sovereign clouds. Remove these exclusions when the extension is updated.
+  - "AzureChinaCloud:ubuntu_2604"
+  - "AzureChinaCloud:ubuntu_2604_minimal"
+  - "AzureUSGovernment:ubuntu_2604"
+  - "AzureUSGovernment:ubuntu_2604_minimal"
