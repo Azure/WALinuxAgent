@@ -42,7 +42,7 @@ from azurelinuxagent.common.agent_supported_feature import get_agent_supported_f
 from azurelinuxagent.common.utils.textutil import redact_sas_token
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, ExtensionDisallowedError, \
-    ExtensionSignaturePolicyError, ExtensionUnsignedError, ExtensionSignatureNotValidatedError
+    ExtensionSignaturePolicyError, ExtensionUnsignedError, ExtensionSignatureNotValidatedError, ExtensionRuntimePolicyError
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEventOperation, \
@@ -730,6 +730,13 @@ class ExtHandlersHandler(object):
             ).format(operation, ext_handler_i.ext_handler.name, conf.get_policy_file_path())
             self.__handle_ext_disallowed_error(ext_handler_i, error_code, report_op=WALAEventOperation.ExtensionSignaturePolicy, message=msg,
                                                extension=extension)
+        except ExtensionRuntimePolicyError as error:
+            _, error_code = _EXT_DISALLOWED_ERROR_MAP.get(ext_handler_i.ext_handler.state)
+            msg = (
+                "Extension will not be processed: {0}"
+            ).format(ustr(error))
+            self.__handle_ext_disallowed_error(ext_handler_i, error_code, report_op=WALAEventOperation.ExtensionPolicy, message=msg,
+                                                extension=extension)
         except ExtensionSignatureNotValidatedError:
             operation, error_code = _EXT_DISALLOWED_ERROR_MAP.get(ext_handler_i.ext_handler.state)
             msg = (
@@ -842,6 +849,9 @@ class ExtHandlersHandler(object):
                 raise ExtensionUnsignedError()
 
             self.__setup_new_handler(ext_handler_i, extension, self.__should_ignore_ext_signature_validation_errors(ext_handler_i))
+            # The runtime policy file should be created, updated, or removed before each install/enable to ensure that
+            # the latest changes to the policy file (if any) are applied.
+            self.__update_extension_runtime_policy(ext_handler_i)
 
             if old_ext_handler_i is None:
                 ext_handler_i.install(extension=extension)
@@ -877,8 +887,29 @@ class ExtHandlersHandler(object):
 
             ext_handler_i.ensure_consistent_data_for_mc()
             ext_handler_i.update_settings(extension)
+            # The runtime policy file should be created, updated, or removed before each install/enable to ensure that
+            # the latest changes to the policy file (if any) are applied.
+            self.__update_extension_runtime_policy(ext_handler_i)
 
         self.__handle_extension(ext_handler_i, extension, uninstall_exit_code)
+
+    def __update_extension_runtime_policy(self, ext_handler_i):
+        # This method synchronizes the extension runtime policy file with the current agent policy at
+        # /etc/waagent_policy.json. If policy enforcement is disabled, any stale runtime policy file is removed. If
+        # policy enforcement is enabled, the extension runtime policy file is created/updated only for extensions that
+        # support policy.
+        #
+        # If an extension runtime policy exists, but the extension does not support policy, an exception will be raised
+        # and caught in handle_ext_handler to prevent the extension from being processed and report the appropriate
+        # status for the extension. This ensures that the policy is not silently ignored.
+        if not self._policy_engine.policy_enforcement_enabled:
+            if ext_handler_i.runtime_policy_exists():
+                ext_handler_i.remove_runtime_policy()   # remove any stale runtime policy file for the extension
+            return
+
+        runtime_policy = self._policy_engine.get_extension_runtime_policy(ext_handler_i.ext_handler.name, ext_handler_i.supports_policy())
+        if runtime_policy is not None:
+            ext_handler_i.update_runtime_policy(runtime_policy) # Create or update the extension runtime policy file
 
     @staticmethod
     def __setup_new_handler(ext_handler_i, extension, ignore_signature_validation_errors):
@@ -2513,6 +2544,32 @@ class ExtHandlerInstance(object):
     def get_log_dir(self):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
 
+    def get_runtime_policy_file(self):
+        return os.path.join(self.get_conf_dir(), 'waagent_runtime_policy.json')
+
+    def runtime_policy_exists(self):
+        return os.path.isfile(self.get_runtime_policy_file())
+
+    def supports_policy(self):
+        return self.load_manifest().supports_policy()
+
+    def update_runtime_policy(self, runtime_policy):
+        runtime_policy_file = self.get_runtime_policy_file()
+        try:
+            fileutil.write_file(runtime_policy_file, json.dumps(runtime_policy))
+        except IOError as e:
+            raise ExtensionRuntimePolicyError(
+                "Failed to save extension runtime policy file: {0}. Error: {1}".format(runtime_policy_file, e))
+
+    def remove_runtime_policy(self):
+        runtime_policy_file = self.get_runtime_policy_file()
+        try:
+            fileutil.rm_files(runtime_policy_file)
+        except OSError as e:
+            if not is_file_not_found_error(e):
+                raise ExtensionRuntimePolicyError(
+                    "Failed to remove extension runtime policy file: {0}. Error: {1}".format(runtime_policy_file, e))
+
     @staticmethod
     def _read_status_file(ext_status_file):
         err_count = 0
@@ -2631,6 +2688,12 @@ class HandlerManifest(object):
         value = self.data['handlerManifest'].get('supportsMultipleExtensions', False)
         return self._parse_boolean_value(value, default_val=False)
 
+    def supports_policy(self):
+        value = self.data['handlerManifest'].get('supportsPolicy', False)
+        # For legacy properties in the manifest, we accept string booleans for backwards compatibility. Since this is a
+        # new boolean property we will not accept string. If the value is not a boolean, False will always be returned.
+        return value if isinstance(value, bool) else False
+
     def get_resource_limits(self):
         return ResourceLimits(self.data.get('resourceLimits', None))
 
@@ -2643,7 +2706,7 @@ class HandlerManifest(object):
         """
         Check that the specified keys in the handler manifest has boolean values.
         """
-        for key in ['reportHeartbeat', 'continueOnUpdateFailure', 'supportsMultipleExtensions']:
+        for key in ['reportHeartbeat', 'continueOnUpdateFailure', 'supportsMultipleExtensions', 'supportsPolicy']:
             value = self.data['handlerManifest'].get(key)
             if value is not None and not isinstance(value, bool):
                 msg = "In the handler manifest: '{0}' has a non-boolean value [{1}] for boolean type. Please change it to a boolean value.".format(key, value)
