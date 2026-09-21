@@ -21,6 +21,8 @@ skip_on_images:
   - "centos_79"
   - "centos_82"
   - "suse_12"
+  - "AzureChinaCloud:debian_12"   # AMA takes 10+ minutes to install on Debian 12, since it does an apt-get update. Skip on that image since extension takes too long to install
+  - "AzureChinaCloud:debian_13"   # AMA takes 10+ minutes to install on Debian 13, since it does an apt-get update. Skip on that image since extension takes too long to install
 
 # TODO: The current deployment of VmAccess 1.5.22 prevents the extension from uninstalling; enable this test when the issue is fixed
 skip_on_clouds:
