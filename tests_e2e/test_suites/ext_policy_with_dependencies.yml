@@ -9,7 +9,6 @@ images:
   - "cvm-endorsed"
 executes_on_scale_set: true
 owns_vm: false
-
 skip_on_images:
   # TODO: Currently AlmaLinux is not available for scale sets; enable this image when it is available.
   - "alma_8"
@@ -21,6 +20,11 @@ skip_on_images:
   - "centos_79"
   - "centos_82"
   - "suse_12"
+  # TODO: AzureMonitorLinuxAgent does not support Ubuntu 26.04 in the sovereign clouds. Remove these exclusions when the extension is updated.
+  - "AzureChinaCloud:ubuntu_2604"
+  - "AzureChinaCloud:ubuntu_2604_minimal"
+  - "AzureUSGovernment:ubuntu_2604"
+  - "AzureUSGovernment:ubuntu_2604_minimal"
   - "AzureChinaCloud:debian_12"   # AMA takes 10+ minutes to install on Debian 12, since it does an apt-get update. Skip on that image since extension takes too long to install
   - "AzureChinaCloud:debian_13"   # AMA takes 10+ minutes to install on Debian 13, since it does an apt-get update. Skip on that image since extension takes too long to install
 
