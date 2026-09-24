@@ -17,17 +17,23 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import glob
+import json
 import os
 import shutil
 
 from azurelinuxagent.common import conf, logger
+from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import AgentUpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_DIR_PATTERN, CURRENT_VERSION
+from azurelinuxagent.ga.exthandlers import HandlerManifest
 from azurelinuxagent.ga.guestagent import GuestAgent, AGENT_MANIFEST_FILE
+from azurelinuxagent.ga.signature_validation_util import agent_signature_validation_enabled, report_validation_event, \
+    SignatureValidationError, SignatureValidationTimeoutError, SignatureValidationTimeout, \
+    validate_agent_manifest_signing_info, ManifestValidationError
 
 
 class GAVersionUpdater(object):
@@ -55,32 +61,22 @@ class GAVersionUpdater(object):
         """
         raise NotImplementedError
 
-    def retrieve_agent_version(self, agent_family, goal_state):
-        """
-        This function fetches the agent version from the goal state for the given family.
-        @param agent_family: agent family
-        @param goal_state: goal state
-        """
-        raise NotImplementedError
-
-    def is_retrieved_version_allowed_to_update(self, agent_family):
-        """
-        Checks all base condition if new version allow to update.
-        @param agent_family: agent family
-        @return: True if allowed to update else False
-        """
-        raise NotImplementedError
-
-    def log_new_agent_update_message(self):
-        """
-        This function logs the update message after we check agent allowed to update.
-        """
-        raise NotImplementedError
-
     def proceed_with_update(self):
         """
         performs upgrade/downgrade
         @return: AgentUpgradeExitException
+        """
+        raise NotImplementedError
+
+    def retrieve_and_download_agent(self, protocol, agent_family, goal_state):
+        """
+        Retrieve the target agent version, validate eligibility, and download it.
+        Subclasses control the full retrieve-validate-download flow.
+        @param protocol: protocol object for download
+        @param agent_family: agent family
+        @param goal_state: goal state
+        @return: GuestAgent if an update is ready, None if no update should be attempted at this time
+        @raises: AgentUpdateError if the download fails
         """
         raise NotImplementedError
 
@@ -99,20 +95,49 @@ class GAVersionUpdater(object):
         self._gs_id = gs_id
 
     @staticmethod
-    def download_new_agent_pkg(package_to_download, protocol, is_fast_track_goal_state):
+    def download_new_agent_pkg(package_to_download, protocol, is_fast_track_goal_state, signature):
         """
-        Function downloads the new agent.
+        Function downloads the new agent if it doesn't already exist on disk.
         @param package_to_download: package to download
         @param protocol: protocol object
         @param is_fast_track_goal_state: True if goal state is fast track else False
+        @param signature: base64-encoded signature string, or empty string to skip validation
         """
         agent_name = "{0}-{1}".format(AGENT_NAME, package_to_download.version)
         agent_dir = os.path.join(conf.get_lib_dir(), agent_name)
         agent_pkg_path = ".".join((os.path.join(conf.get_lib_dir(), agent_name), "zip"))
         agent_handler_manifest_file = os.path.join(agent_dir, AGENT_MANIFEST_FILE)
         if not os.path.exists(agent_dir) or not os.path.isfile(agent_handler_manifest_file):
-            protocol.client.download_zip_package(agent_name, package_to_download.uris, agent_pkg_path, agent_dir, use_verify_header=is_fast_track_goal_state,
-                                                 signature="", enforce_signature=False)
+            try:
+                # ignore_signature_validation_errors is set to True to allow the agent update to proceed even if signature validation fails. If
+                # signature validation fails after downloading the package, the download_zip_package method will still unzip the package to
+                # the agent_dir and then raise a SignatureValidationError with the details of the validation failure for the caller to handle.
+                # TODO: Once signature validation is enforced, ignore_signature_validation_errors should be set to False so that download_zip_package
+                # will clean up the unverified zip and raise SignatureValidationError on validation failure.
+                protocol.client.download_zip_package(agent_name, package_to_download.uris, agent_pkg_path, agent_dir, use_verify_header=is_fast_track_goal_state,
+                                                     signature=signature, ignore_signature_validation_errors=True)
+            except SignatureValidationTimeoutError as ex:
+                # During the telemetry release, handle any SignatureValidationTimeoutError by sending telemetry.
+                # This is a temporary behavior while we collect telemetry on the results of agent signature validation.
+                # TODO: This timeout behavior should be removed once agent signature validation is enforced before update.
+
+                # Send event (info) that agent signature validation is disabled until service restart
+                msg = "Agent signature validation timeout exceeded. Disabling agent signature validation until agent restart."
+                logger.info(msg)
+                add_event(op=WALAEventOperation.SignatureValidation, message=msg, log_event=False)
+                SignatureValidationTimeout.disable_agent_validation()
+
+                # Send event that validation failed for this package
+                report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING,
+                                        message=ustr(ex),
+                                        name=AGENT_NAME, version=package_to_download.version, duration=ex.duration)
+            except SignatureValidationError as ex:
+                # During the telemetry release, handle any SignatureValidationError by sending telemetry.
+                # TODO: Once agent signature validation is enforced before update, this exception should be raised so
+                # that the calling updater can handle it appropriately
+                report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING,
+                                        message=ustr(ex),
+                                        name=AGENT_NAME, version=package_to_download.version, duration=ex.duration)
         else:
             logger.info("Agent {0} was previously downloaded - skipping download", agent_name)
 
@@ -126,7 +151,38 @@ class GAVersionUpdater(object):
                 logger.warn("Unable to delete Agent directory: {0}".format(err))
             raise AgentUpdateError("Downloaded agent package: {0} is missing agent handler manifest file: {1}".format(agent_name, agent_handler_manifest_file))
 
-    def download_and_get_new_agent(self, protocol, agent_family, goal_state):
+        # If the signature is not an empty string, validate the HandlerManifest 'signingInfo' as well.
+        #
+        # Until the feature is considered stable, any errors validating the handler manifest should not prevent the agent from updating.
+        # TODO: Once agent signature validation is enforced before update, manifest validation errors should be
+        # surfaced to prevent update to the package.
+        if signature != "":
+            try:
+                with open(agent_handler_manifest_file, "r") as manifest_file:
+                    manifest_data = json.load(manifest_file)
+                if isinstance(manifest_data, list):
+                    if len(manifest_data) == 0:
+                        raise ManifestValidationError(
+                            msg="HandlerManifest.json is empty for package '{0}'".format(agent_name),
+                            operation=WALAEventOperation.PackageSigningInfoResult,
+                            duration=0)
+                    else:
+                        manifest_data = manifest_data[0]
+                validate_agent_manifest_signing_info(HandlerManifest(manifest_data), ustr(package_to_download.version))
+            except ManifestValidationError as ex:
+                report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING,
+                                        message=ustr(ex),
+                                        name=AGENT_NAME, version=package_to_download.version, duration=ex.duration)
+            except Exception as ex:
+                # Defensive catch-all: validate_agent_manifest_signing_info() only raises ManifestValidationError,
+                # but reading/parsing the manifest file above may raise other exceptions. We catch anything else here
+                # to guarantee that manifest validation cannot block the agent update.
+                msg = "Unexpected error validating agent handler manifest 'signingInfo' for package '{0}'. Error: {1}".format(agent_name, ustr(ex))
+                report_validation_event(op=WALAEventOperation.PackageSigningInfoResult, level=logger.LogLevel.WARNING,
+                                        message=msg,
+                                        name=AGENT_NAME, version=package_to_download.version, duration=0)
+
+    def _download_and_get_new_agent(self, protocol, agent_family, goal_state):
         """
         Function downloads the new agent and returns the downloaded version.
         @param protocol: protocol object
@@ -137,8 +193,19 @@ class GAVersionUpdater(object):
         if self._agent_manifest is None:  # Fetch agent manifest if it's not already done
             self._agent_manifest = goal_state.fetch_agent_manifest(agent_family.name, agent_family.uris)
         package_to_download = self._get_agent_package_to_download(self._agent_manifest, self._version)
+        # Out of an abundance of caution, wrap the call to get the agent package signature from the goal state in a
+        # try/except while we collect telemetry to ensure the logic is stable
+        signature = ""
+        try:
+            signature = self._get_agent_package_signature(self._version, agent_family, goal_state)
+        except Exception as e:
+            # TODO: Once agent signature validation is enforced, this condition should raise an exception instead of skipping validation.
+            # Log as warning but mark event as success to avoid poluting release monitoring queries while we collect telemetry on this feature
+            msg = "Unexpected error getting the agent package signature, skipping agent package signature validation: {0}".format(ustr(e))
+            logger.warn(msg)
+            add_event(op=WALAEventOperation.SignatureValidation, is_success=True, message=msg, log_event=False)
         is_fast_track_goal_state = goal_state.extensions_goal_state.source == GoalStateSource.FastTrack
-        self.download_new_agent_pkg(package_to_download, protocol, is_fast_track_goal_state)
+        self.download_new_agent_pkg(package_to_download, protocol, is_fast_track_goal_state, signature)
         agent = GuestAgent.from_agent_package(package_to_download)
         return agent
 
@@ -160,6 +227,48 @@ class GAVersionUpdater(object):
 
         raise AgentUpdateError("No matching package found in the agent manifest for version: {0} in goal state incarnation: {1}, "
                         "skipping agent update".format(str(version), self._gs_id))
+
+    @staticmethod
+    def _get_agent_package_signature(version, agent_family, goal_state):
+        """
+        Gets the signature for the given agent version from the goal state. Returns the base64-encoded signature string
+        if agent signature validation is enabled and a signature for that version is in the goal state, otherwise returns an empty string.
+        @param version: agent version (FlexibleVersion)
+        @param agent_family: VMAgentFamily from the goal state
+        @param goal_state: goal state object
+        @return: base64-encoded signature string, or empty string if agent signature validation is disabled or the signature for the given version is not found in the goal state
+        """
+        if not agent_signature_validation_enabled():
+            return ""
+
+        # If agent signature validation is enabled, but the goal state doesn't support agent signature mapping, log
+        # locally and skip validation (return empty string). Send event so we can determine how many VMs are skipping
+        # agent package signature validation due to this condition.
+        # TODO: Once signature validation is enforced, this condition should raise an exception.
+        if not goal_state.extensions_goal_state.supports_agent_signature_mapping():
+            msg = "Goal state does not support agent signature mapping, skipping agent package signature validation."
+            logger.info(msg)
+            add_event(op=WALAEventOperation.SignatureValidation, is_success=True, message=msg, log_event=False)
+            return ""
+
+        # If agent signature validation is enabled, but the goal state doesn't have a signature for the given version,
+        # log locally and skip validation (return empty string). Send event so we can determine how many VMs are
+        # skipping agent package signature validation due to this condition.
+        # There are a few reasons the signature might be missing from the goal state:
+        #   1) Instability in CRP changes to include the signature
+        #   2) The agent discovered the update from the manifest before it received a new goal state with the signature
+        # We include the goal state timestamp in the telemetry to help differentiate case #2 from case #1. Once CRP changes are considered
+        # stable, the update logic will be changed to discover updates via the signatures delivered in the goal state instead of the 
+        # manifest, which should eliminate case #2.
+        # TODO: Once signature validation is enforced, this condition should raise an exception
+        if str(version) not in agent_family.ga_version_to_signature_mapping:
+            msg = "No signature found for agent version {0} in goal state (goal state timestamp: {1}; activity id: {2}), skipping agent package signature validation.".format(
+                str(version), goal_state.extensions_goal_state.created_on_timestamp, goal_state.extensions_goal_state.activity_id)
+            logger.info(msg)
+            add_event(op=WALAEventOperation.SignatureValidation, is_success=True, message=msg, log_event=False)
+            return ""
+
+        return agent_family.ga_version_to_signature_mapping[str(version)]
 
     @staticmethod
     def _purge_unknown_agents_from_disk(known_agents):

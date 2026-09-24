@@ -125,7 +125,7 @@ class _CpuController(_CgroupController):
         return tracked
 
     def get_unit_properties(self):
-        return ["CPUAccounting", "CPUQuotaPerSecUSec"]
+        return ["CPUQuotaPerSecUSec"]
 
     def get_controller_type(self):
         return "cpu"
@@ -206,6 +206,14 @@ class CpuControllerV1(_CpuController):
         self._current_throttled_time = self._get_cpu_stat_counter(counter_name='throttled_time')
 
         return round(float(self._current_throttled_time - self._previous_throttled_time) / 1E9, 3)
+
+    def get_unit_properties(self):
+        """
+        V1 need to collect CPUAccounting property to know whether the cgroup is accounting for CPU usage or not
+        """
+        properties = super(CpuControllerV1, self).get_unit_properties()
+        properties.append("CPUAccounting")
+        return properties
 
 
 class CpuControllerV2(_CpuController):

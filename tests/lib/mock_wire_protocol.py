@@ -19,12 +19,13 @@ import os
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.protocol.wire import WireProtocol, TRANSPORT_PRV_FILE_NAME, TRANSPORT_CERT_FILE_NAME
 from azurelinuxagent.common.utils import restutil
-from tests.lib.tools import patch
+from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
+from tests.lib.tools import patch, Mock
 from tests.lib import wire_protocol_data
 
 
 @contextlib.contextmanager
-def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, do_not_mock=lambda method, url: False, fail_on_unknown_request=True, save_to_history=False, detect_protocol=True):
+def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, do_not_mock=lambda method, url: False, fail_on_unknown_request=True, save_to_history=False, detect_protocol=True, create_transport_certificate=True):
     """
     Creates a WireProtocol object that handles requests to the WireServer, the Host GA Plugin, and some requests to storage (requests that provide mock data
     in wire_protocol_data.py).
@@ -126,10 +127,23 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
         patched = patch("azurelinuxagent.common.protocol.wire.CryptUtil", side_effect=protocol.mock_wire_data.mock_crypt_util)
         patched.start()
         start.crypt_util_patch = patched
+
+        # mock_wire_protocol calls protocol.detect(), which fetches the entire goal state. Updating the goal
+        # state calls ext_signature_validation_enabled(), which requires ConfidentialVMInfo to be initialized.
+        # ConfidentialVMInfo is only initialized in UpdateHandler.run(), so we mock it here to prevent exceptions
+        # due to lack of initialization. We only patch if is_confidential_vm is not already mocked because some
+        # tests already mock is_confidential_vm and we don't want to override that.
+        if not isinstance(ConfidentialVMInfo.is_confidential_vm, Mock):
+            patched = patch("azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm", return_value=False)
+            patched.start()
+            start.is_cvm_patch = patched
     start.http_request_patch = None
     start.crypt_util_patch = None
+    start.is_cvm_patch = None
 
     def stop():
+        if start.is_cvm_patch is not None:
+            start.is_cvm_patch.stop()
         if start.crypt_util_patch is not None:
             start.crypt_util_patch.stop()
         if start.http_request_patch is not None:
@@ -151,11 +165,17 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     # go do it
     try:
         protocol.start()
+
+        if create_transport_certificate:
+            # The mock WireServer response for the Certificates API is encrypted using a specific transport certificate, which is also part of the mock data set. We create the Transport certificate
+            # using that mock data. If, for any reason, a test needs to create its own Transport certificate, it can set the create_transport_certificate parameter to False.
+            private_key = os.path.join(conf.get_lib_dir(), TRANSPORT_PRV_FILE_NAME)
+            certificate = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
+            protocol.mock_wire_data.mock_gen_trans_cert(private_key, certificate)
+
         if detect_protocol:
             protocol.detect(save_to_history=save_to_history)
-        else:
-            # the transport certificate is generated during protocol detection; if we skip detection we still need to generate it
-            protocol.mock_wire_data.mock_gen_trans_cert(os.path.join(conf.get_lib_dir(), TRANSPORT_PRV_FILE_NAME), os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME))
+
         yield protocol
     finally:
         protocol.stop()

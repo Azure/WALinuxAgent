@@ -42,6 +42,9 @@ class CpuConsumer(threading.Thread):
                 dd_command = ["dd", "if=/dev/zero", "of=/dev/null"]
                 logger.info("Starting dummy dd command: {0} to stress CPU", ' '.join(dd_command))
                 subprocess.Popen(dd_command)
+                cmd = "dd if=/dev/zero of=/dev/shm/pressure_test bs=1M count=4096"
+                logger.info("Starting dummy command: {0} to stress Memory", cmd)
+                subprocess.Popen(cmd, shell=True)
                 logger.info("dd command completed; sleeping...")
                 i = 0
                 while i < 30 and not self._stopped:

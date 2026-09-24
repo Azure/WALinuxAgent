@@ -185,8 +185,7 @@ class ExtPolicy(AgentVmTest):
             # without settings have different status reporting logic, so we should test all cases.
             # CustomScript is a single-config extension.
             custom_script = ExtPolicy.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
-                                              resource_name="CustomScript"),
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript),
                 {'commandToExecute': f"echo '{str(uuid.uuid4())}'"}
             )
 
@@ -206,15 +205,13 @@ class ExtPolicy(AgentVmTest):
 
             # AzureMonitorLinuxAgent is a no-config extension (extension without settings).
             azure_monitor = ExtPolicy.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent,
-                                              resource_name="AzureMonitorLinuxAgent"),
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent),
                 None
             )
 
             # AzureSecurityLinuxAgent is an extension that reports heartbeat.
             azure_security = ExtPolicy.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureSecurityLinuxAgent,
-                                              resource_name="AzureSecurityLinuxAgent"),
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureSecurityLinuxAgent),
                 {}
             )
 
@@ -246,12 +243,12 @@ class ExtPolicy(AgentVmTest):
             # does not support the distro, skip this workaround and the test case (5).
             distro = self._ssh_client.run_command("get_distro.py").rstrip()
             if VmExtensionIds.GuestConfig.supports_distro(distro):
-                guest_config_resource_name = "AzurePolicyforLinux"
-                if guest_config_resource_name not in extension_names_on_vm:
+                # Refresh the list of installed extensions and check if GuestConfig is already present
+                extension_types_on_vm = {ext.type_properties_type for ext in self._context.vm.get_extensions().value}
+                if "ConfigurationforLinux" not in extension_types_on_vm:
                     log.info("")
                     log.info("Installing GuestConfig extension.")
-                    guest_config = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.GuestConfig,
-                                                                 resource_name=guest_config_resource_name)
+                    guest_config = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.GuestConfig)
                     guest_config.enable(auto_upgrade_minor_version=True)
 
             log.info("")
@@ -273,7 +270,6 @@ class ExtPolicy(AgentVmTest):
                     "policyVersion": "0.1.0",
                     "extensionPolicies": {
                         "allowListedExtensionsOnly": True,
-                        "signatureRequired": False,
                         "extensions": {
                             "Microsoft.Azure.Extensions.CustomScript": {},
                             # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
@@ -309,7 +305,6 @@ class ExtPolicy(AgentVmTest):
                     "policyVersion": "0.1.0",
                     "extensionPolicies": {
                         "allowListedExtensionsOnly": False,
-                        "signatureRequired": False,
                         "extensions": {}
                     }
                 }
@@ -337,7 +332,6 @@ class ExtPolicy(AgentVmTest):
                     "policyVersion": "0.1.0",
                     "extensionPolicies": {
                         "allowListedExtensionsOnly": True,
-                        "signatureRequired": False,
                         "extensions": {
                             # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
                             "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
@@ -360,7 +354,6 @@ class ExtPolicy(AgentVmTest):
                     "policyVersion": "0.1.0",
                     "extensionPolicies": {
                         "allowListedExtensionsOnly": True,
-                        "signatureRequired": False,
                         "extensions": {
                             "Microsoft.Azure.Extensions.CustomScript": {},
                             "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent": {},
@@ -387,7 +380,6 @@ class ExtPolicy(AgentVmTest):
                     "policyVersion": "0.1.0",
                     "extensionPolicies": {
                         "allowListedExtensionsOnly": True,
-                        "signatureRequired": False,
                         "extensions": {
                             # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
                             "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
@@ -419,7 +411,6 @@ class ExtPolicy(AgentVmTest):
                     "policyVersion": "0.1.0",
                     "extensionPolicies": {
                         "allowListedExtensionsOnly": True,
-                        "signatureRequired": False,
                         "extensions": {
                             "Microsoft.Azure.Extensions.CustomScript": {},
                             # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
@@ -430,13 +421,34 @@ class ExtPolicy(AgentVmTest):
             self._create_policy_file(policy)
             self._operation_should_succeed("delete", custom_script)
 
+            # Attempt to delete an extension that was previously blocked (failed to install) -> should succeed.
+            # Even if the extension is still disallowed by policy, uninstall should succeed because the extension
+            # was never actually installed and no extension code will be executed.
+            log.info("")
+            log.info("*** Begin test case 7")
+            log.info("This policy tests the following scenario: ")
+            log.info("- delete a disallowed single-config extension (CustomScript) that previously failed to install due to policy -> should succeed")
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "allowListedExtensionsOnly": True,
+                        "extensions": {
+                            # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                            "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
+                        }
+                    }
+                }
+            self._create_policy_file(policy)
+            self._operation_should_fail("enable", custom_script)        # CSE should not be installed
+            self._operation_should_succeed("delete", custom_script)     # Since CSE was not installed, delete should succeed
+
         finally:
-            # Cleanup after test: disable policy enforcement via conf and delete policy file
+            # Cleanup after test: Delete policy file
             log.info("")
             log.info("*** Begin test cleanup")
-            self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
             self._ssh_client.run_command("rm -f /etc/waagent_policy.json", use_sudo=True)
-            log.info("Successfully disabled policy via config (Debug.EnableExtensionPolicy=n) and removed policy file at /etc/waagent_policy.json")
+            log.info("Successfully removed policy file at /etc/waagent_policy.json")
             log.info("*** Test cleanup complete.")
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:

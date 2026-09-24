@@ -24,6 +24,7 @@ import argparse
 from azurelinuxagent.common.protocol.goal_state import GoalStateProperties
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 from tests_e2e.tests.lib.retry import retry
 
 
@@ -57,15 +58,25 @@ def main():
     try:
         parser = argparse.ArgumentParser()
         parser.add_argument('--family_type', dest="family_type", default="Test")
+        parser.add_argument('--all', dest="all_versions", action="store_true", default=False,
+                            help="Print all versions from the manifest (space-separated) instead of just the largest")
         args = parser.parse_args()
+        # Initialize CVM info before fetching goal state, since updating the goal state calls
+        # ext_signature_validation_enabled() which requires ConfidentialVMInfo to be initialized.
+        # In the agent, this is done in UpdateHandler.run(), but this script runs standalone.
+        ConfidentialVMInfo.fetch_and_initialize_cvm_info()
         protocol = get_protocol_util().get_protocol(init_goal_state=False)
         retry(lambda: protocol.client.reset_goal_state(
             goal_state_properties=GoalStateProperties.ExtensionsGoalState))
         goal_state = protocol.client.get_goal_state()
         agent_family = get_agent_family_manifest(goal_state, args.family_type)
         agent_manifest = goal_state.fetch_agent_manifest(agent_family.name, agent_family.uris)
-        largest_version = get_largest_version(agent_manifest)
-        print(str(largest_version))
+        if args.all_versions:
+            versions = sorted([FlexibleVersion(pkg.version) for pkg in agent_manifest.pkg_list.versions])
+            print(" ".join(str(v) for v in versions))
+        else:
+            largest_version = get_largest_version(agent_manifest)
+            print(str(largest_version))
     except Exception as e:
         raise Exception("Unable to verify agent updated to latest version since test failed to get the which is the latest version from the agent manifest: {0}".format(e))
 

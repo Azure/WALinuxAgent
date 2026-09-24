@@ -25,6 +25,9 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
+from azurelinuxagent.ga.signature_validation_util import openssl_version_supported_for_signature_validation
+
 
 # Default policy values to be used when customer does not specify these attributes in the policy file.
 _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY = False
@@ -35,8 +38,20 @@ _DEFAULT_EXTENSIONS = {}
 # Increment this number when any new attributes are added to the policy schema.
 _MAX_SUPPORTED_POLICY_VERSION = "0.1.0"
 
+# Extension signature validation is currently only supported on CVMs. If a non-CVM user creates a policy with signature
+# required, we should raise an error indicating that the policy is invalid.
+# TODO: Remove once signature validation is supported on all VMs
 
-class InvalidPolicyError(AgentError):
+
+class PolicyError(AgentError):
+    """
+    Base class for policy-related errors.
+    """
+    def __init__(self, msg=None, inner=None):
+        super(PolicyError, self).__init__(msg, inner)
+
+
+class InvalidPolicyError(PolicyError):
     """
     Error raised if user-provided policy is invalid.
     """
@@ -45,25 +60,82 @@ class InvalidPolicyError(AgentError):
         super(InvalidPolicyError, self).__init__(msg, inner)
 
 
+class ExtensionSignaturePolicyError(PolicyError):
+    """
+    Base error raised when policy requires signature, but the extension is not signed or was not previously validated.
+    The policy engine raises this base type because it does not have context about the specific operation (install, enable,
+    upgrade, etc.). Callers of the policy engine are expected to catch this exception and translate it into one of the more
+    specific subclasses (ExtensionUnsignedError or ExtensionSignatureNotValidatedError) so that the appropriate message
+    can be reported.
+    This error does not accept a message.
+    """
+    def __init__(self):
+        super(ExtensionSignaturePolicyError, self).__init__()
+
+
+class ExtensionUnsignedError(ExtensionSignaturePolicyError):
+    """
+    Raised when policy requires a signature during install, but the extension is not signed.
+    This error does not accept a message.
+    """
+
+
+class ExtensionSignatureNotValidatedError(ExtensionSignaturePolicyError):
+    """
+    Raised when policy requires a signature for an already-installed extension whose signature was never validated by the agent
+    (e.g. the extension was installed before signature validation was enabled, or before policy enforcement was turned on).
+    This error does not accept a message.
+    """
+
+
+class ExtensionDisallowedError(PolicyError):
+    """
+    Error raised when extension is not present in the policy allowlist.
+    This error does not accept a message.
+    """
+    def __init__(self):
+        super(ExtensionDisallowedError, self).__init__()
+
+
 class _PolicyEngine(object):
     """
     Implements base policy engine API.
+
+    Note: All public methods in PolicyEngine classes must verify that policy enforcement is enabled and act as no-ops when it is not.
     """
     def __init__(self):
         """
-        Initialize policy engine: if policy enforcement is enabled, read and parse policy file.
+        Initialize policy engine with a default policy. This should not fail or raise any errors.
         """
-        self._policy_enforcement_enabled = self.__get_policy_enforcement_enabled()
-        self._policy_file_contents = None   # Raw policy file contents will be saved in __read_policy()
-        if not self.policy_enforcement_enabled:
+        self._policy_enforcement_enabled = _PolicyEngine.__get_policy_enforcement_enabled()
+        default_policy = {
+            "policyVersion": ustr(_MAX_SUPPORTED_POLICY_VERSION),
+            "extensionPolicies": {
+                "allowListedExtensionsOnly": _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY,
+                "signatureRequired": _DEFAULT_SIGNATURE_REQUIRED,
+                "extensions": _DEFAULT_EXTENSIONS
+            }
+        }
+        self._policy = default_policy
+
+    @property
+    def policy_enforcement_enabled(self):
+        return self._policy_enforcement_enabled
+
+    def update_policy(self, goal_state_history):
+        """
+        If policy enforcement is enabled, read and parse policy file, and update the policy being enforced.
+
+        :param goal_state_history: GoalStateHistory object. Policy file contents are saved to the history folder.
+        """
+        # Check and update if policy enforcement is enabled each time policy is updated
+        self._policy_enforcement_enabled = _PolicyEngine.__get_policy_enforcement_enabled()
+        if not self._policy_enforcement_enabled:
             return
 
         _PolicyEngine._log_policy_event("Policy enforcement is enabled.")
-        self._policy = self._parse_policy(self.__read_policy())
-
-    @property
-    def policy_file_contents(self):
-        return self._policy_file_contents
+        policy_file_contents = self.__read_policy(goal_state_history)
+        self._policy = self._parse_policy(policy_file_contents)
 
     @staticmethod
     def _log_policy_event(msg, is_success=True, op=WALAEventOperation.Policy, send_event=True):
@@ -80,44 +152,58 @@ class _PolicyEngine(object):
     @staticmethod
     def __get_policy_enforcement_enabled():
         """
-        Policy will be enabled if (1) policy file exists at the expected location and (2) the conf flag "Debug.EnableExtensionPolicy" is true.
-        """
-        return conf.get_extension_policy_enabled() and os.path.exists(conf.get_policy_file_path())
+        Return True if policy enforcement is enabled. Policy is enabled if:
+            1. policy file exists at the expected location
+            2. the conf flag "Debug.EnableExtensionPolicy" is set to True.
 
-    @property
-    def policy_enforcement_enabled(self):
-        return self._policy_enforcement_enabled
+        TODO: this behavior is temporary for telemetry release only. After telemetry release, remove
+        the check for the policy file, and always enforce policy if the conf flag is True. 
 
-    def __read_policy(self):
+        This method runs during policy engine initialization and should not raise errors.
+
         """
-        Read customer-provided policy JSON file, load and return as a dict.
+        return conf.get_extension_policy_enabled() and os.path.isfile(conf.get_policy_file_path())
+
+
+    @staticmethod
+    def __read_policy(goal_state_history):
+        """
+        Read customer-provided policy JSON file, load and return as a dict. Policy file contents are saved to the goal state history folder.
 
         Policy file is expected to be at conf.get_policy_file_path(). Note that this method should only be called
         after verifying that the file exists (currently done in __init__).
 
         Raise InvalidPolicyError if JSON is invalid, or any exceptions are thrown while reading the file.
         """
-        with open(conf.get_policy_file_path(), 'r') as f:
-            try:
-                self._policy_file_contents = f.read()
+        policy_file_contents = None
+        try:
+            with open(conf.get_policy_file_path(), 'r') as f:
+                policy_file_contents = f.read()
+
+                # Save policy file contents to goal state history folder
+                try:
+                    goal_state_history.save(policy_file_contents, "waagent_policy.json")
+                except Exception as ex:
+                    logger.warn("Failed to save policy to history, continuing with goal state processing. Error: {0}", ustr(ex))
+
                 _PolicyEngine._log_policy_event(
                     "Enforcing policy using policy file found at '{0}'.".format(conf.get_policy_file_path()))
 
                 # json.loads will raise error if file contents are not a valid json (including empty file).
-                custom_policy = json.loads(self._policy_file_contents)
+                custom_policy = json.loads(policy_file_contents)
 
-            except ValueError as ex:
-                msg = "policy file does not conform to valid json syntax."
-                if self._policy_file_contents is not None:
-                    msg += " File contents: {0}".format(self._policy_file_contents)
-                raise InvalidPolicyError(msg=msg, inner=ex)
-            except Exception as ex:
-                msg = "unable to read or load policy file."
-                if self._policy_file_contents is not None:
-                    msg += " File contents: {0}".format(self._policy_file_contents)
-                raise InvalidPolicyError(msg=msg, inner=ex)
+        except ValueError as ex:
+            msg = "policy file does not conform to valid json syntax."
+            if policy_file_contents is not None:
+                msg += " File contents: {0}".format(policy_file_contents)
+            raise InvalidPolicyError(msg=msg, inner=ex)
+        except Exception as ex:
+            msg = "unable to read or load policy file."
+            if policy_file_contents is not None:
+                msg += " File contents: {0}".format(policy_file_contents)
+            raise InvalidPolicyError(msg=msg, inner=ex)
 
-            return custom_policy
+        return custom_policy
 
     @staticmethod
     def _parse_policy(policy):
@@ -175,6 +261,7 @@ class _PolicyEngine(object):
         extension_policies = _PolicyEngine._get_dictionary(policy, attribute="extensionPolicies", optional=True, default={})
 
         _PolicyEngine._check_attributes(extension_policies, object_name="extensionPolicies", valid_attributes=["allowListedExtensionsOnly", "signatureRequired", "extensions"])
+        _PolicyEngine._validate_signature_required(extension_policies)
 
         return {
             "allowListedExtensionsOnly": _PolicyEngine._get_boolean(extension_policies, attribute="allowListedExtensionsOnly", name_prefix="extensionPolicies.", optional=True, default=_DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY),
@@ -207,6 +294,7 @@ class _PolicyEngine(object):
         extension_attribute_name = "extensionPolicies.extensions.{0}".format(extension)
 
         _PolicyEngine._check_attributes(extension, object_name=extension_attribute_name, valid_attributes=["signatureRequired", "runtimePolicy"])
+        _PolicyEngine._validate_signature_required(extension)
 
         return_value = {}
 
@@ -231,6 +319,24 @@ class _PolicyEngine(object):
         for k in object_.keys():
             if k not in valid_attributes:
                 raise InvalidPolicyError("unrecognized attribute '{0}' in {1}".format(k, object_name))
+
+    @staticmethod
+    def _validate_signature_required(object_):
+        """
+        Validates that 'signatureRequired' can be set to true.
+        Raises InvalidPolicyError if signatureRequired is true but the system does not support signature validation.
+        """
+        if object_.get("signatureRequired") is True:
+            # Signature validation is currently only supported on CVMs. If a non-CVM user creates a policy with
+            # signatureRequired=true, reject the policy at parse time.
+            # TODO: Remove once signature validation is supported on all VMs.
+            if not ConfidentialVMInfo.is_confidential_vm():
+                raise InvalidPolicyError("setting 'signatureRequired' to true is only supported on confidential virtual machines (CVMs).")
+            # Signature validation requires OpenSSL >= 1.1.0. If the system OpenSSL is too old, reject the policy at
+            # parse time.
+            # TODO: Remove once signature validation no longer depends on the 'no_check_time' flag.
+            if not openssl_version_supported_for_signature_validation():
+                raise InvalidPolicyError("setting 'signatureRequired' to true requires OpenSSL >= 1.1.0; the OpenSSL version on this system does not support signature validation.")
 
     @staticmethod
     def _get_dictionary(object_, attribute, name_prefix="", optional=False, default=None):
@@ -284,14 +390,14 @@ class _PolicyEngine(object):
 
 class ExtensionPolicyEngine(_PolicyEngine):
 
-    def should_allow_extension(self, extension_name):
+    def _should_allow_extension(self, extension_name):
         """
         Return whether we should allow extension download based on policy.
         If policy feature not enabled, return True.
         If allowListedExtensionsOnly=true, return true only if extension present in "extensions" allowlist.
-        If allowListedExtensions=false, return true always.
+        If allowListedExtensionsOnly=false, return true always.
         """
-        if not self.policy_enforcement_enabled:
+        if not self._policy_enforcement_enabled:
             return True
 
         allow_listed_extension_only = self._policy.get("extensionPolicies").get("allowListedExtensionsOnly")
@@ -306,7 +412,7 @@ class ExtensionPolicyEngine(_PolicyEngine):
         If policy feature not enabled, return False.
         Individual policy takes precedence over global.
         """
-        if not self.policy_enforcement_enabled:
+        if not self._policy_enforcement_enabled:
             return False
 
         global_signature_required = self._policy.get("extensionPolicies").get("signatureRequired")
@@ -314,3 +420,26 @@ class ExtensionPolicyEngine(_PolicyEngine):
         individual_signature_required = individual_policy.get("signatureRequired") if individual_policy is not None else None
 
         return individual_signature_required if individual_signature_required is not None else global_signature_required
+
+    def check_extension_policy(self, extension_name, extension_is_signed):
+        """
+        Enforce all applicable extension policies.
+        :param extension_name: extension name (string).
+        :param extension_is_signed: Boolean indicating whether the extension is signed (or signature was previously validated, if extension is not being installed).
+        :raises ExtensionDisallowedError: If the extension is not allowed by policy.
+        :raises ExtensionSignaturePolicyError: If the extension is required to be signed but is not. The caller is expected to
+            translate this into one of the more specific subclasses (ExtensionUnsignedError or ExtensionSignatureNotValidatedError)
+            so that the appropriate message can be reported.
+        """
+        if not self._policy_enforcement_enabled:
+            return
+
+        extension_allowed = self._should_allow_extension(extension_name)
+        if not extension_allowed:
+            raise ExtensionDisallowedError()      # Caller sets message and error code, based on requested extension operation
+
+        # Raises the generic ExtensionSignaturePolicyError; the caller has the context to translate this into a more
+        # specific exception (ExtensionUnsignedError vs. ExtensionSignatureNotValidatedError) for clearer diagnostics.
+        enforce_signature = self.should_enforce_signature_validation(extension_name)
+        if enforce_signature and not extension_is_signed:
+            raise ExtensionSignaturePolicyError() # Caller sets message and error code, based on requested extension operation

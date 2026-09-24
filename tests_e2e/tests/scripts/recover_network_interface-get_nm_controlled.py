@@ -25,7 +25,7 @@ from azurelinuxagent.common.osutil import get_osutil
 def main():
     os_util = get_osutil()
     ifname = os_util.get_if_name()
-    nm_controlled = os_util.get_nm_controlled(ifname)
+    nm_controlled = hasattr(os_util, 'get_nm_controlled') and os_util.get_nm_controlled(ifname)  # get_nm_controlled is implemented only on some subclasses of OSUtil
 
     if nm_controlled:
         print("Interface is NM controlled")

@@ -40,20 +40,19 @@ def _cloud_init_is_enabled_service():
         bool: True if cloud-init is enabled, False if otherwise.
     """
 
-    try:
-        subprocess.check_output([
-            'service',
-            'cloud-init',
-            'status'
-        ], stderr=subprocess.STDOUT)
+    for service_name in ['cloud-init', 'cloudinit']:
+        try:
+            subprocess.check_output([
+                'service',
+                service_name,
+                'status'
+            ], stderr=subprocess.STDOUT)
+            return True
+        # pylint: disable=broad-except
+        except Exception as exc:
+            logger.info('Tried service "{0}", unable to get enabled status: {1}'.format(service_name, exc))
 
-        unit_is_enabled = True
-    # pylint: disable=broad-except
-    except Exception as exc:
-        logger.info('Unable to get cloud-init enabled status from service: {0}'.format(exc))
-        unit_is_enabled = False
-
-    return unit_is_enabled
+    return False
 
 def cloud_init_is_enabled():
     """

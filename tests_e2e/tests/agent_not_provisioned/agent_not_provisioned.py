@@ -77,7 +77,7 @@ class AgentNotProvisioned(AgentVmTest):
         #
         log.info("Verifying that extension processing is disabled.")
         log.info("Executing CustomScript; it should fail.")
-        custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
+        custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript)
         try:
             custom_script.enable(settings={'commandToExecute': "date"}, protected_settings={}, force_update=True, timeout=20 * 60)
             fail("CustomScript should have failed")

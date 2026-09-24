@@ -164,6 +164,16 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
                        src=["config/clearlinux/waagent.conf"])
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/clearlinux/waagent.service"])
+    elif name == 'azurecontainerlinux':
+        set_bin_files(data_files, dest=agent_bin_path)
+        set_logrotate_files(data_files)
+        set_conf_files(data_files, dest="/etc",
+                       src=["config/acl/waagent.conf"])
+        set_systemd_files(data_files, dest=systemd_dir_path,
+                          src=["init/acl/waagent.service"])
+        multi_user_target_drop_in_dir = os.path.join(systemd_dir_path, "multi-user.target.d")
+        set_systemd_files(data_files, dest=multi_user_target_drop_in_dir,
+                          src=["init/acl/10-waagent-sysext.conf"])
     elif name in ["mariner", "azurelinux"]:
         set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, dest="/etc",
@@ -352,13 +362,13 @@ class install(_install):  # pylint: disable=C0103
 #   module was deprecated. Depending on the Linux distribution the
 #   implementation may be broken prior to Python 3.8 where the functionality
 #   will be removed from Python 3.
-# * In version 3.13 of Python, the crypt module was removed and crypt-r is
+# * In version 3.13 of Python, the crypt module was removed and passlib is
 #   required instead.
 requires = []
 if sys.version_info[0] >= 3 and sys.version_info[1] >= 8:
     requires.append('distro')
 if sys.version_info[0] >= 3 and sys.version_info[1] >= 13:
-    requires.append('crypt-r')
+    requires.append('passlib')
 
 modules = []  # pylint: disable=invalid-name
 

@@ -1,3 +1,4 @@
+
 # Windows Azure Linux Agent
 #
 # Copyright 2018 Microsoft Corporation
@@ -17,6 +18,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import glob
+import errno
 import os
 import platform
 import re
@@ -40,14 +42,15 @@ from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters_and_protocol, \
     WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExitException, AgentUpgradeExitException, AgentMemoryExceededException
-from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError
+from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError, IptablesInconsistencyError
 from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.ga.persist_firewall_rules import PersistFirewallRulesHandler
-from azurelinuxagent.common.protocol.goal_state import GoalStateSource
+from azurelinuxagent.common.protocol.goal_state import GoalStateSource, TRANSPORT_CERT_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol, VmSettingsNotSupported
 from azurelinuxagent.common.protocol.restapi import VERSION_0
 from azurelinuxagent.common.protocol.util import get_protocol_util
+from azurelinuxagent.common.protocol.wire import WireProtocol, TransportCertificateError
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.archive import StateArchiver, AGENT_STATUS_FILE
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -64,6 +67,8 @@ from azurelinuxagent.ga.guestagent import GuestAgent
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
 from azurelinuxagent.ga.signing_certificate_util import write_signing_certificates, get_microsoft_signing_certificate_path
+from azurelinuxagent.ga import state_dir
+from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 
 CHILD_HEALTH_INTERVAL = 15 * 60
 CHILD_LAUNCH_INTERVAL = 5 * 60
@@ -125,7 +130,6 @@ def get_update_handler():
 
 class UpdateHandler(object):
     TELEMETRY_HEARTBEAT_PERIOD = timedelta(minutes=30)
-    CHECK_MEMORY_USAGE_PERIOD = timedelta(seconds=conf.get_cgroup_check_period())
 
     def __init__(self):
         self.osutil = get_osutil()
@@ -329,9 +333,42 @@ class UpdateHandler(object):
         """
 
         try:
+            reset_memory_telemetry = []
+            msg1 = "[{0}] Starting ext_handler process".format(datetime.now(UTC))
+            logger.info(msg1)
+            reset_memory_telemetry.append(msg1)
+            try:
+                if systemd.is_systemd():
+                    unit_name = systemd.get_agent_unit_name()
+                    current_limit = systemd.get_unit_property(unit_name, "MemoryHigh").strip().lower()  # check if the property exists
+                    if current_limit != "infinity":
+                        systemd.set_unit_run_time_property(unit_name, "MemoryHigh", "")
+                        msg2 = "[{0}] Reset agent cgroup MemoryHigh property to infinity finished.".format(datetime.now(UTC))
+                        logger.info(msg2)
+                        reset_memory_telemetry.append(msg2)
+                        new_limit = systemd.get_unit_property(unit_name, "MemoryHigh")
+                        msg3 = "[{0}] Current MemoryHigh is {1}.".format(datetime.now(UTC), new_limit)
+                        logger.info(msg3)
+                        reset_memory_telemetry.append(msg3)
+                    else:
+                        msg4 = "[{0}] Agent cgroup MemoryHigh property is already set to infinity, no need to reset it.".format(datetime.now(UTC))
+                        logger.info(msg4)
+                        reset_memory_telemetry.append(msg4)
+                else:
+                    msg6 = "[{0}] Systemd is not present, skipping reset of agent cgroup MemoryHigh property.".format(datetime.now(UTC))
+                    logger.info(msg6)
+                    reset_memory_telemetry.append(msg6)
+            except Exception as e:
+                msg5 = "[{0}] Failed to reset agent cgroup MemoryHigh property: {1}".format(datetime.now(UTC), ustr(e))
+                logger.info(msg5)
+                reset_memory_telemetry.append(msg5)
+
             logger.info("{0} (Goal State Agent version {1})", AGENT_LONG_NAME, AGENT_VERSION)
             logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
             logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
+
+            # Ensure state dir exists (may not be created by the daemon if it runs an older version)
+            state_dir.initialize_state_dir()
 
             vm_arch = self.osutil.get_vm_arch()
             logger.info("CPU Arch: {0}", vm_arch)
@@ -355,16 +392,27 @@ class UpdateHandler(object):
                 )
             logger.info(os_info_msg)
 
+            # Initialize Confidential VM info but defer sending telemetry until common parameters are initialized.
+            # ConfidentialVMInfo.fetch_and_initialize_cvm_info() should be called to initialize AgentGlobals._is_cvm
+            # before initialize_event_logger_vminfo_common_parameters_and_protocol() is called.
+            cvm_info_err = None
+            try:
+                ConfidentialVMInfo.fetch_and_initialize_cvm_info()
+            except Exception as ex:
+                cvm_info_err = "Failed to get virtual machine security type from IMDS, will assume this is not a Confidential Virtual Machine: {0}".format(ustr(ex))
+
             #
             # Initialize the goal state; some components depend on information provided by the goal state and this
             # call ensures the required info is initialized (e.g. telemetry depends on the container ID.)
             #
-            protocol = self.protocol_util.get_protocol(save_to_history=True)
-
+            protocol = self.protocol_util.get_protocol(init_goal_state=False)
             self._initialize_goal_state(protocol)
 
             # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters_and_protocol(protocol)
+
+            # reporting reset memory telemetry
+            add_event(AGENT_NAME, op=WALAEventOperation.ResetMemory, message="\n".join(reset_memory_telemetry))
 
             # Send telemetry if protocol endpoint is not the known WireServer endpoint.
             endpoint = protocol.get_endpoint()
@@ -376,6 +424,15 @@ class UpdateHandler(object):
             # Send telemetry for the OS-specific info.
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
             self._log_openssl_info()
+
+            # Send telemetry for Confidential VM info
+            if cvm_info_err is not None:
+                logger.warn(cvm_info_err)
+                add_event(op=WALAEventOperation.SignatureValidation, message=cvm_info_err, is_success=False, log_event=False)
+            else:
+                cvm_info_msg = "This {0} a confidential virtual machine.".format("is" if ConfidentialVMInfo.is_confidential_vm() else "is not")
+                logger.info(cvm_info_msg)
+                add_event(op=WALAEventOperation.SignatureValidation, message=cvm_info_msg)
 
             #
             # Perform initialization tasks
@@ -467,11 +524,25 @@ class UpdateHandler(object):
 
     def _initialize_goal_state(self, protocol):
         #
-        # Block until we can fetch the first goal state (self._try_update_goal_state() does its own logging and error handling).
+        # Block until we can fetch the first goal state. Also, refresh the transport certificate.
+        #
+        # Note that all the telemetry emitted by this function (and the functions it calls) is not fully associated with the current VM; the
+        # container ID will be populated only after the goal state is actually fetched, and the Resource Group, VM Name, and VM ID will be
+        # populated only after we initialize telemetry (which happens after this function returns).
+        #
+        # To address issue, we should populate any uninitialized fields before pushing the telemetry events to the WireServer.
         #
         event.info(WALAEventOperation.GoalState, "Initializing the goal state...")
+
+        try:
+            event.info(WALAEventOperation.TransportCertificate, "Refreshing/creating the Transport Certificate.")
+            WireProtocol.create_transport_certificate()
+        except TransportCertificateError as e:
+            event.warn(WALAEventOperation.TransportCertificate, "{0}", ustr(e))
+
         while not self._try_update_goal_state(protocol):
             time.sleep(conf.get_goal_state_period())
+
         event.info(WALAEventOperation.GoalState, "Goal state initialization completed.")
 
         #
@@ -481,7 +552,7 @@ class UpdateHandler(object):
         if not conf.get_enable_fast_track():
             last_fast_track_timestamp = HostPluginProtocol.get_fast_track_timestamp()
             if last_fast_track_timestamp is not None:
-                egs = protocol.client.get_goal_state().extensions_goal_state
+                egs = self._goal_state.extensions_goal_state
                 if egs.created_on_timestamp < last_fast_track_timestamp:
                     egs.is_outdated = True
                     event.info(
@@ -531,6 +602,13 @@ class UpdateHandler(object):
         max_errors_to_log = 3
 
         try:
+            #
+            # Ensure the transport certificate exists
+            #
+            trans_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
+            if not os.path.exists(trans_cert_file):
+                WireProtocol.create_transport_certificate()
+
             #
             # For Fast Track goal states we need to ensure that the tenant certificate is in the goal state.
             #
@@ -598,15 +676,11 @@ class UpdateHandler(object):
         # Check that the certificates needed by extensions are in the goal state certificates summary
         for extension in goal_state.extensions_goal_state.extensions:
             for settings in extension.settings:
-                if settings.protectedSettings is None:
-                    continue
-                certificates = goal_state.certs.summary
-                if not any(settings.certificateThumbprint == c['thumbprint'] for c in certificates):
-                    event.warn(
-                        WALAEventOperation.FetchGoalState,
-                        "The extensions goal state is out of sync with the tenant cert. Certificate {0}, needed by {1}, is missing.",
-                        settings.certificateThumbprint, extension.name)
-                    return False
+                if settings.protectedSettings is not None:
+                    certificate_path = os.path.join(conf.get_lib_dir(), settings.certificateThumbprint + '.crt')
+                    if not os.path.isfile(certificate_path):
+                        event.warn(WALAEventOperation.FetchGoalState, "The extensions goal state is out of sync with the tenant cert. Certificate {0}, needed by {1}, is missing.", settings.certificateThumbprint, extension.name)
+                        return False
         return True
 
     def _processing_new_incarnation(self):
@@ -655,7 +729,7 @@ class UpdateHandler(object):
             self._report_status(exthandlers_handler, agent_update_handler)
 
             if self._processing_new_incarnation():
-                remote_access_handler.run()
+                remote_access_handler.run(self._goal_state.remote_access)
 
             # lastly, archive the goal state history (but do it only on new goal states - no need to do it on every iteration)
             if self._processing_new_extensions_goal_state():
@@ -733,13 +807,20 @@ class UpdateHandler(object):
         if self.child_process is None:
             return
 
-        logger.info(
-            u"Agent {0} forwarding signal {1} to {2}\n",
-            CURRENT_AGENT,
-            signum,
-            self.child_agent.name if self.child_agent is not None else CURRENT_AGENT)
+        child_agent_name = self.child_agent.name if self.child_agent is not None else CURRENT_AGENT
+        message = u"Agent {0} forwarding signal {1} to {2}...".format(CURRENT_AGENT, signum, child_agent_name)
+        logger.info(u"{0}\n", message)
+        add_event(op=WALAEventOperation.Enable, message=message)
 
-        self.child_process.send_signal(signum)
+        try:
+            self.child_process.send_signal(signum)
+        except OSError as error:
+            # There may be a race condition in which the child exited after the above check for None and send_signal(); ignore it.
+            if error.errno != errno.ESRCH:  # "no such process" 
+                raise
+            message = u"The {0} child process no longer existed when forwarding signal {1}; continuing the service shutdown process.".format(CURRENT_AGENT, signum)
+            logger.info(u"{0}", message)
+            add_event(op=WALAEventOperation.Enable, message=message)
 
         if self.signal_handler not in (None, signal.SIG_IGN, signal.SIG_DFL):
             self.signal_handler(signum, frame)
@@ -1163,6 +1244,7 @@ class UpdateHandler(object):
                 return
 
             firewall_manager = FirewallManager.create(wire_server_address)
+            firewall_manager.verbose = True
 
             try:
                 firewall_manager.remove_legacy_rule()
@@ -1176,6 +1258,8 @@ class UpdateHandler(object):
                 else:
                     firewall_manager.setup()
                     event.info(WALAEventOperation.Firewall, "Created firewall rules for Azure Fabric:\n{0}", firewall_manager.get_state())
+            except IptablesInconsistencyError as e:
+                event.warn(WALAEventOperation.FirewallInconsistency, "{0}", ustr(e))
             except FirewallStateError as e:
                 event.warn(WALAEventOperation.Firewall, "The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): {0}. Current state:\n{1}", ustr(e), firewall_manager.get_state())
 

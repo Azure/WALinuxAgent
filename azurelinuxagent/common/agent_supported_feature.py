@@ -85,7 +85,7 @@ class _GAVersioningGovernanceFeature(AgentSupportedFeature):
 
     __NAME = SupportedFeatureNames.GAVersioningGovernance
     __VERSION = "1.0"
-    __SUPPORTED = conf.get_auto_update_to_latest_version() and conf.get_enable_ga_versioning()
+    __SUPPORTED = True
 
     def __init__(self):
         super(_GAVersioningGovernanceFeature, self).__init__(name=self.__NAME,
@@ -96,7 +96,6 @@ class _GAVersioningGovernanceFeature(AgentSupportedFeature):
 # This is the list of features that Agent supports and we advertise to CRP
 __CRP_ADVERTISED_FEATURES = {
     SupportedFeatureNames.MultiConfig: _MultiConfigFeature(),
-    SupportedFeatureNames.GAVersioningGovernance: _GAVersioningGovernanceFeature()
 }
 
 
@@ -127,7 +126,13 @@ def get_agent_supported_features_list_for_crp():
             }
     """
 
-    return dict((name, feature) for name, feature in __CRP_ADVERTISED_FEATURES.items() if feature.is_supported)
+    supported_features = dict((name, feature) for name, feature in __CRP_ADVERTISED_FEATURES.items() if feature.is_supported)
+    ga_versioning_feature = _GAVersioningGovernanceFeature()
+    # For GA Versioning Governance feature, we need to check auto updates and GA versioning is enabled.
+    # If disabled, we need to inform that feature is not supported by not sending feature in the supported list to CRP
+    if ga_versioning_feature.is_supported and conf.get_auto_update_to_latest_version() and conf.get_enable_ga_versioning():
+        supported_features[SupportedFeatureNames.GAVersioningGovernance] = ga_versioning_feature
+    return supported_features
 
 
 def get_agent_supported_features_list_for_extensions():

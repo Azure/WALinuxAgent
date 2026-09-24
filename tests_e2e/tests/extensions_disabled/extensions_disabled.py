@@ -60,13 +60,11 @@ class ExtensionsDisabled(AgentVmTest):
         test_file = f"waagent-test.{unique}"
         test_cases = [
             ExtensionsDisabled.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
-                                              resource_name="CustomScript"),
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript),
                 {'commandToExecute': f"echo '{unique}' > /tmp/{test_file}"}
             ),
             ExtensionsDisabled.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
-                                              resource_name="RunCommandHandler"),
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler),
                 {'source': {'script': f"echo '{unique}' > /tmp/{test_file}"}}
             )
         ]

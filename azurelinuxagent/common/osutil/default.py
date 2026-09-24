@@ -43,29 +43,48 @@ from azurelinuxagent.common.exception import OSUtilError
 #
 # The 'crypt' package was removed in Python 3.13.
 #
-# To work around this, WALinuxAgent 2.12 and 2.13 added a dependency on legacycrypt and imported crypt from there. From 2.14,
-# we instead get crypt from the crypt-r package. The code below needs to handle the case where the self-update WALinuxAgent
-# is running on a machine where the pre-installed WALinuxAgent is 2.12/2.13 (and crypt may be coming from legacycrypt).
+# To work around this, on WALinuxAgent 2.12 and 2.13 we added a dependency on legacycrypt and imported crypt from there. From
+# WALinuxAgent 2.14, we instead get crypt from the crypt-r package. Lastly, from WALinuxAgent 2.16, we dropped the dependency
+# on crypt altogether and instead use the hashing functions on passlib.hash.
+#
+# The WALinuxAgent that is pre-installed on the VM images works fine on any of those cases, but self-update WALinuxAgent needs
+# to do a discovery process to determine what module and function to use. For example, it may be the case that after self
+# update, WALinuxAgent is running on a machine where 2.12 was pre-installed and crypt is coming from legacycrypt.
 #
 # We first try importing from crypt, which may have been installed from the crypt or crypt-r packages, then try
-# importing from legacy crypt, then fallback to a dummy function that raises an exception when invoked. The Provisioning Agent
-# and JIT requests use the crypt function, so those features would fail if none of the required dependencies are installed.
+# importing from legacy crypt, and lastly try importing passlib.hash. If none of those work, we raise an exception when
+# trying to hash a password. The Provisioning Agent and JIT requests need to hash passwords, so those features would fail
+# if none of the required dependencies are installed.
 #
-try:
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=DeprecationWarning)
-        from crypt import crypt  # pylint: disable=deprecated-module
-except ImportError:
-    __CRYPT_IMPORTED__ = False
+__HASH_METHOD_NONE__    = 0  # None of the required dependencies are installed
+__HASH_METHOD_CRYPT__   = 1  # Use the crypt function when hashing passwords
+__HASH_METHOD_PASSLIB__ = 2  # Use passlib.hash to hash passwords
+
+__HASH_METHOD__ = __HASH_METHOD_NONE__
+
+if __HASH_METHOD__ == __HASH_METHOD_NONE__:
+    try:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=DeprecationWarning)
+            from crypt import crypt  # pylint: disable=deprecated-module
+            __HASH_METHOD__ = __HASH_METHOD_CRYPT__
+    except ImportError:
+        pass
+
+if __HASH_METHOD__ == __HASH_METHOD_NONE__:
     if sys.version_info[0] == 3 and sys.version_info[1] >= 13 or sys.version_info[0] > 3:
         try:
             from legacycrypt import crypt
-            __CRYPT_IMPORTED__ = True
+            __HASH_METHOD__ = __HASH_METHOD_CRYPT__
         except ImportError:
             pass
-    if not __CRYPT_IMPORTED__:
-        def crypt(password, salt):
-            raise OSUtilError("This feature requires one of the 'crypt', 'legacycrypt' or 'crypt-r' Python packages to be installed.")
+
+if __HASH_METHOD__ == __HASH_METHOD_NONE__:
+    try:
+        from passlib.hash import sha512_crypt
+        __HASH_METHOD__ = __HASH_METHOD_PASSLIB__
+    except ImportError:
+        pass
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
@@ -263,13 +282,22 @@ class DefaultOSUtil(object):
 
     @staticmethod
     def gen_password_hash(password, crypt_id, salt_len):
-        collection = string.ascii_letters + string.digits
-        salt = ''.join(random.choice(collection) for _ in range(salt_len))
-        salt = "${0}${1}".format(crypt_id, salt)
-        if sys.version_info[0] == 2:
-            # if python 2.*, encode to type 'str' to prevent Unicode Encode Error from crypt.crypt
-            password = password.encode('utf-8')
-        return crypt(password, salt)
+        if __HASH_METHOD__ == __HASH_METHOD_CRYPT__:
+            collection = string.ascii_letters + string.digits
+            salt = ''.join(random.choice(collection) for _ in range(salt_len))
+            salt = "${0}${1}".format(crypt_id, salt)
+            if sys.version_info[0] == 2:
+                # if python 2.*, encode to type 'str' to prevent Unicode Encode Error from crypt.crypt
+                password = password.encode('utf-8')
+
+            # NOTE: crypt() is invoked only when it has been defined
+            return crypt(password, salt)  # pylint: disable=used-before-assignment
+
+        if __HASH_METHOD__ == __HASH_METHOD_PASSLIB__:
+            # NOTE: sha512_crypt is used only when it has been defined
+            return sha512_crypt.hash(password)  # pylint: disable=possibly-used-before-assignment
+
+        raise OSUtilError("This feature requires one of the 'crypt', 'legacycrypt', 'crypt-r', or passlib Python packages to be installed.")
 
     def get_users(self):
         return getpwall()

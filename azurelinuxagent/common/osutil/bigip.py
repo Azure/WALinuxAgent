@@ -101,7 +101,7 @@ class BigIpOSUtil(DefaultOSUtil):
     def get_dhcp_pid(self):
         return self._get_dhcp_pid(["/sbin/pidof", "dhclient"])
 
-    def set_hostname(self, hostname):
+    def set_hostname(self, _):
         """Set the static hostname of the device
 
         Normally, tmsh is used to set the hostname for the system. For our
@@ -125,7 +125,7 @@ class BigIpOSUtil(DefaultOSUtil):
         """
         return None
 
-    def set_dhcp_hostname(self, hostname):
+    def set_dhcp_hostname(self, _):
         """Sets the DHCP hostname
 
         See `set_hostname` for an explanation of why I pass here
@@ -134,7 +134,7 @@ class BigIpOSUtil(DefaultOSUtil):
         """
         return None
 
-    def useradd(self, username, expiration=None, comment=None):
+    def useradd(self, username, expiration=None, comment=None):  # pylint: disable=unused-argument
         """Create user account using tmsh
 
         Our policy is to create two accounts when booting a BIG-IP instance.
@@ -157,7 +157,7 @@ class BigIpOSUtil(DefaultOSUtil):
         self._save_sys_config()
         return 0
 
-    def chpasswd(self, username, password, crypt_id=6, salt_len=10):
+    def chpasswd(self, username, password, crypt_id=6, salt_len=10):  # pylint: disable=unused-argument
         """Change a user's password with tmsh
 
         Since we are creating the user specified account and additionally
@@ -247,7 +247,7 @@ class BigIpOSUtil(DefaultOSUtil):
         self._wait_until_mcpd_is_initialized()
         return super(BigIpOSUtil, self).mount_dvd(**kwargs)
 
-    def eject_dvd(self, chk_err=True):
+    def eject_dvd(self, chk_err=True):  # pylint: disable=unused-argument
         """Runs the eject command to eject the provisioning DVD
 
         BIG-IP does not include an eject command. It is sufficient to just

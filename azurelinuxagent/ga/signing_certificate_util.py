@@ -73,10 +73,10 @@ def _write_certificate(cert_string, output_path):
         umask = os.umask(0o077)
         with open(output_path, "w") as cert_file:
             cert_file.write(cert_string)
-        logger.info("Signing certificate written to {0}".format(output_path))
+        logger.info("Signing certificate used for extension signature validation has been written to {0}".format(output_path))
 
     except Exception as err:
-        msg = "Failed to write signing certificate to file ('{0}'). Error details:\n{1}".format(output_path, err)
+        msg = "Failed to write extension signing certificate to file ('{0}'). Error details:\n{1}".format(output_path, err)
         event.error(op=WALAEventOperation.SignatureValidation, fmt=msg)
 
     finally:

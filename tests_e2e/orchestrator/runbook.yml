@@ -37,27 +37,34 @@ variable:
     value:
       - agent_bvt
       - agent_cgroups
+      - agent_create_user
       - agent_ext_workflow
       - agent_firewall
       - agent_not_provisioned
       - agent_persist_firewall
       - agent_status
       - agent_update
+#      Disabling agent_update_with_signature test suite. The changes in CRP to include the agent signatures in the goal
+#      state were disabled due to concerns with svd size for uniform scalesets. Once CRP re-enables the agent signatures
+#      in the goal state, we can re-enable this test suite.
+#      - agent_update_with_signature
       - ext_cgroups
-      - extensions_disabled
       - ext_policy
       - ext_policy_with_dependencies
       - ext_sequencing
+      - ext_signature_validation
       - ext_telemetry_pipeline
+      - ext_update
+      - extensions_disabled
       - fips
+      - firewalld
       - hibernation
       - keyvault_certificates
+      - log_collector
       - multi_config_ext
       - no_outbound_connections
       - publish_hostname
       - recover_network_interface
-      - log_collector
-      - ext_update
 
   #
   # Additional arguments pass to the test suites
@@ -213,6 +220,15 @@ variable:
   #
   - name: c_is_vhd
     value: false
+    is_case_visible: true
+
+  #
+  # Security type to use when deploying the VM/VMSS resource (e.g. "ConfidentialVM"). Empty means use the default
+  # deployment behavior. Populated by the AgentTestSuiteCombinator from the 'security_type' property on the
+  # image in images.yml.
+  #
+  - name: c_security_type
+    value: ""
     is_case_visible: true
 
 environment: $(c_environment)

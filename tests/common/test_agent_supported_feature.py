@@ -63,9 +63,9 @@ class TestAgentSupportedFeature(AgentTestCase):
             self.assertNotIn(SupportedFeatureNames.GAVersioningGovernance, get_agent_supported_features_list_for_crp(),
                              "GAVersioningGovernance should not be fetched in crp_supported_features as not supported")
 
-        self.assertEqual(SupportedFeatureNames.GAVersioningGovernance,
-                         get_supported_feature_by_name(SupportedFeatureNames.GAVersioningGovernance).name,
-                         "Invalid/Wrong feature returned")
+        with patch("azurelinuxagent.common.conf.get_auto_update_to_latest_version", return_value=False):
+            self.assertNotIn(SupportedFeatureNames.GAVersioningGovernance, get_agent_supported_features_list_for_crp(),
+                             "GAVersioningGovernance should not be fetched in crp_supported_features as not supported")
 
         # Raise error if feature name not found
         with self.assertRaises(NotImplementedError):

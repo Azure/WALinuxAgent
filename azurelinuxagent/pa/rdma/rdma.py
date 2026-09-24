@@ -48,25 +48,17 @@ def setup_rdma_device(nd_version, shared_conf):
         return
 
     rdma_ipv4_addr = getattrib(instance_elem, "rdmaIPv4Address")
-    if not rdma_ipv4_addr:
-        logger.error(
-            "Could not find rdmaIPv4Address attribute on Instance element of SharedConfig.xml document")
-        return
-
     rdma_mac_addr = getattrib(instance_elem, "rdmaMacAddress")
-    if not rdma_mac_addr:
-        logger.error(
-            "Could not find rdmaMacAddress attribute on Instance element of SharedConfig.xml document")
-        return
 
     # add colons to the MAC address (e.g. 00155D33FF1D ->
     # 00:15:5D:33:FF:1D)
-    rdma_mac_addr = ':'.join([rdma_mac_addr[i:i + 2]
-                              for i in range(0, len(rdma_mac_addr), 2)])
+    if rdma_mac_addr:
+        rdma_mac_addr = ':'.join([rdma_mac_addr[i:i + 2]
+                                  for i in range(0, len(rdma_mac_addr), 2)])
     logger.info("Found RDMA details. IPv4={0} MAC={1}".format(
         rdma_ipv4_addr, rdma_mac_addr))
 
-    # Set up the RDMA device with collected informatino
+    # Set up the RDMA device with collected information
     RDMADeviceHandler(rdma_ipv4_addr, rdma_mac_addr, nd_version).start()
     logger.info("RDMA: device is set up")
     return

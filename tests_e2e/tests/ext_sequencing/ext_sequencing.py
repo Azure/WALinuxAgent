@@ -37,8 +37,9 @@ from azurelinuxagent.common.future import UTC, datetime_min_utc
 from tests_e2e.tests.ext_sequencing.ext_seq_test_cases import add_one_dependent_ext_without_settings, add_two_extensions_with_dependencies, \
     remove_one_dependent_extension, remove_all_dependencies, add_one_dependent_extension, \
     add_single_dependencies, remove_all_dependent_extensions, add_failing_dependent_extension_with_one_dependency, add_failing_dependent_extension_with_two_dependencies
-from tests_e2e.tests.lib.agent_test import AgentVmssTest, TestSkipped
+from tests_e2e.tests.lib.agent_test import AgentVmssTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
+from tests_e2e.tests.lib.test_result import TestSkipped
 from tests_e2e.tests.lib.virtual_machine_scale_set_client import VmssInstanceIpAddress
 from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
 from tests_e2e.tests.lib.logging import log

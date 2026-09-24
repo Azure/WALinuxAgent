@@ -477,5 +477,61 @@ time.sleep(120)
                 thread.join(timeout=5)
 
 
+class RunCommandGetOutputTestCase(AgentTestCase):
+    def test_run_command_get_output_should_call_callback_for_each_line(self):
+        output = []
+        shellutil.run_command_get_output(["printf", "line1\nline2\nline3\n"], on_output_line=output.append)
+        self.assertEqual(output, ["line1", "line2", "line3"],
+                         "run_command_get_output did not call on_output_line with the expected stdout lines. Got: {0}".format(output))
+
+    def test_run_command_get_output_should_not_call_callback_for_no_output(self):
+        output = []
+        shellutil.run_command_get_output(["true"], on_output_line=output.append)
+        self.assertEqual(output, [],
+                         "run_command_get_output should not call on_output_line when the command produces no output. Got: {0}".format(output))
+
+    def test_run_command_get_output_should_raise_command_error_on_non_zero_exit(self):
+        with self.assertRaises(shellutil.CommandError,
+                               msg="run_command_get_output should raise CommandError when the command exits with a non-zero status"):
+            shellutil.run_command_get_output(["ls", "nonexistent_file"], on_output_line=lambda line: None)
+
+    def test_run_command_get_output_should_not_raise_on_success(self):
+        try:
+            shellutil.run_command_get_output(["echo", "hello"], on_output_line=lambda line: None)
+        except shellutil.CommandError:
+            self.fail("run_command_get_output raised CommandError on success")
+
+    def test_run_command_get_output_should_track_process(self):
+        with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+            shellutil.run_command_get_output(["echo", "hello"], on_output_line=lambda line: None)
+            _, kwargs = popen_patch.call_args
+            self.assertEqual(
+                kwargs['env'].get(shellutil.PARENT_PROCESS_NAME),
+                shellutil.AZURE_GUEST_AGENT,
+                "run_command_get_output should set the {0} environment variable to {1} so the child process is tracked as an agent process".format(
+                    shellutil.PARENT_PROCESS_NAME, shellutil.AZURE_GUEST_AGENT))
+
+    def test_run_command_get_output_should_kill_process_when_callback_raises(self):
+        """When the callback raises an exception, the subprocess should be killed and cleaned up."""
+        pids = []
+        original_popen = shellutil._popen
+
+        def capture_popen(*args, **kwargs):
+            proc = original_popen(*args, **kwargs)
+            pids.append(proc.pid)
+            return proc
+
+        def raise_on_callback(_):
+            raise RuntimeError("stop")
+
+        with patch("azurelinuxagent.common.utils.shellutil._popen", side_effect=capture_popen):
+            with self.assertRaises(RuntimeError,
+                                   msg="The callback exception should propagate to the caller"):
+                shellutil.run_command_get_output(["bash", "-c", "echo line1; read"], on_output_line=raise_on_callback)
+
+        self.assertNotIn(pids[0], shellutil.get_running_commands(),
+                         "Process should be removed from running commands after callback raises")
+
+
 if __name__ == '__main__':
     unittest.main()

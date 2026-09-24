@@ -32,11 +32,13 @@ from assertpy import fail
 from time import sleep
 
 from tests_e2e.tests.lib.shell import CommandError
-from tests_e2e.tests.lib.agent_test import AgentVmTest, TestSkipped
+from tests_e2e.tests.lib.test_result import TestSkipped
+from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.logging import log
 
 from azurelinuxagent.common.future import UTC
+
 
 class PublishHostname(AgentVmTest):
     def __init__(self, context: AgentVmTestContext):
@@ -156,7 +158,7 @@ class PublishHostname(AgentVmTest):
                     hostname_detected = ""
                     for retry in range(4, -1, -1):
                         try:
-                            hostname_detected = self.retry_ssh_if_connection_reset("grep -n 'Detected hostname change:.*-> {0}' /var/log/waagent.log".format(hostname), use_sudo=True)
+                            hostname_detected = self.retry_ssh_if_connection_reset("grep -a -n 'Detected hostname change:.*-> {0}' /var/log/waagent.log".format(hostname), use_sudo=True)
                             if hostname_detected:
                                 log.info("Agent detected hostname change: {0}".format(hostname_detected))
                                 break

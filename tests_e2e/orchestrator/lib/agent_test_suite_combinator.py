@@ -1,12 +1,15 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
+import datetime
 import logging
 import random
 import re
 import urllib.parse
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional, Tuple, Type
+
+from azurelinuxagent.common.future import UTC
 
 # E0401: Unable to import 'dataclasses_json' (import-error)
 from dataclasses_json import dataclass_json  # pylint: disable=E0401
@@ -16,9 +19,11 @@ from dataclasses_json import dataclass_json  # pylint: disable=E0401
 #     etc
 from lisa import schema  # pylint: disable=E0401
 from lisa.combinator import Combinator  # pylint: disable=E0401
+from lisa.messages import TestStatus  # pylint: disable=E0401
 from lisa.util import field_metadata  # pylint: disable=E0401
 
 from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, VmImageInfo, TestSuiteInfo, CustomImage
+from tests_e2e.orchestrator.lib.agent_test_result import AgentTestResult
 from tests_e2e.tests.lib.logging import set_thread_name
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 from tests_e2e.tests.lib.virtual_machine_scale_set_client import VirtualMachineScaleSetClient
@@ -149,8 +154,10 @@ class AgentTestSuitesCombinator(Combinator):
 
         runbook_images = self._get_runbook_images(loader)
 
+        all_suites_require_vmss = all(s.executes_on_scale_set for s in loader.test_suites)
+
         skip_test_suites: List[str] = []
-        skip_test_suites_images: List[str] = []
+        skip_test_suites_images: List[Tuple[str, str]] = []
         for test_suite_info in loader.test_suites:
             if self.runbook.cloud in test_suite_info.skip_on_clouds:
                 skip_test_suites.append(test_suite_info.name)
@@ -162,8 +169,7 @@ class AgentTestSuitesCombinator(Combinator):
 
             skip_images_info: List[VmImageInfo] = self._get_test_suite_skip_images(test_suite_info, loader)
             if len(skip_images_info) > 0:
-                skip_test_suite_image = f"{test_suite_info.name}: {','.join([i.urn for i in skip_images_info])}"
-                skip_test_suites_images.append(skip_test_suite_image)
+                skip_test_suites_images.append((test_suite_info.name, ', '.join([i.urn for i in skip_images_info])))
 
             for image in images_info:
                 if image in skip_images_info:
@@ -186,9 +192,19 @@ class AgentTestSuitesCombinator(Combinator):
                     shared_gallery = ""
 
                 if test_suite_info.executes_on_scale_set and (vhd != "" or shared_gallery != ""):
-                    raise Exception("VHDS and images from galleries are currently not supported on scale sets.")
+                    if all_suites_require_vmss:
+                        raise Exception("VHDs and images from galleries are currently not supported on scale sets")
+                    
+                    AgentTestResult.report(
+                        f"{test_suite_info.name}-{image_name}",
+                        test_suite_info.name,
+                        TestStatus.SKIPPED,
+                        datetime.datetime.now(datetime.timezone.utc),
+                        message="VHDs and images from galleries are currently not supported on scale sets.")
+                    continue
 
                 vm_size = self._get_vm_size(image)
+                security_type = image.security_type
 
                 locations: List[str] = self._get_locations(test_suite_info, image)
                 if len(locations) == 0:
@@ -208,6 +224,7 @@ class AgentTestSuitesCombinator(Combinator):
                                 marketplace_image=marketplace_image,
                                 location=location,
                                 vm_size=vm_size,
+                                security_type=security_type,
                                 test_suite_info=test_suite_info)
                         else:
                             env = self.create_vm_environment(
@@ -217,6 +234,7 @@ class AgentTestSuitesCombinator(Combinator):
                                 shared_gallery=shared_gallery,
                                 location=location,
                                 vm_size=vm_size,
+                                security_type=security_type,
                                 test_suite_info=test_suite_info)
                         environments.append(env)
                     else:
@@ -232,6 +250,7 @@ class AgentTestSuitesCombinator(Combinator):
                                     marketplace_image=marketplace_image,
                                     location=location,
                                     vm_size=vm_size,
+                                    security_type=security_type,
                                     test_suite_info=test_suite_info)
                             else:
                                 env = self.create_vm_environment(
@@ -241,17 +260,29 @@ class AgentTestSuitesCombinator(Combinator):
                                     shared_gallery=shared_gallery,
                                     location=location,
                                     vm_size=vm_size,
+                                    security_type=security_type,
                                     test_suite_info=test_suite_info)
                             shared_environments[env_name] = env
 
+                    vm_tags = env["vm_tags"]
                     if test_suite_info.template != '':
-                        vm_tags = env["vm_tags"]
                         if "templates" not in vm_tags:
                             vm_tags["templates"] = test_suite_info.template
                         else:
                             vm_tags["templates"] += "," + test_suite_info.template
 
         environments.extend(shared_environments.values())
+
+        if len(skip_test_suites) > 0:
+            self._log.info("Skipping test suites %s", skip_test_suites)
+            for skipped in skip_test_suites:
+                AgentTestResult.report(skipped, skipped, TestStatus.SKIPPED, datetime.datetime.now(UTC), message=f"Skipping test suite {skipped}")
+
+        if len(skip_test_suites_images) > 0:
+            self._log.info("Skipping test suits run on images \n %s", '\n'.join([f"\t{suite}: {images}" for suite, images in skip_test_suites_images]))
+            for skipped in skip_test_suites_images:
+                suite, images = skipped
+                AgentTestResult.report(suite, suite, TestStatus.SKIPPED, datetime.datetime.now(UTC), message=f"Skipping test suite {suite} on images {images}")
 
         if len(environments) == 0:
             raise Exception("No VM images were found to execute the test suites.")
@@ -261,12 +292,6 @@ class AgentTestSuitesCombinator(Combinator):
         summary = [f"{e['c_env_name']}: [{format_suites(e['c_test_suites'])}]" for e in environments]
         summary.sort()
         self._log.info("Executing tests on %d environments\n\n%s\n", len(environments), '\n'.join([f"\t{s}" for s in summary]))
-
-        if len(skip_test_suites) > 0:
-            self._log.info("Skipping test suites %s", skip_test_suites)
-
-        if len(skip_test_suites_images) > 0:
-            self._log.info("Skipping test suits run on images \n %s", '\n'.join([f"\t{skip}" for skip in skip_test_suites_images]))
 
         return environments
 
@@ -350,7 +375,7 @@ class AgentTestSuitesCombinator(Combinator):
             "c_test_suites": loader.test_suites,
         }
 
-    def create_vm_environment(self, env_name: str, marketplace_image: str, vhd: str, shared_gallery: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo) -> Dict[str, Any]:
+    def create_vm_environment(self, env_name: str, marketplace_image: str, vhd: str, shared_gallery: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo, security_type: str = "") -> Dict[str, Any]:
         #
         # Custom ARM templates (to create the test VMs) require special handling. These templates are processed by the azure_update_arm_template
         # hook, which does not have access to the runbook variables. Instead, we use a dummy VM tag named "templates" and pass the
@@ -414,9 +439,24 @@ class AgentTestSuitesCombinator(Combinator):
                     }
                 ]
             }
+        elif security_type == "ConfidentialVM":
+            # On the VM path LISA performs the deployment, so the security type must be expressed as a LISA feature
+            # requirement on 'c_platform' (LISA does not look at the 'c_security_type' variable, which is consumed
+            # only by 'AgentTestSuite' on the VMSS path). This forces LISA to deploy the image as a Confidential VM
+            # regardless of which security profiles the image and VM size happen to support; without it, LISA's
+            # priority-based selection may pick a non-CVM profile. Note that LISA's SecurityProfileType enum uses
+            # the lowercase value 'cvm' (which it maps internally to ARM's 'ConfidentialVM').
+            environment['c_platform'][0]['requirement']["features"] = {
+                "items": [
+                    {
+                        "type": "Security_Profile",
+                        "security_profile": "cvm"
+                    }
+                ]
+            }
         return environment
 
-    def create_vmss_environment(self, env_name: str, marketplace_image: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo) -> Dict[str, Any]:
+    def create_vmss_environment(self, env_name: str, marketplace_image: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo, security_type: str = "") -> Dict[str, Any]:
         return {
             "c_platform": [
                 {
@@ -440,6 +480,9 @@ class AgentTestSuitesCombinator(Combinator):
             "c_location": location,
             "c_image": marketplace_image,
             "c_is_vhd": False,
+            # On the VMSS path the scale set is deployed by 'AgentTestSuite' using our own ARM template
+            # (vmss.json), bypassing LISA.
+            "c_security_type": security_type,
             "c_vm_size": vm_size,
             "vm_tags": {}
         }
@@ -463,6 +506,7 @@ class AgentTestSuitesCombinator(Combinator):
         i.urn = self.runbook.image  # Note that this could be a URN or the URI for a VHD, or an image from a shared gallery
         i.locations = []
         i.vm_sizes = []
+        i.security_type = ""
 
         return [i]
 
@@ -477,12 +521,12 @@ class AgentTestSuitesCombinator(Combinator):
         for image in suite.images:
             match = AgentTestLoader.RANDOM_IMAGES_RE.match(image)
             if match is None:
-                # Added this condition for galley image as they don't have definition in images.yml
-                if CustomImage._is_image_from_gallery(image):
+                if CustomImage._is_image_from_gallery(image) or AgentTestLoader.IMAGE_URN_RE.match(image) is not None:
                     i = VmImageInfo()
                     i.urn = image
                     i.locations = []
                     i.vm_sizes = []
+                    i.security_type = ""
                     image_list = [i]
                 else:
                     image_list = loader.images[image]
@@ -497,8 +541,7 @@ class AgentTestSuitesCombinator(Combinator):
                 unique[i.urn] = i
         return [v for k, v in unique.items()]
 
-    @staticmethod
-    def _get_test_suite_skip_images(suite: TestSuiteInfo, loader: AgentTestLoader) -> List[VmImageInfo]:
+    def _get_test_suite_skip_images(self, suite: TestSuiteInfo, loader: AgentTestLoader) -> List[VmImageInfo]:
         """
         Returns images that need to be skipped by the suite.
 
@@ -506,6 +549,12 @@ class AgentTestSuitesCombinator(Combinator):
         """
         skip_unique: Dict[str, VmImageInfo] = {}
         for image in suite.skip_on_images:
+            cloud = ""
+            split = image.split(':')
+            if len(split) == 2:
+                cloud, image = split
+            if cloud != "" and cloud != self.runbook.cloud:
+                continue
             image_list = loader.images[image]
             for i in image_list:
                 skip_unique[i.urn] = i

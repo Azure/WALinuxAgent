@@ -11,9 +11,11 @@ image-sets:
 #
       - "alma_8"
       - "alma_9"
+      - "alma_10"
       - "mariner_2" # azure linux 2
       - "azure-linux_3"
       - "azure-linux_3_fips"
+      - "azure-linux_4"
       - "centos_79"
       - "centos_82"
       - "debian_9"
@@ -23,6 +25,7 @@ image-sets:
       - "oracle_79"
       - "oracle_810"
       - "oracle_95"
+      - "oracle_10"
       - "rhel_79"
       - "rhel_810"
       - "rhel_95"
@@ -44,6 +47,7 @@ image-sets:
       - "flatcar_arm64"
       - "mariner_2_arm64"
       - "azure-linux_3_arm64"
+      - "azure-linux_4_arm64"
       - "rhel_95_arm64"
       - "ubuntu_2204_arm64"
       - "ubuntu_2404_arm64"
@@ -87,49 +91,36 @@ image-sets:
       - "ubuntu_2404"
       - "ubuntu_2404_arm64"
 
-   # These are distros with default OpenSSL version 1.1.0 or later, as required for signature validation.
-   # TODO: Remove this image set once timestamp validation is implemented and the "no_check_time" flag
-   # (which requires OpenSSL 1.1.0) is no longer needed.
-   signature-validation-endorsed:
-      - "alma_8"
-      - "alma_9"
-      - "centos_82"
-      - "debian_9"
-      - "debian_10"
-      - "debian_11"
-      - "flatcar"
-      - "mariner_2"
-      - "azure-linux_3"
-      - "azure-linux_3_fips"
-      - "suse_15"
-      - "rhel_810"
-      - "rhel_95"
-      - "rhel_10"
-      - "rocky_9"
-      - "ubuntu_1804"
-      - "ubuntu_2004"
-      - "ubuntu_2204"
-      - "ubuntu_2204_minimal"
-      - "ubuntu_2404"
-      - "ubuntu_2404_minimal"
+   # These distros are endorsed for confidential VMs.
+   cvm-endorsed:
+      - "azure-linux_3_cvm"
+      - "rhel_94_cvm"
+      - "rhel_95_cvm"
+      - "ubuntu_2004_cvm"
+      - "ubuntu_2204_cvm"
+      - "ubuntu_2404_cvm"
+# Rocky Linux 9 CVM cannot currently be deployed in the internal testing subscription. Skipping this image in e2e tests.
+# TODO: Re-enable this image in e2e tests once deployment issue is resolved.
+#      - "rocky_9_cvm"
 
 #
 # An image can be specified by a string giving its urn, as in
 #
-#    ubuntu_2004: "Canonical 0001-com-ubuntu-server-focal 20_04-lts latest"
+#    ubuntu_2004: "Canonical:0001-com-ubuntu-server-focal:20_04-lts:latest"
 #
-# or by an object with 3 properties: urn, locations and vm_sizes, as in
+# or by an object with 4 properties: urn, locations, vm_sizes and security_type, as in
 #
 #   mariner_2_arm64:
-#      urn: "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
+#      urn: "microsoftcblmariner:cbl-mariner:cbl-mariner-2-arm64:latest"
 #      locations:
 #         - AzureCloud: ["eastus"]
 #      vm_sizes:
 #         - "Standard_D2pls_v5"
+#      security_type: "ConfidentialVM"
 #
-# 'urn' is required, while 'locations' and 'vm_sizes' are optional. The latter
-# two properties can be used to specify that the image is available only in
-# some locations, or that it can be used only on some VM sizes.
+# 'urn' is required, while 'locations', 'vm_sizes' and 'security_type' are optional.
+# 'locations' and 'vm_sizes' can be used to specify that the image is available only
+# in some locations, or that it can be used only on some VM sizes.
 #
 # The 'locations' property consists of 3 items, one for each cloud (AzureCloud,
 # AzureUSGovernment and AzureChinaCloud). For each of these items:
@@ -137,6 +128,11 @@ image-sets:
 #    - If the item is not present, the image is available in all locations for that cloud.
 #    - If the value is a list of locations, the image is available only in those locations
 #    - If the value is an empty list, the image is not available in that cloud.
+#
+# The 'security_type' property forces the image to be deployed with a specific security
+# type. Currently only "ConfidentialVM" is supported; when set, both VM deployments
+# (via LISA) and VMSS deployments (via the ARM template at orchestrator/templates/vmss.json)
+# are configured as Confidential VMs. When omitted, the default deployment behavior is used.
 #
 # URNs follow the format '<Publisher> <Offer> <Sku> <Version>' or
 # '<Publisher>:<Offer>:<Sku>:<Version>'
@@ -149,45 +145,67 @@ image-sets:
 #
 images:
    alma_8:
-      urn: "almalinux almalinux-x86_64 8-gen2 latest"
+      urn: "almalinux:almalinux-x86_64:8-gen2:latest"
    alma_9:
-      urn: "almalinux almalinux-x86_64 9-gen2 latest"
-      locations:
-         AzureChinaCloud: []
+      urn: "almalinux:almalinux-x86_64:9-gen2:latest"
+   alma_10:
+      urn: "almalinux:almalinux-x86_64:10-gen2:latest"
    azure-linux_3:
-      urn: "microsoftcblmariner azure-linux-3 azure-linux-3 latest"
+      urn: "microsoftcblmariner:azure-linux-3:azure-linux-3:latest"
       locations:
          AzureUSGovernment: []
          AzureChinaCloud: []
    azure-linux_3_fips:
-      urn: "microsoftcblmariner azure-linux-3 azure-linux-3-gen2-fips latest"
+      urn: "microsoftcblmariner:azure-linux-3:azure-linux-3-gen2-fips:latest"
       locations:
          AzureUSGovernment: []
          AzureChinaCloud: []
    azure-linux_3_arm64:
-      urn: "microsoftcblmariner azure-linux-3 azure-linux-3-arm64 latest"
+      urn: "microsoftcblmariner:azure-linux-3:azure-linux-3-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
          - "Standard_B2pls_v2"
       locations:
          AzureUSGovernment: []
          AzureChinaCloud: []
-   centos_610: "OpenLogic CentOS 6.10 latest"
-   centos_75: "OpenLogic CentOS 7.5 latest"
-   centos_79: "OpenLogic CentOS 7_9 latest"
+   azure-linux_3_cvm:
+      urn: "microsoftcblmariner azure-linux-3 azure-linux-3-cvm latest"
+      security_type: "ConfidentialVM"
+      vm_sizes:
+         - "Standard_DC2ads_v5" # TODO: The sku for this image should be updated to 'Standard_DC2as_v6' once we have capacity for it in our test subs, since it is available in more regions
+      locations:
+         AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
+         AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
+         AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
+   azure-linux_4:
+      urn: "microsoftazurelinux:azurelinux-4:4:latest"
+      locations:
+         AzureUSGovernment: []
+         AzureChinaCloud: []
+   azure-linux_4_arm64:
+      urn: "microsoftazurelinux:azurelinux-4:4-arm64:latest"
+      vm_sizes:
+         # See comment above wrt VM sizes for ARM64 machines
+         - "Standard_B2pls_v2"
+      locations:
+         AzureUSGovernment: []
+         AzureChinaCloud: []
+   centos_610: "OpenLogic:CentOS:6.10:latest"
+   centos_75: "OpenLogic:CentOS:7.5:latest"
+   centos_79: "OpenLogic:CentOS:7_9:latest"
    centos_82:
-      urn: "OpenLogic CentOS 8_2 latest"
+      urn: "OpenLogic:CentOS:8_2:latest"
       vm_sizes:
          # Since centos derived from redhat, please see the comment for vm size in rhel_82
          - "Standard_B2s"
    databricks_ubuntu:
-      urn: "AzureDatabricks Databricks DatabricksWorker latest"
-   debian_8: "credativ Debian 8 latest"
-   debian_9: "credativ Debian 9 latest"
-   debian_10: "Debian debian-10 10 latest"
-   debian_11: "Debian debian-11 11 latest"
+      urn: "AzureDatabricks:Databricks:DatabricksWorker:latest"
+   debian_8: "credativ:Debian:8:latest"
+   debian_9: "credativ:Debian:9:latest"
+   debian_10: "Debian:debian-10:10:latest"
+   debian_11: "Debian:debian-11:11:latest"
    debian_11_arm64:
-      urn: "Debian debian-11 11-backports-arm64 latest"
+      urn: "Debian:debian-11:11-backports-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
          - "Standard_B2pls_v2"
@@ -195,12 +213,12 @@ images:
          AzureUSGovernment: []
          AzureChinaCloud: []
    flatcar:
-      urn: "kinvolk flatcar-container-linux-free stable latest"
+      urn: "kinvolk:flatcar-container-linux-free:stable:latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
    flatcar_arm64:
-      urn: "kinvolk flatcar-container-linux-corevm stable latest"
+      urn: "kinvolk:flatcar-container-linux-corevm:stable:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
          - "Standard_B2pls_v2"
@@ -208,67 +226,78 @@ images:
          AzureChinaCloud: []
          AzureUSGovernment: []
    mariner_1:
-      urn: "microsoftcblmariner cbl-mariner cbl-mariner-1 latest"
+      urn: "microsoftcblmariner:cbl-mariner:cbl-mariner-1:latest"
       locations:
          AzureChinaCloud: []
-   mariner_2: "microsoftcblmariner cbl-mariner cbl-mariner-2 latest"
+   mariner_2: "microsoftcblmariner:cbl-mariner:cbl-mariner-2:latest"
    mariner_2_arm64:
-      urn: "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
+      urn: "microsoftcblmariner:cbl-mariner:cbl-mariner-2-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
          - "Standard_B2pls_v2"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
-   oracle_610: "Oracle Oracle-Linux 6.10 latest"
-   oracle_75:
-      urn: "Oracle Oracle-Linux 7.5 latest"
+   oracle_610: "Oracle:Oracle-Linux:6.10:latest" # Python 2.6.6; not in test run
+   oracle_75: # Python: 2.7.5; used for the recover_network_interface test
+      urn: "Oracle:Oracle-Linux:7.5:latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
-   oracle_79:
-      urn: "Oracle Oracle-Linux ol79-gen2 latest"
+   oracle_79: # Python: 2.7.5
+      urn: "Oracle:Oracle-Linux:ol79-gen2:latest"
       locations:
          AzureChinaCloud: []
-   oracle_82:
-      urn: "Oracle Oracle-Linux ol82-gen2 latest"
+   oracle_82: # Python: 3.6.8; used for the recover_network_interface test
+      urn: "Oracle:Oracle-Linux:ol82-gen2:latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
-   oracle_810:
-      urn: "Oracle Oracle-Linux ol810-lvm-gen2 latest"
+   oracle_810: # Python: 3.6.8
+      urn: "Oracle:Oracle-Linux:ol810-lvm-gen2:latest"
       locations:
          AzureChinaCloud: []
-   oracle_95:
-      urn: "Oracle Oracle-Linux ol95-lvm-gen2 latest"
+   oracle_95: # Python: 3.9.21
+      urn: "Oracle:Oracle-Linux:ol95-lvm-gen2:latest"
       locations:
          AzureChinaCloud: []
-   rhel_610: "RedHat RHEL 6.10 latest"
+   oracle_10:
+      urn: "Oracle:Oracle-Linux:ol10-lvm-gen2:latest"
+      locations:
+         AzureChinaCloud: []
+   oracle_10_arm64: # TODO: Oracle 10 ARM64 is failing to deploy; add to 'endorsed-arm64' once it is fixed.
+      urn: "Oracle:Oracle-Linux:ol10-arm64-lvm-gen2:latest"
+      locations:
+         AzureChinaCloud: []
+         AzureUSGovernment: [] # TODO: Our test subscription does not have quota to create VMs with this image. Remove once we update our subscription.
+   rhel_610: "RedHat:RHEL:6.10:latest"
    rhel_75:
-      urn: "RedHat RHEL 7.5 latest"
+      urn: "RedHat:RHEL:7.5:latest"
       locations:
          AzureChinaCloud: []
+         AzureUSGovernment: []
    rhel_79:
-      urn: "RedHat RHEL 7_9 latest"
+      urn: "RedHat:RHEL:7_9:latest"
       locations:
          AzureChinaCloud: []
    rhel_82:
-      urn: "RedHat RHEL 8.2 latest"
+      urn: "RedHat:RHEL:8.2:latest"
       locations:
          AzureChinaCloud: []
+         AzureUSGovernment: []
       vm_sizes:
       # Previously one user reported agent hang on this VM size for redhat 7+ but not observed in rhel 8. So I'm using same vm size to test agent cgroups scenario for rhel 8 to make sure we don't see any issue in automation.
          - "Standard_B2s"
    rhel_810:
-      urn: "RedHat RHEL 8_10 latest"
+      urn: "RedHat:RHEL:8_10:latest"
       locations:
          AzureChinaCloud: []
    rhel_95:
-      urn: "RedHat RHEL 9_5 latest"
+      urn: "RedHat:RHEL:9_5:latest"
       locations:
          AzureChinaCloud: []
    rhel_95_arm64:
-      urn: "RedHat rhel-arm64 9_5-arm64 latest"
+      urn: "RedHat:rhel-arm64:9_5-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
          - "Standard_B2pls_v2"
@@ -276,42 +305,114 @@ images:
          AzureChinaCloud: []
          AzureUSGovernment: []
    rhel_10:
-      urn: "RedHat RHEL 10_0 latest"
+      urn: "RedHat:RHEL:10_0:latest"
       locations:
         # TODO: Remove this once RHEL 10 is available in AzureChinaCloud
          AzureChinaCloud: []
+   rhel_94_cvm:
+      urn: "RedHat rhel-cvm 9_4_cvm latest"
+      security_type: "ConfidentialVM"
+      vm_sizes:
+         - "Standard_DC2ads_v5" # TODO: The sku for this image should be updated to 'Standard_DC2as_v6' once we have capacity for it in our test subs, since it is available in more regions
+      locations:
+         AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
+         AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
+         AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
+   rhel_95_cvm:
+      urn: "RedHat rhel-cvm 9_5_cvm latest"
+      security_type: "ConfidentialVM"
+      vm_sizes:
+         - "Standard_DC2ads_v5" # TODO: The sku for this image should be updated to 'Standard_DC2as_v6' once we have capacity for it in our test subs, since it is available in more regions
+      locations:
+         AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
+         AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
+         AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
+   rhel_10_cvm:
+      urn: "RedHat:rhel-cvm:10_2_cvm:latest"
+      security_type: "ConfidentialVM"
+      vm_sizes:
+         - "Standard_DC2ads_v5" # TODO: The sku for this image should be updated to 'Standard_DC2as_v6' once we have capacity for it in our test subs, since it is available in more regions
+      locations:
+         AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
+         AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
+         AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
    rocky_9:
-      urn: "resf rockylinux-x86_64 9-base latest"
+      urn: "ciq:rocky-community-editions:rocky-community-9:latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
+   rocky_9_cvm:
+      urn: "ciq:rocky-lts:ciqrl94lts-cvm:latest"
+      security_type: "ConfidentialVM"
+      vm_sizes:
+         - "Standard_DC2ads_v5" # TODO: The sku for this image should be updated to 'Standard_DC2as_v6' once we have capacity for it in our test subs, since it is available in more regions
+      locations:
+         AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
+         AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
+         AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
    suse_12:
-      urn: "SUSE sles-12-sp5 gen1 latest"
+      urn: "SUSE:sles-12-sp5:gen1:latest"
       locations:
          AzureChinaCloud: []
-   suse_15: "SUSE sles-15-sp6-basic gen2 latest"
-   ubuntu_1604: "Canonical UbuntuServer 16.04-LTS latest"
-   ubuntu_1804: "Canonical UbuntuServer 18.04-LTS latest"
-   ubuntu_2004: "Canonical 0001-com-ubuntu-server-focal 20_04-lts latest"
-   ubuntu_2204: "Canonical 0001-com-ubuntu-server-jammy 22_04-lts latest"
-   ubuntu_pro_2204: "Canonical 0001-com-ubuntu-pro-microsoft pro-22_04 latest"
-   ubuntu_pro_fips_2204: "Canonical 0001-com-ubuntu-pro-microsoft pro-fips-22_04 latest"
+   suse_15: "SUSE:sles-15-sp6-basic:gen2:latest"
+   ubuntu_1604: "Canonical:UbuntuServer:16.04-LTS:latest"
+   ubuntu_1804: "Canonical:UbuntuServer:18.04-LTS:latest"
+   ubuntu_2004: "Canonical:0001-com-ubuntu-server-focal:20_04-lts:latest"
+   ubuntu_2204: "Canonical:0001-com-ubuntu-server-jammy:22_04-lts:latest"
+   ubuntu_pro_2204:
+      urn: "Canonical:0001-com-ubuntu-pro-microsoft:pro-22_04:latest"
+      locations:
+         AzureUSGovernment: []
+         AzureChinaCloud: []
+   ubuntu_pro_fips_2204:
+      urn: "Canonical:0001-com-ubuntu-pro-microsoft:pro-fips-22_04:latest"
+      locations:
+         AzureUSGovernment: []
+         AzureChinaCloud: []
    ubuntu_2204_arm64:
-      urn: "Canonical 0001-com-ubuntu-server-jammy 22_04-lts-arm64 latest"
+      urn: "Canonical:0001-com-ubuntu-server-jammy:22_04-lts-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
          - "Standard_B2pls_v2"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
-   ubuntu_2204_minimal: "Canonical 0001-com-ubuntu-minimal-jammy minimal-22_04-lts-gen2 latest"
-   ubuntu_2404: "Canonical ubuntu-24_04-lts server latest"
+   ubuntu_2204_minimal: "Canonical:0001-com-ubuntu-minimal-jammy:minimal-22_04-lts-gen2:latest"
+   ubuntu_2404: "Canonical:ubuntu-24_04-lts:server:latest"
    ubuntu_2404_arm64:
-      urn: "Canonical ubuntu-24_04-lts server-arm64 latest"
+      urn: "Canonical:ubuntu-24_04-lts:server-arm64:latest"
       vm_sizes:
          # See comment above wrt VM sizes for ARM64 machines
          - "Standard_B2pls_v2"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
-   ubuntu_2404_minimal: "Canonical ubuntu-24_04-lts minimal latest"
+   ubuntu_2404_minimal: "Canonical:ubuntu-24_04-lts:minimal:latest"
+   ubuntu_2004_cvm:
+      urn: "Canonical 0001-com-ubuntu-confidential-vm-focal 20_04-lts-cvm latest"
+      security_type: "ConfidentialVM"
+      vm_sizes:
+         - "Standard_DC2ads_v5" # TODO: The sku for this image should be updated to 'Standard_DC2as_v6' once we have capacity for it in our test subs, since it is available in more regions
+      locations:
+         AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
+         AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
+         AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
+   ubuntu_2204_cvm:
+      urn: "Canonical 0001-com-ubuntu-confidential-vm-jammy 22_04-lts-cvm latest"
+      security_type: "ConfidentialVM"
+      vm_sizes:
+         - "Standard_DC2ads_v5" # TODO: The sku for this image should be updated to 'Standard_DC2as_v6' once we have capacity for it in our test subs, since it is available in more regions
+      locations:
+         AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
+         AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
+         AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
+   ubuntu_2404_cvm:
+      urn: "Canonical ubuntu-24_04-lts cvm latest"
+      security_type: "ConfidentialVM"
+      vm_sizes:
+         - "Standard_DC2ads_v5" # TODO: The sku for this image should be updated to 'Standard_DC2as_v6' once we have capacity for it in our test subs, since it is available in more regions
+      locations:
+         AzureCloud: ["westeurope", "eastus2euap"] # The 'Standard_DC2ads_v5' SKU is currently only available in a limited set of regions.
+         AzureUSGovernment: []                     # TODO: We don't have the required quota for CVM VMs in our Gov subscription, remove this once we do.
+         AzureChinaCloud: []                       # TODO: China cloud does not have CVM support yet. Remove this once CVM is available in China cloud.
+   ubuntu_2510: "Canonical:ubuntu-25_10:server:latest"

@@ -42,6 +42,14 @@ class AgentCgroupsProcessCheck(AgentVmTest):
         3. Restart the ext_handler process to re-initialize the cgroups setup
         4. Verify that agent detects extension processes and will not enable the cgroups
         """
+        distro = self._ssh_client.get_distro()
+        # AMA is required to trigger the "unexpected process in agent cgroup" scenario validated below.
+        # Skip on distros where AMA is not available:
+        #   - ubuntu_2510: AMA is not yet supported
+        #   - centos_82:   AMA no longer supports this distro since version 1.43
+        if distro in ("ubuntu_2510", "centos_82"):
+            log.info("Skipping test on %s as AMA extension is not supported to test this scenario", distro)
+            return
 
         log.info("=====Validating agent cgroups process check")
         self._run_remote_test(self._ssh_client, "agent_cgroups_process_check-unknown_process_check.py", use_sudo=True)
@@ -53,8 +61,7 @@ class AgentCgroupsProcessCheck(AgentVmTest):
 
     def _install_ama_extension(self):
         ama_extension = VirtualMachineExtensionClient(
-            self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent,
-            resource_name="AMAAgent")
+            self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent)
         log.info("Installing %s", ama_extension)
         ama_extension.enable()
         ama_extension.assert_instance_view()

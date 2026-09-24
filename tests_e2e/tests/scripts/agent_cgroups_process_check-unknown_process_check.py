@@ -38,7 +38,7 @@ def prepare_agent():
                                     "Debug.CgroupDisableOnQuotaCheckFailure=n"])
     log.info("Successfully enabled agent cgroups config flag: {0}".format(result))
 
-    found: bool = retry_if_false(lambda: check_log_message(" Agent cgroups enabled: True", after_timestamp=check_time))
+    found: bool = retry_if_false(lambda: check_log_message("Agent cgroups enabled: True", after_timestamp=check_time))
     if not found:
         fail("Agent cgroups not enabled")
 

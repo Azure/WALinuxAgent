@@ -49,7 +49,7 @@ class RunCommandBvt(AgentVmTest):
 
         test_cases = [
             RunCommandBvt.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommand, resource_name="RunCommand"),
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommand),
                 lambda s: {
                     "script": base64.standard_b64encode(bytearray(s, 'utf-8')).decode('utf-8')
                 })
@@ -60,7 +60,7 @@ class RunCommandBvt(AgentVmTest):
         else:
             test_cases.append(
                 RunCommandBvt.TestCase(
-                    VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler, resource_name="RunCommandHandler"),
+                    VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler),
                     lambda s: {
                         "source": {
                             "script": s

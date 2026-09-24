@@ -188,7 +188,7 @@ class ProtocolUtil(SingletonPerThread):
                 return
             logger.error("Failed to clear wiresever endpoint: {0}", e)
 
-    def _detect_protocol(self, init_goal_state, create_transport_certificate, save_to_history):
+    def _detect_protocol(self, init_goal_state, save_to_history):
         """
         Probe protocol endpoints in turn.
         """
@@ -223,7 +223,7 @@ class ProtocolUtil(SingletonPerThread):
 
                 try:
                     protocol = WireProtocol(endpoint)
-                    protocol.detect(init_goal_state=init_goal_state, create_transport_certificate=create_transport_certificate, save_to_history=save_to_history)
+                    protocol.detect(init_goal_state=init_goal_state, save_to_history=save_to_history)
                     self._set_wireserver_endpoint(endpoint)
                     return protocol
 
@@ -274,7 +274,7 @@ class ProtocolUtil(SingletonPerThread):
         finally:
             self._lock.release()
 
-    def get_protocol(self, init_goal_state=True, create_transport_certificate=True, save_to_history=False):
+    def get_protocol(self, init_goal_state=True, save_to_history=False):
         """
         Detect protocol by endpoint.
         :returns: protocol instance
@@ -284,8 +284,6 @@ class ProtocolUtil(SingletonPerThread):
             if self._protocol is not None:
                 return self._protocol
 
-            # If the protocol file contains MetadataProtocol we need to fall through to 
-            # _detect_protocol so that we can generate the WireServer transport certificates.
             protocol_file_path = self._get_protocol_file_path()
             if os.path.isfile(protocol_file_path) and fileutil.read_file(protocol_file_path) == WIRE_PROTOCOL_NAME:
                 endpoint = self.get_wireserver_endpoint()
@@ -302,14 +300,14 @@ class ProtocolUtil(SingletonPerThread):
 
             logger.info("Detect protocol endpoint")
 
-            protocol = self._detect_protocol(init_goal_state=init_goal_state, create_transport_certificate=create_transport_certificate, save_to_history=save_to_history)
+            protocol = self._detect_protocol(init_goal_state=init_goal_state, save_to_history=save_to_history)
 
             IOErrorCounter.set_protocol_endpoint(endpoint=protocol.get_endpoint())
             self._save_protocol(WIRE_PROTOCOL_NAME)
 
             self._protocol = protocol
 
-            # Need to clean up MDS artifacts only after _detect_protocol so that we don't
+            # Clean up the metadata server artifacts only after _detect_protocol so that we don't
             # delete MDS certificates if we can't reach WireServer and have to roll back
             # the update
             if is_metadata_server_artifact_present():
