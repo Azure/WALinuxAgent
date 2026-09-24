@@ -145,6 +145,11 @@ class TestConf(AgentTestCase):
         self.assertTrue(os.path.exists(disable_file_path))
         self.assertEqual('', fileutil.read_file(disable_file_path))
 
+    def test_get_wait_for_cloud_init_timeout(self):
+        config = conf.ConfigurationProvider()
+        config.load("Extensions.WaitForCloudInitTimeout=120")
+        self.assertEqual(120, conf.get_wait_for_cloud_init_timeout(config))
+
     def test_get_extensions_enabled(self):
         self.assertTrue(conf.get_extensions_enabled(self.conf))
 
