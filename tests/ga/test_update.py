@@ -2065,7 +2065,7 @@ class MonitorThreadTest(AgentTestCase):
 
     def tearDown(self):
         self.security_type_patch.stop()
-        super(MonitorThreadTest, self).setUp()
+        super(MonitorThreadTest, self).tearDown()
 
     def _test_run(self, invocations=1):
         def iterator(*_, **__):
