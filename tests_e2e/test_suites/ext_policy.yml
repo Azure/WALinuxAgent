@@ -20,3 +20,6 @@ skip_on_images:
   - "AzureChinaCloud:ubuntu_2604_minimal"
   - "AzureUSGovernment:ubuntu_2604"
   - "AzureUSGovernment:ubuntu_2604_minimal"
+  # The test depends on Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, which frequently fails on Debian 12/13 with '2026/09/22 08:31:44 E: Unable to lock directory /var/lib/apt/lists/'
+  - "AzureChinaCloud:debian_12"
+  - "AzureChinaCloud:debian_13"
