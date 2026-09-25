@@ -19,7 +19,7 @@ import json
 import os
 
 from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, InvalidPolicyError, \
-    _PolicyEngine, _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY, _DEFAULT_SIGNATURE_REQUIRED
+    _PolicyEngine, _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY, _DEFAULT_SIGNATURE_REQUIRED, ExtensionRuntimePolicyError
 from tests.lib.tools import AgentTestCase, MagicMock, patch
 
 TEST_EXTENSION_NAME = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
@@ -573,10 +573,12 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
 
     def test_extension_name_in_policy_should_be_case_insensitive(self):
         """
-        Extension name is allowed to be any case. Test that should_allow() and should_enforce_signature_validation() return expected
-        results, even when the extension name does not match the case of the name specified in policy.
+        Extension name is allowed to be any case. Test that should_allow(), should_enforce_signature_validation(), and
+        get_extension_runtime_policy() return expected results, even when the extension name does not match the case
+        of the name specified in policy.
         """
         ext_name_in_policy = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
+        ext_runtime_policy = {"allowDirectScripts": False}
         for ext_name_to_test in [
             "MicrOsoft.aZure.activedirectory.aaDsShloginFORlinux",
             "microsoft.azure.activedirectory.aadsshloginforlinux"
@@ -589,7 +591,8 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
                         "signatureRequired": False,
                         "extensions": {
                             ext_name_in_policy: {
-                                "signatureRequired": True
+                                "signatureRequired": True,
+                                "runtimePolicy": ext_runtime_policy
                             }
                         }
                     }
@@ -600,7 +603,125 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
             engine.update_policy(self.goal_state_history)
             should_allow = engine._should_allow_extension(ext_name_to_test)
             should_enforce_signature = engine.should_enforce_signature_validation(ext_name_to_test)
+            runtime_policy = engine.get_extension_runtime_policy(ext_name_to_test, True)
             self.assertTrue(should_allow,
                             msg="Extension should have been found in allowlist regardless of extension name case.")
             self.assertTrue(should_enforce_signature,
                             msg="Individual signatureRequired policy should have been found and used, regardless of extension name case.")
+            self.assertEqual(ext_runtime_policy, runtime_policy,
+                             msg="Runtime policy should have been returned, regardless of extension name case.")
+
+    def test_get_extension_runtime_policy_should_return_none_if_policy_enforcement_is_disabled(self):
+        engine = ExtensionPolicyEngine()
+        result = engine.get_extension_runtime_policy(TEST_EXTENSION_NAME, supports_policy=True)
+        self.assertIsNone(result)
+
+    def test_get_extension_runtime_policy_should_return_policy_if_specified_and_ext_supports_policy(self):
+        """
+        If runtimePolicy is specified for the extension, get_extension_runtime_policy() should return it.
+        """
+        runtime_policy = {"allowDirectScripts": False}
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    TEST_EXTENSION_NAME: {
+                        "runtimePolicy": runtime_policy
+                    }
+                }
+            }
+        }
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine()
+        engine.update_policy(self.goal_state_history)
+        result = engine.get_extension_runtime_policy(TEST_EXTENSION_NAME, supports_policy=True)
+        self.assertEqual(runtime_policy, result, msg="get_extension_runtime_policy() should return the runtimePolicy dict.")
+
+    def test_get_extension_runtime_policy_should_return_empty_dict_if_not_specified_and_ext_supports_policy(self):
+        """
+        If runtimePolicy is not specified for an extension that supports policy, get_extension_runtime_policy() should return {}.
+        """
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    TEST_EXTENSION_NAME: {}
+                }
+            }
+        }
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine()
+        engine.update_policy(self.goal_state_history)
+        result = engine.get_extension_runtime_policy(TEST_EXTENSION_NAME, supports_policy=True)
+        self.assertEqual({}, result, msg="get_extension_runtime_policy() should return an empty object when runtimePolicy is not specified.")
+
+    def test_get_extension_runtime_policy_should_return_empty_dict_if_extension_not_in_policy_and_ext_supports_policy(self):
+        """
+        If an extension that supports policy is not in the policy, get_extension_runtime_policy() should return {}.
+        """
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {}
+            }
+        }
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine()
+        engine.update_policy(self.goal_state_history)
+        result = engine.get_extension_runtime_policy(TEST_EXTENSION_NAME, supports_policy=True)
+        self.assertEqual({}, result, msg="get_extension_runtime_policy() should return an empty object when extension is not in policy.")
+
+    def test_get_extension_runtime_policy_should_raise_if_ext_does_not_support_policy_and_policy_specified(self):
+        runtime_policy = {"allowDirectScripts": False}
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    TEST_EXTENSION_NAME: {
+                        "runtimePolicy": runtime_policy
+                    }
+                }
+            }
+        }
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine()
+        engine.update_policy(self.goal_state_history)
+
+        with self.assertRaises(ExtensionRuntimePolicyError):
+            engine.get_extension_runtime_policy(TEST_EXTENSION_NAME, supports_policy=False)
+
+    def test_get_extension_runtime_policy_should_raise_if_ext_does_not_support_policy_and_empty_runtime_policy_specified(self):
+        runtime_policy = {}     # The agent has no knowledge of runtime_policy contents, so even an empty dict is considered as a provided policy
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    TEST_EXTENSION_NAME: {
+                        "runtimePolicy": runtime_policy
+                    }
+                }
+            }
+        }
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine()
+        engine.update_policy(self.goal_state_history)
+
+        with self.assertRaises(ExtensionRuntimePolicyError):
+            engine.get_extension_runtime_policy(TEST_EXTENSION_NAME, supports_policy=False)
+
+    def test_get_extension_runtime_policy_should_return_none_if_extension_does_not_support_policy_and_none_is_specified(self):
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    TEST_EXTENSION_NAME: {}
+                }
+            }
+        }
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine()
+        engine.update_policy(self.goal_state_history)
+
+        result = engine.get_extension_runtime_policy(TEST_EXTENSION_NAME, supports_policy=False)
+
+        self.assertIsNone(result)

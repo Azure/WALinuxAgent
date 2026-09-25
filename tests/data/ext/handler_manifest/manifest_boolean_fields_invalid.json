@@ -9,7 +9,8 @@
       "disableCommand": "disable_cmd",
       "reportHeartbeat": "invalid",
       "continueOnUpdateFailure": "invalid",
-      "supportsMultipleExtensions": 1
+      "supportsMultipleExtensions": 1,
+      "supportsPolicy": 1
     }
 }]
 
