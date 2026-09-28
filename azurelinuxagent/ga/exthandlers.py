@@ -849,9 +849,6 @@ class ExtHandlersHandler(object):
                 raise ExtensionUnsignedError()
 
             self.__setup_new_handler(ext_handler_i, extension, self.__should_ignore_ext_signature_validation_errors(ext_handler_i))
-            # The runtime policy file should be created, updated, or removed before each install/enable to ensure that
-            # the latest changes to the policy file (if any) are applied.
-            self.__update_extension_runtime_policy(ext_handler_i)
 
             if old_ext_handler_i is None:
                 ext_handler_i.install(extension=extension)
@@ -899,9 +896,9 @@ class ExtHandlersHandler(object):
         # policy enforcement is enabled, the extension runtime policy file is created/updated only for extensions that
         # support policy.
         #
-        # If an extension runtime policy exists, but the extension does not support policy, an exception will be raised
-        # and caught in handle_ext_handler to prevent the extension from being processed and report the appropriate
-        # status for the extension. This ensures that the policy is not silently ignored.
+        # If runtimePolicy is configured for an extension that does not support policy, an exception is raised and
+        # caught in handle_ext_handler to prevent the extension from being processed and report the appropriate status.
+        # This ensures that the configured runtime policy is not silently ignored.
         if not self._policy_engine.policy_enforcement_enabled:
             if ext_handler_i.runtime_policy_exists():
                 ext_handler_i.remove_runtime_policy()   # remove any stale runtime policy file for the extension
@@ -910,13 +907,15 @@ class ExtHandlersHandler(object):
         runtime_policy = self._policy_engine.get_extension_runtime_policy(ext_handler_i.ext_handler.name, ext_handler_i.supports_policy())
         if runtime_policy is not None:
             ext_handler_i.update_runtime_policy(runtime_policy) # Create or update the extension runtime policy file
+        elif ext_handler_i.runtime_policy_exists():
+            ext_handler_i.remove_runtime_policy()   # remove any stale runtime policy file for the extension
 
-    @staticmethod
-    def __setup_new_handler(ext_handler_i, extension, ignore_signature_validation_errors):
+    def __setup_new_handler(self, ext_handler_i, extension, ignore_signature_validation_errors):
         ext_handler_i.set_handler_state(ExtHandlerState.NotInstalled)
         ext_handler_i.download(ignore_signature_validation_errors)
         ext_handler_i.initialize()
         ext_handler_i.update_settings(extension)
+        self.__update_extension_runtime_policy(ext_handler_i)
 
     @staticmethod
     def __handle_extension(ext_handler_i, extension, uninstall_exit_code):

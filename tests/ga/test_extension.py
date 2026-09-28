@@ -4177,7 +4177,7 @@ class TestExtensionPolicy(TestExtensionBase):
             protocol.report_vm_status = MagicMock()
             exthandlers_handler = get_exthandlers_handler(protocol)
 
-            with patch("azurelinuxagent.ga.exthandlers.HandlerManifest.supports_policy", return_value=True):
+            with patch("azurelinuxagent.ga.exthandlers.HandlerManifest.supports_policy", return_value=True) as supports_policy:
                 # First enable - initial policy
                 self._create_policy_file(initial_policy_with_runtime_policy)
                 exthandlers_handler.run()
@@ -4209,6 +4209,18 @@ class TestExtensionPolicy(TestExtensionBase):
                 # Fourth enable - policy enforcement disabled
                 os.remove(self.policy_path)
                 protocol.mock_wire_data.set_incarnation(4)
+                protocol.client.update_goal_state()
+                exthandlers_handler.run()
+
+                self.assertFalse(os.path.exists(self.runtime_policy_path), "Stale runtime policy file was not removed")
+
+                # Fifth enable - policy enforcement enabled, but the extension does not support policy and has no
+                # runtime policy configured
+                with open(self.runtime_policy_path, mode='w') as runtime_policy_file:
+                    json.dump({"stale": True}, runtime_policy_file)
+                supports_policy.return_value = False
+                self._create_policy_file(updated_policy_without_runtime_policy)
+                protocol.mock_wire_data.set_incarnation(5)
                 protocol.client.update_goal_state()
                 exthandlers_handler.run()
 
