@@ -35,6 +35,7 @@ from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.utils.archive import GoalStateHistory, SHARED_CONF_FILE_NAME
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
+from azurelinuxagent.ga.signature_validation_util import ext_signature_validation_enabled
 
 
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
@@ -62,7 +63,7 @@ class GoalStateProperties(object):
 
 
 class GoalState(object):
-    def __init__(self, wire_client, goal_state_properties=GoalStateProperties.All, silent=False, save_to_history=False):
+    def __init__(self, wire_client, goal_state_properties=GoalStateProperties.All, silent=False, save_to_history=False, ignore_certificate_download_errors=True):
         """
         Fetches the goal state using the given wire client.
 
@@ -77,6 +78,7 @@ class GoalState(object):
             self._wire_client = wire_client
             self._history = None
             self._save_to_history = save_to_history
+            self._ignore_certificate_download_errors = ignore_certificate_download_errors
             self._extensions_goal_state = None  # populated from vmSettings or extensionsConfig
             self._goal_state_properties = goal_state_properties
             self.logger = logger.Logger(logger.DEFAULT_LOGGER)
@@ -261,41 +263,59 @@ class GoalState(object):
         if goal_state_updated:
             extensions_config = self._fetch_full_wire_server_goal_state(incarnation, xml_doc)
 
-        #
-        # Lastly, decide whether to use the vmSettings or extensionsConfig for the extensions goal state
-        #
-        if goal_state_updated:
-            # On rotation of the tenant certificate the vmSettings and extensionsConfig are not updated. However, the incarnation of the WS goal state is update so 'goal_state_updated' will be True.
-            # In this case, we should use the most recent of vmSettigns and extensionsConfig.
-            if vm_settings is not None:
-                most_recent = vm_settings if vm_settings.created_on_timestamp > extensions_config.created_on_timestamp else extensions_config
-            else:
-                most_recent = extensions_config
-        else:  # vm_settings_updated
-            most_recent = vm_settings
+        # Process only if extensions goal state was requested
+        if self._goal_state_properties & GoalStateProperties.ExtensionsGoalState:
+            #
+            # Lastly, decide whether to use the vmSettings or extensionsConfig for the extensions goal state
+            #
+            if goal_state_updated:
+                # On rotation of the tenant certificate the vmSettings and extensionsConfig are not updated. However, the incarnation of the WS goal state is update so 'goal_state_updated' will be True.
+                # In this case, we should use the most recent of vmSettigns and extensionsConfig.
+                if vm_settings is not None:
+                    most_recent = vm_settings if vm_settings.created_on_timestamp > extensions_config.created_on_timestamp else extensions_config
+                else:
+                    most_recent = extensions_config
+            else:  # vm_settings_updated
+                most_recent = vm_settings
 
-        if self._extensions_goal_state is None or most_recent.created_on_timestamp >= self._extensions_goal_state.created_on_timestamp:
-            self._extensions_goal_state = most_recent
+            if self._extensions_goal_state is None or most_recent.created_on_timestamp >= self._extensions_goal_state.created_on_timestamp:
+                self._extensions_goal_state = most_recent
 
-        # For each extension in the goal state being executed, we emit telemetry to indicate whether a signature is present
-        # for the extension. The "is_success" field reflects whether the extension was signed.
-        # If signature is missing, skip telemetry in the following cases:
-        #   - Extension requested state is 'uninstall' (uninstall goal states never include signature).
-        #   - The goal state API does not support the 'encoded_signature' property (e.g., fast track goal states where HGAP version does not support signature).
-        for ext in self._extensions_goal_state.extensions:
-            if ext.state == "uninstall" or not self._extensions_goal_state.supports_encoded_signature():
-                continue
-            add_event(op=WALAEventOperation.ExtensionSigned, message="", name=ext.name, version=ext.version, is_success=ext.encoded_signature != "", log_event=False)
+            # For each extension in the goal state being executed, we emit telemetry to indicate whether a signature is present
+            # for the extension. The "is_success" field reflects whether the extension was signed.
+            # Only send telemetry if the following conditions are met:
+            #   - Goal state API supports 'encoded_signature' property (e.g., for fast track goal states, HGAP version should support signature)
+            #   - Signature validation is enabled
+            #   - Extension requested state is *not* 'uninstall' (uninstall goal states never include signature).
+            #
+            if ext_signature_validation_enabled() and self._extensions_goal_state.supports_encoded_signature():
+                # The telemetry message includes activity ID and created-on timestamp, and the 
+                # 'is_success' column conveys whether the extension signature is present.
+                #   - The activity Id is included to quickly correlate with CRP/HGAP telemetry for a particular goal 
+                #       state without needing to infer the activity id from other guest agent events.
+                #   - The created_on_timestamp is included so that we can filter out old goal states (created before CRP
+                #       started including signatures in GS) in our queries.
+                # The local log message indicates whether the extension signature is present or not.
+                telemetry_msg = json.dumps({
+                    "activity_id": self._extensions_goal_state.activity_id,
+                    "created_on_timestamp": str(self._extensions_goal_state.created_on_timestamp),
+                })
+                for ext in self._extensions_goal_state.extensions:
+                    if ext.state == "uninstall":
+                        continue
+                    log_msg = "Goal state {0} signature for extension package".format("contains" if ext.encoded_signature else "does not contain")
+                    self.logger.info("{0} {1} (version: {2})".format(log_msg, ext.name, ext.version))
+                    add_event(op=WALAEventOperation.ExtensionSigned, message=telemetry_msg, name=ext.name, version=ext.version, is_success=ext.encoded_signature != "", log_event=False)
 
-        # Ensure all certificates are downloaded on Fast Track goal states in order to maintain backwards compatibility with previous
-        # versions of the Agent, which used to download certificates from the WireServer on every goal state. Some customer applications
-        # depend on this behavior (see https://github.com/Azure/WALinuxAgent/issues/2750).
-        #
-        if self._extensions_goal_state.source == GoalStateSource.FastTrack and self._goal_state_properties & GoalStateProperties.Certificates:
-            self._check_and_download_missing_certs_on_disk()
+            # Ensure all certificates are downloaded on Fast Track goal states in order to maintain backwards compatibility with previous
+            # versions of the Agent, which used to download certificates from the WireServer on every goal state. Some customer applications
+            # depend on this behavior (see https://github.com/Azure/WALinuxAgent/issues/2750).
+            #
+            if self._extensions_goal_state.source == GoalStateSource.FastTrack and self._goal_state_properties & GoalStateProperties.Certificates:
+                self._check_and_download_missing_certs_on_disk()
 
     def _download_certificates(self, certs_uri):
-        certs = Certificates(self._wire_client, certs_uri, self.logger)
+        certs = Certificates(self._wire_client, certs_uri, self.logger, ignore_download_errors=self._ignore_certificate_download_errors)
         # Save the certificates summary (i.e. the thumbprints but not the certificates themselves) to the goal state history
         if self._save_to_history:
             self._history.save_certificates(json.dumps(certs.summary))
@@ -471,6 +491,7 @@ class GoalState(object):
 
             remote_access = None
             if GoalStateProperties.RemoteAccessInfo & self._goal_state_properties:
+                container = find(xml_doc, "Container")
                 remote_access_uri = findtext(container, "RemoteAccessInfo")
                 if remote_access_uri is not None:
                     xml_text = self._wire_client.fetch_config(remote_access_uri, self._wire_client.get_header_for_remote_access())
@@ -517,28 +538,48 @@ class SharedConfig(object):
 
 
 class Certificates(LogEvent):
-    def __init__(self, wire_client, uri, logger_):
+    def __init__(self, wire_client, uri, logger_, ignore_download_errors=True):
         super(Certificates, self).__init__(logger_)
+        self._ignore_download_errors = ignore_download_errors
         self.summary = []
         self._crypt_util = CryptUtil(conf.get_openssl_cmd())
 
+        pfx_file = os.path.join(conf.get_lib_dir(), PFX_FILE_NAME)
+        pem_file = os.path.join(conf.get_lib_dir(), PEM_FILE_NAME)
+
+        create_empty_pem_file = False
+
         try:
-            pfx_file = self._download_certificates_pfx(wire_client, uri)
-            if pfx_file is None:  # The response from the WireServer may not have any certificates
-                return
-
-            try:
-                pem_file = self._convert_certificates_pfx_to_pem(pfx_file)
-            finally:
-                self._remove_file(pfx_file)
-
-            self.summary = self._extract_certificate(pem_file)
-
-            for c in self.summary:
-                self.info(WALAEventOperation.GoalStateCertificates, "Downloaded certificate {0}", c)
-
+            if not self._try_download_certificates_pfx(wire_client, uri, pfx_file):
+                create_empty_pem_file = True
+                return  # The response from the WireServer did not have any certificates, or they were not in the expected format
+            self._convert_certificates_pfx_to_pem(pfx_file, pem_file)
         except Exception as e:
+            # A failure to download the certificates won't necessarily produce an error. Certificates do not change often and they may have
+            # already been saved to disk on a previous goal state. Re-raise the exception only if explicitly requested via the ignore_download_errors
+            # parameter, otherwise simply report the error and continue processing the goal_state; later on,
+            # before extensions are processed, the Agent checks whether the required certificates are already on disk and refreshes the goal
+            # state if they are not
+            if not self._ignore_download_errors:
+                raise
             self.error(WALAEventOperation.GoalStateCertificates, "Error fetching the goal state certificates: {0}", ustr(e))
+            create_empty_pem_file = True
+            return
+        finally:
+            if create_empty_pem_file:
+                # Agents older than 2.13.1.1 can go into an infinite loop during initialization of the Daemon if the certificates cannot
+                # be downloaded/decrypted and the PEM file does not exist. Create an empty file (or overwrite any existing file from previous
+                # goal states) to ensure it exists.
+                open(pem_file, "w").close()
+            self._remove_file(pfx_file)
+
+        try:
+            self.summary = self._extract_certificate(pem_file)
+        except Exception as e:
+            self.error(WALAEventOperation.GoalStateCertificates, "Error extracting the goal state certificates from {0}: {1}", pem_file, ustr(e))
+
+        for c in self.summary:
+            self.info(WALAEventOperation.GoalStateCertificates, "Downloaded certificate {0}", c)
 
     def _remove_file(self, file):
         if os.path.exists(file):
@@ -547,15 +588,14 @@ class Certificates(LogEvent):
             except Exception as e:
                 self.warn(WALAEventOperation.GoalStateCertificates, "Failed to remove {0}: {1}", file, ustr(e))
 
-    def _download_certificates_pfx(self, wire_client, uri):
+    def _try_download_certificates_pfx(self, wire_client, uri, pfx_file):
         """
-        Downloads the certificates from the WireServer and saves them to a pfx file.
-        Returns the full path of the pfx file, or None, if the WireServer response does not have a "Data" element
+        Downloads the certificates from the WireServer and saves them to the given pfx file path.
+        Returns True if the certificates were downloaded, False if the WireServer response does not have a "Data" element, or if the certificates are not in the expected format.
         """
         trans_prv_file = os.path.join(conf.get_lib_dir(), TRANSPORT_PRV_FILE_NAME)
         trans_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
         xml_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
-        pfx_file = os.path.join(conf.get_lib_dir(), PFX_FILE_NAME)
 
         for cypher in ["AES128_CBC", "DES_EDE3_CBC"]:
             headers = wire_client.get_headers_for_encrypted_request(cypher)
@@ -572,11 +612,11 @@ class Certificates(LogEvent):
             data = findtext(xml_doc, "Data")
             if data is None:
                 self.info(WALAEventOperation.GoalStateCertificates, "The Data element of the Certificates response is empty")
-                return None
+                return False
             certificate_format = findtext(xml_doc, "Format")
             if certificate_format and certificate_format != "Pkcs7BlobWithPfxContents":
                 self.warn(WALAEventOperation.GoalStateCertificates, "The Certificates format is not Pkcs7BlobWithPfxContents; skipping. Format is {0}", certificate_format)
-                return None
+                return False
 
             p7m_file = Certificates._create_p7m_file(data)
 
@@ -587,9 +627,9 @@ class Certificates(LogEvent):
                 self._remove_file(pfx_file)
                 continue
 
-            return pfx_file
+            return True
 
-        raise Exception("Cannot download certificates using any of the supported cyphers")
+        raise ProtocolError("Cannot download certificates using any of the supported ciphers")
 
     @staticmethod
     def _create_p7m_file(data):
@@ -603,18 +643,15 @@ class Certificates(LogEvent):
         fileutil.write_file(p7m_file, p7m)
         return p7m_file
 
-    def _convert_certificates_pfx_to_pem(self, pfx_file):
+    def _convert_certificates_pfx_to_pem(self, pfx_file, pem_file):
         """
-        Convert the pfx file to pem file.
+        Convert the pfx file to PEM and saves the result to the given file.
         """
-        pem_file = os.path.join(conf.get_lib_dir(), PEM_FILE_NAME)
-
         for nomacver in [True, False]:
             try:
                 self._crypt_util.convert_pfx_to_pem(pfx_file, nomacver, pem_file)
                 return pem_file
             except shellutil.CommandError as e:
-                self._remove_file(pem_file)  # An error may leave an empty pem file, which can produce a failure on some versions of open SSL (e.g. 3.2.2) on the next invocation
                 self.warn(WALAEventOperation.GoalState, "Error converting PFX to PEM [-nomacver: {0}]: {1}", nomacver, ustr(e))
                 continue
 

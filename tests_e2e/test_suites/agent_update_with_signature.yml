@@ -1,0 +1,18 @@
+# Agent update with signature validation
+#
+# Extends the standard agent update tests (RSM and self-update) to additionally verify:
+#   1. Agent package signature was validated before each update where a download occurred
+#   2. Goal state signature telemetry was sent on each new goal state
+#
+# This suite runs on all CVM-endorsed images. Agent signature validation is only supported on CVMs right now.
+# TODO: Update images list once agent signature validation is supported on non-CVMs
+name: "AgentUpdateWithSignature"
+tests:
+   - "agent_update/rsm_update_with_signature.py"
+   - "agent_update/self_update_with_signature.py"
+images: "cvm-endorsed"     # Run on all cvm-endorsed images while the feature is in development
+locations: "AzureCloud:eastus2euap"
+owns_vm: true
+skip_on_clouds:
+  - "AzureChinaCloud"
+  - "AzureUSGovernment"

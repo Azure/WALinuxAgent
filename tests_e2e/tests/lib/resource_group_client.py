@@ -22,7 +22,19 @@ from typing import Dict, Any
 
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.resource import ResourceManagementClient
-from azure.mgmt.resource.resources.models import DeploymentProperties, DeploymentMode
+#
+# TODO: DeploymentProperties and DeploymentMode have been moved to a different module. This requires updating LISA and the Docker images.
+#
+# When fixing that, look at the list of breaking changes at https://pypi.org/project/azure-mgmt-resource/:
+#
+# 25.0.0 (2026-02-04)
+# Breaking Changes
+#
+# * Operation Group Deployments and DeploymentOperations of ResourceManagementClient are moved to DeploymentsMgmtClient of independent package azure-mgmt-resource-deployments.
+#   If you called ResourceManagementClient(...).deployments.xx(...) before, just need to change to DeploymentsMgmtClient(...).deployments.xx(...).
+#   And same for DeploymentOperations.
+#
+from azure.mgmt.resource.resources.models import DeploymentProperties, DeploymentMode  # pylint: disable=no-name-in-module
 
 from tests_e2e.tests.lib.azure_sdk_client import AzureSdkClient
 from tests_e2e.tests.lib.logging import log

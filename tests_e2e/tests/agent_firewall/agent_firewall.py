@@ -20,6 +20,7 @@ from typing import Any, Dict, List
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
+from tests_e2e.tests.lib.firewall_utilities import FirewallUtilities
 
 
 class AgentFirewall(AgentVmTest):
@@ -32,6 +33,8 @@ class AgentFirewall(AgentVmTest):
         self._ssh_client = self._context.create_ssh_client()
 
     def run(self):
+        FirewallUtilities.skip_test_if_proxy_agent_is_managing_the_wireserver_endpoint(self._ssh_client)
+
         self._run_remote_test(self._ssh_client, f"agent_firewall-verify_all_firewall_rules.py --user {self._context.username}", use_sudo=True)
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:

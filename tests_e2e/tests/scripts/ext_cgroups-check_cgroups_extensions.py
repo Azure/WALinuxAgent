@@ -17,6 +17,7 @@
 # limitations under the License.
 #
 
+import argparse
 import os
 import re
 
@@ -116,7 +117,7 @@ def verify_ext_cgroup_controllers_created_on_file_system():
     log.info('Verified all extension cgroup controller paths are present and they are: \n {0}'.format(verified_controllers_path))
 
 
-def verify_extension_service_cgroup_created_on_file_system():
+def verify_extension_service_cgroup_created_on_file_system(check_ama=True):
     """
     This method ensure that extension service cgroup paths are created on file system after running extension
     """
@@ -127,9 +128,12 @@ def verify_extension_service_cgroup_created_on_file_system():
     verify_extension_service_cgroup_created(GATESTEXT_SERVICE, gatestext_cgroup_mount_path)
 
     # Azure Monitor Extension Service
-    azuremonitoragent_cgroup_mount_path = get_unit_cgroup_mount_path(AZUREMONITORAGENT_SERVICE)
-    azuremonitoragent_service_name = AZUREMONITORAGENT_SERVICE
-    verify_extension_service_cgroup_created(azuremonitoragent_service_name, azuremonitoragent_cgroup_mount_path)
+    if check_ama:
+        azuremonitoragent_cgroup_mount_path = get_unit_cgroup_mount_path(AZUREMONITORAGENT_SERVICE)
+        azuremonitoragent_service_name = AZUREMONITORAGENT_SERVICE
+        verify_extension_service_cgroup_created(azuremonitoragent_service_name, azuremonitoragent_cgroup_mount_path)
+    else:
+        log.info("Skipping %s service cgroup path check: AMA was not installed on this distro", AZUREMONITORAGENT_SERVICE)
 
     log.info('Verified all extension service cgroup paths created in file system .\n')
 
@@ -158,7 +162,7 @@ def verify_extension_service_cgroup_created(service_name, cgroup_mount_path):
              "System mounted cgroups are \n{3}".format(service_name, missing_cgroups_path, verified_cgroups_path, print_cgroups()))
 
 
-def verify_ext_cgroups_tracked():
+def verify_ext_cgroups_tracked(check_ama=True):
     """
     Checks if ext cgroups are tracked by the agent. This is verified by checking the agent log for the message "Started tracking cgroup {extension_name}"
     """
@@ -198,7 +202,7 @@ def verify_ext_cgroups_tracked():
         fail('Expected gatestext cgroups were not tracked, according to the agent log. '
                         'Pattern searched for: {0} and found \n{1}'.format(CGROUP_TRACKED_PATTERN.pattern, cgroups_added_for_telemetry))
 
-    if not azuremonitoragent_cgroups_tracked:
+    if check_ama and not azuremonitoragent_cgroups_tracked:
         fail('Expected azuremonitoragent cgroups were not tracked, according to the agent log. '
                         'Pattern searched for: {0} and found \n{1}'.format(CGROUP_TRACKED_PATTERN.pattern, cgroups_added_for_telemetry))
 
@@ -206,20 +210,32 @@ def verify_ext_cgroups_tracked():
         fail('Expected gatestext service cgroups were not tracked, according to the agent log. '
                         'Pattern searched for: {0} and found \n{1}'.format(CGROUP_TRACKED_PATTERN.pattern, cgroups_added_for_telemetry))
 
-    if not azuremonitoragent_service_cgroups_tracked:
+    if check_ama and not azuremonitoragent_service_cgroups_tracked:
         fail('Expected azuremonitoragent service cgroups were not tracked, according to the agent log. '
                         'Pattern searched for: {0} and found \n{1}'.format(CGROUP_TRACKED_PATTERN.pattern, cgroups_added_for_telemetry))
+
+    if not check_ama:
+        log.info("Skipping AMA cgroup tracking checks: AMA was not installed on this distro")
 
     log.info("Extension cgroups tracked as expected\n%s", cgroups_added_for_telemetry)
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--skip-ama",
+        action="store_true",
+        help="Skip validations that depend on the Azure Monitor Linux Agent (AMA). "
+             "Use this on distros where AMA is not installed (e.g. centos_82 with AMA >= 1.43).")
+    args = parser.parse_args()
+    check_ama = not args.skip_ama
+
     verify_if_distro_supports_cgroup()
     verify_ext_cgroup_controllers_created_on_file_system()
     verify_custom_script_cgroup_assigned_correctly()
     verify_agent_cgroup_assigned_correctly()
-    verify_extension_service_cgroup_created_on_file_system()
-    verify_ext_cgroups_tracked()
+    verify_extension_service_cgroup_created_on_file_system(check_ama=check_ama)
+    verify_ext_cgroups_tracked(check_ama=check_ama)
 
 
 try:

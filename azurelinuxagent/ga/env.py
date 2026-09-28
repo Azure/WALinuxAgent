@@ -28,10 +28,11 @@ from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common import event
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common.future import UTC
-from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError
+from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError, IptablesInconsistencyError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
@@ -100,43 +101,111 @@ class MonitorDhcpClientRestart(PeriodicOperation):
         return pid
 
 
+class FirewallState(object):
+    OK = "OK"  # The firewall rules for the WireServer are setup correctly
+    NotSet = "NotSet"  # The firewall rules have not been set
+    Invalid = "Invalid"  # The state of the firewall rules is not as expected, e.g. because some rules are missing
+    Inconsistent = "Inconsistent"  # The state of the firewall is reported differently by different tools, e.g. "iptables -C" vs "iptables -L"
+    Unknown = "Unknown"  # There was an error while setting up the firewall and its state is not known
+
+
 class EnableFirewall(PeriodicOperation):
+    _REPORTING_PERIOD = datetime.timedelta(hours=24)  # We set limits on the number of reports for this period. Limits are reset after the period elapses.
+    _MAX_REPORTS_WHEN_FIREWALL_OK = 1  # Max number of reports to emit during a reporting period when the firewall is in a good state
+    _MAX_REPORTS_WHEN_FIREWALL_NOT_OK = 3  # Max number of reports to emit during a reporting period when the firewall is not in a good state
+    _MAX_REPORTS_PER_PERIOD = 8  # Absolute max number of reports to emit during a reporting period regardless of the state of the firewall.
+
     def __init__(self, wire_server_address):
         super(EnableFirewall, self).__init__(conf.get_enable_firewall_period())
         self._wire_server_address = wire_server_address
+        self._is_first_iteration = True  # The firewall may not be setup on service start (e.g. new VMs); we issue some messages as INFO the first time, then as WARNING/ERROR for subsequent iterations
         self._firewall_manager = None  # initialized on demand in the _operation method
-        self._message_count = 0
-        self._report_after = datetime.datetime.now(UTC)
+        self._firewall_state = FirewallState.OK  # Initialized to OK to prevent turning on verbose mode on the initial invocation of _operation(). It is properly initialized as soon as we do the first check of the firewall.
+        #
+        # This PeriodicOperation can run very frequently, so we need to limit the number of messages (local log and telemetry) that are emitted.
+        #
+        # Each execution of the _operation() method can emit one or more messages; a "report" consists of all the messages emitted during a single execution. We use self._report_count to limit the number of reports that are emitted 
+        # during a reporting period. When the firewall is in a good state (FirewallState.OK) the limit is set by _MAX_REPORTS_WHEN_FIREWALL_OK, otherwise it is set by _MAX_REPORTS_WHEN_FIREWALL_NOT_OK. However, when the state of the
+        # firewall changes (for example, it was OK and then it becomes incorrect because some rules missing) we want to resume reporting messages immediately, so we reset self._report_count. This strategy can produce too many messages
+        # if the state of the firewall changes too often, so we use self._period_report_count to set an absolute limit (_MAX_REPORTS_PER_PERIOD) on the number of reports per reporting period, regardless of the state of the firewall.
+        #
+        # Both report counters are reset each _REPORTING_PERIOD.
+        #
+        self._reporting_period_end = datetime.datetime.now(UTC) + EnableFirewall._REPORTING_PERIOD
+        self._report_count = 0   # we can reset this counter more than once per period depending on the state of the firewall
+        self._period_report_count = 0  # this counter is reset only once per period
+        self._should_report = True
 
     def _operation(self):
         try:
+            #
+            # We check the reporting limits and set self._should_report at the beginning of the method. Note that self._report_count and self._should_report can be reset to their initial values if the state of the firewall changes.
+            #
+            self._update_reporting_state()
+
             if self._firewall_manager is None:
                 self._firewall_manager = FirewallManager.create(self._wire_server_address)
 
+            #
+            # Setting up the Firewall Manager to verbose will make it log each command it executes, along with its output. We do this only when the state of the firewall
+            # is not OK and the report limit has not been reached.
+            #
+            self._firewall_manager.verbose = self._firewall_state != FirewallState.OK and self._should_report
+
             try:
                 if self._firewall_manager.check():
-                    return  # The firewall is configured correctly
-                self._report(event.warn, "The firewall has not been setup. Will set it up.")
+                    self._update_firewall_state(FirewallState.OK)
+                    self._emit_event(event.info, WALAEventOperation.Firewall, "The firewall is configured correctly. Current state:\n{0}", self._firewall_manager.get_state())
+                    return
+                self._update_firewall_state(FirewallState.NotSet)
+                self._emit_event(event.info if self._is_first_iteration else event.warn, WALAEventOperation.Firewall, "The firewall has not been setup. Will set it up.")
+            except IptablesInconsistencyError as e:
+                self._update_firewall_state(FirewallState.Inconsistent)
+                self._emit_event(event.warn, WALAEventOperation.FirewallInconsistency, "The results returned by iptables are inconsistent, will not change the current state of the firewall: {0}", ustr(e))
+                return
             except FirewallStateError as e:
-                self._report(event.warn, "The firewall is not configured correctly. {0}. Will reset it. Current state:\n{1}", ustr(e), self._firewall_manager.get_state())
+                self._update_firewall_state(FirewallState.Invalid)
+                self._emit_event(event.info if self._is_first_iteration else event.warn, WALAEventOperation.ResetFirewall, "The firewall is not configured correctly. {0}. Will reset it. Current state:\n{1}", ustr(e), self._firewall_manager.get_state())
                 self._firewall_manager.remove()
+
             self._firewall_manager.setup()
-            self._report(event.info, "The firewall was setup successfully:\n{0}", self._firewall_manager.get_state())
+            self._update_firewall_state(FirewallState.OK)
+            self._emit_event(event.info, WALAEventOperation.Firewall, "The firewall was setup successfully:\n{0}", self._firewall_manager.get_state())
         except Exception as e:
-            self._report(event.warn, "An error occurred while setting up the firewall: {0}", ustr(e))
+            self._update_firewall_state(FirewallState.Unknown)
+            if self._firewall_manager is None:
+                self._emit_event(event.warn, WALAEventOperation.Firewall, "An error occurred while verifying the state of the firewall: {0}", textutil.format_exception(e))
+            else:
+                self._emit_event(event.warn, WALAEventOperation.Firewall, "An error occurred while verifying the state of the firewall: {0}. Current state:\n{1}", textutil.format_exception(e), self._firewall_manager.get_state())
+        finally:
+            if self._should_report:
+                self._report_count += 1
+                self._period_report_count += 1
+            self._is_first_iteration = False
 
-    def _report(self, report_function, message, *args):
-        # Report the first 3 messages, then stop reporting for 12 hours
-        if datetime.datetime.now(UTC) < self._report_after:
-            return
 
-        self._message_count += 1
-        if self._message_count > 3:
-            self._report_after = datetime.datetime.now(UTC) + datetime.timedelta(hours=12)
-            self._message_count = 0
-            return
+    def _emit_event(self, event_function, operation, message, *args):
+        if self._should_report:
+            event_function(operation, message, *args)
 
-        report_function(WALAEventOperation.ResetFirewall, message, *args)
+    def _update_reporting_state(self):
+        # Reset the report counts every time a period has elapsed
+        if datetime.datetime.now(UTC) >= self._reporting_period_end:
+            self._report_count = 0
+            self._period_report_count = 0
+            self._reporting_period_end = datetime.datetime.now(UTC) + EnableFirewall._REPORTING_PERIOD
+
+        # Check the report limits
+        max_reports = EnableFirewall._MAX_REPORTS_WHEN_FIREWALL_OK if self._firewall_state == FirewallState.OK else EnableFirewall._MAX_REPORTS_WHEN_FIREWALL_NOT_OK
+        self._should_report = self._report_count < max_reports and self._period_report_count < EnableFirewall._MAX_REPORTS_PER_PERIOD
+
+    def _update_firewall_state(self, firewall_state):
+        if (self._firewall_state == FirewallState.OK) != (firewall_state == FirewallState.OK):
+            # Reset the report count and enable reporting immediately, as long as we have not reached the absolute limit per period.
+            if self._period_report_count < EnableFirewall._MAX_REPORTS_PER_PERIOD:
+                self._report_count = 0
+                self._should_report = True
+        self._firewall_state = firewall_state
 
 
 class SetRootDeviceScsiTimeout(PeriodicOperation):

@@ -55,6 +55,7 @@ from tests.lib.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_da
     clear_singleton_instances, skip_if_predicate_true, load_data
 from tests.lib import wire_protocol_data
 from tests.lib.http_request_predicates import HttpRequestPredicates
+from azurelinuxagent.ga.confidential_vm_info import SecurityType
 
 
 NO_ERROR = {
@@ -1055,6 +1056,7 @@ class TestUpdate(UpdateTestCase):
                                 MockIpTables.get_accept_dns_command("-A"),
                                 MockIpTables.get_accept_command("-A"),
                                 MockIpTables.get_drop_command("-A"),
+                                MockIpTables.get_list_command()
                             ],
                             mock_iptables.call_list,
                             "Expected 2 calls for the legacy rule (-C and -D), followed by 3 sets of calls for the current rules (-C and -A)")
@@ -1074,6 +1076,7 @@ class TestUpdate(UpdateTestCase):
                                 MockFirewallCmd.get_accept_dns_command("--passthrough"),
                                 MockFirewallCmd.get_accept_command("--passthrough"),
                                 MockFirewallCmd.get_drop_command("--passthrough"),
+                                MockFirewallCmd.get_list_command()
                             ],
                             mock_firewall_cmd.call_list,
                             "Expected 2 calls for the legacy rule (-C and -D), followed by 3 sets of calls for the current rules (-C and -A)")
@@ -1885,12 +1888,18 @@ class MonitorThreadTest(AgentTestCase):
     def setUp(self):
         super(MonitorThreadTest, self).setUp()
         self.event_patch = patch('azurelinuxagent.common.event.add_event')
+        self.security_type_patch = patch('azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo._fetch_security_type_from_imds', return_value=SecurityType.ConfidentialVM)
+        self.security_type_patch.start()
         current_thread().name = "ExtHandler"
         protocol = Mock()
         self.update_handler = get_update_handler()
         self.update_handler.protocol_util = Mock()
         self.update_handler.protocol_util.get_protocol = Mock(return_value=protocol)
         clear_singleton_instances(ProtocolUtil)
+
+    def tearDown(self):
+        self.security_type_patch.stop()
+        super(MonitorThreadTest, self).setUp()
 
     def _test_run(self, invocations=1):
         def iterator(*_, **__):
@@ -2048,9 +2057,6 @@ class ProtocolMock(object):
 
     def get_protocol(self):
         return self
-
-    def get_goal_state(self):
-        return self._goal_state
 
     def update_goal_state(self):
         self.call_counts["update_goal_state"] += 1
@@ -2276,7 +2282,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
 
             update_handler._process_goal_state(exthandlers_handler, remote_access_handler, agent_update_handler)
 
-            incarnation = exthandlers_handler.protocol.get_goal_state().incarnation
+            incarnation = update_handler._goal_state.incarnation
             matches = glob.glob(os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "*_{0}".format(incarnation)))
             self.assertTrue(len(matches) == 1, "Could not find the history directory for the goal state. Got: {0}".format(matches))
 
@@ -2304,7 +2310,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
                 with mock_update_handler(protocol) as update_handler:
                     update_handler.run()
 
-                    self.assertTrue(protocol.client.get_goal_state().extensions_goal_state.is_outdated)
+                    self.assertTrue(update_handler._goal_state.extensions_goal_state.is_outdated)
 
     @staticmethod
     def _http_get_vm_settings_handler_not_found(url, *_, **__):
@@ -2319,7 +2325,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
             with mock_update_handler(protocol) as update_handler:
                 update_handler.run()
 
-                self.assertTrue(protocol.client.get_goal_state().extensions_goal_state.is_outdated)
+                self.assertTrue(update_handler._goal_state.extensions_goal_state.is_outdated)
 
     def test_it_should_clear_the_timestamp_for_the_most_recent_fast_track_goal_state(self):
         data_file = self._prepare_fast_track_goal_state()

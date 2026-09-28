@@ -40,8 +40,7 @@ class ExtensionUpdateFailureTest(AgentVmTest):
         custom_script = VmExtensionIds.CustomScript
         custom_script_2_0 = VirtualMachineExtensionClient(
             self._context.vm,
-            custom_script,
-            resource_name="CustomScript")
+            custom_script)
         extensions_to_cleanup = {
             custom_script: custom_script_2_0
         }
@@ -62,13 +61,12 @@ class ExtensionUpdateFailureTest(AgentVmTest):
 
             log.info("Modifying existing handler commands (disable operation) in HandlerManifest.json to fail the disable operation during update")
 
-            output = self._ssh_client.run_command(f"ext_update-modify_handler_manifest.py --extension-name '{custom_script}' --properties disableCommand=disablefailed continueOnUpdateFailure=false", use_sudo=True)
+            output = self._ssh_client.run_command(f"ext_update-modify_handler_manifest.py --extension-name {custom_script} --properties disableCommand=disablefailed continueOnUpdateFailure=false", use_sudo=True)
             log.info("Modified handlerManifest.json:\n%s", output)
 
             custom_script_2_1 = VirtualMachineExtensionClient(
                 self._context.vm,
-                VmExtensionIdentifier(VmExtensionIds.CustomScript.publisher, VmExtensionIds.CustomScript.type, "2.1"),
-                resource_name="CustomScript")
+                VmExtensionIdentifier(VmExtensionIds.CustomScript.publisher, VmExtensionIds.CustomScript.type, "2.1"))
 
             log.info("Updating %s", custom_script_2_0)
 
@@ -92,10 +90,12 @@ class ExtensionUpdateFailureTest(AgentVmTest):
     def _remove_extensions(self, extensions_to_cleanup):
         extensions_on_vm = self._context.vm.get_extensions().value
         extension_names_on_vm = {ext.name for ext in extensions_on_vm}
+        log.info("Extensions currently on VM: %s", extension_names_on_vm)
 
         for ext_name, ext in extensions_to_cleanup.items():
-            if ext_name in extension_names_on_vm:
-                self._ssh_client.run_command(f"ext_update-modify_handler_manifest.py --extension-name '{ext_name}' --reset", use_sudo=True)
+            if ext._resource_name in extension_names_on_vm:
+                output = self._ssh_client.run_command(f"ext_update-modify_handler_manifest.py --extension-name {ext_name} --reset", use_sudo=True)
+                log.info("Reset handlerManifest.json:\n%s", output)
                 ext.delete()
                 log.info("Removed extension %s", ext_name)
 

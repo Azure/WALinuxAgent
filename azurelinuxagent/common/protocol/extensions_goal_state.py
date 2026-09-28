@@ -178,8 +178,16 @@ class ExtensionsGoalState(object):
     def supports_encoded_signature(self):
         """
         Returns boolean indicating if the goal state API supports the 'encoded_signature' property.
-        - ExtensionsConfig goal states should always return True.
-        - VmSettings goal states should check the HGAP version.
+        - ExtensionsConfig goal states should always return True if VM is running on a CVM.
+        - VmSettings goal states should check the HGAP version and if VM is running on a CVM.
+        """
+        raise NotImplementedError()
+
+    def supports_agent_signature_mapping(self):
+        """
+        Returns boolean indicating if the goal state API supports the 'VersionToSignatureMappings' property for agent signatures.
+        - ExtensionsConfig goal states should return True if VM is running on a CVM.
+        - VmSettings goal states should check the HGAP version and if VM is running on a CVM.
         """
         raise NotImplementedError()
 
@@ -253,4 +261,7 @@ class EmptyExtensionsGoalState(ExtensionsGoalState):
         return ''
 
     def supports_encoded_signature(self):
+        return False
+
+    def supports_agent_signature_mapping(self):
         return False

@@ -26,7 +26,6 @@ import time
 import traceback
 from datetime import datetime
 
-import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import EventError, OSUtilError
@@ -86,14 +85,21 @@ class WALAEventOperation:
     Disable = "Disable"
     Downgrade = "Downgrade"
     Download = "Download"
+    DuplicateFirewallRules = "DuplicateFirewallRules"
     Enable = "Enable"
+    ExtensionCleanup = "ExtensionCleanup"                               # Event for extension cleanup operations (e.g., removing packages with invalid signatures).
     ExtensionHandlerManifest = "ExtensionHandlerManifest"
-    ExtensionPolicy = "ExtensionPolicy"
+    ExtensionPolicy = "ExtensionPolicy"                                 # Event for any extension policy-related operations (e.g., extension not in allowlist).
+    ExtensionSignaturePolicy = "ExtensionSignaturePolicy"               # Event for unsigned extension blocked due to extension signature policy.
+    ExtensionSigned = "ExtensionSigned"                                 # Event indicating whether an extension is signed.
+    AgentSignature = "AgentSignature"                                   # Event indicating which agent signatures are delivered in the goal state.
     ExtensionProcessing = "ExtensionProcessing"
     ExtensionResourceGovernance = "ExtensionResourceGovernance"
     ExtensionTelemetryEventProcessing = "ExtensionTelemetryEventProcessing"
     FetchGoalState = "FetchGoalState"
     Firewall = "Firewall"
+    FirewallBootSetup = "FirewallBootSetup"
+    FirewallInconsistency = "FirewallInconsistency"
     GoalState = "GoalState"
     GoalStateCertificates = "GoalStateCertificates"
     GoalStateUnsupportedFeatures = "GoalStateUnsupportedFeatures"
@@ -109,13 +115,16 @@ class WALAEventOperation:
     ImdsHeartbeat = "ImdsHeartbeat"
     Install = "Install"
     InitializeHostPlugin = "InitializeHostPlugin"
+    KernelSoftLockup = "KernelSoftLockup"
     Log = "Log"
     LogCollection = "LogCollection"
     NoExec = "NoExec"
     OSInfo = "OSInfo"
     OpenSsl = "OpenSsl"
+    PackageSignatureResult = "PackageSignatureResult"                   # Event with the result of package signature validation.
+    PackageSigningInfoResult = "PackageSigningInfoResult"               # Event with the result of package manifest 'signingInfo' validation.
     PersistFirewallRules = "PersistFirewallRules"
-    Policy = "Policy"
+    Policy = "Policy"                                                   # Event for policy operations not tied to a specific policy type (e.g., policy initialization).
     ProvisionAfterExtensions = "ProvisionAfterExtensions"
     PluginSettingsVersionMismatch = "PluginSettingsVersionMismatch"
     InvalidExtensionConfig = "InvalidExtensionConfig"
@@ -130,14 +139,13 @@ class WALAEventOperation:
     RequestedStateDisabled = "RequestedStateDisabled"
     RequestedVersionMismatch = "RequestedVersionMismatch"
     ResetFirewall = "ResetFirewall"
+    ResetMemory = "ResetMemory"
     Restart = "Restart"
-    SignatureValidation = "SignatureValidation"
-    ExtensionSigned = "ExtensionSigned"
-    PackageSignatureResult = "PackageSignatureResult"
-    PackageSigningInfoResult = "PackageSigningInfoResult"
     SetCGroupsLimits = "SetCGroupsLimits"
+    SignatureValidation = "SignatureValidation"                         # Event for general logs related to package signature or manifest validation that don't fall under a specific operation.
     SkipUpdate = "SkipUpdate"
     StatusProcessing = "StatusProcessing"
+    TransportCertificate = "TransportCertificate"
     UnhandledError = "UnhandledError"
     UnInstall = "UnInstall"
     Unknown = "Unknown"
@@ -175,7 +183,7 @@ class EventStatus(object):
             return True
         return self._status[event] is True
 
-    def initialize(self, status_dir=conf.get_lib_dir()):
+    def initialize(self, status_dir):
         self._path = os.path.join(status_dir, EventStatus.EVENT_STATUS_FILE)
         self._load()
 
@@ -390,8 +398,11 @@ class EventLogger(object):
 
         # Parameters from OS
         osutil = get_osutil()
+        # Determining IsCVM requires a network call. Set as uninitialized for now until common parameters are
+        # initialized with real values in initialize_vminfo_common_parameters()
         keyword_name = {
-            "CpuArchitecture": osutil.get_vm_arch()
+            "CpuArchitecture": osutil.get_vm_arch(),
+            "IsCVM": "IsCVM_UNINITIALIZED"
         }
         self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.OSVersion, EventLogger._get_os_version()))
         self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.ExecutionMode, AGENT_EXECUTION_MODE))
@@ -458,6 +469,29 @@ class EventLogger(object):
             parameters[CommonTelemetryEventSchema.ImageOrigin].value = int(imds_info.image_origin)
         except Exception as e:
             logger.warn("Failed to get IMDS info; will be missing from telemetry: {0}", ustr(e))
+
+        # The KeywordName column is initialized with the CPUArch in EventLogger.__init__(). The security type is
+        # not yet discovered at that time because it requires a network call, so we update KeywordName here with the
+        # IsCVM value.
+        # The security type is initialized by the ConfidentialVMInfo class because it fetches metadata from IMDS with
+        # the minimum version that supports the security type field. We do not use that minimum version in the IMDS
+        # request in this method due to inadequate saturation of that version in the fleet. When the ConfidentialVMInfo
+        # class attributes are initialized, AgentGlobals is also updated with the security type, so we can get the
+        # security type in this module without introducing dependencies on the ConfidentialVMInfo class.
+        # The security type is only initialized on the ExtHandler process, since the value is not needed on the Daemon
+        # or LogCollector and we want to avoid unnecessary network calls on those processes. As a result, we only
+        # update the keywordName if we are on the ExtHandler process.
+        try:
+            if threading.current_thread().name == "ExtHandler":
+                keyword_name_str = parameters[CommonTelemetryEventSchema.KeywordName].value               # Get the current value of keywordName
+                keyword_name_json = json.loads(keyword_name_str)                                          # Convert the string to JSON
+                # AgentGlobals.get_is_cvm() raises if cvm info is not initialized so the IsCVM value in the keywordName
+                # column would remain uninitialized in that case
+                is_cvm = AgentGlobals.get_is_cvm()                                                        # Get the CVM state from AgentGlobals
+                keyword_name_json["IsCVM"] = is_cvm                                                       # Update the security type in the JSON
+                parameters[CommonTelemetryEventSchema.KeywordName].value = json.dumps(keyword_name_json)  # Convert the JSON back to string and update the value of keywordName
+        except Exception as e:
+            logger.warn("Failed to update the KeywordName column with IsCVM; will be missing from telemetry: {0}", ustr(e))
 
     def save_event(self, data):
         if self.event_dir is None:

@@ -10,6 +10,7 @@ from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionEr
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerPackage
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, ExtHandlerState
+from azurelinuxagent.ga.signature_validation_util import SignatureValidationError, ManifestValidationError
 from tests.lib import wire_protocol_data
 from tests.lib.mock_wire_protocol import mock_wire_protocol
 from tests.lib.tools import AgentTestCase, patch, Mock
@@ -33,6 +34,11 @@ class DownloadExtensionTestCase(AgentTestCase):
 
     def setUp(self):
         AgentTestCase.setUp(self)
+        # Tests in this class call ext_signature_validation_enabled() during extension download, which requires
+        # ConfidentialVMInfo to be initialized. ConfidentialVMInfo is only initialized in UpdateHandler.run(),
+        # so we mock it here to prevent exceptions due to lack of initialization.
+        self.patch_is_cvm = patch("azurelinuxagent.ga.confidential_vm_info.ConfidentialVMInfo.is_confidential_vm", return_value=False)
+        self.patch_is_cvm.start()
 
         ext_handler = Extension(name='Microsoft.CPlat.Core.RunCommandLinux')
         ext_handler.version = "1.0.0"
@@ -70,6 +76,7 @@ class DownloadExtensionTestCase(AgentTestCase):
         self.mock_get_lib_dir.start()
 
     def tearDown(self):
+        self.patch_is_cvm.stop()
         self.mock_get_lib_dir.stop()
         self.mock_get_log_dir.stop()
         self.mock_get_base_dir.stop()
@@ -124,7 +131,7 @@ class DownloadExtensionTestCase(AgentTestCase):
 
         with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
             with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.report_event") as mock_report_event:
-                self.ext_handler_instance.download()
+                self.ext_handler_instance.download(ignore_signature_validation_errors=True)
 
         # first download attempt should succeed
         self.assertEqual(1, mock_stream.call_count, "wireserver stream should be called once")
@@ -136,7 +143,7 @@ class DownloadExtensionTestCase(AgentTestCase):
         DownloadExtensionTestCase._create_zip_file(self._get_extension_package_file())
 
         with DownloadExtensionTestCase.create_mock_stream(lambda: None) as mock_stream:
-            self.ext_handler_instance.download()
+            self.ext_handler_instance.download(ignore_signature_validation_errors=True)
 
         mock_stream.assert_not_called()
 
@@ -150,7 +157,7 @@ class DownloadExtensionTestCase(AgentTestCase):
         DownloadExtensionTestCase._create_invalid_zip_file(self._get_extension_package_file())
 
         with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
-            self.ext_handler_instance.download()
+            self.ext_handler_instance.download(ignore_signature_validation_errors=True)
 
         self.assertEqual(1, mock_stream.call_count, "wireserver stream should be called once")
 
@@ -159,7 +166,7 @@ class DownloadExtensionTestCase(AgentTestCase):
     def test_it_should_maintain_extension_handler_state_when_good_zip_exists(self):
         DownloadExtensionTestCase._create_zip_file(self._get_extension_package_file())
         self.ext_handler_instance.set_handler_state(ExtHandlerState.NotInstalled)
-        self.ext_handler_instance.download()
+        self.ext_handler_instance.download(ignore_signature_validation_errors=True)
         self._assert_download_and_expand_succeeded()
         self.assertTrue(os.path.exists(os.path.join(self.ext_handler_instance.get_conf_dir(), "HandlerState")),
                         "Ensure that the HandlerState file exists on disk")
@@ -175,7 +182,7 @@ class DownloadExtensionTestCase(AgentTestCase):
         self.ext_handler_instance.set_handler_state(ExtHandlerState.NotInstalled)
 
         with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
-            self.ext_handler_instance.download()
+            self.ext_handler_instance.download(ignore_signature_validation_errors=True)
 
         self.assertEqual(1, mock_stream.call_count, "wireserver stream should be called once")
 
@@ -192,7 +199,7 @@ class DownloadExtensionTestCase(AgentTestCase):
 
         with DownloadExtensionTestCase.create_mock_stream(stream):
             with self.assertRaises(ExtensionDownloadError):
-                self.ext_handler_instance.download()
+                self.ext_handler_instance.download(ignore_signature_validation_errors=True)
 
         self.assertFalse(os.path.exists(self._get_extension_package_file()), "The bad zip extension package should not be downloaded to the expected location")
         self.assertFalse(os.path.exists(self._get_extension_command_file()), "The extension package should not expanded be to the expected location due to bad zip")
@@ -208,7 +215,7 @@ class DownloadExtensionTestCase(AgentTestCase):
             return True
 
         with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
-            self.ext_handler_instance.download()
+            self.ext_handler_instance.download(ignore_signature_validation_errors=True)
 
         self.assertEqual(mock_stream.call_count, mock_stream.download_failures + 1)
 
@@ -224,7 +231,7 @@ class DownloadExtensionTestCase(AgentTestCase):
             return True
 
         with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
-            self.ext_handler_instance.download()
+            self.ext_handler_instance.download(ignore_signature_validation_errors=True)
 
         self.assertEqual(mock_stream.call_count, mock_stream.download_failures + 1)
 
@@ -241,7 +248,7 @@ class DownloadExtensionTestCase(AgentTestCase):
             return True
 
         with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
-            self.ext_handler_instance.download()
+            self.ext_handler_instance.download(ignore_signature_validation_errors=True)
 
         self.assertEqual(mock_stream.call_count, mock_stream.download_failures + 1)
 
@@ -256,7 +263,7 @@ class DownloadExtensionTestCase(AgentTestCase):
 
         with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
             with self.assertRaises(ExtensionDownloadError) as context_manager:
-                self.ext_handler_instance.download()
+                self.ext_handler_instance.download(ignore_signature_validation_errors=True)
 
         self.assertEqual(mock_stream.call_count, len(self.pkg.uris))
 
@@ -266,3 +273,58 @@ class DownloadExtensionTestCase(AgentTestCase):
         self.assertFalse(os.path.exists(self.extension_dir), "The extension directory was not removed")
         self.assertFalse(os.path.exists(stream.target_file), "The extension package was not removed")
 
+    def test_it_should_ignore_package_validation_errors(self):
+        # When 'ignore_signature_validation_errors' is False, all validation errors should be ignored and download should succeed.
+        def stream(_, destination, **__):
+            stream.destination = destination
+            DownloadExtensionTestCase._create_zip_file(destination)
+            return True
+
+        stream.destination = None
+        self.ext_handler_instance.ext_handler.encoded_signature = "mockencodedsignature"
+        with patch("azurelinuxagent.ga.exthandlers.ext_signature_validation_enabled", return_value=True):
+            with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.load_manifest', return_value={}):
+                with DownloadExtensionTestCase.create_mock_stream(stream):
+                    # Both signature and manifest are invalid, but download should still succeed with no errors.
+                    self.ext_handler_instance.download(ignore_signature_validation_errors=True)
+
+        self._assert_download_and_expand_succeeded()
+
+    def test_it_should_raise_signature_validation_error_and_cleanup_package(self):
+        # When 'ignore_signature_validation_errors' is False, signature validation error should be raised and
+        # zip package should be removed.
+        def stream(_, destination, **__):
+            stream.destination = destination
+            DownloadExtensionTestCase._create_zip_file(destination)
+            return True
+
+        stream.destination = None
+        self.ext_handler_instance.ext_handler.encoded_signature = "mockencodedsignature"
+        with patch("azurelinuxagent.ga.exthandlers.ext_signature_validation_enabled", return_value=True):
+            with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
+                with self.assertRaises(SignatureValidationError):
+                    self.ext_handler_instance.download(ignore_signature_validation_errors=False)
+
+        # Should not retry if download failure is due to signature validation error
+        self.assertEqual(mock_stream.call_count, 1)
+
+        self.assertFalse(os.path.exists(self.extension_dir), "The extension directory was not removed")
+        self.assertFalse(os.path.exists(stream.destination), "The extension package was not removed")
+
+    def test_it_should_raise_manifest_validation_error(self):
+        # When 'ignore_signature_validation_errors' is False and manifest is invalid, error should be raised.
+        def stream(_, destination, **__):
+            stream.destination = destination
+            DownloadExtensionTestCase._create_zip_file(destination)
+            return True
+
+        stream.destination = None
+        self.ext_handler_instance.ext_handler.encoded_signature = "mockencodedsignature"
+        with patch("azurelinuxagent.ga.exthandlers.ext_signature_validation_enabled", return_value=True):
+            with DownloadExtensionTestCase.create_mock_stream(stream):
+
+                # Mock that signature validation succeeds, but manifest is invalid - should raise ManifestValidationError
+                with patch("azurelinuxagent.common.protocol.wire.validate_signature"):
+                    with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.load_manifest', return_value={}):
+                        with self.assertRaises(ManifestValidationError):
+                            self.ext_handler_instance.download(ignore_signature_validation_errors=False)

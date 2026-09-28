@@ -16,12 +16,6 @@
               <Value>ssh-rsa AAAANOTAREALKEY== foo@bar.local</Value>
             </PublicKey>
           </PublicKeys>
-          <KeyPairs>
-            <KeyPair>
-              <Fingerprint>EB0C0AB4B2D5FC35F2F0658D19F44C8283E2DD62</Fingerprint>
-              <Path>$HOME/UserName/.ssh/id_rsa</Path>
-            </KeyPair>
-          </KeyPairs>
         </SSH>
         <CustomData>CustomData</CustomData>
       </LinuxProvisioningConfigurationSet>

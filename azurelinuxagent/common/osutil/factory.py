@@ -19,6 +19,7 @@
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_CODE_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 from azurelinuxagent.common.utils.distro_version import DistroVersion
+from .acl import AclOSUtil
 from .alpine import AlpineOSUtil
 from .arch import ArchUtil
 from .bigip import BigIpOSUtil
@@ -145,6 +146,12 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
 
     if distro_name == "iosxe":
         return IosxeOSUtil()
+
+    # distro_name is same for azurelinux/mariner and Azure Container Linux (ACL).
+    # ACL is a flavor of Azure Linux, differentiation is based on distro_full_name.
+    # For Azure Container Linux, distro_name will be made "azurecontainerlinux".
+    if distro_name == "azurecontainerlinux":
+        return AclOSUtil()
 
     if distro_name in ["mariner", "azurelinux"]:
         return MarinerOSUtil()

@@ -28,7 +28,8 @@ import uuid
 from assertpy import assert_that
 from pathlib import Path
 
-from tests_e2e.tests.lib.agent_test import AgentVmTest, TestSkipped
+from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.test_result import TestSkipped
 from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
@@ -58,7 +59,7 @@ class VmAccessBvt(AgentVmTest):
             public_key = f.read()
 
         # Invoke the extension
-        vm_access = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.VmAccess, resource_name="VmAccess")
+        vm_access = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.VmAccess)
         vm_access.enable(
             protected_settings={
                 'username': username,

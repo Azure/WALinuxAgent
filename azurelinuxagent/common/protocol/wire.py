@@ -44,11 +44,12 @@ from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchem
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.restutil import TELEMETRY_THROTTLE_DELAY_IN_SECONDS, \
-    TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS, TELEMETRY_DATA
+    TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS, TELEMETRY_DATA, read_response_error, INVALID_CONTAINER_CONFIGURATION, \
+    HEADERS_TO_INCLUDE_IN_FAILURE_MSG
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, gettext, remove_bom, get_bytes_from_pem, parse_json, redact_sas_token
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
-from azurelinuxagent.ga.signature_validation_util import validate_signature, SignatureValidationError
+from azurelinuxagent.ga.signature_validation_util import validate_signature, SignatureValidationError, cleanup_package_with_invalid_signature
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
 HEALTH_REPORT_URI = "http://{0}/machine?comp=health"
@@ -69,22 +70,27 @@ class UploadError(HttpError):
     pass
 
 
+class TransportCertificateError(ProtocolError):
+    pass
+
+
 class WireProtocol(DataContract):
     def __init__(self, endpoint):
         if endpoint is None:
             raise ProtocolError("WireProtocol endpoint is None")
         self.client = WireClient(endpoint)
 
-    def detect(self, init_goal_state=True, create_transport_certificate=True, save_to_history=False):
-        self.client.check_wire_protocol_version()
+    @staticmethod
+    def create_transport_certificate():
+        try:
+            trans_prv_file = os.path.join(conf.get_lib_dir(), TRANSPORT_PRV_FILE_NAME)
+            trans_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
+            CryptUtil(conf.get_openssl_cmd()).gen_transport_cert(trans_prv_file, trans_cert_file)
+        except Exception as e:
+            raise TransportCertificateError("Cannot create the Transport certificate: {0}".format(ustr(e)))
 
-        if create_transport_certificate:
-            trans_prv_file = os.path.join(conf.get_lib_dir(),
-                                          TRANSPORT_PRV_FILE_NAME)
-            trans_cert_file = os.path.join(conf.get_lib_dir(),
-                                           TRANSPORT_CERT_FILE_NAME)
-            cryptutil = CryptUtil(conf.get_openssl_cmd())
-            cryptutil.gen_transport_cert(trans_prv_file, trans_cert_file)
+    def detect(self, init_goal_state=True, save_to_history=False):
+        self.client.check_wire_protocol_version()
 
         # Initialize the goal state, including all the inner properties
         if init_goal_state:
@@ -105,8 +111,8 @@ class WireProtocol(DataContract):
         return self.client.get_endpoint()
 
     def get_vminfo(self):
-        goal_state = self.client.get_goal_state()
-        hosting_env = self.client.get_hosting_env()
+        goal_state = GoalState(self.client, goal_state_properties=GoalStateProperties.HostingEnv|GoalStateProperties.RoleConfig)
+        hosting_env = goal_state.hosting_env
 
         vminfo = VMInfo()
         vminfo.subscriptionId = None
@@ -116,22 +122,18 @@ class WireProtocol(DataContract):
         vminfo.roleInstanceName = goal_state.role_instance_id
         return vminfo
 
-    def get_certs(self):
-        return self.client.get_certs()
-
     def get_goal_state(self):
         return self.client.get_goal_state()
 
     def report_provision_status(self, provision_status):
         validate_param("provision_status", provision_status, ProvisionStatus)
 
+        goal_state = GoalState(self.client, goal_state_properties=GoalStateProperties.RoleConfig)
         if provision_status.status is not None:
-            self.client.report_health(provision_status.status,
-                                      provision_status.subStatus,
-                                      provision_status.description)
+            self.client.report_health(goal_state, provision_status.status, provision_status.subStatus, provision_status.description)
         if provision_status.properties.certificateThumbprint is not None:
             thumbprint = provision_status.properties.certificateThumbprint
-            self.client.report_role_prop(thumbprint)
+            self.client.report_role_prop(goal_state, thumbprint)
 
     def report_vm_status(self, vm_status):
         validate_param("vm_status", vm_status, VMStatus)
@@ -605,7 +607,10 @@ class WireClient(object):
         """
         host_ga_plugin = self.get_host_plugin()
 
-        direct_download = lambda uri: self.fetch(uri)[0]
+        # Fail fast on request timeouts when doing direct downloads, as these may indicate no outbound connection on
+        # the VM and should fall back quickly to the host channel. Reconsider this strategy if we switch the primary
+        # download channel to HGAP.
+        direct_download = lambda uri: self.fetch(uri, fail_fast_on_timeout=True)[0]
 
         def hgap_download(uri):
             request_uri, request_headers = host_ga_plugin.get_artifact_request(uri, use_verify_header=use_verify_header)
@@ -614,7 +619,7 @@ class WireClient(object):
 
         return self._download_with_fallback_channel(download_type, uris, direct_download=direct_download, hgap_download=hgap_download)
 
-    def download_zip_package(self, package_name, uris, target_file, target_directory, use_verify_header, signature, enforce_signature):
+    def download_zip_package(self, package_name, uris, target_file, target_directory, use_verify_header, signature, ignore_signature_validation_errors):
         """
         Downloads the ZIP package specified in 'uris' (which is a list of alternate locations for the ZIP), saving it to 'target_file' and then expanding
         its contents to 'target_directory'. Deletes the target file after it has been expanded.
@@ -628,41 +633,39 @@ class WireClient(object):
 
         The 'signature' parameter should be a base64-encoded signature string. If signature is not an empty string, package signature will be validated
         immediately after downloading the package but before expanding it.
-
-        Currently, the 'enforce_signature' flag only affects logging and telemetry. If set to False, a message is appended
-        to any validation failure indicating that the error can be safely ignored.
-        TODO: Update logic so that 'enforce_signature' also controls whether validation failures raise an exception.
+        If 'ignore_signature_validation_errors' is False, any signature validation error blocks package extraction and is raised immediately.
+        If true, package is extracted even if validation fails.
         """
         host_ga_plugin = self.get_host_plugin()
 
-        direct_download = lambda uri: self.stream(uri, target_file, headers=None, use_proxy=True)
+        # Fail fast on request timeouts when doing direct downloads, as these may indicate no outbound connection on
+        # the VM and should fall back quickly to the host channel. Reconsider this strategy if we switch the primary
+        # download channel to HGAP.
+        direct_download = lambda uri: self.stream(uri, target_file, headers=None, use_proxy=True, fail_fast_on_timeout=True)
 
         def hgap_download(uri):
             request_uri, request_headers = host_ga_plugin.get_artifact_request(uri, use_verify_header=use_verify_header, artifact_manifest_url=host_ga_plugin.manifest_uri)
-            return self.stream(request_uri, target_file, headers=request_headers, use_proxy=False)
+            return self.stream(request_uri, target_file, headers=request_headers, use_proxy=False, retry_codes=restutil.HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES)
 
         def on_downloaded():
-            # If 'signature' parameter is not an empty string, validate the zip package signature immediately after download.
-            # Signature validation errors are caught and stored, allowing download to proceed. After zip package extraction,
-            # the error is re-raised to surface the failure, so the caller has knowledge of the failure and can handle appropriately.
-            # In future releases, once sufficient telemetry is collected and we gain confidence in the validation process,
-            # extraction will be blocked if signature validation fails, and the zip will be removed.
-            #
-            # TODO: Block packages failing signature validation when 'enforce_signature' is True
+            # If the 'signature' parameter is not an empty string, validate the zip package signature immediately after download.
+            # If 'ignore_signature_validation_errors' is false, raise any validation errors before package extraction, and clean up the zip file.
+            # If true, catch and store the validation error, and re-raise after extraction so the caller has knowledge of the failure and
+            # can handle and report it appropriately.
             validation_error = None
             if signature != "":
                 try:
-                    failure_log_level = logger.LogLevel.ERROR if enforce_signature else logger.LogLevel.WARNING
-                    validate_signature(target_file, signature, package_full_name=package_name, failure_log_level=failure_log_level)
+                    validate_signature(target_file, signature, package_full_name=package_name)
                 except SignatureValidationError as ex:
-                    # validate_signature() only raises SignatureValidationError, and already sends logs/telemetry for the error.
-                    # If signature is not being enforced, catch the error and re-raise after expanding the zip.
-                    # TODO: if signature is being enforced, raise error and and cleanup zip file
+                    # validate_signature() only raises SignatureValidationError.
+                    if not ignore_signature_validation_errors:
+                        cleanup_package_with_invalid_signature(target_file)
+                        raise
                     validation_error = ex
 
             WireClient._try_expand_zip_package(package_name, target_file, target_directory)
 
-            # Surface any validation errors after extraction so the caller can decide how to handle.
+            # If signature validation errors should be ignored here, surface any errors after extraction so the caller can decide how to handle/report them.
             if validation_error is not None:
                 raise validation_error
 
@@ -736,14 +739,14 @@ class WireClient(object):
             except Exception as exception:
                 logger.warn("Cannot delete {0}: {1}", target_file, ustr(exception))
 
-    def stream(self, uri, destination, headers=None, use_proxy=None):
+    def stream(self, uri, destination, headers=None, use_proxy=None, retry_codes=None, fail_fast_on_timeout=False):
         """
         Downloads the content of the given 'uri' and saves it to the 'destination' file.
         """
         try:
             logger.verbose("Fetch [{0}] with headers [{1}] to file [{2}]", uri, headers, destination)
 
-            response = self._fetch_response(uri, headers, use_proxy)
+            response = self._fetch_response(uri, headers, use_proxy, retry_codes, fail_fast_on_timeout=fail_fast_on_timeout)
             if response is not None and not restutil.request_failed(response):
                 chunk_size = 1024 * 1024  # 1MB buffer
                 with open(destination, 'wb', chunk_size) as destination_fh:
@@ -761,37 +764,69 @@ class WireClient(object):
                     logger.warn("Can't delete {0}: {1}", destination, ustr(exception))
             raise
 
-    def fetch(self, uri, headers=None, use_proxy=None, decode=True, retry_codes=None, ok_codes=None):
+    def fetch(self, uri, headers=None, use_proxy=None, decode=True, retry_codes=None, ok_codes=None, fail_fast_on_timeout=False):
         """
         Returns a tuple with the content and headers of the response. The headers are a list of (name, value) tuples.
         """
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
         response_headers = None
-        response = self._fetch_response(uri, headers, use_proxy, retry_codes=retry_codes, ok_codes=ok_codes)
+        response = self._fetch_response(uri, headers, use_proxy, retry_codes=retry_codes, ok_codes=ok_codes, fail_fast_on_timeout=fail_fast_on_timeout)
         if response is not None and not restutil.request_failed(response, ok_codes=ok_codes):
             response_content = response.read()
             content = self.decode_config(response_content) if decode else response_content
             response_headers = response.getheaders()
         return content, response_headers
 
-    def _fetch_response(self, uri, headers=None, use_proxy=None, retry_codes=None, ok_codes=None):
+    def _fetch_response(self, uri, headers=None, use_proxy=None, retry_codes=None, ok_codes=None, fail_fast_on_timeout=False):
         resp = None
+        headers_for_failure_msg = {}
+        if headers is not None:
+            for k, v in headers.items():
+                if k in HEADERS_TO_INCLUDE_IN_FAILURE_MSG:
+                    headers_for_failure_msg[k] = v
         try:
+            # TODO: This method was originally meant to be used for calls to storage, but at some point during
+            #   refactoring it ended up being used for calls to HGAP /extensionArtifact. Calls to HGAP should follow a
+            #   similar pattern to fetch_config, which goes through call_wireserver. Those methods enforce certain
+            #   behavior, such as never using a proxy, which is critical on calls to WireServer. Similarly, calls to
+            #   HGAP should never use a proxy, but that is not being enforced in this method. It would be better to
+            #   follow a similar pattern to fetch_config than depend on developers passing in the correct value for
+            #   use_proxy.
             resp = self.call_storage_service(
                 restutil.http_get,
                 uri,
                 headers=headers,
                 use_proxy=use_proxy,
-                retry_codes=retry_codes)
+                retry_codes=retry_codes,
+                fail_fast_on_timeout=fail_fast_on_timeout)
 
             host_plugin = self.get_host_plugin()
 
+            response_error = None
+
+            # If we got a 400 (bad request) because the container id is invalid, it could indicate a stale goal
+            # state. The caller will handle this exception by forcing a goal state refresh, which in turn updates the
+            # container-id header passed to HostGAPlugin, and retrying the call.
+            # See Issue #1294, PR #1299.
+            # TODO: This behavior is specific to HGAP requests. It should be moved to a different method which is
+            #  exclusively used for HGAP requests
+            if resp.status == httpclient.BAD_REQUEST:
+                response_error = read_response_error(resp)
+                if INVALID_CONTAINER_CONFIGURATION in response_error:
+                    raise InvalidContainerError(response_error)
+
             if restutil.request_failed(resp, ok_codes=ok_codes):
-                error_response = restutil.read_response_error(resp)
-                msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
+                error_response = response_error if response_error is not None else restutil.read_response_error(resp)
+                if len(headers_for_failure_msg) > 0:
+                    msg = "Fetch failed from [{0}] with headers [{1}]: {2}".format(uri, json.dumps(headers_for_failure_msg), error_response)
+                else:
+                    msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
 
+                # TODO: The call to report_fetch_health should be limited to HGAP requests. That method should only
+                #  be used to report failures in HGAP's artifact downloads API. This logic should be moved to a
+                #  different method which is exclusively used for HGAP requests.
                 if host_plugin is not None:
                     host_plugin.report_fetch_health(uri,
                                                     is_healthy=not restutil.request_failed_at_hostplugin(resp),
@@ -803,10 +838,24 @@ class WireClient(object):
                     host_plugin.report_fetch_health(uri, source='WireClient')
 
         except (HttpError, ProtocolError, IOError) as error:
+            # These exception types already have URI and headers in their message, so we don't need to add it to the
+            # telemetry event message here
             msg = "Fetch failed: {0}".format(error)
             logger.warn(msg)
             report_event(op=WALAEventOperation.HttpGet, is_success=False, message=msg, log_event=False)
             raise
+
+        except Exception as error:
+            # Add the URI and relevant request headers to the telemetry event for any unexpected exceptions
+            if len(headers_for_failure_msg) > 0:
+                error_msg = "Fetch failed with exception from [{0}] with headers [{1}]: {2}".format(uri, json.dumps(headers_for_failure_msg), error)
+            else:
+                error_msg = "Fetch failed with exception from [{0}]: {1}".format(uri, error)
+            msg = "Fetch failed: {0}".format(error_msg)
+            logger.warn(msg)
+            report_event(op=WALAEventOperation.HttpGet, is_success=False, message=msg, log_event=False)
+            # Re-raise any unexpected exception as ProtocolError
+            raise ProtocolError(error_msg)
 
         return resp
 
@@ -856,26 +905,6 @@ class WireClient(object):
         if self._goal_state is None:
             raise ProtocolError("Trying to fetch goal state before initialization!")
         return self._goal_state
-
-    def get_hosting_env(self):
-        if self._goal_state is None:
-            raise ProtocolError("Trying to fetch Hosting Environment before initialization!")
-        return self._goal_state.hosting_env
-
-    def get_shared_conf(self):
-        if self._goal_state is None:
-            raise ProtocolError("Trying to fetch Shared Conf before initialization!")
-        return self._goal_state.shared_conf
-
-    def get_certs(self):
-        if self._goal_state is None:
-            raise ProtocolError("Trying to fetch Certificates before initialization!")
-        return self._goal_state.certs
-
-    def get_remote_access(self):
-        if self._goal_state is None:
-            raise ProtocolError("Trying to fetch Remote Access before initialization!")
-        return self._goal_state.remote_access
 
     def check_wire_protocol_version(self):
         uri = VERSION_INFO_URI.format(self.get_endpoint())
@@ -1027,8 +1056,7 @@ class WireClient(object):
 
         raise ProtocolError("Failed to upload status blob via either channel")
 
-    def report_role_prop(self, thumbprint):
-        goal_state = self.get_goal_state()
+    def report_role_prop(self, goal_state, thumbprint):
         role_prop = _build_role_properties(goal_state.container_id,
                                            goal_state.role_instance_id,
                                            thumbprint)
@@ -1048,8 +1076,7 @@ class WireClient(object):
                                  u",{0}: {1}").format(resp.status,
                                                       resp.read()))
 
-    def report_health(self, status, substatus, description):
-        goal_state = self.get_goal_state()
+    def report_health(self, goal_state, status, substatus, description):
         health_report = _build_health_report(goal_state.incarnation,
                                              goal_state.container_id,
                                              goal_state.role_instance_id,

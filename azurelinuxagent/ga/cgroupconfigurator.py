@@ -36,6 +36,7 @@ from azurelinuxagent.common.version import get_distro
 from azurelinuxagent.common.utils import shellutil, fileutil
 from azurelinuxagent.ga.extensionprocessutil import handle_process_completion
 from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.ga.resourcequota import CpuQuota, MemoryQuota, ResourceName
 
 AZURE_SLICE = "azure.slice"
 _AZURE_SLICE_CONTENTS = """
@@ -55,16 +56,6 @@ Before=slices.target
 CPUAccounting=yes
 MemoryAccounting=yes
 """
-_EXTENSION_SLICE_CONTENTS = """
-[Unit]
-Description=Slice for Azure VM extension {extension_name}
-DefaultDependencies=no
-Before=slices.target
-[Slice]
-CPUAccounting=yes
-CPUQuota={cpu_quota}
-MemoryAccounting=yes
-"""
 LOGCOLLECTOR_SLICE = "azure-walinuxagent-logcollector.slice"
 # More info on resource limits properties in systemd here:
 # https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/resource_management_guide/sec-modifying_control_groups
@@ -73,6 +64,10 @@ LOGCOLLECTOR_MEMORY_THROTTLE_LIMIT_FOR_V2 = "170M"
 LOGCOLLECTOR_MAX_THROTTLED_EVENTS_FOR_V2 = 10
 LOGCOLLECTOR_ANON_MEMORY_LIMIT_FOR_V1_AND_V2 = 25 * 1024 ** 2  # 25Mb
 LOGCOLLECTOR_CACHE_MEMORY_LIMIT_FOR_V1_AND_V2 = 155 * 1024 ** 2  # 155Mb
+
+PKG_SIGNATURE_VALIDATION_SLICE_NAME = "azure-walinuxagent-pkgsignaturevalidation"
+PKG_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME = "pkgsignaturevalidation"
+PKG_SIGNATURE_VALIDATION_CPU_QUOTA = "50%"
 
 _AGENT_DROP_IN_FILE_SLICE = "10-Slice.conf"
 _AGENT_DROP_IN_FILE_SLICE_CONTENTS = """
@@ -144,19 +139,26 @@ class CGroupConfigurator(object):
                     self._reset_agent_cgroup_setup()
                     return
 
-                # We check the agent unit 'Slice' property before setting up azure.slice. This check is done first
-                # because the agent's Slice unit property will be 'azure.slice' if the slice drop-in file exists, even
-                # though systemd has not moved the agent to azure.slice yet. Systemd will only move the agent to
-                # azure.slice after a vm restart.
+                # PR #2015 introduced a check to disable cgroups when the Agent is not in the expected cgroup. Telemetry at the time indicated that in a small number of
+                # VMs the Agent was showing up directly under the root cgroup or system.slice. As we started moving the agent to its own slice, the check was eventually
+                # changed to use the Slice property as returned by systemctl show (PR #2160).
+                # Current telemetry doesn't report any VMs where the Agent shows up in an unexpected Slice. The cgroups logic has had quite a few fixes since the original
+                # check was introduced, and very likely the issue causing the mismatch has been resolved. However, the check using the Slice property is not always accurate,
+                # for example when the dropin file that defines the slice has been created but the Agent service has not been restarted, so the Agent is still in the default
+                # slice.
+                # I am changing the check to use the ControlGroup property instead. Consider removing it after a few releases if telemetry does not show any VMs failing
+                # the check.
                 agent_unit_name = systemd.get_agent_unit_name()
-                agent_slice = systemd.get_unit_property(agent_unit_name, "Slice")
-                if agent_slice not in (AZURE_SLICE, "system.slice"):
-                    log_cgroup_warning("The agent is within an unexpected slice: {0}".format(agent_slice))
+                agent_control_group = systemd.get_unit_property(agent_unit_name, "ControlGroup")
+                if agent_control_group not in ("/{0}/{1}".format(AZURE_SLICE, agent_unit_name), "/system.slice/{0}".format(agent_unit_name)):
+                    log_cgroup_warning("The agent is within an unexpected control group: {0}".format(agent_control_group))
                     return
 
                 # Before agent setup, cleanup the old agent setup (drop-in files) since new agent uses different approach(systemctl) to setup cgroups.
                 log_cgroup_info("Cleaning up old agent setup (drop-in files), if any")
                 self._cleanup_old_agent_setup()
+                if self.using_cgroup_v2():
+                    self._reset_resource_quota(systemd.get_agent_unit_name(), ResourceName.MEMORY, ignore_enforce_check=True)
 
                 # Notes about slice setup:
                 #   For machines where daemon version did not already create azure.slice, the
@@ -171,13 +173,13 @@ class CGroupConfigurator(object):
                 # Get agent cgroup
                 self._agent_cgroup = self._cgroups_api.get_unit_cgroup(unit_name=agent_unit_name, cgroup_name=AGENT_NAME_TELEMETRY)
 
-                if conf.get_cgroup_disable_on_process_check_failure() and self._check_fails_if_processes_found_in_agent_cgroup_before_enable(agent_slice):
+                if conf.get_cgroup_disable_on_process_check_failure() and self._check_fails_if_processes_found_in_agent_cgroup_before_enable():
                     reason = "Found unexpected processes in the agent cgroup before agent enable cgroups."
                     self.disable(reason, DisableCgroups.ALL)
                     return
 
                 # Get controllers to track
-                agent_controllers = self._agent_cgroup.get_controllers(expected_relative_path=os.path.join(agent_slice, agent_unit_name))
+                agent_controllers = self._agent_cgroup.get_controllers()
                 if len(agent_controllers) > 0:
                     self.enable()
                     self._enable_accounting(agent_unit_name)
@@ -186,7 +188,7 @@ class CGroupConfigurator(object):
                     for prop in controller.get_unit_properties():
                         log_cgroup_info('Agent {0} unit property value: {1}'.format(prop, systemd.get_unit_property(systemd.get_agent_unit_name(), prop)))
                     if isinstance(controller, _CpuController) and self._cgroups_api.can_enforce_cpu():
-                        self._set_cpu_quota(agent_unit_name, conf.get_agent_cpu_quota())
+                        self._set_resource_quota(agent_unit_name, {ResourceName.CPU:conf.get_agent_cpu_quota()})
                         controller.track_throttle_time(True)  # CPU controller track the throttle time only when CPU quota is set
                     elif isinstance(controller, _MemoryController):
                         self._agent_memory_metrics = controller
@@ -198,10 +200,10 @@ class CGroupConfigurator(object):
                 log_cgroup_info('Agent cgroups enabled: {0}'.format(self._agent_cgroups_enabled))
                 self._initialized = True
 
-                if self._cgroups_api is not None and not self._cgroups_api.can_enforce_cpu():
-                    # If agent cgroups are not enabled or quotas not enabled, reset the quota for the agent unit
-                    log_cgroup_info("Reset CPU quota if agent cgroups were not enabled for enforcement")
-                    self._reset_cpu_quota(systemd.get_agent_unit_name())
+                # If agent cgroups are not enabled or CPU quotas cannot be enforced, reset the quota for the agent unit
+                if self._cgroups_api is not None and (not self._agent_cgroups_enabled or not self._cgroups_api.can_enforce_cpu()):
+                    log_cgroup_info("Reset CPU quota since agent cgroups are not enabled for enforcement")
+                    self._reset_resource_quota(systemd.get_agent_unit_name(), ResourceName.CPU, ignore_enforce_check=True)
 
         def _check_cgroups_supported(self):
             distro_supported = CGroupUtil.distro_supported()
@@ -271,15 +273,14 @@ class CGroupConfigurator(object):
             # New agent will setup limits for scope instead slice, so removing existing logcollector slice.
             CGroupConfigurator._Impl._cleanup_unit_file(logcollector_slice)
 
-            # Cleanup the old drop-in files, new agent will use systemdctl set-property to enable accounting and limits
+            # Cleanup the old drop-in files, new agent will use systemctl set-property to enable accounting and limits
             CGroupConfigurator._Impl._cleanup_unit_file(agent_drop_in_file_cpu_accounting)
 
             CGroupConfigurator._Impl._cleanup_unit_file(agent_drop_in_file_memory_accounting)
 
             CGroupConfigurator._Impl._cleanup_unit_file(agent_drop_in_file_cpu_quota)
 
-        @staticmethod
-        def _setup_azure_slice():
+        def _setup_azure_slice(self):
             """
             The agent creates "azure.slice" for use by extensions and the agent. The agent runs under "azure.slice" directly and each
             extension runs under its own slice ("Microsoft.CPlat.Extension.slice" in the example below). All the slices for
@@ -312,7 +313,9 @@ class CGroupConfigurator(object):
             if not os.path.exists(azure_slice):
                 files_to_create.append((azure_slice, _AZURE_SLICE_CONTENTS))
 
-            if not os.path.exists(vmextensions_slice):
+            # Slice has only accounting properties, so no need explicit set in cgroupv2
+            accounting_props, _ = self._cgroups_api.get_accounting_properties()
+            if not os.path.exists(vmextensions_slice) and len(accounting_props) > 0:
                 files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
 
             if fileutil.findre_in_file(agent_unit_file, r"Slice=") is not None:
@@ -333,6 +336,9 @@ class CGroupConfigurator(object):
                         return
 
         def _reset_agent_cgroup_setup(self):
+            """
+            This clean up added when cpu support added in distro but later distro removed from the supported list. At that time, memory support was not added, so no need to reset memory quota.
+            """
             try:
                 agent_drop_in_path = systemd.get_agent_drop_in_path()
                 if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path) and len(os.listdir(agent_drop_in_path)) > 0:
@@ -355,24 +361,23 @@ class CGroupConfigurator(object):
                     if len(files_to_cleanup) > 0:
                         log_cgroup_info("Found drop-in files; attempting agent cgroup setup cleanup", send_event=False)
                         self._cleanup_all_files(files_to_cleanup)
-                        self._reset_cpu_quota(systemd.get_agent_unit_name())
+                        self._reset_resource_quota(systemd.get_agent_unit_name(), ResourceName.CPU, ignore_enforce_check=True)
 
             except Exception as err:
                 logger.warn("Error while resetting the quotas: {0}".format(err))
 
-        @staticmethod
-        def _enable_accounting(unit_name):
+        def _enable_accounting(self, unit_name):
             """
-            Enable CPU and Memory accounting for the unit
+            Enable CPU and Memory accounting for the unit.
+            Note: On cgroup v2, accounting is enabled by default.
             """
             try:
-                # since we don't use daemon-reload and drop-files for accounting, so it will be enabled with systemctl set-property
-                accounting_properties = ("CPUAccounting", "MemoryAccounting")
-                values = ("yes", "yes")
-                log_cgroup_info("Enabling accounting properties for the agent: {0}".format(accounting_properties))
-                systemd.set_unit_run_time_properties(unit_name, accounting_properties, values)
+                accounting_properties, values = self._cgroups_api.get_accounting_properties()
+                if len(accounting_properties) > 0:
+                    log_cgroup_info("Enabling accounting properties for {0}: {1}".format(unit_name, accounting_properties))
+                    systemd.set_unit_run_time_properties(unit_name, accounting_properties, values)
             except Exception as exception:
-                log_cgroup_warning("Failed to set accounting properties for the agent: {0}".format(ustr(exception)))
+                log_cgroup_warning("Failed to set accounting properties for {0}: {1}".format(unit_name, ustr(exception)))
 
         # W0238: Unused private member `_Impl.__create_unit_file(path, contents)` (unused-private-member)
         @staticmethod
@@ -431,6 +436,9 @@ class CGroupConfigurator(object):
         def using_cgroup_v2(self):
             return isinstance(self._cgroups_api, SystemdCgroupApiv2)
 
+        def get_cgroups_api(self):
+            return self._cgroups_api
+
         def enable(self):
             if not self.supported():
                 raise CGroupsException(
@@ -446,9 +454,10 @@ class CGroupConfigurator(object):
             significant delay to the extension execution.
             """
             try:
+                # Reset quotas for agent
+                self._reset_resource_quota(systemd.get_agent_unit_name(), ResourceName.ALL)
                 if disable_cgroups == DisableCgroups.ALL:  # disable all
-                    # Reset quotas
-                    self._reset_cpu_quota(systemd.get_agent_unit_name())
+                    # Reset quotas for extensions
                     extension_services = self.get_extension_services_list()
                     for extension in extension_services:
                         log_cgroup_info("Resetting extension : {0} and it's services: {1} Quota".format(extension, extension_services[extension]), send_event=False)
@@ -458,7 +467,6 @@ class CGroupConfigurator(object):
                     self._agent_cgroups_enabled = False
                     self._extensions_cgroups_enabled = False
                 elif disable_cgroups == DisableCgroups.AGENT:  # disable agent
-                    self._reset_cpu_quota(systemd.get_agent_unit_name())
                     agent_controllers = self._agent_cgroup.get_controllers()
                     for controller in agent_controllers:
                         if isinstance(controller, _CpuController):
@@ -470,47 +478,72 @@ class CGroupConfigurator(object):
             except Exception as exception:
                 log_cgroup_warning("Error disabling cgroups: {0}".format(ustr(exception)))
 
-        def _set_cpu_quota(self, unit_name, quota):
-            """
-            Sets CPU quota to the given percentage (100% == 1 CPU)
+        def _get_resource_quotas(self, resource_name):
+            if self._cgroups_api is None:
+                return []
+            if resource_name == ResourceName.CPU:
+                return [CpuQuota(self._cgroups_api)]
+            elif resource_name == ResourceName.MEMORY:
+                return [MemoryQuota(self._cgroups_api)]
+            elif resource_name == ResourceName.ALL:
+                return [CpuQuota(self._cgroups_api), MemoryQuota(self._cgroups_api)]
 
-            NOTE: This is done using a systemtcl set-property --runtime; any local overrides in /etc folder on the VM will take precedence
-            over this setting.
-            """
-            if self._cgroups_api.can_enforce_cpu():
-                quota_percentage = "{0}%".format(quota)
-                log_cgroup_info("Setting {0}'s CPUQuota to {1}".format(unit_name, quota_percentage))
-                CGroupConfigurator._Impl._try_set_cpu_quota(unit_name, quota_percentage)
+            return []
 
-        def _reset_cpu_quota(self, unit_name):
+        def _set_resource_quota(self, unit_name, new_quotas):
             """
-            Removes any CPUQuota on the agent
-
-            NOTE: This resets the quota on the agent's default dropin file; any local overrides on the VM will take precedence
-            over this setting.
+            Sets the quota for the given resource type ('CPU', 'Memory', or 'All').
+            new_quotas is a dictionary with resource names as keys and quota values as values.
             """
-            log_cgroup_info("Resetting {0}'s CPUQuota".format(unit_name), send_event=False)
-            if CGroupConfigurator._Impl._try_set_cpu_quota(unit_name, "infinity"): # systemd expresses no-quota as infinity, following the same convention
-                try:
-                    log_cgroup_info('Current CPUQuota: {0}'.format(systemd.get_unit_property(unit_name, "CPUQuotaPerSecUSec")))
-                except Exception as e:
-                    log_cgroup_warning('Failed to get current CPUQuotaPerSecUSec after reset: {0}'.format(ustr(e)))
-
-        # W0238: Unused private member `_Impl.__try_set_cpu_quota(quota)` (unused-private-member)
-        @staticmethod
-        def _try_set_cpu_quota(unit_name, quota):  # pylint: disable=unused-private-member
             try:
-                current_cpu_quota = CGroupUtil.get_current_cpu_quota(unit_name)
-                if current_cpu_quota == quota:
-                    return True
-                quota = quota if quota != "infinity" else ""  # no-quota expressed as empty string while setting property
-                systemd.set_unit_run_time_property(unit_name, "CPUQuota", quota)
-            except Exception as exception:
-                log_cgroup_warning('Failed to set CPUQuota: {0}'.format(ustr(exception)))
-                return False
-            return True
+                quotas = self._get_resource_quotas(ResourceName.ALL)
+                property_names = []
+                values = []
+                for rq in quotas:
+                    if rq.can_enforce() and rq.name in new_quotas:
+                        q = new_quotas.get(rq.name)
+                        value = rq.format(q)
+                        current = rq.get_current_quota(unit_name)
+                        if current != value:
+                            property_names.append(rq.property)
+                            values.append(value)
+                if len(property_names) > 0:
+                    log_cgroup_info("Setting {0} properties: {1}".format(unit_name, dict(zip(property_names, values))))
+                    systemd.set_unit_run_time_properties(unit_name, property_names, values)
 
-        def _check_fails_if_processes_found_in_agent_cgroup_before_enable(self, agent_slice):
+            except Exception as exception:
+                log_cgroup_warning('Failed to set resource quota: {0}'.format(ustr(exception)))
+
+        def _reset_resource_quota(self, unit_name, resource_name, ignore_enforce_check=False):
+            """
+            Resets the quota for the given resource type ('CPU', 'Memory', or 'All').
+            Only resets if the current value is not already 'infinity'.
+
+            ignore_enforce_check - True In some scenarios(e.g. distro removed from supported list in new agent), we want to reset the quota even if the quota is not enforced.
+            """
+            try:
+                quotas = self._get_resource_quotas(resource_name)
+                property_names = []
+                values = []
+                for rq in quotas:
+                    if ignore_enforce_check or rq.can_enforce():
+                        current = rq.get_current_quota(unit_name)
+                        if current != "infinity":
+                            property_names.append(rq.property)
+                            values.append("")  # systemd convention
+                if len(property_names) > 0:
+                    log_cgroup_info("Resetting {0} properties: {1}".format(unit_name, property_names), send_event=False)
+                    systemd.set_unit_run_time_properties(unit_name, property_names, values)
+
+                    for rq in quotas:
+                        if rq.property in property_names:
+                            current = rq.get_current_quota(unit_name)
+                            log_cgroup_info('Current {0}: {1}'.format(rq.property, current))
+
+            except Exception as exception:
+                log_cgroup_warning('Failed to reset resource quota: {0}'.format(ustr(exception)))
+
+        def _check_fails_if_processes_found_in_agent_cgroup_before_enable(self):
             """
             This check ensures that before we enable the agent's cgroups, there are no unexpected processes in the agent's cgroup already.
 
@@ -519,8 +552,6 @@ class CGroupConfigurator(object):
             2. Disabled agent cgroups due to check_cgroups regular check. Once we disable the cgroups we don't run the extensions in it's own slice, so they will be in agent cgroups.
             3. When ext_hanlder restart and enable the cgroups again, already running processes from step 2 still be in agent cgroups. This may cause the extensions run with agent limit.
             """
-            if agent_slice not in (AZURE_SLICE, "system.slice"):
-                return False
             try:
                 log_cgroup_info("Checking for unexpected processes in the agent's cgroup before enabling cgroups")
                 self._check_processes_in_agent_cgroup(True)
@@ -636,14 +667,22 @@ class CGroupConfigurator(object):
 
             Each property should be explicitly set (even if already included in the log collector slice) for the log
             collector process to run in the transient scope directory with the expected accounting and limits.
+
+            Note: On cgroup v2, accounting is enabled by default. No need explicit set
             """
-            logcollector_properties = ["--property=CPUAccounting=yes", "--property=MemoryAccounting=yes", "--property=CPUQuota={0}".format(LOGCOLLECTOR_CPU_QUOTA_FOR_V1_AND_V2)]
-            if not self.using_cgroup_v2():
-                return logcollector_properties
+            logcollector_properties = ["--property=CPUQuota={0}".format(LOGCOLLECTOR_CPU_QUOTA_FOR_V1_AND_V2)]
+
+            # Add accounting properties based on cgroup version
+            accounting_props, accounting_vals = self._cgroups_api.get_accounting_properties()
+            for prop, val in zip(accounting_props, accounting_vals):
+                logcollector_properties.append("--property={0}={1}".format(prop, val))
+
             # Memory throttling limit is used when running log collector on v2 machines using the 'MemoryHigh' property.
             # We do not use a systemd property to enforce memory on V1 because it invokes the OOM killer if the limit
             # is exceeded.
-            logcollector_properties.append("--property=MemoryHigh={0}".format(LOGCOLLECTOR_MEMORY_THROTTLE_LIMIT_FOR_V2))
+            if self.using_cgroup_v2():
+                logcollector_properties.append("--property=MemoryHigh={0}".format(LOGCOLLECTOR_MEMORY_THROTTLE_LIMIT_FOR_V2))
+
             return logcollector_properties
 
         @staticmethod
@@ -839,27 +878,28 @@ class CGroupConfigurator(object):
             process = subprocess.Popen(command, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, preexec_fn=os.setsid)  # pylint: disable=W1509
             return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout, stderr=stderr, error_code=error_code)
 
-        @staticmethod
-        def _get_unit_properties_requiring_update(unit_name, cpu_quota=""):
+        def _get_unit_properties_requiring_update(self, unit_name, cpu_quota=""):
             """
             Check if the cgroups setup is completed for the unit and return the properties that need an update.
             """
             properties_to_update = ()
             properties_values = ()
-            cpu_accounting = systemd.get_unit_property(unit_name, "CPUAccounting")
-            if cpu_accounting != "yes":
-                properties_to_update += ("CPUAccounting",)
-                properties_values += ("yes",)
-            memory_accounting = systemd.get_unit_property(unit_name, "MemoryAccounting")
-            if memory_accounting != "yes":
-                properties_to_update += ("MemoryAccounting",)
-                properties_values += ("yes",)
+
+            # Get accounting properties based on cgroup version
+            accounting_props, accounting_vals = self._cgroups_api.get_accounting_properties()
+            for prop, val in zip(accounting_props, accounting_vals):
+                current = systemd.get_unit_property(unit_name, prop)
+                if current != val:
+                    properties_to_update += (prop,)
+                    properties_values += (val,)
+
             current_cpu_quota = CGroupUtil.get_current_cpu_quota(unit_name)
             if current_cpu_quota != cpu_quota:
                 properties_to_update += ("CPUQuota",)
                 # no-quota expressed as empty string while setting property
                 cpu_quota = cpu_quota if cpu_quota != "infinity" else ""
                 properties_values += (cpu_quota,)
+
             return properties_to_update, properties_values
 
         def setup_extension_slice(self, extension_name, cpu_quota):
@@ -912,7 +952,7 @@ class CGroupConfigurator(object):
             """
             if self.enabled():
                 try:
-                    self._reset_cpu_quota(CGroupUtil.get_extension_slice_name(extension_name))
+                    self._reset_resource_quota(CGroupUtil.get_extension_slice_name(extension_name), ResourceName.CPU)
                 except Exception as exception:
                     log_cgroup_warning('Failed to reset for {0}: {1}'.format(extension_name, ustr(exception)))
 
@@ -975,7 +1015,7 @@ class CGroupConfigurator(object):
                     for service in services_list:
                         service_name = service.get('name', None)
                         if service_name is not None and systemd.is_unit_loaded(service_name):
-                            self._reset_cpu_quota(service_name)
+                            self._reset_resource_quota(service_name, ResourceName.CPU)
                 except Exception as exception:
                     log_cgroup_warning('Failed to reset for {0} : {1}'.format(service_name, ustr(exception)))
 

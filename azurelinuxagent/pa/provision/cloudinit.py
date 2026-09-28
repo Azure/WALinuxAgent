@@ -49,14 +49,10 @@ class CloudInitProvisionHandler(ProvisionHandler):
             utc_start = datetime.now(UTC)
             logger.info("Running CloudInit provisioning handler")
             self.wait_for_ovfenv()
-            self.protocol_util.get_protocol()  # Trigger protocol detection
-            self.report_not_ready("Provisioning", "Starting")
-
-            thumbprint = self.wait_for_ssh_host_key()  # pylint: disable=W0612
+            self.wait_for_ssh_host_key()
             self.write_provisioned()
             logger.info("Finished provisioning")
 
-            self.report_ready()
             self.report_event("Provisioning with cloud-init succeeded ({0}s)".format(self._get_uptime_seconds()),
                 is_success=True,
                 duration=elapsed_milliseconds(utc_start))
@@ -64,7 +60,6 @@ class CloudInitProvisionHandler(ProvisionHandler):
         except ProvisionError as e:
             msg = "Provisioning with cloud-init failed: {0} ({1}s)".format(ustr(e), self._get_uptime_seconds())
             logger.error(msg)
-            self.report_not_ready("ProvisioningFailed", ustr(e))
             self.report_event(msg)
             return
 

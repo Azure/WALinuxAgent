@@ -29,8 +29,9 @@ from typing import List, Dict, Any
 from assertpy import fail, assert_that
 from time import sleep
 
-from tests_e2e.tests.lib.agent_test import AgentVmTest, TestSkipped
+from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
+from tests_e2e.tests.lib.test_result import TestSkipped
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
@@ -134,7 +135,7 @@ class RecoverNetworkInterface(AgentVmTest):
         """
         log.info("")
         log.info("Using CSE to bring the primary network interface down and call the OSUtil to bring the interface back up. Command to execute: {0}".format(script))
-        custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
+        custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript)
         try:
             custom_script.enable(protected_settings={'commandToExecute': script}, settings={})
         except TimeoutError:

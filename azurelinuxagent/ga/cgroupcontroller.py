@@ -25,7 +25,6 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import fileutil
 
 _REPORT_EVERY_HOUR = timedelta(hours=1)
-_DEFAULT_REPORT_PERIOD = timedelta(seconds=conf.get_cgroup_check_period())
 
 AGENT_NAME_TELEMETRY = "walinuxagent.service"  # Name used for telemetry; it needs to be consistent even if the name of the service changes
 AGENT_LOG_COLLECTOR = "azure-walinuxagent-logcollector"
@@ -40,12 +39,12 @@ class MetricValue(object):
     Class for defining all the required metric fields to send telemetry.
     """
 
-    def __init__(self, category, counter, instance, value, report_period=_DEFAULT_REPORT_PERIOD):
+    def __init__(self, category, counter, instance, value, report_period=None):
         self._category = category
         self._counter = counter
         self._instance = instance
         self._value = value
-        self._report_period = report_period
+        self._report_period = timedelta(seconds=conf.get_cgroup_check_period()) if report_period is None else report_period
 
     @property
     def category(self):
@@ -82,6 +81,7 @@ class MetricsCounter(object):
     MAX_MEM_USAGE = "Max Memory Usage (B)"
     SWAP_MEM_USAGE = "Swap Memory Usage (B)"
     MEM_THROTTLED = "Total Memory Throttled Events"
+    MEM_PRESSURE = "Memory Pressure (s)"
     AVAILABLE_MEM = "Available Memory (MB)"
     USED_MEM = "Used Memory (MB)"
 

@@ -3,33 +3,21 @@
     <Plugins>
         <Plugin>
             <Version>1.0.0</Version>
-            <Uris>
-                <Uri>http://mock-goal-state/ga-manifests/OSTCExtensions.WALinuxAgent__1.0.0</Uri>
-            </Uris>
         </Plugin>
         <Plugin>
             <Version>1.1.0</Version>
-            <Uris>
-                <Uri>http://mock-goal-state/ga-manifests/OSTCExtensions.WALinuxAgent__1.1.0</Uri>
-            </Uris>
         </Plugin>
         <Plugin>
             <Version>1.2.0</Version>
-            <Uris>
-                <Uri>http://mock-goal-state/ga-manifests/OSTCExtensions.WALinuxAgent__1.2.0</Uri>
-            </Uris>
         </Plugin>
         <Plugin>
-            <Version>2.0.0</Version><Uris><Uri>http://mock-goal-state/ga-manifests/OSTCExtensions.WALinuxAgent__2.0.0</Uri></Uris>
+            <Version>2.0.0</Version>
         </Plugin>
         <Plugin>
-            <Version>2.1.0</Version><Uris><Uri>http://mock-goal-state/ga-manifests/OSTCExtensions.WALinuxAgent__2.1.0</Uri></Uris>
+            <Version>2.1.0</Version>
         </Plugin>
         <Plugin>
             <Version>9.9.9.10</Version>
-            <Uris>
-                <Uri>http://mock-goal-state/ga-manifests/OSTCExtensions.WALinuxAgent__99999.0.0.0</Uri>
-            </Uris>
         </Plugin>
         <Plugin>
             <Version>99999.0.0.0</Version>

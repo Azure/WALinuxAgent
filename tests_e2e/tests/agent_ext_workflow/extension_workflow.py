@@ -184,8 +184,7 @@ class ExtensionWorkflow(AgentVmTest):
             )
             dcr_test_ext_client = VirtualMachineExtensionClient(
                 self._context.vm,
-                dcr_test_ext_id_1_1,
-                resource_name="GuestAgentDcrTestExt"
+                dcr_test_ext_id_1_1
             )
             dcr_ext = ExtensionWorkflow.GuestAgentDcrTestExtension(
                 extension=dcr_test_ext_client,
@@ -330,8 +329,7 @@ class ExtensionWorkflow(AgentVmTest):
             )
             dcr_test_ext_client_1_2 = VirtualMachineExtensionClient(
                 self._context.vm,
-                dcr_test_ext_id_1_2,
-                resource_name="GuestAgentDcrTestExt"
+                dcr_test_ext_id_1_2
             )
 
             # Update extension object & version to new version
@@ -396,8 +394,7 @@ class ExtensionWorkflow(AgentVmTest):
                 "1.3")
             dcr_test_ext_client_1_3 = VirtualMachineExtensionClient(
                 self._context.vm,
-                dcr_test_ext_id_1_3,
-                resource_name="GuestAgentDcrTestExt"
+                dcr_test_ext_id_1_3
             )
 
             # Update extension object & version to new version

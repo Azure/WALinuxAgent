@@ -54,7 +54,7 @@ def main():
                     sys.exit(0)
 
     except Exception as e:
-        log.info("Error thrown when searching for test data in agent log: {0}".format(str(e)))
+        log.info("Error thrown when searching for test data in agent log: {0}".format(str(e)), exc_info=True)
 
     log.info("Did not find expected error in agent log. Expected to find pattern: {0}".format(pattern))
     sys.exit(1)

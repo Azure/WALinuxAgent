@@ -91,3 +91,6 @@ ENV/
 # pyenv
 .python-version
 .vscode/
+
+# vscode
+.github/copilot-instructions.md

@@ -32,9 +32,9 @@ from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCod
     ExtensionOperationError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import systemd
+from azurelinuxagent.common.osutil.systemd import is_systemd_run_failure
 from azurelinuxagent.common.utils import fileutil, shellutil
-from azurelinuxagent.ga.extensionprocessutil import handle_process_completion, read_output, \
-    TELEMETRY_MESSAGE_MAX_LEN
+from azurelinuxagent.ga.extensionprocessutil import handle_process_completion, read_output
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import get_distro
 
@@ -69,7 +69,8 @@ class CGroupUtil(object):
         return (distro_name.lower() == 'ubuntu' and distro_version.major >= 16) or \
             (distro_name.lower() in ('centos', 'redhat') and distro_version.major == 8) or \
             (distro_name.lower() == 'rhel' and distro_version.major == 9) or \
-            (distro_name.lower() == 'azurelinux' and distro_version.major == 3)
+            (distro_name.lower() == 'azurelinux' and distro_version.major == 3) or \
+            distro_name.lower() == 'chainguard'
 
     @staticmethod
     def get_extension_slice_name(extension_name, old_slice=False):
@@ -158,6 +159,31 @@ class CGroupUtil(object):
             return "unknown"
 
     @staticmethod
+    def get_current_memory_quota(unit_name):
+        """
+        Returns the memory quota for the given unit in bytes, or 'infinity' if not set, or 'unknown' if an error occurs.
+        """
+        try:
+            mem_quota = systemd.get_unit_property(unit_name, "MemoryHigh").strip().lower()
+            if mem_quota == "infinity":
+                return mem_quota  # No limit on memory usage
+            elif mem_quota.endswith("k"):
+                mem_quota_bytes = int(mem_quota[:-1]) * 1024
+            elif mem_quota.endswith("m"):
+                mem_quota_bytes = int(mem_quota[:-1]) * 1024 * 1024
+            elif mem_quota.endswith("g"):
+                mem_quota_bytes = int(mem_quota[:-1]) * 1024 * 1024 * 1024
+            elif mem_quota.endswith("t"):
+                mem_quota_bytes = int(mem_quota[:-1]) * 1024 * 1024 * 1024 * 1024
+            else:
+                mem_quota_bytes = mem_quota
+
+            return str(mem_quota_bytes)
+        except Exception as e:
+            log_cgroup_warning("Error in getting current MemoryHigh: {0}".format(ustr(e)))
+            return "unknown"
+
+    @staticmethod
     def has_cpu_quota(unit_name):
         """
         Returns True if quota set for the unit.
@@ -217,19 +243,27 @@ def create_cgroup_api():
 
     root_hierarchy_mode = shellutil.run_command(["stat", "-f", "--format=%T", CGROUP_FILE_SYSTEM_ROOT]).rstrip()
 
-    if root_hierarchy_mode == "cgroup2fs":
+    # Distro Ubuntu 25.10 ship Rust-based coreutils. Its 'stat' lacks a human-readable mapping for the cgroup v2 (cgroup2fs) magic number, so it prints
+    # UNKNOWN with that magic value 0x63677270. Add an explicit check for this hex to detect cgroup v2
+    # #stat -f --format=%T /sys/fs/cgroup/
+    # UNKNOWN (0x63677270)
+    #
+
+    if root_hierarchy_mode == "cgroup2fs" or (root_hierarchy_mode.startswith("UNKNOWN") and "0x63677270" in root_hierarchy_mode):
         return SystemdCgroupApiv2()
 
     elif root_hierarchy_mode == "tmpfs":
         # Check if a hybrid mode is being used
         unified_hierarchy_path = os.path.join(CGROUP_FILE_SYSTEM_ROOT, "unified")
-        if os.path.exists(unified_hierarchy_path) and shellutil.run_command(["stat", "-f", "--format=%T", unified_hierarchy_path]).rstrip() == "cgroup2fs":
-            # Hybrid mode is being used. Check if any controllers are available to be enabled in the unified hierarchy.
-            available_unified_controllers_file = os.path.join(unified_hierarchy_path, "cgroup.controllers")
-            if os.path.exists(available_unified_controllers_file):
-                available_unified_controllers = fileutil.read_file(available_unified_controllers_file).rstrip()
-                if available_unified_controllers != "":
-                    raise CGroupsException("Detected hybrid cgroup mode, but there are controllers available to be enabled in unified hierarchy: {0}".format(available_unified_controllers))
+        if os.path.exists(unified_hierarchy_path):
+            unified_hierarchy_mode = shellutil.run_command( ["stat", "-f", "--format=%T", unified_hierarchy_path]).rstrip()
+            if unified_hierarchy_mode == "cgroup2fs" or (unified_hierarchy_mode.startswith("UNKNOWN") and "0x63677270" in unified_hierarchy_mode):
+                # Hybrid mode is being used. Check if any controllers are available to be enabled in the unified hierarchy.
+                available_unified_controllers_file = os.path.join(unified_hierarchy_path, "cgroup.controllers")
+                if os.path.exists(available_unified_controllers_file):
+                    available_unified_controllers = fileutil.read_file(available_unified_controllers_file).rstrip()
+                    if available_unified_controllers != "":
+                        raise CGroupsException("Detected hybrid cgroup mode, but there are controllers available to be enabled in unified hierarchy: {0}".format(available_unified_controllers))
 
         cgroup_api_v1 = SystemdCgroupApiv1()
         # Previously the agent supported users mounting cgroup v1 controllers in locations other than the systemd
@@ -302,16 +336,37 @@ class _SystemdCgroupApi(object):
         """
         raise NotImplementedError()
 
+    def can_enforce_memory(self):
+        """
+        Cgroup version specific. Returns if controller can be used for enforcement
+        """
+        raise NotImplementedError()
+
+    def get_accounting_properties(self):
+        """
+        Returns the accounting properties to set for a unit.
+        Override in subclasses for version-specific behavior.
+        """
+        raise NotImplementedError()
+
     def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr,
                                 error_code=ExtensionErrorCodes.PluginUnknownFailure):
         scope = "{0}_{1}".format(cmd_name, uuid.uuid4())
         extension_slice_name = CGroupUtil.get_extension_slice_name(extension_name)
+
+        # For v1: Disable accounting to prevent nested cgroups (slice already has accounting enabled), so that all the counters will be present in extension Cgroup
+        # For v2: No accounting properties needed as they are enabled by default.
+        accounting_props, accounting_vals = self.get_accounting_properties()
+        accounting_args = ""
+        for prop, _ in zip(accounting_props, accounting_vals):
+            # Set accounting to 'no' to prevent nested cgroups under the extension slice
+            accounting_args += " --property={0}=no".format(prop)
+
         with self._systemd_run_commands_lock:
+            systemd_run_cmd = "systemd-run{0} --unit={1} --scope --slice={2} {3}".format(
+                accounting_args, scope, extension_slice_name, command)
             process = subprocess.Popen(  # pylint: disable=W1509
-                # Some distros like ubuntu20 by default cpu and memory accounting enabled. Thus create nested cgroups under the extension slice
-                # So disabling CPU and Memory accounting prevents from creating nested cgroups, so that all the counters will be present in extension Cgroup
-                # since slice unit file configured with accounting enabled.
-                "systemd-run --property=CPUAccounting=no --property=MemoryAccounting=no --unit={0} --scope --slice={1} {2}".format(scope, extension_slice_name, command),
+                systemd_run_cmd,
                 shell=shell,
                 cwd=cwd,
                 stdout=stdout,
@@ -352,7 +407,7 @@ class _SystemdCgroupApi(object):
         except ExtensionError as e:
             # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
             # extension errors.
-            if not self._is_systemd_failure(scope, stderr):
+            if not is_systemd_run_failure(scope, stderr):
                 # There was an extension error; it either timed out or returned a non-zero exit code. Re-raise the error
                 raise
 
@@ -372,13 +427,6 @@ class _SystemdCgroupApi(object):
         finally:
             with self._systemd_run_commands_lock:
                 self._systemd_run_commands.remove(process.pid)
-
-    @staticmethod
-    def _is_systemd_failure(scope_name, stderr):
-        stderr.seek(0)
-        stderr = ustr(stderr.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
-        unit_not_found = "Unit {0} not found.".format(scope_name)
-        return unit_not_found in stderr or scope_name not in stderr
 
 
 class SystemdCgroupApiv1(_SystemdCgroupApi):
@@ -508,6 +556,15 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
     def can_enforce_cpu(self):
         return CgroupV1.CPU_CONTROLLER in self._cgroup_mountpoints
 
+    def can_enforce_memory(self):
+        return False
+
+    def get_accounting_properties(self):
+        """
+        For cgroup v1, explicit accounting must be enabled.
+        """
+        return ("CPUAccounting", "MemoryAccounting"), ("yes", "yes")
+
 
 class SystemdCgroupApiv2(_SystemdCgroupApi):
     """
@@ -623,6 +680,16 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
     def can_enforce_cpu(self):
         return CgroupV2.CPU_CONTROLLER in self._controllers_enabled_at_root
 
+    def can_enforce_memory(self):
+        return CgroupV2.MEMORY_CONTROLLER in self._controllers_enabled_at_root
+
+    def get_accounting_properties(self):
+        """
+        For cgroup v2, accounting is enabled by default in the unified hierarchy. No explicit setting needed.
+         and also, systemd 258+ deprecated CPUAccounting property
+        """
+        return (), ()
+
 
 class Cgroup(object):
     MEMORY_CONTROLLER = "memory"
@@ -645,12 +712,9 @@ class Cgroup(object):
         """
         raise NotImplementedError()
 
-    def get_controllers(self, expected_relative_path=None):
+    def get_controllers(self):
         """
         Cgroup version specific. Returns a list of the agent supported controllers which are mounted/enabled for the cgroup.
-
-        :param expected_relative_path: The expected relative path of the cgroup. If provided, only controllers mounted
-        at this expected path will be returned.
         """
         raise NotImplementedError()
 
@@ -687,7 +751,7 @@ class CgroupV1(Cgroup):
 
         return in_expected_slice
 
-    def get_controllers(self, expected_relative_path=None):
+    def get_controllers(self):
         controllers = []
 
         for supported_controller_name in self.get_supported_controller_names():
@@ -703,12 +767,6 @@ class CgroupV1(Cgroup):
             if controller_path is None:
                 log_cgroup_warning("{0} is not mounted for the {1} cgroup; will not track".format(supported_controller_name, self._cgroup_name))
                 continue
-
-            if expected_relative_path is not None:
-                expected_path = os.path.join(controller_mountpoint, expected_relative_path)
-                if controller_path != expected_path:
-                    log_cgroup_warning("The {0} controller is not mounted at the expected path for the {1} cgroup; will not track. Actual cgroup path:[{2}] Expected:[{3}]".format(supported_controller_name, self._cgroup_name, controller_path, expected_path))
-                    continue
 
             if supported_controller_name == self.CPU_CONTROLLER:
                 controller = CpuControllerV1(self._cgroup_name, controller_path)
@@ -763,7 +821,7 @@ class CgroupV2(Cgroup):
 
         return True
 
-    def get_controllers(self, expected_relative_path=None):
+    def get_controllers(self):
         controllers = []
 
         for supported_controller_name in self.get_supported_controller_names():
@@ -778,14 +836,6 @@ class CgroupV2(Cgroup):
             if self._cgroup_path == "":
                 log_cgroup_warning("Cgroup path for {0} cannot be determined; will not track".format(self._cgroup_name))
                 continue
-
-            if expected_relative_path is not None:
-                expected_path = os.path.join(self._root_cgroup_path, expected_relative_path)
-                if self._cgroup_path != expected_path:
-                    log_cgroup_warning(
-                        "The {0} cgroup is not mounted at the expected path; will not track. Actual cgroup path:[{1}] Expected:[{2}]".format(
-                            self._cgroup_name, self._cgroup_path, expected_path))
-                    continue
 
             if supported_controller_name == self.CPU_CONTROLLER:
                 controller = CpuControllerV2(self._cgroup_name, self._cgroup_path)

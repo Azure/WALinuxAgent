@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Type
 
 import tests_e2e
+from tests_e2e.tests.lib.azure_clouds import AZURE_CLOUDS
 from tests_e2e.tests.lib.agent_test import AgentTest, AgentVmTest, AgentVmssTest
 
 
@@ -79,6 +80,10 @@ class VmImageInfo(object):
     locations: Dict[str, List[str]]
     # Indicates that the image is available only for those VM sizes. If empty, the image should be available for all VM sizes
     vm_sizes: List[str]
+    # Optional security type (e.g. "ConfidentialVM") to use when deploying this image. When set, the deployment
+    # is forced to use this security type both for VM (via LISA's Security_Profile requirement) and for VMSS
+    # (via the 'securityType' parameter in the ARM template). When empty, the default deployment behavior is used.
+    security_type: str
 
     def __str__(self):
         return self.urn
@@ -152,6 +157,9 @@ class AgentTestLoader(object):
     # Matches a reference to a random subset of images within a set with an optional count: random(<image_set>, [<count>]), e.g. random(endorsed, 3), random(endorsed)
     RANDOM_IMAGES_RE = re.compile(r"random\((?P<image_set>[^,]+)(\s*,\s*(?P<count>\d+))?\)")
 
+    # Matches an image URN, which must consist of 4 components separated by ':', e.g. "Canonical:ubuntu-24_04-lts:server:latest"
+    IMAGE_URN_RE = re.compile(r"^[^:]+:[^:]+:[^:]+:[^:]+$")
+
     def _validate(self):
         """
         Performs some basic validations on the data loaded from the YAML description files
@@ -171,21 +179,30 @@ class AgentTestLoader(object):
             for image in suite.images:
                 image = _parse_image(image)
                 # skip validation if suite image from gallery image
-                if CustomImage._is_image_from_gallery(image):
+                if CustomImage._is_image_from_gallery(image) or AgentTestLoader.IMAGE_URN_RE.match(image) is not None:
                     continue
                 if image not in self.images:
                     raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {image} in images.yml or image from a shared gallery")
 
-            # If the suite specifies a cloud and it's location<cloud:location>, validate that location string is start with <cloud:> and then validate that the images it uses are available in that location
+            def split_on_cloud(value):
+                split = value.split(":")
+                if len(split) == 2:
+                    if split[0] not in AZURE_CLOUDS:
+                        raise Exception(f"{value} does not contain a valid cloud: {split[0]}")
+                    return split
+                if len(split) == 1:
+                    return "", split[0]
+                raise Exception(f"{value} is not a valid value in the test configuration")
+
+            # If the test suite specifies any locations, validate that the images it uses are available in those locations
             for suite_location in suite.locations:
-                if suite_location.startswith(self.__cloud + ":"):
-                    suite_location = suite_location.split(":")[1]
-                else:
+                cloud, suite_location = split_on_cloud(suite_location)
+                if cloud != "" and cloud != self.__cloud:
                     continue
                 for suite_image in suite.images:
                     suite_image = _parse_image(suite_image)
-                    # skip validation if suite image from gallery image
-                    if CustomImage._is_image_from_gallery(suite_image):
+                    # skip validation if suite image is a gallery image or is in 'skip_images'
+                    if CustomImage._is_image_from_gallery(suite_image) or suite_image in suite.skip_on_images or f"{self.__cloud}:{suite_image}" in suite.skip_on_images:
                         continue
                     for image in self.images[suite_image]:
                         # If the image has a location restriction, validate that it is available on the location the suite must run on
@@ -196,11 +213,12 @@ class AgentTestLoader(object):
 
             # if the suite specifies skip clouds, validate that cloud used in our tests
             for suite_skip_cloud in suite.skip_on_clouds:
-                if suite_skip_cloud not in ["AzureCloud", "AzureChinaCloud", "AzureUSGovernment"]:
+                if suite_skip_cloud not in AZURE_CLOUDS:
                     raise Exception(f"Invalid cloud {suite_skip_cloud} for in {suite.name}")
 
-            # if the suite specifies skip images, validate that images used in our tests
+            # if the suite specifies skip_on_images, validate that the images are valid
             for suite_skip_image in suite.skip_on_images:
+                _, suite_skip_image = split_on_cloud(suite_skip_image)
                 if suite_skip_image not in self.images:
                     raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {suite_skip_image} in images.yml")
 
@@ -237,7 +255,8 @@ class AgentTestLoader(object):
                           rest of the tests in the suite will not be executed). By default, a failure on a test does not stop execution of
                           the test suite.
         * images   - A string, or a list of strings, specifying the images on which the test suite must be executed. Each value
-                     can be the name of a single image (e.g."ubuntu_2004"), or the name of an image set (e.g. "endorsed") or shared gallery image(e.g. "gallery/wait-cloud-init/1.0.2").
+                     can be the name of a single image (e.g."ubuntu_2004"), the name of an image set (e.g. "endorsed"), a shared gallery image
+                     (e.g. "gallery/wait-cloud-init/1.0.2"), or a URN (e.g.""Canonical:ubuntu-24_04-lts:server:latest").
                      The names for images and image sets are defined in WALinuxAgent/tests_e2e/tests_suites/images.yml.
         * locations - [Optional; string or list of strings] If given, the test suite must be executed on that cloud location(e.g. "AzureCloud:eastus2euap").
                      If not specified, or set to an empty string, the test suite will be executed in the default location. This is useful
@@ -331,8 +350,9 @@ class AgentTestLoader(object):
         spec = importlib.util.spec_from_file_location(f"tests_e2e.tests.{relative_path.replace('/', '.').replace('.py', '')}", str(full_path))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        # return all the classes in the module that are subclasses of AgentTest but are not AgentVmTest or AgentVmssTest themselves.
-        matches = [v for v in module.__dict__.values() if isinstance(v, type) and issubclass(v, AgentTest) and v != AgentVmTest and v != AgentVmssTest]
+        # return all the classes in the module that are subclasses of AgentTest, are not AgentVmTest or AgentVmssTest themselves,
+        # and are defined in this module (not imported from another module).
+        matches = [v for v in module.__dict__.values() if isinstance(v, type) and issubclass(v, AgentTest) and v != AgentVmTest and v != AgentVmssTest and v.__module__ == module.__name__]
         if len(matches) != 1:
             raise Exception(f"Error in {full_path} (each test file must contain exactly one class derived from AgentTest)")
         return matches[0]
@@ -358,12 +378,16 @@ class AgentTestLoader(object):
                 i.urn = description
                 i.locations = {}
                 i.vm_sizes = []
+                i.security_type = ""
             else:
                 if "urn" not in description:
                     raise Exception(f"Image {name} is missing the 'urn' property: {description}")
                 i.urn = description["urn"]
                 i.locations = description["locations"] if "locations" in description else {}
                 i.vm_sizes = description["vm_sizes"] if "vm_sizes" in description else []
+                i.security_type = description["security_type"] if "security_type" in description else ""
+                if i.security_type not in ("", "ConfidentialVM"):
+                    raise Exception(f"Invalid security_type {i.security_type} for image {name} in images.yml; expected one of '', 'ConfidentialVM'")
                 for cloud in i.locations.keys():
                     if cloud not in ["AzureCloud", "AzureChinaCloud", "AzureUSGovernment"]:
                         raise Exception(f"Invalid cloud {cloud} for image {name} in images.yml")

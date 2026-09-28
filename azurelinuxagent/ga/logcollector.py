@@ -28,7 +28,7 @@ from heapq import heappush, heappop
 
 from azurelinuxagent.common.conf import get_lib_dir, get_ext_log_dir, get_agent_log_file
 from azurelinuxagent.common.event import initialize_event_logger_vminfo_common_parameters_and_protocol, add_event, WALAEventOperation
-from azurelinuxagent.common.future import ustr, UTC
+from azurelinuxagent.common.future import ustr, UTC, BACKSLASH_REPLACE
 from azurelinuxagent.ga.logcollector_manifests import MANIFEST_NORMAL, MANIFEST_FULL
 
 # Please note: be careful when adding agent dependencies in this module.
@@ -61,6 +61,7 @@ _MUST_COLLECT_FILES = [
     _AGENT_LOG,
     os.path.join(_AGENT_LIB_DIR, "waagent_status.json"),
     os.path.join(_AGENT_LIB_DIR, "history", "*.zip"),
+    os.path.join(_AGENT_LIB_DIR, "state", "*"),
     os.path.join(_EXTENSION_LOG_DIR, "*", "*"),
     os.path.join(_EXTENSION_LOG_DIR, "*", "*", "*"),
     "{0}.*".format(_AGENT_LOG)  # any additional waagent.log files (e.g., waagent.log.1.gz)
@@ -110,7 +111,7 @@ class LogCollector(object):
 
     @staticmethod
     def initialize_telemetry():
-        protocol = get_protocol_util().get_protocol(init_goal_state=False, create_transport_certificate=False, save_to_history=False)
+        protocol = get_protocol_util().get_protocol(init_goal_state=False, save_to_history=False)
         protocol.client.reset_goal_state(goal_state_properties=GoalStateProperties.RoleConfig | GoalStateProperties.HostingEnv)
         # Initialize the common parameters for telemetry events
         initialize_event_logger_vminfo_common_parameters_and_protocol(protocol)
@@ -128,7 +129,7 @@ class LogCollector(object):
             return " ".join(cmd) if isinstance(cmd, list) else command
 
         def _encode_command_output(output):
-            return ustr(output, encoding="utf-8", errors="backslashreplace")
+            return ustr(output, encoding="utf-8", errors=BACKSLASH_REPLACE)
 
         try:
             process = subprocess.Popen(command, stdout=stdout, stderr=subprocess.PIPE, shell=False)

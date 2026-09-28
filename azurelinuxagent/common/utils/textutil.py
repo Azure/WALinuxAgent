@@ -439,7 +439,10 @@ def format_exception(exception):
     return msg
 
 
-SAS_TOKEN_RE = re.compile(r'(https://\S+\?)((sv|st|se|sr|sp|sip|spr|sig)=\S+)+', flags=re.IGNORECASE)
+# Regex to match SAS tokens in URLs. We explicitly end the match on double quotes or a closing bracket because of
+# certain agent logs/events where we log the VMAP uri and close it with either double quotes or a bracket. We end the
+# match on whitespace as well to handle any other scenario.
+SAS_TOKEN_RE = re.compile(r'(https://\S+\?)((sv|st|se|sr|sp|sip|spr|sig)=[^"\]\s]+)+', flags=re.IGNORECASE)
 
 
 def redact_sas_token(msg):

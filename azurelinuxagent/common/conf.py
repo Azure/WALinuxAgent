@@ -145,11 +145,13 @@ __SWITCH_OPTIONS__ = {
     "Debug.CgroupDisableOnProcessCheckFailure": True,
     "Debug.CgroupDisableOnQuotaCheckFailure": True,
     "Debug.EnableAgentMemoryUsageCheck": False,
+    "Debug.EnableAgentSignatureValidation": False,
     "Debug.EnableFastTrack": True,
     "Debug.EnableGAVersioning": True,
     "Debug.EnableCgroupV2ResourceLimiting": False,
-    "Debug.EnableExtensionPolicy": False,
-    "Debug.EnableSignatureValidation": False
+    "Debug.EnableExtensionPolicy": True,
+    "Debug.EnableExtSignatureValidation": True,
+    "Debug.IgnoreExtSignatureValidationErrors": True
 }
 
 
@@ -173,7 +175,12 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.Filesystem": "ext3",
     "AutoUpdate.GAFamily": "Prod",
     "Policy.PolicyFilePath": "/etc/waagent_policy.json",
-    "Protocol.EndpointDiscovery": "dhcp"
+    "Protocol.EndpointDiscovery": "dhcp",
+    #
+    # "Debug" options are experimental and may be removed in later
+    # versions of the Agent.
+    #
+    "Debug.SignatureValidationTelemetryExpiryTime": "2027-02-01"
 }
 
 
@@ -204,7 +211,9 @@ __INTEGER_OPTIONS__ = {
     "Debug.AutoUpdateHotfixFrequency": 14400,
     "Debug.AutoUpdateNormalFrequency": 86400,
     "Debug.FirewallRulesLogPeriod": 86400,
-    "Debug.LogCollectorInitialDelay": 5 * 60
+    "Debug.LogCollectorInitialDelay": 5 * 60,
+    "Debug.SignatureValidationInitialDelay": 10 * 60,
+    "Debug.SignatureValidationTimeout": 10
 }
 
 
@@ -608,6 +617,15 @@ def get_agent_cpu_quota(conf=__conf__):
     return conf.get_int("Debug.AgentCpuQuota", 50)
 
 
+def get_agent_memory_quota(conf=__conf__):
+    """
+    Memory quota for the agent in Bytes defined as soft limit
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.AgentMemoryQuota", 300 * 1024 ** 2)
+
+
 def get_agent_cpu_throttled_time_threshold(conf=__conf__):
     """
     Throttled time threshold for agent cpu in seconds.
@@ -615,15 +633,6 @@ def get_agent_cpu_throttled_time_threshold(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_int("Debug.AgentCpuThrottledTimeThreshold", 120)
-
-
-def get_agent_memory_quota(conf=__conf__):
-    """
-    Memory quota for the agent in bytes.
-
-    NOTE: This option is experimental and may be removed in later versions of the Agent.
-    """
-    return conf.get_int("Debug.AgentMemoryQuota", 30 * 1024 ** 2)
 
 
 def get_enable_agent_memory_usage_check(conf=__conf__):
@@ -690,7 +699,7 @@ def get_extension_policy_enabled(conf=__conf__):
     Determine whether extension policy is enabled. If true, policy will be enforced before installing any extensions.
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.EnableExtensionPolicy", False)
+    return conf.get_switch("Debug.EnableExtensionPolicy", True)
 
   
 def get_enable_cgroup_v2_resource_limiting(conf=__conf__):
@@ -710,13 +719,58 @@ def get_log_collector_initial_delay(conf=__conf__):
     return conf.get_int("Debug.LogCollectorInitialDelay", 5 * 60)
 
   
-def get_signature_validation_enabled(conf=__conf__):
+def get_ext_signature_validation_enabled(conf=__conf__):
     """
-    Determine whether signature validation is enabled. If true, package signature will be validated before
-    installing any signed extensions.
+    Determine whether extension signature validation is enabled. If true, extension package signature will be validated
+    before installing any signed extensions.
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.EnableSignatureValidation", False)
+    return conf.get_switch("Debug.EnableExtSignatureValidation", True)
+
+
+def get_agent_signature_validation_enabled(conf=__conf__):
+    """
+    Determine whether agent package signature validation is enabled. If true, agent package signature will be
+    validated before updating to any signed agent for supported VMs (CVMs only).
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.EnableAgentSignatureValidation", False)
+
+
+def get_signature_validation_telemetry_expiry_time(conf=__conf__):
+    """
+    Get the expiry date for the signature validation telemetry.
+    After this date, signature validation telemetry will be disabled.
+    Format: YYYY-MM-DD
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get("Debug.SignatureValidationTelemetryExpiryTime", "2027-02-01")
+
+
+def get_ignore_ext_signature_validation_errors(conf=__conf__):
+    """
+    If True, extension signature validation errors will be ignored, unless extension policy requires signature. This is primarily intended for use during telemetry release.
+    If False, any extension signature validation error will block the extension, regardless of extension policy.
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.IgnoreExtSignatureValidationErrors", True)
+
+
+def get_signature_validation_initial_delay(conf=__conf__):
+    """
+    Get initial delay period (in seconds) after service start before extension and agent signature validation is enabled.
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.SignatureValidationInitialDelay", 10 * 60)
+
+
+def get_signature_validation_timeout(conf=__conf__):
+    """
+    Get timeout (in seconds) for signature validation operations. If a single validation exceeds this threshold,
+    the feature is disabled until agent restart.
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.SignatureValidationTimeout", 10)
 
   
 def get_enable_rsm_downgrade(conf=__conf__):

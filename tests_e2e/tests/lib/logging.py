@@ -170,3 +170,5 @@ def set_thread_name(name: str):
         current_thread().name = initial_name
 
 
+def indent(text: str, prefix: str = "\t"):
+    return "\n".join(f"{prefix}{line}" for line in text.splitlines())

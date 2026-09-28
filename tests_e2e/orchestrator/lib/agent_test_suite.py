@@ -18,8 +18,6 @@ import datetime
 import json
 import logging
 import time
-import traceback
-import uuid
 
 from pathlib import Path
 from threading import RLock
@@ -31,14 +29,13 @@ from typing import Any, Dict, List, Tuple
 from lisa import (  # pylint: disable=E0401
     Environment,
     Logger,
-    notifier,
     simple_requirement,
     TestCaseMetadata,
     TestSuite as LisaTestSuite,
     TestSuiteMetadata,
 )
 from lisa.environment import EnvironmentStatus  # pylint: disable=E0401
-from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
+from lisa.messages import TestStatus  # pylint: disable=E0401
 from lisa.node import LocalNode, Nodes  # pylint: disable=E0401
 from lisa.util.constants import RUN_ID  # pylint: disable=E0401
 from lisa.sut_orchestrator.azure.common import get_node_context  # pylint: disable=E0401
@@ -47,6 +44,7 @@ from lisa.sut_orchestrator.azure.platform_ import AzurePlatform  # pylint: disab
 import makepkg
 from azurelinuxagent.common.version import AGENT_VERSION
 from azurelinuxagent.common.future import UTC, datetime_min_utc, datetime_max_utc
+from tests_e2e.tests.lib.test_result import TestSkipped, RemoteTestError
 from tests_e2e.tests.lib.retry import retry_if_false
 
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
@@ -54,8 +52,8 @@ from tests_e2e.tests.lib.virtual_machine_scale_set_client import VirtualMachineS
 
 import tests_e2e
 from tests_e2e.orchestrator.lib.agent_test_loader import TestSuiteInfo
+from tests_e2e.orchestrator.lib.agent_test_result import AgentTestResult
 from tests_e2e.tests.lib.agent_log import AgentLog, AgentLogRecord
-from tests_e2e.tests.lib.agent_test import TestSkipped, RemoteTestError
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext, AgentVmTestContext, AgentVmssTestContext
 from tests_e2e.tests.lib.logging import log, set_thread_name, set_current_thread_log
 from tests_e2e.tests.lib.network_security_rule import NetworkSecurityRule
@@ -147,6 +145,9 @@ class AgentTestSuite(LisaTestSuite):
         self._location: str  # Azure location (region) where test VMs are located
         self._image: str   # Image used to create the test VMs; it can be empty if LISA chose the size, or when using an existing VM
 
+        self._vm_size: str  # VM size to use when creating scale sets; empty means use the template default
+        self._security_type: str  # ARM security type (e.g. 'ConfidentialVM') to use when deploying scale sets; empty means template default
+
         self._is_vhd: bool  # True when the test VMs were created by LISA from a VHD; this is usually used to validate a new VHD and the test Agent is not installed
 
         # username and public SSH key for the admin account used to connect to the test VMs
@@ -205,6 +206,8 @@ class AgentTestSuite(LisaTestSuite):
         self._subscription_id = variables["subscription_id"]
         self._location = variables["c_location"]
         self._image = variables["c_image"]
+        self._vm_size = variables["c_vm_size"]
+        self._security_type = variables["c_security_type"]
 
         self._is_vhd = variables["c_is_vhd"]
 
@@ -479,6 +482,11 @@ class AgentTestSuite(LisaTestSuite):
             log.info('Installing tools on the test node')
             log.info(ssh_client.run_command("~/bin/install-tools"))
 
+            # Update waagent.conf on test node
+            log.info("Updating conf file on test node: setting 'Debug.EnableExtSignatureValidation' to true")
+            command = "update-waagent-conf Debug.EnableExtSignatureValidation=y"
+            log.info("%s\n%s", command, ssh_client.run_command(command, use_sudo=True))
+
             if self._is_vhd:
                 log.info("Using a VHD; will not install the Test Agent.")
             elif not install_test_agent:
@@ -607,7 +615,7 @@ class AgentTestSuite(LisaTestSuite):
                     # Report the error and raise an exception to let LISA know that the test errored out.
                     unexpected_error = True
                     log.exception("UNEXPECTED ERROR.")
-                    self._report_test_result(
+                    AgentTestResult.report(
                         self._environment_name,
                         "Unexpected Error",
                         TestStatus.FAILED,
@@ -667,31 +675,31 @@ class AgentTestSuite(LisaTestSuite):
                             summary.append(f"[Passed]  {test.name}")
                             log.info("******** [Passed] %s", test.name)
                             self._lisa_log.info("[Passed] %s", test_full_name)
-                            self._report_test_result(suite_full_name, test.name, TestStatus.PASSED, test_start_time)
+                            AgentTestResult.report(suite_full_name, test.name, TestStatus.PASSED, test_start_time)
                         except TestSkipped as e:
                             summary.append(f"[Skipped] {test.name}")
                             log.info("******** [Skipped] %s: %s", test.name, e)
                             self._lisa_log.info("******** [Skipped] %s", test_full_name)
-                            self._report_test_result(suite_full_name, test.name, TestStatus.SKIPPED, test_start_time, message=str(e))
+                            AgentTestResult.report(suite_full_name, test.name, TestStatus.SKIPPED, test_start_time, message=str(e))
                         except AssertionError as e:
                             test_success = False
                             summary.append(f"[Failed]  {test.name}")
                             log.error("******** [Failed] %s: %s", test.name, e)
                             self._lisa_log.error("******** [Failed] %s", test_full_name)
-                            self._report_test_result(suite_full_name, test.name, TestStatus.FAILED, test_start_time, message=str(e))
+                            AgentTestResult.report(suite_full_name, test.name, TestStatus.FAILED, test_start_time, message=str(e))
                         except RemoteTestError as e:
                             test_success = False
                             summary.append(f"[Failed]  {test.name}")
                             message = f"UNEXPECTED ERROR IN [{e.command}] {e.stderr}\n{e.stdout}"
                             log.error("******** [Failed] %s: %s", test.name, message)
                             self._lisa_log.error("******** [Failed] %s", test_full_name)
-                            self._report_test_result(suite_full_name, test.name, TestStatus.FAILED, test_start_time, message=str(message))
+                            AgentTestResult.report(suite_full_name, test.name, TestStatus.FAILED, test_start_time, message=str(message))
                         except:  # pylint: disable=bare-except
                             test_success = False
                             summary.append(f"[Error]   {test.name}")
                             log.exception("UNEXPECTED ERROR IN %s", test.name)
                             self._lisa_log.exception("UNEXPECTED ERROR IN %s", test_full_name)
-                            self._report_test_result(suite_full_name, test.name, TestStatus.FAILED, test_start_time, message="Unexpected error.", add_exception_stack_trace=True)
+                            AgentTestResult.report(suite_full_name, test.name, TestStatus.FAILED, test_start_time, message="Unexpected error.", add_exception_stack_trace=True)
 
                         log.info("")
 
@@ -718,7 +726,7 @@ class AgentTestSuite(LisaTestSuite):
 
                 except Exception as e:
                     suite_success = False
-                    self._report_test_result(suite_full_name, suite_name, TestStatus.FAILED, suite_start_time, message=f"Unhandled exception while executing test suite {suite_name}: {e}", add_exception_stack_trace=True)
+                    AgentTestResult.report(suite_full_name, suite_name, TestStatus.FAILED, suite_start_time, message=f"Unhandled exception while executing test suite {suite_name}: {e}", add_exception_stack_trace=True)
                 finally:
                     if not suite_success:
                         self._mark_log_as_failed()
@@ -768,7 +776,7 @@ class AgentTestSuite(LisaTestSuite):
                     self._mark_log_as_failed()
                     success = False
 
-                    self._report_test_result(
+                    AgentTestResult.report(
                         test_result_name,
                         "CheckAgentLog",
                         TestStatus.FAILED,
@@ -777,7 +785,7 @@ class AgentTestSuite(LisaTestSuite):
             except:    # pylint: disable=bare-except
                 log.exception("Error checking agent log on %s", node_name)
                 success = False
-                self._report_test_result(
+                AgentTestResult.report(
                     test_result_name,
                     "CheckAgentLog",
                     TestStatus.FAILED,
@@ -851,41 +859,6 @@ class AgentTestSuite(LisaTestSuite):
         """
         log.info("MARKER-LOG-WITH-ERRORS")
 
-    @staticmethod
-    def _report_test_result(
-            suite_name: str,
-            test_name: str,
-            status: TestStatus,
-            start_time: datetime.datetime,
-            message: str = "",
-            add_exception_stack_trace: bool = False
-    ) -> None:
-        """
-        Reports a test result to the junit notifier
-        """
-        # The junit notifier requires an initial RUNNING message in order to register the test in its internal cache.
-        msg: TestResultMessage = TestResultMessage()
-        msg.type = "AgentTestResultMessage"
-        msg.id_ = str(uuid.uuid4())
-        msg.status = TestStatus.RUNNING
-        msg.suite_full_name = suite_name
-        msg.suite_name = msg.suite_full_name
-        msg.full_name = test_name
-        msg.name = msg.full_name
-        msg.elapsed = 0
-
-        notifier.notify(msg)
-
-        # Now send the actual result. The notifier pipeline makes a deep copy of the message so it is OK to re-use the
-        # same object and just update a few fields. If using a different object, be sure that the "id_" is the same.
-        msg.status = status
-        msg.message = message
-        if add_exception_stack_trace:
-            msg.stacktrace = traceback.format_exc()
-        msg.elapsed = (datetime.datetime.now(UTC) - start_time).total_seconds()
-
-        notifier.notify(msg)
-
     def _create_test_scale_set(self) -> None:
         """
         Creates a scale set for the test run
@@ -917,7 +890,7 @@ class AgentTestSuite(LisaTestSuite):
         template: Dict[str, Any] = json.loads(read_file(str(self._test_source_directory/"orchestrator"/"templates/vmss.json")))
 
         # Scale sets for some images need to be deployed with 'plan' property
-        plan_required_images = ["almalinux", "kinvolk", "resf"]
+        plan_required_images = ["almalinux", "kinvolk", "ciq"]
         if publisher in plan_required_images:
             resources: List[Dict[str, Any]] = template.get('resources')
             for resource in resources:
@@ -935,7 +908,7 @@ class AgentTestSuite(LisaTestSuite):
         if self._allow_ssh != '':
             network_security_rule.add_allow_ssh_rule(self._allow_ssh)
 
-        return template, {
+        parameters = {
             "username": {"value": self._user},
             "sshPublicKey": {"value": read_file(f"{self._identity_file}.pub")},
             "vmName": {"value": scale_set_name},
@@ -944,6 +917,18 @@ class AgentTestSuite(LisaTestSuite):
             "sku": {"value": sku},
             "version": {"value": version}
         }
+
+        # If the image definition (in images.yml) or the runbook specifies a VM size, use it; otherwise fall back
+        # to the template default.
+        if self._vm_size != '':
+            parameters["vmSize"] = {"value": self._vm_size}
+
+        # If the image definition (in images.yml) declares a security type (e.g. 'ConfidentialVM'), set it on the
+        # scale set; otherwise the template default ('Standard') is used.
+        if self._security_type != '':
+            parameters["securityType"] = {"value": self._security_type}
+
+        return template, parameters
 
 
 

@@ -20,6 +20,8 @@ import re
 
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.ga.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN
+from azurelinuxagent.common.future import ustr
 
 
 def _get_os_util():
@@ -131,3 +133,42 @@ def is_unit_loaded(unit_name):
         return value.lower() == "loaded"
     except shellutil.CommandError:
         return False
+
+
+def is_systemd_run_failure(unit_name, stderr):
+    """
+    Determines if stderr from a systemd-run command indicates a systemd-run infrastructure failure
+    (as opposed to a failure of the command being executed).
+    
+    This method distinguishes between two types of failures:
+    1. systemd-run infrastructure failures: systemd-run itself failed to execute the command
+       (e.g., D-Bus errors, systemd not available, unit configuration issues)
+    2. Command execution failures: systemd-run successfully executed the command, but the command
+       itself failed or produced errors
+    
+    The determination is made by examining the stderr output:
+    - If stderr contains "Unit {unit_name} not found", it indicates systemd-run couldn't find/create
+      the unit, which is a systemd-run failure
+    - If stderr does NOT contain the unit_name at all, it suggests systemd-run failed before even
+      attempting to run the command (e.g., D-Bus connection failures, systemd not running), which
+      is a systemd-run failure
+    - If stderr contains the unit_name (but not the "not found" message), it means systemd-run
+      successfully started the command in the unit, so any errors are from the command itself,
+      not from systemd-run
+    
+    This distinction is important because:
+    - systemd-run failures should trigger fallback mechanisms (e.g., disable cgroups, run command directly)
+    - Command failures should be propagated to the caller for proper error handling
+
+    :param unit_name: The name of the systemd unit/scope that was used with systemd-run
+    :param stderr: Error output from the systemd-run command, expected to be a file-like object or a string.
+    :return: True if this is a systemd-run failure, False if it's a command execution failure
+    """
+    if isinstance(stderr, ustr):
+        stderr_str = stderr
+    else:
+        stderr.seek(0)
+        stderr_str = ustr(stderr.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
+
+    unit_not_found = "Unit {0} not found.".format(unit_name)
+    return unit_not_found in stderr_str or unit_name not in stderr_str

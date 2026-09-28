@@ -16,8 +16,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from assertpy import assert_that
-
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
@@ -25,25 +23,14 @@ from tests_e2e.tests.lib.ssh_client import SshClient
 
 class CheckFallbackToHGAP(AgentVmTest):
     """
-    Check the agent log to verify that the default channel was changed to HostGAPlugin before executing any extensions.
+    Check the agent log to verify that the default channel was changed to HostGAPlugin after 1 attempt on the Direct
+    channel and before executing any extensions.
     """
     def run(self):
-        # 2023-04-14T14:49:43.005530Z INFO ExtHandler ExtHandler Default channel changed to HostGAPlugin channel.
-        # 2023-04-14T14:49:44.625061Z INFO ExtHandler [Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.25.2] Target handler state: enabled [incarnation_2]
-
         ssh_client: SshClient = self._context.create_ssh_client()
-        log.info("Parsing agent log on the test VM")
-        output = ssh_client.run_command("grep -E 'INFO ExtHandler.*(Default channel changed to HostGAPlugin)|(Target handler state:)' /var/log/waagent.log | head").split('\n')
-        log.info("Output (first 10 lines) from the agent log:\n\t\t%s", '\n\t\t'.join(output))
-
-        assert_that(len(output) > 1).is_true().described_as(
-            "The agent log should contain multiple matching records"
-        )
-        assert_that(output[0]).contains("Default channel changed to HostGAPlugin").described_as(
-            "The agent log should contain a record indicating that the default channel was changed to HostGAPlugin before executing any extensions"
-        )
-
-        log.info("The agent log indicates that the default channel was changed to HostGAPlugin before executing any extensions")
+        log.info("Checking agent log on the test VM to verify download channel fallback behavior...")
+        self._run_remote_test(ssh_client, "no_outbound_connections-verify_download_channel_fallback.py")
+        log.info("Successfully verified download channel fallback behavior in the agent log.")
 
 
 if __name__ == "__main__":
