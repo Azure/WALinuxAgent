@@ -117,7 +117,7 @@ fi
 if [[ "$USER" != "root" ]]; then
   echo ""
   echo "checking tcp traffic to wireserver port 53 for non-root user ($USER)"
-  echo -n 2>/dev/null < /dev/tcp/$WIRE_IP/53 && echo 0 || echo 1  # Establish network connection for port 53
+  echo -n 2>/dev/null < /dev/tcp/$WIRE_IP/53  # Establish network connection for port 53
   TCP_EC=$?
   echo "TCP 53 Connection ExitCode: $TCP_EC"
 fi

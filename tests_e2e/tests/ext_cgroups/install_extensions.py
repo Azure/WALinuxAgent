@@ -17,10 +17,9 @@
 # limitations under the License.
 #
 from pathlib import Path
-from typing import List
 
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
-from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIdentifier, VmExtensionIds
+from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
@@ -34,46 +33,19 @@ class InstallExtensions:
         self._context = context
         self._ssh_client = self._context.create_ssh_client()
 
-    def run(self) -> List[VmExtensionIdentifier]:
+    def run(self) -> None:
         """
-        Installs the extensions used to validate cgroups and returns the list of extensions
-        that were actually installed. Callers can check membership (e.g. AMA) to decide
-        which validations to run.
+        Installs the extensions used to validate cgroups
         """
-        installed_extensions: List[VmExtensionIdentifier] = []
 
         # Install the GATest extension to test service cgroups
         self._install_gatest_extension()
-        installed_extensions.append(VmExtensionIds.GATestExtension)
-
-        # Install the Azure Monitor Agent to test long running process cgroup.
-        # AMA is not supported on all distros (e.g. it dropped centos_82 support in v1.43),
-        # so skip the install where it would fail.
-        distro = self._ssh_client.get_distro()
-        if distro != "centos_82":
-            self._install_ama()
-            installed_extensions.append(VmExtensionIds.AzureMonitorLinuxAgent)
-        else:
-            log.info(
-                "Skipping install of %s: not supported on distro '%s'",
-                VmExtensionIds.AzureMonitorLinuxAgent, distro)
 
         # Install the VM Access extension to test sample extension
         self._install_vmaccess()
-        installed_extensions.append(VmExtensionIds.VmAccess)
 
-        # Install the CSE extension to test extension cgroup
+        # Install the CSE extension to test extension cgroup.
         self._install_cse()
-        installed_extensions.append(VmExtensionIds.CustomScript)
-
-        return installed_extensions
-
-    def _install_ama(self):
-        ama_extension = VirtualMachineExtensionClient(
-            self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent)
-        log.info("Installing %s", ama_extension)
-        ama_extension.enable()
-        ama_extension.assert_instance_view()
 
     def _install_vmaccess(self):
         # fetch the public key
@@ -99,13 +71,19 @@ class InstallExtensions:
         gatest_extension.enable()
         gatest_extension.assert_instance_view()
 
-
     def _install_cse(self):
-        # Use custom script to output the cgroups assigned to it at runtime and save to /var/lib/waagent/tmp/custom_script_check.
-        script_contents = """
-mkdir /var/lib/waagent/tmp
-cp /proc/$$/cgroup /var/lib/waagent/tmp/custom_script_check
-"""
+        # Custom script that:
+        #   1. Saves the cgroup info of the CSE process itself (for CSE cgroup validation).
+        #   2. Spawns a long-running dummy process (`sleep`) that survives after CSE exits.
+        #   3. Writes the dummy process PID to /var/lib/waagent/tmp/dummy_proc.pid.
+        # CSE exits quickly with success.
+        command = (
+            "mkdir -p /var/lib/waagent/tmp; "
+            "cp /proc/$$/cgroup /var/lib/waagent/tmp/custom_script_check; "
+            "nohup sh -c "
+            "'echo $$ > /var/lib/waagent/tmp/dummy_proc.pid; exec sleep 100000' "
+            "</dev/null >/dev/null 2>&1 &"
+        )
         custom_script_2_0 = VirtualMachineExtensionClient(
             self._context.vm,
             VmExtensionIds.CustomScript)
@@ -114,7 +92,7 @@ cp /proc/$$/cgroup /var/lib/waagent/tmp/custom_script_check
         custom_script_2_0.enable(
             settings={},
             protected_settings={
-                'commandToExecute': f"echo \'{script_contents}\' | bash"
+                'commandToExecute': command
             }
         )
         custom_script_2_0.assert_instance_view()

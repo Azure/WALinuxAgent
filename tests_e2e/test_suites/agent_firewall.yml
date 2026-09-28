@@ -12,4 +12,7 @@ tests:
 images:
   - "endorsed"
   - "endorsed-arm64"
+#  - "rocky_10"  # TODO: Rocky 10 does not ship the required kernel modules for iptables or nft by default. Once the distro fixes the dependency issue, this image needs to be tested
 owns_vm: true  # This vm cannot be shared with other tests because it modifies the firewall rules and agent status.
+skip_on_images:
+  - "alma_10"   # TODO: Alma 10 does not ship the required kernel modules for iptables or nft by default. Once the distro fixes the dependency issue, this image needs to be tested

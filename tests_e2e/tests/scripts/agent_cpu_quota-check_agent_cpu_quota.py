@@ -29,10 +29,19 @@ from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import shellutil
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.cgroup_helpers import check_agent_quota_disabled, \
-    get_agent_cpu_quota
+    get_agent_cpu_quota, verify_controllers_available
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import run_remote_test
 from tests_e2e.tests.lib.retry import retry_if_false
+
+
+def verify_if_cpu_controller_is_enabled():
+    found: bool = retry_if_false(lambda: verify_controllers_available(["cpu"]), delay=120, attempts=7)
+    if not found:
+        # Failing the test to track it in daily runs for now
+        raise Exception("The distro does not have CPU controller enabled.")
+
+    log.info("Verified cpu controller mounted on the system")
 
 
 def prepare_agent():
@@ -79,6 +88,17 @@ def prepare_agent():
             file_.seek(0)
             raise Exception("Could not find ExecStart in {0}\n:{1}".format(service_file, file_.read()))
     agent_python = exec_start.split()[0]
+    # On some distros (notably SUSE), the shipped ExecStart is:
+    #     ExecStart=/usr/sbin/waagent -daemon
+    # where /usr/sbin/waagent is a shell-script wrapper, NOT a Python interpreter.
+    # If we prepend that path in front of start_service.py, the shell wrapper will
+    # receive start_service.py as an argument and never execute it as Python, so the
+    # dummy CPU-consuming process is never spawned and the throttling check fails.
+    # Detect that case and fall back to the system's python3.
+    if not os.path.basename(agent_python).startswith("python"):
+        log.info("ExecStart does not begin with a python interpreter (got '%s'); "
+                 "falling back to /usr/bin/python3 to wrap the service.", agent_python)
+        agent_python = "/usr/bin/python3"
     current_directory = os.path.dirname(os.path.abspath(__file__))
     start_service_script = os.path.join(current_directory, "agent_cpu_quota-start_service.py")
     os.makedirs(systemd.get_agent_drop_in_path(), exist_ok=True)
@@ -172,6 +192,7 @@ def verify_throttling_time_check_on_agent_cgroups():
 
 
 def main():
+    verify_if_cpu_controller_is_enabled()
     prepare_agent()
     verify_agent_reported_metrics()
     verify_throttling_time_check_on_agent_cgroups()

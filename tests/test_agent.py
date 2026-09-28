@@ -24,9 +24,11 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.ga import logcollector, cgroupconfigurator
 from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.ga.cgroupapi import InvalidCgroupMountpointException, CgroupV1, CgroupV2
 from azurelinuxagent.ga.collect_logs import CollectLogsHandler
 from azurelinuxagent.ga.cgroupcontroller import AGENT_LOG_COLLECTOR
+from azurelinuxagent.ga.firewall_manager import IpTables, NfTables
 from tests.lib.mock_cgroup_environment import mock_cgroup_v1_environment, mock_cgroup_v2_environment
 from tests.lib.tools import AgentTestCase, data_dir, Mock, patch
 
@@ -36,16 +38,19 @@ AutoUpdate.GAFamily = Prod
 AutoUpdate.UpdateToLatestVersion = True
 Autoupdate.Frequency = 3600
 DVD.MountPoint = /mnt/cdrom/secure
+Debug.AgentAnonMemoryQuota = 314572800
 Debug.AgentCpuQuota = 50
 Debug.AgentCpuThrottledTimeThreshold = 120
-Debug.AgentMemoryQuota = 31457280
+Debug.AgentMemoryConsecutiveBreachCount = 3
+Debug.AgentMemoryMaxRestartsPerVersion = 5
+Debug.AgentMemoryMinRestartIntervalSeconds = 259200
 Debug.AutoUpdateHotfixFrequency = 14400
 Debug.AutoUpdateNormalFrequency = 86400
 Debug.CgroupCheckPeriod = 300
 Debug.CgroupDisableOnProcessCheckFailure = True
 Debug.CgroupDisableOnQuotaCheckFailure = True
 Debug.CgroupLogMetrics = False
-Debug.EnableAgentMemoryUsageCheck = False
+Debug.EnableAgentMemoryUsageCheck = True
 Debug.EnableAgentSignatureValidation = False
 Debug.EnableCgroupV2ResourceLimiting = False
 Debug.EnableExtSignatureValidation = True
@@ -507,6 +512,44 @@ class TestAgent(AgentTestCase):
         cmd, _, _, _, _, _, wire_server_address = parse_args(["-{0}".format(AgentCommands.Help)])
         self.assertEqual(cmd, AgentCommands.Help)
         self.assertEqual(None, wire_server_address)
+
+    def test_setup_firewall_should_return_early_when_firewalld_is_enabled(self):
+        firewall_manager = Mock(spec=IpTables)
+
+        with patch("azurelinuxagent.agent.FirewallManager.create", return_value=firewall_manager):
+            with patch("azurelinuxagent.agent.run_command", return_value="enabled"):
+                with patch("azurelinuxagent.agent.threading.current_thread"):
+                    with self.assertRaises(SystemExit) as context:
+                        Agent.setup_firewall("168.63.129.16")
+
+        self.assertEqual(0, context.exception.code)
+        firewall_manager.setup.assert_not_called()
+
+    def test_setup_firewall_should_not_return_early_when_firewalld_is_not_enabled(self):
+        firewall_manager = Mock(spec=IpTables)
+        firewalld_not_enabled = CommandError(
+            command=["systemctl", "is-enabled", "--type=service", "firewalld.service"],
+            return_code=1,
+            stdout="disabled",
+            stderr="")
+
+        with patch("azurelinuxagent.agent.FirewallManager.create", return_value=firewall_manager):
+            with patch("azurelinuxagent.agent.run_command", side_effect=firewalld_not_enabled):
+                with patch("azurelinuxagent.agent.threading.current_thread"):
+                    Agent.setup_firewall("168.63.129.16")
+
+        firewall_manager.setup.assert_called_once_with()
+
+    def test_setup_firewall_should_never_return_early_if_nftables_is_firewall_manager(self):
+        firewall_manager = Mock(spec=NfTables)
+
+        with patch("azurelinuxagent.agent.FirewallManager.create", return_value=firewall_manager):
+            with patch("azurelinuxagent.agent.run_command") as run_command:
+                with patch("azurelinuxagent.agent.threading.current_thread"):
+                    Agent.setup_firewall("168.63.129.16")
+
+        run_command.assert_not_called()
+        firewall_manager.setup.assert_called_once_with()
 
     def test_it_should_ignore_empty_arguments(self):
 

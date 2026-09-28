@@ -144,7 +144,7 @@ __SWITCH_OPTIONS__ = {
     "Debug.CgroupLogMetrics": False,
     "Debug.CgroupDisableOnProcessCheckFailure": True,
     "Debug.CgroupDisableOnQuotaCheckFailure": True,
-    "Debug.EnableAgentMemoryUsageCheck": False,
+    "Debug.EnableAgentMemoryUsageCheck": True,
     "Debug.EnableAgentSignatureValidation": False,
     "Debug.EnableFastTrack": True,
     "Debug.EnableGAVersioning": True,
@@ -206,7 +206,10 @@ __INTEGER_OPTIONS__ = {
     "Debug.CgroupCheckPeriod": 300,
     "Debug.AgentCpuQuota": 50,
     "Debug.AgentCpuThrottledTimeThreshold": 120,
-    "Debug.AgentMemoryQuota": 30 * 1024 ** 2,
+    "Debug.AgentAnonMemoryQuota": 300 * 1024 ** 2,
+    "Debug.AgentMemoryConsecutiveBreachCount": 3,
+    "Debug.AgentMemoryMaxRestartsPerVersion": 5,
+    "Debug.AgentMemoryMinRestartIntervalSeconds": 3 * 24 * 60 * 60,
     "Debug.EtpCollectionPeriod": 300,
     "Debug.AutoUpdateHotfixFrequency": 14400,
     "Debug.AutoUpdateNormalFrequency": 86400,
@@ -617,13 +620,42 @@ def get_agent_cpu_quota(conf=__conf__):
     return conf.get_int("Debug.AgentCpuQuota", 50)
 
 
-def get_agent_memory_quota(conf=__conf__):
+def get_agent_anon_memory_quota(conf=__conf__):
     """
-    Memory quota for the agent in Bytes defined as soft limit
+    Anon Memory quota for the agent in Bytes
 
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_int("Debug.AgentMemoryQuota", 300 * 1024 ** 2)
+    return conf.get_int("Debug.AgentAnonMemoryQuota", 300 * 1024 ** 2)
+
+
+def get_agent_memory_consecutive_breach_count(conf=__conf__):
+    """
+    Number of consecutive anon-memory breaches (each observed at the end of a goal state
+    processing cycle) required before the agent will attempt a self-restart mitigation.
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.AgentMemoryConsecutiveBreachCount", 3)
+
+
+def get_agent_memory_max_restarts_per_version(conf=__conf__):
+    """
+    Maximum number of self-monitoring restarts allowed for a given agent version.
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.AgentMemoryMaxRestartsPerVersion", 5)
+
+
+def get_agent_memory_min_restart_interval_seconds(conf=__conf__):
+    """
+    Minimum interval (in seconds) between two self-monitoring restarts for the same
+    agent version. Defaults to 3 days.
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.AgentMemoryMinRestartIntervalSeconds", 3 * 24 * 60 * 60)
 
 
 def get_agent_cpu_throttled_time_threshold(conf=__conf__):
@@ -641,7 +673,7 @@ def get_enable_agent_memory_usage_check(conf=__conf__):
 
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.EnableAgentMemoryUsageCheck", False)
+    return conf.get_switch("Debug.EnableAgentMemoryUsageCheck", True)
 
 
 def get_enable_fast_track(conf=__conf__):

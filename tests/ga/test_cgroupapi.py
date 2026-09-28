@@ -54,7 +54,7 @@ class _MockedFileSystemTestCase(AgentTestCase):
 
 
 class CGroupUtilTestCase(AgentTestCase):
-    def test_cgroups_should_be_supported_only_on_ubuntu16plus_centos8_redhat8_rhel9_azurelinux3_chainguard(self):
+    def test_cgroups_should_be_supported_only_on_ubuntu16plus_centos8_redhat8_rhel9plus_azurelinux3plus_oracle95plus_sles156plus_chainguard(self):
         test_cases = [
             (['ubuntu', '16.04', 'xenial'], True),
             (['ubuntu', '16.10', 'yakkety'], True),
@@ -80,12 +80,21 @@ class CGroupUtilTestCase(AgentTestCase):
             (['debian', '9.1', ''], False),
             (['rhel', '9.5', "source"], True),
             (['rhel', '9.0', "core"], True),
-            (['rhel', '10.9', "core"], False),
+            (['rhel', '10.9', "core"], True),
             (['mariner', '1.0', ''], False),
             (['mariner', '2.2', ''], False),
             (['azurelinux', '3.0', ''], True),
             (['azurelinux', '3.10', ''], True),
-            (['chainguard', '20230214', ''], True)
+            (['azurelinux', '4.5', ''], True),
+            (['chainguard', '20230214', ''], True),
+            (['sles', '12', "basic"], False),
+            (['sles', '15.5', "basic"], False),
+            (['sles', '15.6', "basic"], True),
+            (['sles', '16.0', "basic"], True),
+            (['oracle', '8.5', "oracle-core"], False),
+            (['oracle', '9.0', "oracle-core"], False),
+            (['oracle', '9.5', "oracle-core"], True),
+            (['oracle', '10.0', "oracle-core"], True),
         ]
 
         for (distro, supported) in test_cases:

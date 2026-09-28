@@ -62,8 +62,10 @@ class AgentMemoryExceededException(AgentError):
     """
     When Agent memory limit reached.
     """
-    def __init__(self, msg=None, inner=None):
+    def __init__(self, msg=None, inner=None, anon_bytes=0, limit_bytes=0):
         super(AgentMemoryExceededException, self).__init__(msg, inner)
+        self.anon_bytes = anon_bytes
+        self.limit_bytes = limit_bytes
 
 
 class AgentNetworkError(AgentError):

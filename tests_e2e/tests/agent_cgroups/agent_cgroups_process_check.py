@@ -42,29 +42,34 @@ class AgentCgroupsProcessCheck(AgentVmTest):
         3. Restart the ext_handler process to re-initialize the cgroups setup
         4. Verify that agent detects extension processes and will not enable the cgroups
         """
-        distro = self._ssh_client.get_distro()
-        # AMA is required to trigger the "unexpected process in agent cgroup" scenario validated below.
-        # Skip on distros where AMA is not available:
-        #   - ubuntu_2510: AMA is not yet supported
-        #   - centos_82:   AMA no longer supports this distro since version 1.43
-        if distro in ("ubuntu_2510", "centos_82"):
-            log.info("Skipping test on %s as AMA extension is not supported to test this scenario", distro)
-            return
-
         log.info("=====Validating agent cgroups process check")
         self._run_remote_test(self._ssh_client, "agent_cgroups_process_check-unknown_process_check.py", use_sudo=True)
 
-        self._install_ama_extension()
+        # Install CSE with a command that completes quickly but spawns a detached long-running dummy process,
+        # which stays alive after CSE exits and lands in the agent cgroup (since the first
+        # phase of this test disabled cgroups). On ext_handler restart, the agent should
+        # detect this unexpected process and refuse to re-enable cgroups.
+        self._install_cse_with_dummy_process()
 
         log.info("=====Validating agent cgroups not enabled")
         self._run_remote_test(self._ssh_client, "agent_cgroups_process_check-cgroups_not_enabled.py", use_sudo=True)
 
-    def _install_ama_extension(self):
-        ama_extension = VirtualMachineExtensionClient(
-            self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent)
-        log.info("Installing %s", ama_extension)
-        ama_extension.enable()
-        ama_extension.assert_instance_view()
+    def _install_cse_with_dummy_process(self):
+        command = (
+            "mkdir -p /var/lib/waagent/tmp && "
+            "nohup sh -c "
+            "'echo $$ > /var/lib/waagent/tmp/dummy_proc.pid; exec sleep 100000' "
+            "</dev/null >/dev/null 2>&1 &"
+        )
+        cse = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript)
+        log.info("Installing %s", cse)
+        cse.enable(
+            settings={},
+            protected_settings={
+                'commandToExecute': command
+            }
+        )
+        cse.assert_instance_view()
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
 
