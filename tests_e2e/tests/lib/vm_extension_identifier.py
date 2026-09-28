@@ -33,7 +33,7 @@ class VmExtensionIdentifier(object):
         self.version: str = version
 
     unsupported_distros: Dict[str, List[str]] = {
-        "Microsoft.OSTCExtensions.VMAccessForLinux": ["flatcar"],
+        "Microsoft.OSTCExtensions.VMAccessForLinux": ["flatcar", "sles_16"],
         "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent": ["flatcar", "mariner_1", "ubuntu_2404", "sles_15", "rhel_10", "almalinux_10", "oracle_10"],
         "Microsoft.GuestConfiguration.ConfigurationforLinux": ["flatcar"],
         # TODO: Remove azurelinux_4 once AzureSecurityLinuxAgent supports Azure Linux 4.

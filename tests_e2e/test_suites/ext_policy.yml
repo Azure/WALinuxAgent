@@ -15,6 +15,7 @@ skip_on_images:
   # The test depends on Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, which does not support these distros since version 1.43
   - "centos_79"
   - "centos_82"
+  - "suse_16" # TODO: Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent extension does not support Suse 16; skip this image until the extension is updated to support Suse 16
   # TODO: AzureMonitorLinuxAgent does not support Ubuntu 26.04 in the sovereign clouds. Remove these exclusions when the extension is updated.
   - "AzureChinaCloud:ubuntu_2604"
   - "AzureChinaCloud:ubuntu_2604_minimal"

@@ -28,6 +28,7 @@ image-sets:
       - "rocky_9"
       - "suse_12"
       - "suse_15"
+      - "suse_16"
       - "ubuntu_1604"
       - "ubuntu_1804"
       - "ubuntu_2004"
@@ -66,6 +67,7 @@ image-sets:
       - "rhel_10_0"
       - "rhel_10"
       - "suse_15"
+      - "suse_16"
       - "ubuntu_1604"
       - "ubuntu_1804"
       - "ubuntu_2004"
@@ -99,6 +101,7 @@ image-sets:
       - "rhel_10_0"
       - "rhel_10"
       - "suse_15"
+      - "suse_16"
       - "ubuntu_1604"
       - "ubuntu_1804"
       - "ubuntu_2004"
@@ -372,6 +375,7 @@ images:
       locations:
          AzureChinaCloud: []
    suse_15: "SUSE:sles-15-sp6-basic:gen2:latest"
+   suse_16: "SUSE:sles-16-0-x86-64:gen2:latest"
    ubuntu_1604: "Canonical:UbuntuServer:16.04-LTS:latest"
    ubuntu_1804: "Canonical:UbuntuServer:18.04-LTS:latest"
    ubuntu_2004: "Canonical:0001-com-ubuntu-server-focal:20_04-lts:latest"
