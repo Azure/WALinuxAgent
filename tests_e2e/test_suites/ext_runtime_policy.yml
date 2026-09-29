@@ -11,6 +11,7 @@ locations: "AzureCloud:eastus2euap"   # Test CSE 2.8.0 is only available in cana
 skip_on_images:
   - "centos_79"           # TODO: Test CSE 2.8.0 install fails due to golang issues on CentOS 7.9. Remove this once the issue is resolved.
   - "rhel_79"             # TODO: Test CSE 2.8.0 install fails due to golang issues on RHEL 7.9. Remove this once the issue is resolved.
+  - "ubuntu_1604"         # TODO: Test CSE 2.8.0 cannot load libcrypto.so on Ubuntu 16.04. Remove this once the extension supports this image.
 skip_on_clouds:
   - "AzureChinaCloud"     # TODO: Remove the skip once the extension is published to China cloud
   - "AzureUSGovernment"   # TODO: Remove the skip once the extension is published to Gov cloud
