@@ -6,8 +6,8 @@ tests:
   - "ext_runtime_policy/ext_runtime_policy.py"
 images:
   - "random(endorsed,10)"
-#  - "cvm-endorsed"       # TODO: We only have capacity for the CVM images in eastus2euap, but Test CSE 2.8.0 is only available in centraluseuap. Move this test to eastus2euap once it is published to the second canary region
-locations: "AzureCloud:centraluseuap"   # Test CSE 2.8.0 is currently available only in centraluseuap.
+  - "cvm-endorsed"
+locations: "AzureCloud:eastus2euap"   # Test CSE 2.8.0 is only available in canary regions  # TODO: Once the prod CSE supports runtime policy, we can remove the canary region restriction
 skip_on_images:
   - "centos_79"           # TODO: Test CSE 2.8.0 install fails due to golang issues on CentOS 7.9. Remove this once the issue is resolved.
   - "rhel_79"             # TODO: Test CSE 2.8.0 install fails due to golang issues on RHEL 7.9. Remove this once the issue is resolved.
