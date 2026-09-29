@@ -40,7 +40,15 @@ from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineE
 class VmAccessBvt(AgentVmTest):
     def run(self):
         ssh_client: SshClient = self._context.create_ssh_client()
-        if not VmExtensionIds.VmAccess.supports_distro(ssh_client.run_command("get_distro.py").rstrip()):
+        distro = ssh_client.run_command("get_distro.py").rstrip()
+
+        # TODO: VMAccess 1.5.25 fixes Ubuntu 26.04 support and is already deployed in Public and Fairfax. Remove this
+        # China-specific skip after that version is deployed there, which is scheduled by the end of September 2026.
+        # This skip cannot be defined in the test suite YAML because we don't want to skip the other tests in the suite
+        if self._context.vm.cloud == "AzureChinaCloud" and "ubuntu_2604" in distro:
+            raise TestSkipped("Currently VMAccess is not supported on Ubuntu 26.04 in Azure China Cloud")
+
+        if not VmExtensionIds.VmAccess.supports_distro(distro):
             raise TestSkipped("Currently VMAccess is not supported on this distro")
 
         # Try to use a unique username for each test run (note that we truncate to 32 chars to

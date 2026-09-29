@@ -16,17 +16,16 @@
 # limitations under the License.
 #
 import datetime
-import os
 import re
 import sys
 
 from assertpy import fail
 
 from azurelinuxagent.common.future import UTC
-from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import shellutil
 from tests_e2e.tests.lib.agent_log import AgentLog
-from tests_e2e.tests.lib.cgroup_helpers import check_log_message, get_agent_memory_quota, using_cgroupv2
+from tests_e2e.tests.lib.cgroup_helpers import check_log_message, get_agent_memory_quota, using_cgroupv2, \
+    skip_if_memory_controller_is_not_enabled, cleanup_cgroups_test_setup
 
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import run_remote_test
@@ -36,7 +35,7 @@ from tests_e2e.tests.lib.retry import retry_if_false
 def skip_if_distro_not_supports_memory_quota():
     if not using_cgroupv2():
         log.info("Skipping  memory quota test as the distro is not using cgroupv2")
-        cleanup_test_setup()
+        cleanup_cgroups_test_setup()
         sys.exit(0)
 
 
@@ -144,29 +143,14 @@ def verify_memory_throttling_check_on_agent_cgroups():
     log.info("Successfully verified agent reported zero memory throttling metrics")
 
 
-def cleanup_test_setup():
-    log.info("Cleaning up test setup")
-    drop_in_file = os.path.join(systemd.get_agent_drop_in_path(), "99-ExecStart.conf")
-    if os.path.exists(drop_in_file):
-        log.info("Removing %s...", drop_in_file)
-        os.remove(drop_in_file)
-        shellutil.run_command(["systemctl", "daemon-reload"])
-
-    check_time = datetime.datetime.now(UTC)
-    shellutil.run_command(["agent-service", "restart"])
-
-    found: bool = retry_if_false(lambda: check_log_message(" Agent cgroups enabled: True", after_timestamp=check_time))
-    if not found:
-        fail("Agent cgroups not enabled yet")
-
-
 def main():
     skip_if_distro_not_supports_memory_quota()
+    skip_if_memory_controller_is_not_enabled()
     prepare_agent()
     verify_agent_has_no_memory_quota_set()
     verify_agent_reported_memory_metrics()
     verify_memory_throttling_check_on_agent_cgroups()
-    cleanup_test_setup()
+    cleanup_cgroups_test_setup()
 
 
 run_remote_test(main)

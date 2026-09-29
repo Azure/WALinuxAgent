@@ -187,7 +187,7 @@ class MemoryControllerV2(_MemoryController):
                         time_spent = 300 * (percentage / 100)
                         return round(time_spent,  2)
         except (IOError, OSError) as e:
-            if e.errno != errno.ENOENT:  # File is not present in some distros, so we do not raise in that case
+            if e.errno not in (errno.ENOENT, errno.EOPNOTSUPP):  # File is not present in some distros or not supported, so we do not raise in that case
                 raise CGroupsException("Failed to read memory.pressure: {0}".format(ustr(e)))
         except Exception as e:
             raise CGroupsException("Failed to read memory.pressure: {0}".format(ustr(e)))

@@ -780,17 +780,27 @@ class CGroupConfigurator(object):
                         raise CGroupsException("The agent has been throttled for {0} seconds".format(metric.value))
 
         def check_agent_memory_usage(self):
+            """
+            Checks the agent's current anonymous memory usage against the configured
+            quota (Debug.AgentAnonMemoryQuota). Raises AgentMemoryExceededException if the
+            anon usage exceeds the quota. The anon counter is used (instead of total
+            memory) because it better reflects a real leak vs. reclaimable cache/file
+            pages.
+            """
             if self.enabled() and self._agent_memory_metrics is not None:
                 metrics = self._agent_memory_metrics.get_tracked_metrics()
-                current_usage = 0
+                anon_usage = 0
                 for metric in metrics:
-                    if metric.counter == MetricsCounter.TOTAL_MEM_USAGE:
-                        current_usage += metric.value
-                    elif metric.counter == MetricsCounter.SWAP_MEM_USAGE:
-                        current_usage += metric.value
+                    if metric.counter == MetricsCounter.ANON_MEM_USAGE:
+                        anon_usage = metric.value
+                        break
 
-                if current_usage > conf.get_agent_memory_quota():
-                    raise AgentMemoryExceededException("The agent memory limit {0} bytes exceeded. The current reported usage is {1} bytes.".format(conf.get_agent_memory_quota(), current_usage))
+                if anon_usage > conf.get_agent_anon_memory_quota():
+                    raise AgentMemoryExceededException(
+                        "The agent anon memory limit {0} bytes exceeded. The current reported anon usage is {1} bytes.".format(
+                            conf.get_agent_anon_memory_quota(), anon_usage),
+                        anon_bytes=anon_usage,
+                        limit_bytes=conf.get_agent_anon_memory_quota())
 
         @staticmethod
         def _get_parent(pid):

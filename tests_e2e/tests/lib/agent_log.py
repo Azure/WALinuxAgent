@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, AnyStr, Dict, Iterable, List, Match
 
 from azurelinuxagent.common.future import UTC, datetime_min_utc
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
 
 
@@ -160,7 +161,7 @@ class AgentLog(object):
             # 2025-03-07T09:14:37.792300Z INFO ExtHandler ExtHandler [CGW] cpu controller is not enabled; will not track
             {
                 'message': r"\[CGW\]\s*(cpu|memory) controller is not enabled",
-                'if': lambda r: (DISTRO_NAME == 'ubuntu' and DISTRO_VERSION >= '22.00') or (DISTRO_NAME == 'azurelinux' and DISTRO_VERSION >= '3.0') or (DISTRO_NAME == 'rhel' and DISTRO_VERSION >= '9.0')
+                'if': lambda r: (DISTRO_NAME == 'ubuntu' and FlexibleVersion(DISTRO_VERSION) >= FlexibleVersion('22.00')) or (DISTRO_NAME == 'azurelinux' and FlexibleVersion(DISTRO_VERSION) >= FlexibleVersion('3.0')) or (DISTRO_NAME == 'rhel' and FlexibleVersion(DISTRO_VERSION) >= FlexibleVersion('9.0')) or (DISTRO_NAME == 'oracle' and FlexibleVersion(DISTRO_VERSION) >= FlexibleVersion('9.5')) or (DISTRO_NAME == 'sles' and FlexibleVersion(DISTRO_VERSION) >= FlexibleVersion('15.6'))
             },
             #
             #
@@ -331,6 +332,20 @@ class AgentLog(object):
                 'message': r"Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent.*op=Install.*Non-zero exit code: 56,",
             },
             #
+            # AMA uninstall occasionally times out on Oracle/RHEL 8.10.
+            #
+            # 2026-09-13T05:29:40.941381Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, op=UnInstall, message=[ExtensionError] Timeout(300): /var/lib/waagent/Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.45.0/./shim.sh -uninstall
+            # 		[stdout]
+            #
+            #
+            # 		[stderr]
+            # 		, duration=0
+            #
+            {
+                'message': r"name=Microsoft\.Azure\.Monitor\.AzureMonitorLinuxAgent, op=UnInstall, message=\[ExtensionError\] Timeout\(300\)(;CPUThrottledTime\([0-9.]+secs\))?: /var/lib/waagent/Microsoft\.Azure\.Monitor\.AzureMonitorLinuxAgent-[^/]+/\./shim\.sh -uninstall",
+                'if': lambda r: r.level == "ERROR" and DISTRO_NAME in ["oracle", "rhel", "redhat"] and FlexibleVersion(DISTRO_VERSION) == FlexibleVersion("8.10")
+            },
+            #
             # Ignore LogCollector failure to fetch vmSettings if it recovers
             #
             #     2023-08-27T08:13:42.520557Z WARNING MainThread LogCollector Fetch failed: [HttpError] [HTTP Failed] GET https://md-hdd-tkst3125n3x0.blob.core.chinacloudapi.cn/$system/lisa-WALinuxAgent-20230827-080144-029-e0-n0.cb9a406f-584b-4702-98bb-41a3ad5e334f.vmSettings -- IOError timed out -- 6 attempts made
@@ -368,6 +383,32 @@ class AgentLog(object):
                            "|"
                            r"The permanent firewall rules for Azure Fabric are not setup correctly \(The following rules are missing: \['ACCEPT DNS'\]\).* will reset them.",
                 'if': lambda r: r.level == "WARNING"
+            },
+            #
+            # AlmaLinux 10 does not include the xt_owner and xt_conntrack kernel modules or the nft command. The agent
+            # cannot create the UID-based allow rule or conntrack-based drop rule until the image provides a usable
+            # firewall backend. Ignore these known firewall errors when checking the agent log for other test suites.
+            # TODO: Remove this ignore rule once the distro resolves the dependency issue
+            #
+            {
+                'message': r"(Required iptables kernel modules are unresolved \(xt_owner, xt_conntrack\) and nft is not available, continuing with iptables as best effort)"
+                           "|"
+                           r"((Error initializing firewall|An error occurred while verifying the state of the firewall): .*iptables.*-m (owner|conntrack).*missing kernel module)"
+                           "|"
+                           r"(The firewall rules for Azure Fabric are not setup correctly \(the environment thread will fix it\): The following rules are missing: \['ACCEPT', 'DROP'\])"
+                           "|"
+                           r"(The firewall is not configured correctly. The following rules are missing: \['ACCEPT', 'DROP'\].*Will reset it.)",
+                'if': lambda r: DISTRO_NAME == "almalinux" and FlexibleVersion(DISTRO_VERSION).major == 10
+            },
+            #
+            # RHEL 10.2 does not include the kernel modules required by the iptables rules. These warnings are expected
+            # when the agent selects nftables for runtime and persistent firewall rules instead.
+            #
+            {
+                'message': r"(Falling back to nftables because required iptables kernel modules are unresolved:)"
+                           "|"
+                           r"(Firewalld service is running, but runtime firewall rules use nftables; trying to set up )",
+                'if': lambda r: r.level == "WARNING" and DISTRO_NAME in ["rhel", "redhat"] and FlexibleVersion(DISTRO_VERSION) == FlexibleVersion("10.2")
             },
             # TODO: The Daemon has not been updated on Azure Linux 3; remove this message when it is.
             #
@@ -419,13 +460,36 @@ class AgentLog(object):
             # /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-extension: Text file busy
             # [stderr]
             #
+            # 2026-09-02T04:23:48.958247Z ERROR ExtHandler ExtHandler Event: name=Microsoft.GuestConfiguration.ConfigurationforLinux, op=Install, message=[ExtensionOperationError] Non-zero exit code: 1, /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.117/guest-configuration-shim gc_extension.py install
+            # [stdout]
+            #
+            # [stderr]
+            # [2026-09-02T04:23:46+0000]: Unexpected architecture aarch64. Expected architectures include only x86_64.
+            # /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.117/guest-configuration-shim: line 73: LINUX_DISTRO_VERSION: unbound variable
+            #
             # Also, enable not always completes before the new goal state is received
             #
             # 2025-01-07T13:33:25.636847Z WARNING ExtHandler ExtHandler A new goal state was received, but not all the extensions in the previous goal state have completed:
             # [('Microsoft.Azure.Extensions.CustomScript', 'success'), ('Microsoft.GuestConfiguration.ConfigurationforLinux', 'transitioning'), ('RunCommandHandler', 'success')]
             #
             {
-                'message': r"(?s)name=Microsoft.GuestConfiguration.ConfigurationforLinux.*op=Install.*Non-zero exit code: (1.*Text file busy|51.*Unexpected Linux distribution|126.*Exec format error)",
+                'message': r"(?s)name=Microsoft\.GuestConfiguration\.ConfigurationforLinux.*op=Install.*Non-zero exit code: (1.*(Text file busy|Unexpected architecture aarch64)|51.*Unexpected Linux distribution|126.*Exec format error)",
+            },
+            #
+            # GuestConfigurationForLinux stdout/stderr has a failure which is causing noise in agent log on Debian 11. Ignore this failure
+            #
+            # 2026-09-13T05:02:52.515855Z INFO ExtHandler [Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.118] Command: guest-configuration-shim gc_extension.py enable
+            # 		[stdout]
+            # 		...
+            # 		Error: b"[2026-09-13T05:02:52+0000]: Installation of package 'gnupg' failed after 'apt update'.\n"
+            # 		Error: b"[2026-09-13T05:02:52+0000]: Installation of package 'gnupg' failed after 'apt update'.\n"
+            # 		Error: Enable failed with error: Object of type bytes is not JSON serializable
+            # 		...
+            # 		Error: Enable failed with error: Object of type bytes is not JSON serializable
+            # 		[stderr]
+            {
+                'message': r"(?s)^Command: guest-configuration-shim gc_extension\.py enable\n\[stdout\]\n.*Linux distribution is Debian\..*Installation of package 'gnupg' failed after 'apt update'\..*Object of type bytes is not JSON serializable",
+                'if': lambda r: r.level == "INFO" and DISTRO_NAME == "debian" and FlexibleVersion(DISTRO_VERSION).major == 11
             },
             {
                 'message': r"A new goal state was received, but not all the extensions in the previous goal state have completed.*'Microsoft.GuestConfiguration.ConfigurationforLinux',\s+u?'transitioning'",

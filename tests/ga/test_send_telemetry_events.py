@@ -77,8 +77,6 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
             protocol_util.get_protocol = Mock(return_value=protocol)
             send_telemetry_events_handler = get_send_telemetry_events_handler(protocol_util)
             send_telemetry_events_handler.event_calls = []
-            ConfidentialVMInfo = MagicMock()
-            ConfidentialVMInfo.is_confidential_vm = Mock(return_vale=False)
             with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MIN_EVENTS_TO_BATCH",
                        batching_queue_limit):
                 with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MAX_TIMEOUT", timeout):

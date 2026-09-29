@@ -29,7 +29,7 @@ from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import format_exception
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
-from tests_e2e.tests.lib.firewall_manager import FirewallManager, IpTables, get_wireserver_ip
+from tests_e2e.tests.lib.firewall_manager import FirewallManager, IpTables, NfTables, get_wireserver_ip
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import run_remote_test
 import http.client as httpclient
@@ -68,15 +68,36 @@ class AgentFirewall:
     def run(self):
         self._prepare_agent()
 
+        if isinstance(self._firewall_manager, NfTables):
+            # On RHEL 10.2, older agents choose 'iptables' as the firewall manager, but the UID-based allow rule and
+            # conntrack-based drop rule cannot be created due to missing modules. Newer versions of the agent detect
+            # the missing modules and use NfTables instead, after cleaning up the old iptables DNS rule. As a result,
+            # we should ensure no iptables rules exist when NfTables is the firewall manager.
+            self._verify_iptables_rules_removed()
+
         self._firewall_manager.log_firewall_state("** Initial state of the firewall")
-        # Some versions of RHEL have a baked-in agent (2.7.0.6) that can produce duplicate DNS rules.
-        if DISTRO_NAME in ["rhel", "redhat"] and FlexibleVersion(DISTRO_VERSION).major >= 8:
+        # Some versions of RHEL have a baked-in agent (2.7.0.6) that can produce duplicate DNS rules. Rhel 10+ have
+        # baked-in version 2.13.1.1+ so this check is not necessary on those versions.
+        if DISTRO_NAME in ["rhel", "redhat"] and FlexibleVersion(DISTRO_VERSION).major >= 8 and FlexibleVersion(DISTRO_VERSION).major < 10:
             self._remove_duplicate_dns_rules()
         self._firewall_manager.assert_all_rules_are_set()
 
         self._test_accept_dns_rule()
         self._test_accept_rule()
         self._test_drop_rule()
+
+    @staticmethod
+    def _verify_iptables_rules_removed() -> None:
+        try:
+            shellutil.run_command(["sudo", "iptables", "--version"])
+        except shellutil.CommandError:
+            log.info("iptables is not available; there are no iptables rules to verify")
+            return
+
+        iptables = IpTables()
+        for rule in [IpTables.ACCEPT_DNS, IpTables.ACCEPT, IpTables.DROP]:
+            iptables.verify_rule_is_not_set(rule)
+        log.info("Confirmed no agent-owned iptables rules exist when NfTables is the firewall manager")
 
     def _remove_duplicate_dns_rules(self) -> None:
         log.info("Checking for duplicate DNS rules...")
@@ -321,4 +342,3 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-u', '--user', required=True, help="Non root user")
 args = parser.parse_args()
 run_remote_test(lambda: AgentFirewall(args.user).run())
-

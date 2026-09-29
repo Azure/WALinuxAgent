@@ -68,8 +68,10 @@ class CGroupUtil(object):
             return False
         return (distro_name.lower() == 'ubuntu' and distro_version.major >= 16) or \
             (distro_name.lower() in ('centos', 'redhat') and distro_version.major == 8) or \
-            (distro_name.lower() == 'rhel' and distro_version.major == 9) or \
-            (distro_name.lower() == 'azurelinux' and distro_version.major == 3) or \
+            (distro_name.lower() == 'rhel' and distro_version.major >= 9) or \
+            (distro_name.lower() == 'azurelinux' and distro_version.major >= 3) or \
+            (distro_name.lower() == "sles" and ((distro_version.major == 15 and distro_version.minor >= 6) or distro_version.major > 15)) or \
+            (distro_name.lower() == "oracle" and ((distro_version.major == 9 and distro_version.minor >= 5) or distro_version.major > 9)) or \
             distro_name.lower() == 'chainguard'
 
     @staticmethod

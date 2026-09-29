@@ -20,18 +20,25 @@
 
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import shellutil
-from tests_e2e.tests.lib.firewall_manager import Firewalld
+from tests_e2e.tests.lib.firewall_manager import FirewallManager, Firewalld, NfTables
 from tests_e2e.tests.lib.logging import log
 
 
 def main():
-
     if not Firewalld.is_service_running():
         log.info("firewalld.service is not running and skipping test")
         return
 
     firewall = Firewalld()
     firewall.log_firewall_state("** firewalld.service is running; initial state of the firewall")
+
+    if isinstance(FirewallManager.create(), NfTables):
+        # This test deletes agent-owned firewalld passthrough rules and expects the agent to recreate them. Those rules
+        # use iptables syntax and are intentionally not used when NfTables is the runtime firewall manager. In that
+        # case, recreating them would be incorrect and could cause firewalld to fail when the rules are loaded. The
+        # separate stale-rule cleanup test verifies the expected nft behavior instead.
+        log.info("Runtime firewall rules use nftables; skipping the firewalld rule re-add test")
+        return
 
     for rule in [Firewalld.ACCEPT_DNS, Firewalld.ACCEPT, Firewalld.DROP]:
         log.info(f"***** Verifying {rule} rule")

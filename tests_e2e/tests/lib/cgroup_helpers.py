@@ -1,9 +1,10 @@
+import datetime
 import os
 import re
 
 from assertpy import assert_that, fail
 
-from azurelinuxagent.common.future import datetime_min_utc
+from azurelinuxagent.common.future import datetime_min_utc, UTC
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import shellutil, fileutil
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
@@ -12,6 +13,7 @@ from azurelinuxagent.ga.cpucontroller import CpuControllerV1, CpuControllerV2
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
+from tests_e2e.tests.lib.test_result import TestSkipped
 
 BASE_CGROUP = '/sys/fs/cgroup'
 AGENT_CGROUP_NAME = 'WALinuxAgent'
@@ -22,6 +24,7 @@ GATESTEXT_FULL_NAME = "Microsoft.Azure.Extensions.Edp.GATestExtGo"
 GATESTEXT_SERVICE = "gatestext"
 AZUREMONITOREXT_FULL_NAME = "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent"
 AZUREMONITORAGENT_SERVICE = "azuremonitoragent"
+
 
 def verify_if_distro_supports_cgroup():
     """
@@ -155,6 +158,7 @@ def check_agent_quota_disabled():
     # Ubuntu 16 has an issue in expressing no quota as "infinity" https://github.com/systemd/systemd/issues/5965, so we are directly checking the quota value in cpu controller
     return cpu_quota == 'infinity' or get_unit_cgroup_cpu_quota_disabled(AGENT_SERVICE_NAME)
 
+
 def check_cgroup_disabled_due_to_systemd_error():
     """
     Returns True if the cgroup is disabled due to systemd error (Connection reset by peer)
@@ -167,6 +171,7 @@ def check_cgroup_disabled_due_to_systemd_error():
     Failed to start transient scope unit: Connection reset by peer
     """
     return check_log_message("Failed to start.+using systemd-run, will try invoking the extension directly.+[SystemdRunError].+(Message recipient disconnected from message bus without replying|Connection reset by peer|Remote peer disconnected|Transport endpoint is not connected)")
+
 
 def check_log_message(message, after_timestamp=datetime_min_utc):
     """
@@ -192,6 +197,7 @@ def get_unit_cgroup_proc_path(unit_name, controller):
     else:
         return unit_cgroup.get_procs_path()
 
+
 def get_unit_cgroup_cpu_quota_disabled(unit_name):
     """
     Returns True if cpu quota not set for the given unit cgroup
@@ -214,6 +220,7 @@ def get_unit_cgroup_cpu_quota_disabled(unit_name):
             return val == "max" # max means no quota
     return False
 
+
 def get_mounted_controller_list():
     """
     Returns list of controller names which are mounted in different cgroup paths
@@ -222,9 +229,61 @@ def get_mounted_controller_list():
         return [] # empty since v2 controllers are mounted at same root
     return ['cpu', 'memory']
 
+
 def using_cgroupv2():
     """
     Returns True if systemd v2 is used
     """
     cgroups_api = create_cgroup_api()
     return isinstance(cgroups_api, SystemdCgroupApiv2)
+
+
+def cleanup_cgroups_test_setup():
+    log.info("Cleaning up test setup")
+    drop_in_file = os.path.join(systemd.get_agent_drop_in_path(), "99-ExecStart.conf")
+    if os.path.exists(drop_in_file):
+        log.info("Removing %s...", drop_in_file)
+        os.remove(drop_in_file)
+        shellutil.run_command(["systemctl", "daemon-reload"])
+
+    check_time = datetime.datetime.now(UTC)
+    shellutil.run_command(["agent-service", "restart"])
+
+    found: bool = retry_if_false(lambda: check_log_message(" Agent cgroups enabled: True", after_timestamp=check_time))
+    if not found:
+        fail("Agent cgroups not enabled yet")
+
+
+def verify_controllers_available(expected_controllers):
+    """
+    Verifies that the expected controllers are enabled at the root cgroup.
+
+    This check is needed for cgroupv2 because the list of controllers enabled at the root cgroup
+    (as reported by cgroup.subtree_control) is not always populated immediately. After the first
+    boot, there is sometimes a delay before systemd enables the controllers at the root cgroup,
+    so tests running early in the boot process may observe missing controllers even though they
+    will eventually be enabled. To avoid false negatives from that race, we verify here that the
+    expected controllers are actually available before proceeding.
+
+    Note: on cgroupv1 controllers are mounted at separate hierarchies and are always available,
+    so this check is a no-op and returns True.
+    """
+    cgroups_api = create_cgroup_api()
+    if isinstance(cgroups_api, SystemdCgroupApiv1):
+        return True
+    controllers_enabled_at_root = cgroups_api._get_controllers_enabled_at_root(cgroups_api._root_cgroup_path)
+    for controller in expected_controllers:
+        if controller not in controllers_enabled_at_root:
+            log.info("Controller {0} not enabled at root cgroup path".format(controller))
+            return False
+    return True
+
+
+def skip_if_memory_controller_is_not_enabled():
+    # The memory controller is only used for reporting memory metrics. If it is not enabled, it is okay to skip the test.
+    found: bool = retry_if_false(lambda: verify_controllers_available(["memory"]), delay=60)
+    if not found:
+        cleanup_cgroups_test_setup()
+        raise TestSkipped("The distro does not have Memory controller enabled. Skipping the test.")
+
+    log.info("Verified memory controller mounted on the system")

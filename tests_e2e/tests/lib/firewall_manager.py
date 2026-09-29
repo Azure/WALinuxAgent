@@ -65,16 +65,27 @@ class FirewallManager:
         """
         try:
             shellutil.run_command(["sudo", "iptables", "--version"])  # On some distros, e.g. CentOS, iptables is not on the PATH for regular users
-            log.info("Using iptables to manage the firewall")
-            return IpTables()
+            iptables = IpTables()
+            unresolved_modules = iptables.get_unresolved_modules()
+            if len(unresolved_modules) == 0:
+                log.info("Using iptables to manage the firewall")
+                return iptables
+
+            try:
+                shellutil.run_command(["sudo", "nft", "--version"])
+                log.info(f"Required iptables kernel modules are unresolved ({', '.join(unresolved_modules)}); using nftables to manage the firewall")
+                return NfTables()
+            except CommandError:
+                log.info(f"Required iptables kernel modules are unresolved ({', '.join(unresolved_modules)}), but nft is not available; using iptables to manage the firewall")
+                return iptables
         except CommandError:
             pass
 
         try:
-            shellutil.run_command(["nft", "--version"])
+            shellutil.run_command(["sudo", "nft", "--version"])
             log.info("Using nftables to manage the firewall")
             return NfTables()
-        except FileNotFoundError:
+        except CommandError:
             pass
 
         raise Exception("No firewall commands are installed")
@@ -199,6 +210,24 @@ class IpTables(_IpTablesFirewalldManager):
     Implementation of Firewall using the iptables command
     """
 
+    @staticmethod
+    def get_unresolved_modules() -> List[str]:
+        try:
+            shellutil.run_command(["sudo", "modinfo", "--version"])
+        except Exception:
+            return []
+
+        unresolved_modules = []
+        for module_name in ["xt_owner", "xt_conntrack"]:
+            try:
+                shellutil.run_command(["sudo", "modinfo", module_name])
+            except CommandError:
+                unresolved_modules.append(module_name)
+            except Exception:
+                pass
+
+        return unresolved_modules
+
     def _get_state_command(self) -> str:
         return "sudo iptables -w -t security -L -nxv"
 
@@ -244,6 +273,11 @@ class Firewalld(_IpTablesFirewalldManager):
 
     def _get_delete_command_option(self) -> str:
         return "--remove-passthrough"
+
+    def add_rule(self, rule_name: str) -> None:
+        self._log_and_run_command(
+            self._commands[rule_name]("--passthrough")
+        )
 
     def _get_accept_dns_command(self, command_option: str) -> str:
         return f"firewall-cmd --permanent --direct {command_option} ipv4 -t security -A OUTPUT -d {self._wire_server_address} -p tcp --destination-port 53 -j ACCEPT"

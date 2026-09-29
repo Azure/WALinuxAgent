@@ -100,7 +100,7 @@ Waagent depends on some system packages in order to function properly:
 * Filesystem utilities: sfdisk, fdisk, mkfs, parted
 * Password tools: chpasswd, sudo
 * Text processing tools: sed, grep
-* Network tools: ip-route, iptables
+* Network tools: ip-route, iptables, nft (iptables or nft command line tools are required for firewall configuration)
 
 ## Installation
 

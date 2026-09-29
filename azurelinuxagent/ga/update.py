@@ -1,4 +1,3 @@
-
 # Windows Azure Linux Agent
 #
 # Copyright 2018 Microsoft Corporation
@@ -39,10 +38,11 @@ from azurelinuxagent.common.agent_supported_feature import get_supported_feature
     get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.ga.agent_memory_restart_history import AgentMemoryRestartHistory
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters_and_protocol, \
     WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExitException, AgentUpgradeExitException, AgentMemoryExceededException
-from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError, IptablesInconsistencyError
+from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError, IptablesInconsistencyError, NfTables
 from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.ga.persist_firewall_rules import PersistFirewallRulesHandler
@@ -75,6 +75,22 @@ CHILD_HEALTH_INTERVAL = 15 * 60
 CHILD_LAUNCH_INTERVAL = 5 * 60
 CHILD_LAUNCH_RESTART_MAX = 3
 CHILD_POLL_INTERVAL = 60
+
+AGENT_MEMORY_REPORT_PERIOD = timedelta(hours=12)
+AGENT_MEMORY_REPORT_MAX_EVENTS = 5
+
+
+class AgentMemoryEventCategory(object):
+    """
+    Categories for AgentMemory telemetry/log emissions. Each category has its
+    own independent quota inside the AGENT_MEMORY_REPORT_PERIOD window (see
+    UpdateHandler._report_agent_memory_event).
+    """
+    BREACH = "breach"        # anon memory over quota on this sample
+    RESET = "reset"          # counter reset after going back under quota
+    SKIP = "skip"            # breach threshold hit but a guardrail blocked restart
+    EXCEPTION = "exception"  # unexpected failure inside the memory-check path
+
 
 GOAL_STATE_PERIOD_EXTENSIONS_DISABLED = 5 * 60
 
@@ -151,9 +167,11 @@ class UpdateHandler(object):
         self._heartbeat_id = str(uuid.uuid4()).upper()
         self._heartbeat_counter = 0
 
-        self._initial_attempt_check_memory_usage = True
-        self._last_check_memory_usage_time = time.time()
-        self._check_memory_usage_last_error_report = datetime_min_utc
+        self._process_start_time = time.time()
+        self._last_check_memory_usage_time = 0
+        self._agent_memory_consecutive_breaches = 0
+
+        self._agent_memory_last_report_time = {}
 
         self._cloud_init_completed = False  # Only used when Extensions.WaitForCloudInit is enabled; note that this variable is always reset on service start.
 
@@ -1251,29 +1269,118 @@ class UpdateHandler(object):
             self._heartbeat_update_goal_state_error_count = 0
             self._last_telemetry_heartbeat = datetime.now(UTC)
 
+    def _report_agent_memory_event(self, category, message, success=True):
+        """
+        Emit an AgentMemory log line + telemetry event, throttled to at most
+        AGENT_MEMORY_REPORT_MAX_EVENTS emissions per AGENT_MEMORY_REPORT_PERIOD
+        rolling window per `category`. `category` is one of the
+        AgentMemoryEventCategory values so different classes of message
+        (breach, reset, skip, exception) do not consume each other's quota.
+        """
+        now_utc = datetime.now(UTC)
+        window_start = now_utc - AGENT_MEMORY_REPORT_PERIOD
+        # Drop timestamps that fall outside of the current rolling window.
+        recent = [t for t in self._agent_memory_last_report_time.get(category, []) if t > window_start]
+        if len(recent) >= AGENT_MEMORY_REPORT_MAX_EVENTS:
+            self._agent_memory_last_report_time[category] = recent
+            return
+        recent.append(now_utc)
+        self._agent_memory_last_report_time[category] = recent
+        if success:
+            logger.info(message)
+            add_event(AGENT_NAME, op=WALAEventOperation.AgentMemory, message=message)
+        else:
+            logger.warn(message)
+            add_event(AGENT_NAME, op=WALAEventOperation.AgentMemory, is_success=False, message=message, log_event=False)
+
     def _check_agent_memory_usage(self):
         """
-        This checks the agent current memory usage and safely exit the process if agent reaches the memory limit
+        Checks the agent's current anonymous memory usage at the end of each goal state
+        processing cycle. If the anon usage exceeds Debug.AgentAnonMemoryQuota for
+        Debug.AgentMemoryConsecutiveBreachCount consecutive cycles, the agent
+        exits so that the daemon can restart it -- subject to two guardrails
+        persisted across restarts in agent_memory_restart_history.json:
+            * at most Debug.AgentMemoryMaxRestartsPerVersion restarts per
+              agent version, and
+            * at least Debug.AgentMemoryMinRestartIntervalSeconds between
+              successive restarts of the same version.
         """
         try:
-            if conf.get_enable_agent_memory_usage_check() and self._extensions_summary.converged:
-                # we delay first attempt memory usage check, so that current agent won't get blacklisted due to multiple restarts(because of memory limit reach) too frequently
-                if (self._initial_attempt_check_memory_usage and time.time() - self._last_check_memory_usage_time > CHILD_LAUNCH_INTERVAL) or \
-                        (not self._initial_attempt_check_memory_usage and time.time() - self._last_check_memory_usage_time > conf.get_cgroup_check_period()):
-                    self._last_check_memory_usage_time = time.time()
-                    self._initial_attempt_check_memory_usage = False
-                    CGroupConfigurator.get_instance().check_agent_memory_usage()
-        except AgentMemoryExceededException as exception:
-            msg = "Check on agent memory usage:\n{0}".format(ustr(exception))
-            logger.info(msg)
-            add_event(AGENT_NAME, op=WALAEventOperation.AgentMemory, is_success=True, message=msg)
-            raise ExitException("Agent {0} is reached memory limit -- exiting".format(CURRENT_AGENT))
+            if not (conf.get_enable_agent_memory_usage_check() and self._extensions_summary.converged):
+                return
+
+            if not CGroupConfigurator.get_instance().using_cgroup_v2():
+                return
+
+            now = time.time()
+            check_period = conf.get_cgroup_check_period()
+            # Do not consider a self-restart within CHILD_LAUNCH_INTERVAL of process
+            # start. The daemon tracks child (ext-handler) restarts in that window
+            # via _evaluate_agent_health(); if we restart >= CHILD_LAUNCH_RESTART_MAX
+            # times inside CHILD_LAUNCH_INTERVAL, the daemon blacklists this agent
+            # version as bad and stops launching it (see _evaluate_agent_health).
+            # Waiting out CHILD_LAUNCH_INTERVAL before the first sample guarantees
+            # any exit we trigger here cannot contribute to that blacklist counter.
+            if now - self._process_start_time < CHILD_LAUNCH_INTERVAL:
+                return
+            # Steady-state throttle: at most one sample per cgroup check period.
+            # This is what gives the consecutive-breach counter its time semantics:
+            # each breach is a fresh live read of memory.stat separated from the
+            # previous one by >= check_period wall-clock time, so N consecutive
+            # breaches represent (N-1) * check_period of sustained overage.
+            if now - self._last_check_memory_usage_time < check_period:
+                return
+            self._last_check_memory_usage_time = now
+
+            try:
+                CGroupConfigurator.get_instance().check_agent_memory_usage()
+                # Under threshold -> reset consecutive-breach counter.
+                if self._agent_memory_consecutive_breaches != 0:
+                    self._report_agent_memory_event(
+                        AgentMemoryEventCategory.RESET,
+                        "Agent anon memory back under quota; resetting consecutive breach counter (was {0}).".format(
+                            self._agent_memory_consecutive_breaches))
+                    self._agent_memory_consecutive_breaches = 0
+                return
+            except AgentMemoryExceededException as exception:
+                self._agent_memory_consecutive_breaches += 1
+                required = conf.get_agent_memory_consecutive_breach_count()
+                self._report_agent_memory_event(
+                    AgentMemoryEventCategory.BREACH,
+                    "Agent anon memory breach {0}/{1}: {2}".format(
+                        self._agent_memory_consecutive_breaches, required, ustr(exception)))
+                if self._agent_memory_consecutive_breaches < required:
+                    return
+
+                # Consecutive-breach threshold reached; check guardrails.
+                anon_bytes = exception.anon_bytes
+
+                history = AgentMemoryRestartHistory()
+                allowed, reason = history.version_can_restart(
+                    CURRENT_VERSION,
+                    conf.get_agent_memory_max_restarts_per_version(),
+                    conf.get_agent_memory_min_restart_interval_seconds())
+                if not allowed:
+                    self._report_agent_memory_event(
+                        AgentMemoryEventCategory.SKIP,
+                        "Agent anon memory breach threshold reached but self-restart skipped: {0}".format(reason))
+                    # Reset so we don't re-evaluate every cycle; guardrails will
+                    # continue to block until the interval elapses anyway.
+                    self._agent_memory_consecutive_breaches = 0
+                    return
+
+                history.record_restart(CURRENT_VERSION, anon_bytes)
+                exit_msg = "Agent {0} exiting due to sustained anon memory breach ({1} consecutive checks; current={2} B, quota={3} B)".format(
+                    CURRENT_AGENT, self._agent_memory_consecutive_breaches, anon_bytes, conf.get_agent_anon_memory_quota())
+                add_event(AGENT_NAME, op=WALAEventOperation.AgentMemory, is_success=True, message=exit_msg)
+                raise ExitException(exit_msg)
+        except ExitException:  # pylint: disable=try-except-raise
+            raise
         except Exception as exception:
-            if self._check_memory_usage_last_error_report == datetime_min_utc or (self._check_memory_usage_last_error_report + timedelta(hours=6)) > datetime.now(UTC):
-                self._check_memory_usage_last_error_report = datetime.now(UTC)
-                msg = "Error checking the agent's memory usage: {0} --- [NOTE: Will not log the same error for the 6 hours]".format(ustr(exception))
-                logger.warn(msg)
-                add_event(AGENT_NAME, op=WALAEventOperation.AgentMemory, is_success=False, message=msg)
+            self._agent_memory_consecutive_breaches = 0
+            self._report_agent_memory_event(
+                AgentMemoryEventCategory.EXCEPTION,
+                "Error checking the agent's memory usage: {0}".format(ustr(exception)), success=False)
 
     @staticmethod
     def _ensure_extension_telemetry_state_configured_properly(protocol):
@@ -1343,7 +1450,7 @@ class UpdateHandler(object):
             #
             event.info(WALAEventOperation.PersistFirewallRules, "Setting up persistent firewall rules")
             try:
-                PersistFirewallRulesHandler(dst_ip=wire_server_address).setup()
+                PersistFirewallRulesHandler(dst_ip=wire_server_address).setup(runtime_uses_nftables=isinstance(firewall_manager, NfTables))
             except Exception as error:
                 event.error(WALAEventOperation.PersistFirewallRules, "Unable to setup the persistent firewall rules: {0}", ustr(error))
 

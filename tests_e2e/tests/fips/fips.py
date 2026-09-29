@@ -129,7 +129,7 @@ class Fips(AgentVmTest):
 
             The 'distro' parameter is expected to be in the format {name}_{version}, as returned by get_distro.py.
         """
-        return distro in ("rhel_95", "oracle_95")
+        return distro in ("rhel_95", "oracle_97")
 
     def _enable_fips_on_ubuntu(self) -> None:
         #
@@ -264,7 +264,7 @@ class Fips(AgentVmTest):
                 'if': lambda r: r.level == "ERROR"
             },
             #
-            # The current Daemon on RHEL/Oracle 9.5 tries to fetch the certificates during initialization and has not been updated to support FIPS 140-3
+            # The current Daemon on RHEL 9.5 and Oracle 9.7 tries to fetch the certificates during initialization and has not been updated to support FIPS 140-3
             #
             #		2025-07-31T19:06:59.878313Z ERROR Daemon Daemon Failed to decrypt /var/lib/waagent/Certificates.p7m (return code: 1)
             #
@@ -279,7 +279,7 @@ class Fips(AgentVmTest):
             #
             {
                 'message': 'Failed to decrypt /var/lib/waagent/Certificates.p7m',
-                'if': lambda r: self._distro in ['rhel_95', 'oracle_95'] and r.prefix == "Daemon"
+                'if': lambda r: self._distro in ['rhel_95', 'oracle_97'] and r.prefix == "Daemon"
             },
             #
             # There are several extensions that are installed by policy, which is executed asynchronously to the test. If these extensions are installed before a new PFX has been generated, the Agent may issue those warnings, and the extensions may fail.

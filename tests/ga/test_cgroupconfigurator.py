@@ -37,7 +37,7 @@ from azurelinuxagent.common.utils import shellutil, fileutil
 from azurelinuxagent.ga.cpucontroller import CpuControllerV1
 from tests.lib.mock_environment import MockCommand
 from tests.lib.mock_cgroup_environment import mock_cgroup_v1_environment, UnitFilePaths, mock_cgroup_v2_environment
-from tests.lib.tools import AgentTestCase, patch, mock_sleep, data_dir, skip_if_predicate_true
+from tests.lib.tools import AgentTestCase, patch, mock_sleep, data_dir
 from tests.lib.miscellaneous_tools import format_processes, wait_for
 
 
@@ -1186,18 +1186,46 @@ exit 0
                         "Found unexpected processes in the agent cgroup before agent enable cgroups",
                         disable_events[0]["message"],
                         "The error message is not correct when process check failed")
-    @skip_if_predicate_true(lambda: True, "Enable/Rewrite this test when self monitoring is enabled")
-    def test_check_agent_memory_usage_should_raise_a_cgroups_exception_when_the_limit_is_exceeded(self):
-        metrics = [MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, AGENT_NAME_TELEMETRY, conf.get_agent_memory_quota() + 1),
-                   MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.SWAP_MEM_USAGE, AGENT_NAME_TELEMETRY, conf.get_agent_memory_quota() + 1)]
+
+    def test_check_agent_anon_memory_usage_should_raise_a_cgroups_exception_when_the_limit_is_exceeded(self):
+        metrics = [MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, AGENT_NAME_TELEMETRY, conf.get_agent_anon_memory_quota() + 1),
+                   MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.ANON_MEM_USAGE, AGENT_NAME_TELEMETRY, conf.get_agent_anon_memory_quota() + 1)]
 
         with self.assertRaises(AgentMemoryExceededException) as context_manager:
-            with self._get_cgroup_configurator() as configurator:
-                with patch("azurelinuxagent.ga.memorycontroller.MemoryControllerV1.get_tracked_metrics") as tracked_metrics:
+            with self._get_cgroup_configurator_v2() as configurator:
+                with patch("azurelinuxagent.ga.memorycontroller.MemoryControllerV2.get_tracked_metrics") as tracked_metrics:
                     tracked_metrics.return_value = metrics
                     configurator.check_agent_memory_usage()
 
-        self.assertIn("The agent memory limit {0} bytes exceeded".format(conf.get_agent_memory_quota()), ustr(context_manager.exception), "An incorrect exception was raised")
+        self.assertIn("The agent anon memory limit {0} bytes exceeded".format(conf.get_agent_anon_memory_quota()), ustr(context_manager.exception), "An incorrect exception was raised")
+        self.assertEqual(conf.get_agent_anon_memory_quota() + 1, context_manager.exception.anon_bytes,
+                         "anon_bytes on the exception must match the reported anon usage")
+        self.assertEqual(conf.get_agent_anon_memory_quota(), context_manager.exception.limit_bytes,
+                         "limit_bytes on the exception must match the configured anon quota")
+
+    def test_check_agent_anon_memory_usage_should_not_raise_when_only_total_exceeds_limit(self):
+        limit = conf.get_agent_anon_memory_quota()
+        metrics = [
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, AGENT_NAME_TELEMETRY, limit + 1),
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.ANON_MEM_USAGE, AGENT_NAME_TELEMETRY, limit - 1),
+        ]
+
+        with self._get_cgroup_configurator_v2() as configurator:
+            with patch("azurelinuxagent.ga.memorycontroller.MemoryControllerV2.get_tracked_metrics") as tracked_metrics:
+                tracked_metrics.return_value = metrics
+                configurator.check_agent_memory_usage()
+
+    def test_check_agent_anon_memory_usage_should_not_raise_when_anon_metric_is_absent(self):
+        limit = conf.get_agent_anon_memory_quota()
+        metrics = [
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, AGENT_NAME_TELEMETRY, limit + 1),
+        ]
+
+        with self._get_cgroup_configurator_v2() as configurator:
+            with patch("azurelinuxagent.ga.memorycontroller.MemoryControllerV2.get_tracked_metrics") as tracked_metrics:
+                tracked_metrics.return_value = metrics
+                # Must not raise; missing anon sample is not a breach.
+                configurator.check_agent_memory_usage()
 
     def test_get_log_collector_properties_should_return_correct_props(self):
         with self._get_cgroup_configurator() as configurator:

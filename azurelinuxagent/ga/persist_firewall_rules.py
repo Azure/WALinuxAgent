@@ -118,10 +118,48 @@ if __name__ == '__main__':
             logger.info("The firewalld service is present, but not running: {0}".format(ustr(error)))
             return False
 
-    def setup(self):
+    def setup(self, runtime_uses_nftables):
+        """
+        Sets up persistence using a mechanism compatible with the runtime firewall manager.
 
-        if not self._is_firewall_service_running():
-            logger.info("Firewalld service not running/unavailable, trying to set up {0}".format(self.get_service_file_path()))
+        The rules created by the agent through firewalld's direct passthrough API require iptables in the backend.
+        Their arguments use iptables syntax and require iptables to be available and the xt_owner and xt_conntrack
+        kernel modules. This remains true even when firewalld itself uses an nftables backend. If runtime setup
+        selected NfTables as the manager because iptables capabilities are unavailable, attempting to apply the
+        firewalld passthrough rules during boot can fail and cause firewalld to reject its user configuration.
+
+        Previous versions of the agent did add these passthrough rules when iptables or its dependencies were not
+        available. When the agent detects that firewalld is running, but NfTables is being used for runtime
+        setup, it will attempt to remove any passthrough rules created by an older agent.
+
+        :param runtime_uses_nftables: A bool which indicates whether the FirewallManager selected for runtime rules is
+                                      NfTables.
+        """
+        firewalld_service_running = self._is_firewall_service_running()
+        if not firewalld_service_running or runtime_uses_nftables:
+            if not firewalld_service_running:
+                event.info(WALAEventOperation.PersistFirewallRules, "Firewalld service not running/unavailable, trying to set up {0}", self.get_service_file_path())
+            else:
+                # The firewalld passthrough rules created by the agent are only compatible with iptables. If NfTables
+                # is being used for runtime rules, the agent should use the custom network setup service for persistence.
+                # Previous versions of the agent always created firewalld passthrough rules if firewalld was running. Cleanup
+                # any existing rules if firewalld is running but NfTables is the selected runtime manager.
+                try:
+                    firewall_cmd = FirewallCmd(self._dst_ip)
+                    event.info(WALAEventOperation.PersistFirewallRules, "Runtime firewall rules use nftables; removing any iptables-based firewalld passthrough rules previously created by the agent")
+                    try:
+                        firewall_cmd.remove_legacy_rule()
+                    except Exception as error:
+                        event.error(WALAEventOperation.Firewall, "Unable to remove legacy firewall rule. Error: {0}", ustr(error))
+                    try:
+                        firewall_cmd.remove()
+                        event.info(WALAEventOperation.PersistFirewallRules, "Completed cleanup of iptables-based firewalld passthrough rules previously created by the agent")
+                    except Exception as error:
+                        event.error(WALAEventOperation.PersistFirewallRules, "Unable to remove firewalld passthrough rules previously created by the agent: {0}", ustr(error))
+                except Exception as error:
+                    event.error(WALAEventOperation.PersistFirewallRules, "Unable to check for iptables-based firewalld passthrough rules. Error: {0}", ustr(error))
+                event.warn(WALAEventOperation.PersistFirewallRules, "Firewalld service is running, but runtime firewall rules use nftables; trying to set up {0}", self.get_service_file_path())
+
             if systemd.is_systemd():
                 self._setup_network_setup_service()
             else:
@@ -363,4 +401,3 @@ if __name__ == '__main__':
         logger.info(
             "Unit file matches with expected version: {0} and exec start: {1}, not overwriting unit file".format(unit_file_version, unit_exec_start))
         return False
-

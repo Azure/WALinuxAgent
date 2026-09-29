@@ -658,7 +658,7 @@ class Certificates(LogEvent):
                 self._crypt_util.convert_pfx_to_pem(pfx_file, nomacver, pem_file)
                 return pem_file
             except shellutil.CommandError as e:
-                self.warn(WALAEventOperation.GoalState, "Error converting PFX to PEM [-nomacver: {0}]: {1}", nomacver, ustr(e))
+                self.warn(WALAEventOperation.GoalState, "Error converting PFX to PEM [-nomacver: {0}]: {1}", nomacver, ustr(e).replace("-password pass:", "<redacted>"))
                 continue
 
         raise Exception("Cannot convert PFX to PEM")
@@ -805,5 +805,3 @@ class ExtensionManifest(object):
 
             pkg.isinternal = isinternal
             self.pkg_list.versions.append(pkg)
-
-
