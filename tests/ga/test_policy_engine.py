@@ -655,6 +655,26 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
         result = engine.get_extension_runtime_policy(TEST_EXTENSION_NAME, supports_policy=True)
         self.assertEqual({}, result, msg="get_extension_runtime_policy() should return an empty object when runtimePolicy is not specified.")
 
+    def test_get_extension_runtime_policy_should_return_empty_dict_if_null_and_ext_supports_policy(self):
+        # A null runtimePolicy should be treated as not provided
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    TEST_EXTENSION_NAME: {
+                        "runtimePolicy": None
+                    }
+                }
+            }
+        }
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine()
+        engine.update_policy(self.goal_state_history)
+
+        result = engine.get_extension_runtime_policy(TEST_EXTENSION_NAME, supports_policy=True)
+
+        self.assertEqual({}, result, msg="A null runtimePolicy should be treated as not specified.")
+
     def test_get_extension_runtime_policy_should_return_empty_dict_if_extension_not_in_policy_and_ext_supports_policy(self):
         """
         If an extension that supports policy is not in the policy, get_extension_runtime_policy() should return {}.
@@ -715,6 +735,26 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
             "extensionPolicies": {
                 "extensions": {
                     TEST_EXTENSION_NAME: {}
+                }
+            }
+        }
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine()
+        engine.update_policy(self.goal_state_history)
+
+        result = engine.get_extension_runtime_policy(TEST_EXTENSION_NAME, supports_policy=False)
+
+        self.assertIsNone(result)
+
+    def test_get_extension_runtime_policy_should_return_none_if_null_and_extension_does_not_support_policy(self):
+        # A null runtimePolicy should be treated as not provided
+        policy = {
+            "policyVersion": "0.1.0",
+            "extensionPolicies": {
+                "extensions": {
+                    TEST_EXTENSION_NAME: {
+                        "runtimePolicy": None
+                    }
                 }
             }
         }
