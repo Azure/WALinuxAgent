@@ -7,7 +7,7 @@ tests:
 images:
   - "random(endorsed,10)"
   - "cvm-endorsed"
-locations: "AzureCloud:eastus2euap"   # Test CSE 2.8.0 is only available in canary regions  # TODO: Once the prod CSE supports runtime policy, we can remove the canary region restriction
+locations: "AzureCloud:centraluseuap"   # Test CSE 2.8.0 is only available in canary regions  # TODO: Once the prod CSE supports runtime policy, we can remove the canary region restriction
 skip_on_images:
   - "centos_79"           # TODO: Test CSE 2.8.0 install fails due to golang issues on CentOS 7.9. Remove this once the issue is resolved.
   - "rhel_79"             # TODO: Test CSE 2.8.0 install fails due to golang issues on RHEL 7.9. Remove this once the issue is resolved.
