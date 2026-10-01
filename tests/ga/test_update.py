@@ -1754,8 +1754,7 @@ class TestAgentUpgrade(UpdateTestCase):
             mock_wire_data = protocol.mock_wire_data
 
             # This function reloads the conf mid-run to mimic an actual customer scenario
-            if HttpRequestPredicates.is_goal_state_request(url) and mock_wire_data.call_counts[
-             "goalstate"] >= 10 and mock_wire_data.call_counts["goalstate"] < 15:
+            if HttpRequestPredicates.is_goal_state_request(url) and 10 <= mock_wire_data.call_counts["goalstate"] < 15:
 
                 # Ensure we didn't try to download any agents except during the incarnation change
                 self.__assert_agent_directories_available(versions=[str(CURRENT_VERSION)])
@@ -1972,8 +1971,7 @@ class TestAgentUpgrade(UpdateTestCase):
             mock_wire_data = protocol.mock_wire_data
 
             # This function reloads the conf mid-run to mimic an actual customer scenario
-            if HttpRequestPredicates.is_goal_state_request(url) and mock_wire_data.call_counts[
-             "goalstate"] >= 10 and mock_wire_data.call_counts["goalstate"] < 15:
+            if HttpRequestPredicates.is_goal_state_request(url) and 10 <= mock_wire_data.call_counts["goalstate"] < 15:
 
                 # Ensure we didn't try to download any agents except during the incarnation change
                 self.__assert_agent_directories_available(versions=[str(CURRENT_VERSION)])
