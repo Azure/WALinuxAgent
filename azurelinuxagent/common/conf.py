@@ -412,7 +412,7 @@ def get_wait_for_cloud_init(conf=__conf__):
 
 
 def get_wait_for_cloud_init_timeout(conf=__conf__):
-    return conf.get_switch("Extensions.WaitForCloudInitTimeout", 3600)
+    return conf.get_int("Extensions.WaitForCloudInitTimeout", 3600)
 
 
 def get_goal_state_period(conf=__conf__):
