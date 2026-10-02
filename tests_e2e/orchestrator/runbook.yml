@@ -51,6 +51,7 @@ variable:
       - ext_cgroups
       - ext_policy
       - ext_policy_with_dependencies
+      - ext_runtime_policy
       - ext_sequencing
       - ext_signature_validation
       - ext_telemetry_pipeline

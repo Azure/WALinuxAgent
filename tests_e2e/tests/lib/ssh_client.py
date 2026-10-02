@@ -73,7 +73,9 @@ class SshClient(object):
 
     def get_time(self) -> datetime.datetime:
         time_string = self.run_command("date --utc '+%Y-%m-%dT%T.%6NZ'").rstrip()
-        return datetime.datetime.strptime(time_string, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=UTC)
+        # Ubuntu26 'date' implementation ignores the precision in %6N and returns 9 digits instead, but strptime's %f only accepts 1 to 6 digits so we remove the extra digits
+        normalized_time_string = re.sub(r"(\.\d{6})\d+Z$", r"\1Z", time_string)
+        return datetime.datetime.strptime(normalized_time_string, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=UTC)
 
     def copy_to_node(self, local_path: Path, remote_path: Path, recursive: bool = False, attempts: int = ATTEMPTS, attempt_delay: int = ATTEMPT_DELAY) -> None:
         """
