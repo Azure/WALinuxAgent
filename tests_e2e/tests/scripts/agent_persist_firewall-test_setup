@@ -32,7 +32,8 @@ if ! command -v crontab; then
     echo "crontab is not available. Installing cron."
     distro=$(get_distro.py)
     if [[ "$distro" == *"sles"* ]]; then
-        zypper install -y cronie
+        zypper -n refresh
+        zypper -n install cronie
     else
         apt-get update
         apt-get install -y cron
@@ -42,7 +43,8 @@ if ! command -v ping; then
     echo "ping is not available. Installing iputils."
     distro=$(get_distro.py)
     if [[ "$distro" == *"sles"* ]]; then
-        zypper install -y iputils
+        zypper -n refresh
+        zypper -n install iputils
     else
         apt-get update
         apt-get install -y iputils-ping
