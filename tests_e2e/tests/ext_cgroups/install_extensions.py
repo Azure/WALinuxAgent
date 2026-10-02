@@ -48,7 +48,8 @@ class InstallExtensions:
         self._install_cse()
 
     def _install_vmaccess(self):
-        distro = self._ssh_client.run_command("get_distro.py").rstrip()
+        distro = self._ssh_client.run_command("get_distro.py").rstrip().lower()
+        log.info("Checking VMAccess support for distro: %s", distro)
         if not VmExtensionIds.VmAccess.supports_distro(distro):
             log.info("Currently VMAccess is not supported on this distro")
             return
