@@ -15,5 +15,7 @@ skip_on_images:
   # The cpu and memory controllers not populated within the test timeout window, so skip running test in those distros.
   - "AzureChinaCloud:suse_15"
   - "AzureUSGovernment:suse_15"
+  - "AzureChinaCloud:suse_16"
+  - "AzureUSGovernment:suse_16"
   - "AzureUSGovernment:oracle_97"
 owns_vm: true
