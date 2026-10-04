@@ -15,7 +15,11 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import mock
+try:
+    from unittest import mock  # pylint: disable=unused-import
+except ImportError:
+    import mock
+
 import azurelinuxagent.common.dhcp as dhcp
 import azurelinuxagent.common.osutil.default as osutil
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP

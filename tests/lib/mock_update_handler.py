@@ -17,7 +17,10 @@
 
 import contextlib
 
-from mock import PropertyMock
+try:
+    from unittest.mock import PropertyMock  # pylint: disable=unused-import
+except ImportError:
+    from mock import PropertyMock
 
 from azurelinuxagent.ga.agent_update_handler import AgentUpdateHandler
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler
