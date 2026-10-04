@@ -27,7 +27,10 @@ import threading
 import xml.dom
 from datetime import datetime, timedelta
 
-from mock import MagicMock
+try:
+    from unittest.mock import MagicMock  # pylint: disable=unused-import
+except ImportError:
+    from mock import MagicMock
 
 from azurelinuxagent.common.utils import textutil, fileutil, timeutil
 from azurelinuxagent.common import event, logger

@@ -16,7 +16,11 @@
 #
 from datetime import timedelta, datetime
 
-from mock import Mock, MagicMock
+try:
+    from unittest.mock import Mock, MagicMock  # pylint: disable=unused-import
+except ImportError:
+    from mock import Mock, MagicMock
+
 from azurelinuxagent.common.future import UTC
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.protocol.goal_state import RemoteAccess, GoalState, GoalStateProperties
