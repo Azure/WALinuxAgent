@@ -180,7 +180,7 @@ __STRING_OPTIONS__ = {
     # "Debug" options are experimental and may be removed in later
     # versions of the Agent.
     #
-    "Debug.SignatureValidationTelemetryExpiryTime": "2027-02-01"
+    "Debug.SignatureValidationTelemetryExpiryTime": "2027-06-01"
 }
 
 
@@ -776,7 +776,7 @@ def get_signature_validation_telemetry_expiry_time(conf=__conf__):
     Format: YYYY-MM-DD
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get("Debug.SignatureValidationTelemetryExpiryTime", "2027-02-01")
+    return conf.get("Debug.SignatureValidationTelemetryExpiryTime", "2027-06-01")
 
 
 def get_ignore_ext_signature_validation_errors(conf=__conf__):
