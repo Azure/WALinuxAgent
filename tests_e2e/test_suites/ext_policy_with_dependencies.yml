@@ -20,6 +20,8 @@ skip_on_images:
   - "centos_79"
   - "centos_82"
   - "suse_12"
+  # TODO: The test depends on Microsoft.OSTCExtensions.VMAccessForLinux, which currently does not support SUSE 16. Remove this exclusion when the issue is fixed.
+  - "suse_16"
   # TODO: AzureMonitorLinuxAgent does not support Ubuntu 26.04 in the sovereign clouds. Remove these exclusions when the extension is updated.
   - "AzureChinaCloud:ubuntu_2604"
   - "AzureChinaCloud:ubuntu_2604_minimal"

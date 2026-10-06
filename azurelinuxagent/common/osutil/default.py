@@ -291,7 +291,7 @@ class DefaultOSUtil(object):
                 password = password.encode('utf-8')
 
             # NOTE: crypt() is invoked only when it has been defined
-            return crypt(password, salt)  # pylint: disable=used-before-assignment
+            return crypt(password, salt)  # pylint: disable=used-before-assignment,possibly-used-before-assignment
 
         if __HASH_METHOD__ == __HASH_METHOD_PASSLIB__:
             # NOTE: sha512_crypt is used only when it has been defined

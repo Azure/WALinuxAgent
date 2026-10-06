@@ -97,6 +97,12 @@ class ExtensionDisallowedError(PolicyError):
         super(ExtensionDisallowedError, self).__init__()
 
 
+class ExtensionRuntimePolicyError(PolicyError):
+    """
+    Any error related to extension-specific runtime policy.
+    """
+
+
 class _PolicyEngine(object):
     """
     Implements base policy engine API.
@@ -443,3 +449,43 @@ class ExtensionPolicyEngine(_PolicyEngine):
         enforce_signature = self.should_enforce_signature_validation(extension_name)
         if enforce_signature and not extension_is_signed:
             raise ExtensionSignaturePolicyError() # Caller sets message and error code, based on requested extension operation
+
+    def get_extension_runtime_policy(self, extension_name, supports_policy):
+        """
+        Return the runtime policy contents for the extension, or None if no runtime policy file should be written.
+
+        No runtime policy file should be written in either of the following cases:
+            1. Policy enforcement is not enabled.
+            2. The extension does not support policy and no runtime policy is configured for the extension.
+
+        Otherwise, the agent should create or update the extension runtime policy file with the configured runtime policy,
+        or an empty dict if no runtime policy is configured. If a runtime policy is configured but the extension does not
+        support policy, raise an exception to prevent the extension from being processed. This ensures that the policy is
+        not silently ignored.
+
+        | Policy enforcement | supportsPolicy | runtimePolicy specified | Result                     |
+        |--------------------|----------------|-------------------------|----------------------------|
+        | Disabled           | Any            | Any                     | Return None                |
+        | Enabled            | True           | Yes                     | Return runtimePolicy       |
+        | Enabled            | True           | No                      | Return {}                  |
+        | Enabled            | False          | Yes                     | Raise runtime policy error |
+        | Enabled            | False          | No                      | Return None                |
+        """
+        if not self._policy_enforcement_enabled:
+            return None
+
+        extension_policies = self._policy.get("extensionPolicies")
+        extensions = extension_policies.get("extensions") if extension_policies is not None else None
+        individual_policy = extensions.get(extension_name) if extensions is not None else None
+        runtime_policy = individual_policy.get("runtimePolicy") if individual_policy is not None else None
+
+        if supports_policy:
+            return runtime_policy if runtime_policy is not None else {}
+
+        elif runtime_policy is not None:
+            raise ExtensionRuntimePolicyError(
+                "Runtime policy is specified for extension '{0}', but this extension does not support runtime policy enforcement. "
+                "To continue enabling the extension without runtime policy, remove the 'runtimePolicy' property for "
+                "extension '{0}' from the policy file ({1}).".format(extension_name, conf.get_policy_file_path()))
+
+        return None

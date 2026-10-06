@@ -294,8 +294,8 @@ class TestCGroupsTelemetry(AgentTestCase):
     @patch("azurelinuxagent.ga.cpucontroller.CpuControllerV1.get_cpu_throttled_time")
     @patch("azurelinuxagent.ga.cpucontroller.CpuControllerV1.get_cpu_usage")
     @patch("azurelinuxagent.ga.cgroupcontroller._CgroupController.is_active")
-    def test_telemetry_calculations(self, patch_is_active, patch_get_cpu_usage, patch_get_throttle_usage, patch_get_memory_usage, patch_get_memory_max_usage, patch_try_memory_swap_usage,
-                                    *args):  # pylint: disable=unused-argument
+    def test_telemetry_calculations(self, patch_is_active, patch_get_cpu_usage, patch_get_throttle_usage, patch_get_memory_usage, patch_get_memory_max_usage, patch_try_memory_swap_usage,  # pylint: disable=unused-argument
+                                    *args):
         num_polls = 10
         num_extensions = 1
 
