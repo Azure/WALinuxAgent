@@ -94,3 +94,9 @@ ENV/
 
 # vscode
 .github/copilot-instructions.md
+
+# Astred DAG generation inputs and transient output
+.compose/
+.dag-pipeline-state.json
+enrichment-logs/
+scripts/dag-enrichment/output/
