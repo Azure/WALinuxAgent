@@ -1,0 +1,1159 @@
+{
+  "_description": "Auto-generated mapping from NAMESPACE clustering. Cross-references link DAGs via imported namespaces.",
+  "_generated_by": "step3_generate_mapping.py --approach symbols",
+  "_approach": "symbols (namespace-based)",
+  "_optimal_k": 36,
+  "_note": "cross_referenced_dags = other DAG docs that this DAG's files import namespaces from.",
+  "mappings": [
+    {
+      "dag_doc_new": "L1-conceptual/agent-feature-capabilities.md",
+      "compose_dirs": [
+        "azurelinuxagent/common",
+        "azurelinuxagent/common/protocol",
+        "azurelinuxagent/ga"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/agent_supported_feature.py.md",
+        "azurelinuxagent/common/protocol/wire.py.md",
+        "azurelinuxagent/ga/collect_telemetry_events.py.md",
+        "azurelinuxagent/ga/exthandlers.py.md",
+        "azurelinuxagent/ga/update.py.md"
+      ],
+      "description": "Agent capability declarations used by protocol, extension, telemetry, and update components",
+      "cluster_id": 2,
+      "file_count": 5,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/agent_supported_feature",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/agent_supported_feature",
+        "%REPO%/azurelinuxagent/common/datacontract",
+        "%REPO%/azurelinuxagent/common/errorstate",
+        "%REPO%/azurelinuxagent/common/event",
+        "%REPO%/azurelinuxagent/common/exception",
+        "%REPO%/azurelinuxagent/common/future",
+        "%REPO%/azurelinuxagent/common/osutil/factory",
+        "%REPO%/azurelinuxagent/common/utils/restutil",
+        "%REPO%/azurelinuxagent/common/utils/textutil",
+        "%REPO%/azurelinuxagent/ga/cgroupconfigurator",
+        "%REPO%/azurelinuxagent/ga/firewall_manager",
+        "%REPO%/azurelinuxagent/ga/policy/policy_engine"
+      ],
+      "cross_referenced_dags": [
+        "L1-conceptual/goal-state-domain-models.md",
+        "L1-conceptual/protocol-data-contracts.md",
+        "L2-platform/agent-event-reporting.md",
+        "L2-platform/platform-error-handling.md",
+        "L1-conceptual/os-service-management.md",
+        "L1-conceptual/extension-goal-state-factory.md",
+        "L1-conceptual/thread-local-singleton.md",
+        "L2-platform/archive-operations.md",
+        "L2-platform/file-io-utilities.md",
+        "L2-platform/shell-command-validation.md",
+        "L2-platform/agent-packaging-factories.md",
+        "L3-flows/machine-deprovisioning-flow.md",
+        "L2-platform/cgroup-resource-governance.md",
+        "L1-conceptual/thread-handler-contract.md",
+        "L1-conceptual/periodic-operation-runner.md",
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 16
+    },
+    {
+      "dag_doc_new": "L1-conceptual/deprovision-handler-dispatch.md",
+      "compose_dirs": [
+        "azurelinuxagent/pa/deprovision"
+      ],
+      "compose_files": [
+        "azurelinuxagent/pa/deprovision/__init__.py.md"
+      ],
+      "description": "Selects the platform-specific handler for machine deprovisioning",
+      "cluster_id": 31,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/pa/deprovision/__init__",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/pa/deprovision/__init__",
+        "%REPO%/azurelinuxagent/pa/deprovision/factory"
+      ],
+      "cross_referenced_dags": [],
+      "cross_ref_count": 0
+    },
+    {
+      "dag_doc_new": "L1-conceptual/distribution-version-model.md",
+      "compose_dirs": [
+        "azurelinuxagent/common/utils"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/utils/distro_version.py.md"
+      ],
+      "description": "Comparable value model for Linux distribution versions",
+      "cluster_id": 14,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/utils/distro_version",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/utils/distro_version"
+      ],
+      "cross_referenced_dags": [
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 1
+    },
+    {
+      "dag_doc_new": "L1-conceptual/extension-goal-state-factory.md",
+      "compose_dirs": [
+        "azurelinuxagent/common/protocol"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/protocol/extensions_goal_state_factory.py.md"
+      ],
+      "description": "Factory for constructing extension goal states from supported configuration sources",
+      "cluster_id": 11,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/protocol/extensions_goal_state",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/protocol/extensions_goal_state",
+        "%REPO%/azurelinuxagent/common/protocol/extensions_goal_state_factory",
+        "%REPO%/azurelinuxagent/common/protocol/extensions_goal_state_from_extensions_config",
+        "%REPO%/azurelinuxagent/common/protocol/extensions_goal_state_from_vm_settings"
+      ],
+      "cross_referenced_dags": [],
+      "cross_ref_count": 0
+    },
+    {
+      "dag_doc_new": "L1-conceptual/goal-state-domain-models.md",
+      "compose_dirs": [
+        "azurelinuxagent/common",
+        "azurelinuxagent/common/protocol"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/AgentGlobals.py.md",
+        "azurelinuxagent/common/event.py.md",
+        "azurelinuxagent/common/protocol/extensions_goal_state.py.md",
+        "azurelinuxagent/common/protocol/extensions_goal_state_from_vm_settings.py.md",
+        "azurelinuxagent/common/protocol/goal_state.py.md"
+      ],
+      "description": "Shared agent globals, extension goal state, and protocol event models",
+      "cluster_id": 1,
+      "file_count": 5,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/AgentGlobals",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/AgentGlobals",
+        "%REPO%/azurelinuxagent/common/datacontract",
+        "%REPO%/azurelinuxagent/common/event",
+        "%REPO%/azurelinuxagent/common/exception",
+        "%REPO%/azurelinuxagent/common/future",
+        "%REPO%/azurelinuxagent/common/osutil/factory",
+        "%REPO%/azurelinuxagent/common/protocol/extensions_goal_state",
+        "%REPO%/azurelinuxagent/common/protocol/extensions_goal_state_factory",
+        "%REPO%/azurelinuxagent/common/protocol/extensions_goal_state_from_vm_settings",
+        "%REPO%/azurelinuxagent/common/protocol/hostplugin",
+        "%REPO%/azurelinuxagent/common/protocol/restapi",
+        "%REPO%/azurelinuxagent/common/telemetryevent",
+        "%REPO%/azurelinuxagent/common/utils/flexible_version",
+        "%REPO%/azurelinuxagent/common/utils/textutil"
+      ],
+      "cross_referenced_dags": [
+        "L1-conceptual/protocol-data-contracts.md",
+        "L2-platform/agent-event-reporting.md",
+        "L2-platform/platform-error-handling.md",
+        "L1-conceptual/extension-goal-state-factory.md",
+        "L2-platform/archive-operations.md",
+        "L2-platform/file-io-utilities.md",
+        "L2-platform/shell-command-validation.md",
+        "L2-platform/utc-time-utilities.md",
+        "L2-platform/cgroup-resource-governance.md",
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 10
+    },
+    {
+      "dag_doc_new": "L1-conceptual/os-service-management.md",
+      "compose_dirs": [
+        "azurelinuxagent/common/osutil"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/osutil/__init__.py.md",
+        "azurelinuxagent/common/osutil/systemd.py.md"
+      ],
+      "description": "Operating system utility selection and systemd service management",
+      "cluster_id": 10,
+      "file_count": 2,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/osutil/factory",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/osutil/factory",
+        "%REPO%/azurelinuxagent/common/osutil/systemd",
+        "%REPO%/azurelinuxagent/common/utils/shellutil"
+      ],
+      "cross_referenced_dags": [
+        "L2-platform/cgroup-resource-governance.md",
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 2
+    },
+    {
+      "dag_doc_new": "L1-conceptual/periodic-operation-runner.md",
+      "compose_dirs": [
+        "azurelinuxagent/ga"
+      ],
+      "compose_files": [
+        "azurelinuxagent/ga/periodic_operation.py.md"
+      ],
+      "description": "Schedules and runs recurring agent operations at controlled intervals",
+      "cluster_id": 30,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/ga/periodic_operation",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/logger",
+        "%REPO%/azurelinuxagent/ga/periodic_operation"
+      ],
+      "cross_referenced_dags": [
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 1
+    },
+    {
+      "dag_doc_new": "L1-conceptual/protocol-data-contracts.md",
+      "compose_dirs": [
+        "azurelinuxagent/common",
+        "azurelinuxagent/common/protocol"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/protocol/restapi.py.md",
+        "azurelinuxagent/common/telemetryevent.py.md"
+      ],
+      "description": "REST API and telemetry data contracts exchanged with Azure services",
+      "cluster_id": 3,
+      "file_count": 2,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/datacontract",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/datacontract",
+        "%REPO%/azurelinuxagent/common/protocol/restapi",
+        "%REPO%/azurelinuxagent/common/telemetryevent",
+        "%REPO%/azurelinuxagent/common/utils/textutil",
+        "%REPO%/azurelinuxagent/common/version"
+      ],
+      "cross_referenced_dags": [
+        "L2-platform/agent-event-reporting.md",
+        "L2-platform/platform-error-handling.md",
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 3
+    },
+    {
+      "dag_doc_new": "L1-conceptual/provision-handler-selection.md",
+      "compose_dirs": [
+        "azurelinuxagent/pa/provision"
+      ],
+      "compose_files": [
+        "azurelinuxagent/pa/provision/__init__.py.md"
+      ],
+      "description": "Creates the platform-specific handler used to provision virtual machines",
+      "cluster_id": 33,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/pa/provision/factory",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/pa/provision/factory"
+      ],
+      "cross_referenced_dags": [],
+      "cross_ref_count": 0
+    },
+    {
+      "dag_doc_new": "L1-conceptual/rdma-handler-factory.md",
+      "compose_dirs": [
+        "azurelinuxagent/pa/rdma"
+      ],
+      "compose_files": [
+        "azurelinuxagent/pa/rdma/__init__.py.md"
+      ],
+      "description": "Creates the distribution-specific handler for RDMA configuration",
+      "cluster_id": 34,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/pa/rdma/factory",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/pa/rdma/factory"
+      ],
+      "cross_referenced_dags": [
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 1
+    },
+    {
+      "dag_doc_new": "L1-conceptual/resource-disk-factory.md",
+      "compose_dirs": [
+        "azurelinuxagent/daemon/resourcedisk"
+      ],
+      "compose_files": [
+        "azurelinuxagent/daemon/resourcedisk/__init__.py.md"
+      ],
+      "description": "Factory contract for selecting platform-specific resource disk handlers",
+      "cluster_id": 23,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/daemon/resourcedisk/factory",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/daemon/resourcedisk/factory"
+      ],
+      "cross_referenced_dags": [],
+      "cross_ref_count": 0
+    },
+    {
+      "dag_doc_new": "L1-conceptual/thread-handler-contract.md",
+      "compose_dirs": [
+        "azurelinuxagent/ga"
+      ],
+      "compose_files": [
+        "azurelinuxagent/ga/interfaces.py.md"
+      ],
+      "description": "Lifecycle contract for starting, monitoring, and keeping worker threads alive",
+      "cluster_id": 28,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/ga/interfaces",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/ga/interfaces"
+      ],
+      "cross_referenced_dags": [],
+      "cross_ref_count": 0
+    },
+    {
+      "dag_doc_new": "L1-conceptual/thread-local-singleton.md",
+      "compose_dirs": [
+        "azurelinuxagent/common",
+        "azurelinuxagent/common/protocol"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/protocol/util.py.md",
+        "azurelinuxagent/common/singletonperthread.py.md"
+      ],
+      "description": "Thread-scoped singleton pattern and supporting protocol utilities",
+      "cluster_id": 12,
+      "file_count": 2,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/singletonperthread",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/dhcp",
+        "%REPO%/azurelinuxagent/common/exception",
+        "%REPO%/azurelinuxagent/common/osutil/factory",
+        "%REPO%/azurelinuxagent/common/protocol/metadata_server_migration_util",
+        "%REPO%/azurelinuxagent/common/protocol/ovfenv",
+        "%REPO%/azurelinuxagent/common/protocol/util",
+        "%REPO%/azurelinuxagent/common/protocol/wire",
+        "%REPO%/azurelinuxagent/common/singletonperthread",
+        "%REPO%/azurelinuxagent/common/utils/restutil"
+      ],
+      "cross_referenced_dags": [
+        "L2-platform/file-io-utilities.md",
+        "L2-platform/cgroup-resource-governance.md",
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 3
+    },
+    {
+      "dag_doc_new": "L2-platform/agent-event-reporting.md",
+      "compose_dirs": [
+        "azurelinuxagent/common/protocol",
+        "azurelinuxagent/daemon",
+        "azurelinuxagent/daemon/resourcedisk",
+        "azurelinuxagent/ga",
+        "azurelinuxagent/ga/policy",
+        "azurelinuxagent/pa/provision"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/protocol/extensions_goal_state_from_extensions_config.py.md",
+        "azurelinuxagent/common/protocol/metadata_server_migration_util.py.md",
+        "azurelinuxagent/daemon/main.py.md",
+        "azurelinuxagent/daemon/resourcedisk/default.py.md",
+        "azurelinuxagent/ga/agent_update_handler.py.md",
+        "azurelinuxagent/ga/cgroupapi.py.md",
+        "azurelinuxagent/ga/env.py.md",
+        "azurelinuxagent/ga/extensionprocessutil.py.md",
+        "azurelinuxagent/ga/firewall_manager.py.md",
+        "azurelinuxagent/ga/guestagent.py.md",
+        "azurelinuxagent/ga/logcollector.py.md",
+        "azurelinuxagent/ga/persist_firewall_rules.py.md",
+        "azurelinuxagent/ga/policy/policy_engine.py.md",
+        "azurelinuxagent/ga/remoteaccess.py.md",
+        "azurelinuxagent/ga/rsm_version_updater.py.md",
+        "azurelinuxagent/ga/self_update_version_updater.py.md",
+        "azurelinuxagent/ga/send_telemetry_events.py.md",
+        "azurelinuxagent/ga/signing_certificate_util.py.md",
+        "azurelinuxagent/pa/provision/default.py.md"
+      ],
+      "description": "Cross-cutting event reporting for daemon, extension, firewall, cgroup, and update operations",
+      "cluster_id": 5,
+      "file_count": 19,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/event",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/conf",
+        "%REPO%/azurelinuxagent/common/dhcp",
+        "%REPO%/azurelinuxagent/common/event",
+        "%REPO%/azurelinuxagent/common/exception",
+        "%REPO%/azurelinuxagent/common/future",
+        "%REPO%/azurelinuxagent/common/logger",
+        "%REPO%/azurelinuxagent/common/osutil/factory",
+        "%REPO%/azurelinuxagent/common/protocol/extensions_goal_state",
+        "%REPO%/azurelinuxagent/common/protocol/extensions_goal_state_from_vm_settings",
+        "%REPO%/azurelinuxagent/common/protocol/goal_state",
+        "%REPO%/azurelinuxagent/common/protocol/metadata_server_migration_util",
+        "%REPO%/azurelinuxagent/common/protocol/restapi",
+        "%REPO%/azurelinuxagent/common/protocol/util",
+        "%REPO%/azurelinuxagent/common/utils/cryptutil",
+        "%REPO%/azurelinuxagent/common/utils/flexible_version",
+        "%REPO%/azurelinuxagent/common/utils/shellutil",
+        "%REPO%/azurelinuxagent/common/utils/textutil",
+        "%REPO%/azurelinuxagent/common/version",
+        "%REPO%/azurelinuxagent/daemon/resourcedisk/default",
+        "%REPO%/azurelinuxagent/ga/agent_update_handler",
+        "%REPO%/azurelinuxagent/ga/cgroupstelemetry",
+        "%REPO%/azurelinuxagent/ga/cpucontroller",
+        "%REPO%/azurelinuxagent/ga/env",
+        "%REPO%/azurelinuxagent/ga/extensionprocessutil",
+        "%REPO%/azurelinuxagent/ga/exthandlers",
+        "%REPO%/azurelinuxagent/ga/firewall_manager",
+        "%REPO%/azurelinuxagent/ga/ga_version_updater",
+        "%REPO%/azurelinuxagent/ga/guestagent",
+        "%REPO%/azurelinuxagent/ga/interfaces",
+        "%REPO%/azurelinuxagent/ga/logcollector",
+        "%REPO%/azurelinuxagent/ga/logcollector_manifests",
+        "%REPO%/azurelinuxagent/ga/memorycontroller",
+        "%REPO%/azurelinuxagent/ga/periodic_operation",
+        "%REPO%/azurelinuxagent/ga/persist_firewall_rules",
+        "%REPO%/azurelinuxagent/ga/policy/policy_engine",
+        "%REPO%/azurelinuxagent/ga/remoteaccess",
+        "%REPO%/azurelinuxagent/ga/rsm_version_updater",
+        "%REPO%/azurelinuxagent/ga/self_update_version_updater",
+        "%REPO%/azurelinuxagent/ga/send_telemetry_events",
+        "%REPO%/azurelinuxagent/ga/signing_certificate_util",
+        "%REPO%/azurelinuxagent/pa/provision/cloudinitdetect",
+        "%REPO%/azurelinuxagent/pa/provision/default",
+        "%REPO%/azurelinuxagent/pa/rdma/rdma"
+      ],
+      "cross_referenced_dags": [
+        "L2-platform/platform-error-handling.md",
+        "L1-conceptual/os-service-management.md",
+        "L1-conceptual/extension-goal-state-factory.md",
+        "L1-conceptual/thread-local-singleton.md",
+        "L2-platform/file-io-utilities.md",
+        "L2-platform/shell-command-validation.md",
+        "L2-platform/utc-time-utilities.md",
+        "L2-platform/agent-packaging-factories.md",
+        "L3-flows/daemon-entrypoint.md",
+        "L1-conceptual/resource-disk-factory.md",
+        "L3-flows/scvmm-agent-integration.md",
+        "L3-flows/machine-deprovisioning-flow.md",
+        "L2-platform/cgroup-resource-governance.md",
+        "L2-platform/cgroup-telemetry-tracking.md",
+        "L1-conceptual/thread-handler-contract.md",
+        "L2-platform/log-collector-manifests.md",
+        "L1-conceptual/periodic-operation-runner.md",
+        "L1-conceptual/deprovision-handler-dispatch.md",
+        "L1-conceptual/provision-handler-selection.md",
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 20
+    },
+    {
+      "dag_doc_new": "L2-platform/agent-logging-service.md",
+      "compose_dirs": [
+        "azurelinuxagent/common",
+        "azurelinuxagent/pa/provision"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/logger.py.md",
+        "azurelinuxagent/pa/provision/cloudinitdetect.py.md"
+      ],
+      "description": "Agent logging infrastructure with periodic controls and cloud-init detection support",
+      "cluster_id": 8,
+      "file_count": 2,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/logger",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/logger",
+        "%REPO%/azurelinuxagent/common/utils/textutil",
+        "%REPO%/azurelinuxagent/pa/provision/cloudinitdetect"
+      ],
+      "cross_referenced_dags": [
+        "L2-platform/utc-time-utilities.md",
+        "L2-platform/agent-packaging-factories.md",
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 3
+    },
+    {
+      "dag_doc_new": "L2-platform/agent-packaging-factories.md",
+      "compose_dirs": [
+        "makepkg.py.md",
+        "azurelinuxagent/common/osutil",
+        "azurelinuxagent/daemon/resourcedisk",
+        "azurelinuxagent/pa/deprovision",
+        "azurelinuxagent/pa/provision"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/osutil/factory.py.md",
+        "azurelinuxagent/daemon/resourcedisk/factory.py.md",
+        "azurelinuxagent/pa/deprovision/factory.py.md",
+        "azurelinuxagent/pa/provision/factory.py.md",
+        "makepkg.py.md",
+        "setup.py.md"
+      ],
+      "description": "Build packaging and platform-specific factory selection for agent components",
+      "cluster_id": 21,
+      "file_count": 6,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/version",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/conf",
+        "%REPO%/azurelinuxagent/common/logger",
+        "%REPO%/azurelinuxagent/common/osutil/alpine",
+        "%REPO%/azurelinuxagent/common/osutil/arch",
+        "%REPO%/azurelinuxagent/common/osutil/bigip",
+        "%REPO%/azurelinuxagent/common/osutil/chainguard",
+        "%REPO%/azurelinuxagent/common/osutil/clearlinux",
+        "%REPO%/azurelinuxagent/common/osutil/coreos",
+        "%REPO%/azurelinuxagent/common/osutil/debian",
+        "%REPO%/azurelinuxagent/common/osutil/default",
+        "%REPO%/azurelinuxagent/common/osutil/devuan",
+        "%REPO%/azurelinuxagent/common/osutil/factory",
+        "%REPO%/azurelinuxagent/common/utils/distro_version",
+        "%REPO%/azurelinuxagent/common/version",
+        "%REPO%/azurelinuxagent/daemon/resourcedisk/default",
+        "%REPO%/azurelinuxagent/daemon/resourcedisk/factory",
+        "%REPO%/azurelinuxagent/daemon/resourcedisk/freebsd",
+        "%REPO%/azurelinuxagent/daemon/resourcedisk/openbsd",
+        "%REPO%/azurelinuxagent/daemon/resourcedisk/openwrt",
+        "%REPO%/azurelinuxagent/ga/guestagent",
+        "%REPO%/azurelinuxagent/pa/deprovision/arch",
+        "%REPO%/azurelinuxagent/pa/deprovision/clearlinux",
+        "%REPO%/azurelinuxagent/pa/deprovision/coreos",
+        "%REPO%/azurelinuxagent/pa/deprovision/default",
+        "%REPO%/azurelinuxagent/pa/deprovision/factory",
+        "%REPO%/azurelinuxagent/pa/deprovision/ubuntu",
+        "%REPO%/azurelinuxagent/pa/provision/cloudinit",
+        "%REPO%/azurelinuxagent/pa/provision/cloudinitdetect",
+        "%REPO%/azurelinuxagent/pa/provision/default",
+        "%REPO%/azurelinuxagent/pa/provision/factory",
+        "%REPO%/makepkg",
+        "%REPO%/setup"
+      ],
+      "cross_referenced_dags": [
+        "L2-platform/platform-error-handling.md",
+        "L2-platform/distribution-os-adapters.md",
+        "L1-conceptual/resource-disk-factory.md",
+        "L2-platform/cgroup-resource-governance.md",
+        "L1-conceptual/deprovision-handler-dispatch.md",
+        "L3-flows/distro-deprovision-workflows.md",
+        "L1-conceptual/provision-handler-selection.md",
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 8
+    },
+    {
+      "dag_doc_new": "L2-platform/archive-operations.md",
+      "compose_dirs": [
+        "azurelinuxagent/common/utils"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/utils/archive.py.md"
+      ],
+      "description": "Utilities for creating, inspecting, and extracting archives",
+      "cluster_id": 13,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/utils/archive",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/utils/archive"
+      ],
+      "cross_referenced_dags": [
+        "L2-platform/file-io-utilities.md",
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 2
+    },
+    {
+      "dag_doc_new": "L2-platform/cgroup-resource-governance.md",
+      "compose_dirs": [
+        "azurelinuxagent/ga"
+      ],
+      "compose_files": [
+        "azurelinuxagent/ga/cgroupconfigurator.py.md",
+        "azurelinuxagent/ga/collect_logs.py.md",
+        "azurelinuxagent/ga/monitor.py.md"
+      ],
+      "description": "Cgroup configuration, monitoring, and diagnostic log collection services",
+      "cluster_id": 26,
+      "file_count": 3,
+      "defining_namespace": "%REPO%/azurelinuxagent/ga/cgroupcontroller",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/errorstate",
+        "%REPO%/azurelinuxagent/common/event",
+        "%REPO%/azurelinuxagent/common/exception",
+        "%REPO%/azurelinuxagent/common/osutil/factory",
+        "%REPO%/azurelinuxagent/common/protocol/healthservice",
+        "%REPO%/azurelinuxagent/common/protocol/imds",
+        "%REPO%/azurelinuxagent/common/protocol/util",
+        "%REPO%/azurelinuxagent/common/utils/restutil",
+        "%REPO%/azurelinuxagent/common/utils/shellutil",
+        "%REPO%/azurelinuxagent/common/version",
+        "%REPO%/azurelinuxagent/ga/cgroupapi",
+        "%REPO%/azurelinuxagent/ga/cgroupconfigurator",
+        "%REPO%/azurelinuxagent/ga/cgroupcontroller",
+        "%REPO%/azurelinuxagent/ga/cgroupstelemetry",
+        "%REPO%/azurelinuxagent/ga/cpucontroller",
+        "%REPO%/azurelinuxagent/ga/interfaces",
+        "%REPO%/azurelinuxagent/ga/logcollector",
+        "%REPO%/azurelinuxagent/ga/memorycontroller"
+      ],
+      "cross_referenced_dags": [
+        "L2-platform/agent-event-reporting.md",
+        "L1-conceptual/os-service-management.md",
+        "L2-platform/file-io-utilities.md",
+        "L2-platform/cgroup-telemetry-tracking.md",
+        "L1-conceptual/thread-handler-contract.md",
+        "L1-conceptual/periodic-operation-runner.md",
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 7
+    },
+    {
+      "dag_doc_new": "L2-platform/cgroup-telemetry-tracking.md",
+      "compose_dirs": [
+        "azurelinuxagent/ga"
+      ],
+      "compose_files": [
+        "azurelinuxagent/ga/cgroupstelemetry.py.md"
+      ],
+      "description": "Cgroup controller tracking and resource governance telemetry",
+      "cluster_id": 27,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/ga/cgroupstelemetry",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/logger",
+        "%REPO%/azurelinuxagent/ga/cgroupstelemetry",
+        "%REPO%/azurelinuxagent/ga/cpucontroller"
+      ],
+      "cross_referenced_dags": [
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 1
+    },
+    {
+      "dag_doc_new": "L2-platform/distribution-os-adapters.md",
+      "compose_dirs": [
+        "azurelinuxagent/common/osutil"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/osutil/alpine.py.md",
+        "azurelinuxagent/common/osutil/arch.py.md",
+        "azurelinuxagent/common/osutil/chainguard.py.md",
+        "azurelinuxagent/common/osutil/clearlinux.py.md",
+        "azurelinuxagent/common/osutil/coreos.py.md",
+        "azurelinuxagent/common/osutil/debian.py.md",
+        "azurelinuxagent/common/osutil/devuan.py.md",
+        "azurelinuxagent/common/osutil/fedora.py.md",
+        "azurelinuxagent/common/osutil/iosxe.py.md",
+        "azurelinuxagent/common/osutil/mariner.py.md",
+        "azurelinuxagent/common/osutil/openwrt.py.md",
+        "azurelinuxagent/common/osutil/photonos.py.md",
+        "azurelinuxagent/common/osutil/ubuntu.py.md"
+      ],
+      "description": "Distribution-specific operating system utility implementations",
+      "cluster_id": 9,
+      "file_count": 13,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/osutil/default",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/exception",
+        "%REPO%/azurelinuxagent/common/logger",
+        "%REPO%/azurelinuxagent/common/osutil/alpine",
+        "%REPO%/azurelinuxagent/common/osutil/arch",
+        "%REPO%/azurelinuxagent/common/osutil/chainguard",
+        "%REPO%/azurelinuxagent/common/osutil/clearlinux",
+        "%REPO%/azurelinuxagent/common/osutil/coreos",
+        "%REPO%/azurelinuxagent/common/osutil/debian",
+        "%REPO%/azurelinuxagent/common/osutil/default",
+        "%REPO%/azurelinuxagent/common/osutil/devuan",
+        "%REPO%/azurelinuxagent/common/osutil/fedora",
+        "%REPO%/azurelinuxagent/common/osutil/iosxe",
+        "%REPO%/azurelinuxagent/common/osutil/mariner",
+        "%REPO%/azurelinuxagent/common/osutil/openwrt",
+        "%REPO%/azurelinuxagent/common/osutil/photonos",
+        "%REPO%/azurelinuxagent/common/osutil/ubuntu",
+        "%REPO%/azurelinuxagent/common/utils/networkutil",
+        "%REPO%/azurelinuxagent/common/utils/shellutil"
+      ],
+      "cross_referenced_dags": [
+        "L2-platform/file-io-utilities.md",
+        "L2-platform/network-route-utilities.md",
+        "L2-platform/agent-packaging-factories.md",
+        "L2-platform/cgroup-resource-governance.md",
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 5
+    },
+    {
+      "dag_doc_new": "L2-platform/file-io-utilities.md",
+      "compose_dirs": [
+        "azurelinuxagent/common/utils"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/utils/fileutil.py.md"
+      ],
+      "description": "File reading, writing, copying, and filesystem manipulation utilities",
+      "cluster_id": 15,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/utils/fileutil",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/utils/fileutil",
+        "%REPO%/azurelinuxagent/common/utils/textutil"
+      ],
+      "cross_referenced_dags": [
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 1
+    },
+    {
+      "dag_doc_new": "L2-platform/flexible-version-comparison.md",
+      "compose_dirs": [
+        "azurelinuxagent/common",
+        "azurelinuxagent/common/utils"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/utils/flexible_version.py.md",
+        "azurelinuxagent/common/version.py.md"
+      ],
+      "description": "Flexible parsing, representation, and comparison of agent and platform versions",
+      "cluster_id": 16,
+      "file_count": 2,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/utils/flexible_version",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/future",
+        "%REPO%/azurelinuxagent/common/utils/flexible_version",
+        "%REPO%/azurelinuxagent/common/utils/shellutil",
+        "%REPO%/azurelinuxagent/common/version"
+      ],
+      "cross_referenced_dags": [
+        "L2-platform/shell-command-validation.md",
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 2
+    },
+    {
+      "dag_doc_new": "L2-platform/log-collector-manifests.md",
+      "compose_dirs": [
+        "azurelinuxagent/ga"
+      ],
+      "compose_files": [
+        "azurelinuxagent/ga/logcollector_manifests.py.md"
+      ],
+      "description": "Manifest definitions that select files and data for diagnostic log collection",
+      "cluster_id": 29,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/ga/logcollector_manifests",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/ga/logcollector_manifests"
+      ],
+      "cross_referenced_dags": [],
+      "cross_ref_count": 0
+    },
+    {
+      "dag_doc_new": "L2-platform/network-route-utilities.md",
+      "compose_dirs": [
+        "azurelinuxagent/common/utils"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/utils/networkutil.py.md"
+      ],
+      "description": "Network route parsing and conversion of kernel route values to IP addresses",
+      "cluster_id": 17,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/utils/networkutil",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/utils/networkutil"
+      ],
+      "cross_referenced_dags": [],
+      "cross_ref_count": 0
+    },
+    {
+      "dag_doc_new": "L2-platform/platform-error-handling.md",
+      "compose_dirs": [
+        "azurelinuxagent",
+        "azurelinuxagent/common",
+        "azurelinuxagent/common/osutil",
+        "azurelinuxagent/common/protocol",
+        "azurelinuxagent/common/utils",
+        "azurelinuxagent/daemon/resourcedisk",
+        "azurelinuxagent/ga",
+        "azurelinuxagent/pa/provision"
+      ],
+      "compose_files": [
+        "azurelinuxagent/agent.py.md",
+        "azurelinuxagent/common/conf.py.md",
+        "azurelinuxagent/common/datacontract.py.md",
+        "azurelinuxagent/common/dhcp.py.md",
+        "azurelinuxagent/common/exception.py.md",
+        "azurelinuxagent/common/osutil/bigip.py.md",
+        "azurelinuxagent/common/osutil/default.py.md",
+        "azurelinuxagent/common/osutil/freebsd.py.md",
+        "azurelinuxagent/common/osutil/gaia.py.md",
+        "azurelinuxagent/common/osutil/nsbsd.py.md",
+        "azurelinuxagent/common/osutil/openbsd.py.md",
+        "azurelinuxagent/common/osutil/redhat.py.md",
+        "azurelinuxagent/common/osutil/suse.py.md",
+        "azurelinuxagent/common/protocol/healthservice.py.md",
+        "azurelinuxagent/common/protocol/imds.py.md",
+        "azurelinuxagent/common/protocol/ovfenv.py.md",
+        "azurelinuxagent/common/utils/cryptutil.py.md",
+        "azurelinuxagent/common/utils/restutil.py.md",
+        "azurelinuxagent/daemon/resourcedisk/freebsd.py.md",
+        "azurelinuxagent/daemon/resourcedisk/openbsd.py.md",
+        "azurelinuxagent/daemon/resourcedisk/openwrt.py.md",
+        "azurelinuxagent/ga/cgroupcontroller.py.md",
+        "azurelinuxagent/ga/cpucontroller.py.md",
+        "azurelinuxagent/ga/ga_version_updater.py.md",
+        "azurelinuxagent/ga/memorycontroller.py.md",
+        "azurelinuxagent/pa/provision/cloudinit.py.md"
+      ],
+      "description": "Shared exceptions and platform-specific operating system failure handling",
+      "cluster_id": 6,
+      "file_count": 26,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/exception",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/conf",
+        "%REPO%/azurelinuxagent/common/datacontract",
+        "%REPO%/azurelinuxagent/common/dhcp",
+        "%REPO%/azurelinuxagent/common/event",
+        "%REPO%/azurelinuxagent/common/exception",
+        "%REPO%/azurelinuxagent/common/future",
+        "%REPO%/azurelinuxagent/common/logger",
+        "%REPO%/azurelinuxagent/common/osutil/bigip",
+        "%REPO%/azurelinuxagent/common/osutil/default",
+        "%REPO%/azurelinuxagent/common/osutil/factory",
+        "%REPO%/azurelinuxagent/common/osutil/freebsd",
+        "%REPO%/azurelinuxagent/common/osutil/gaia",
+        "%REPO%/azurelinuxagent/common/osutil/nsbsd",
+        "%REPO%/azurelinuxagent/common/osutil/openbsd",
+        "%REPO%/azurelinuxagent/common/osutil/redhat",
+        "%REPO%/azurelinuxagent/common/osutil/suse",
+        "%REPO%/azurelinuxagent/common/protocol/extensions_goal_state",
+        "%REPO%/azurelinuxagent/common/protocol/healthservice",
+        "%REPO%/azurelinuxagent/common/protocol/imds",
+        "%REPO%/azurelinuxagent/common/protocol/ovfenv",
+        "%REPO%/azurelinuxagent/common/protocol/util",
+        "%REPO%/azurelinuxagent/common/utils/cryptutil",
+        "%REPO%/azurelinuxagent/common/utils/fileutil",
+        "%REPO%/azurelinuxagent/common/utils/flexible_version",
+        "%REPO%/azurelinuxagent/common/utils/networkutil",
+        "%REPO%/azurelinuxagent/common/utils/restutil",
+        "%REPO%/azurelinuxagent/common/utils/shellutil",
+        "%REPO%/azurelinuxagent/common/utils/textutil",
+        "%REPO%/azurelinuxagent/common/version",
+        "%REPO%/azurelinuxagent/daemon/resourcedisk/default",
+        "%REPO%/azurelinuxagent/daemon/resourcedisk/freebsd",
+        "%REPO%/azurelinuxagent/daemon/resourcedisk/openbsd",
+        "%REPO%/azurelinuxagent/daemon/resourcedisk/openwrt",
+        "%REPO%/azurelinuxagent/ga/cgroupapi",
+        "%REPO%/azurelinuxagent/ga/cgroupcontroller",
+        "%REPO%/azurelinuxagent/ga/cpucontroller",
+        "%REPO%/azurelinuxagent/ga/firewall_manager",
+        "%REPO%/azurelinuxagent/ga/ga_version_updater",
+        "%REPO%/azurelinuxagent/ga/guestagent",
+        "%REPO%/azurelinuxagent/ga/logcollector",
+        "%REPO%/azurelinuxagent/ga/memorycontroller",
+        "%REPO%/azurelinuxagent/pa/provision/cloudinit",
+        "%REPO%/azurelinuxagent/pa/provision/cloudinitdetect",
+        "%REPO%/azurelinuxagent/pa/provision/default",
+        "__CRYPT_IMPORTED__"
+      ],
+      "cross_referenced_dags": [
+        "L3-flows/agent-application-bootstrap.md",
+        "L1-conceptual/extension-goal-state-factory.md",
+        "L1-conceptual/thread-local-singleton.md",
+        "L2-platform/file-io-utilities.md",
+        "L2-platform/network-route-utilities.md",
+        "L2-platform/shell-command-validation.md",
+        "L2-platform/agent-packaging-factories.md",
+        "L3-flows/daemon-entrypoint.md",
+        "L2-platform/cgroup-resource-governance.md",
+        "L2-platform/cgroup-telemetry-tracking.md",
+        "L1-conceptual/deprovision-handler-dispatch.md",
+        "L1-conceptual/provision-handler-selection.md",
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 13
+    },
+    {
+      "dag_doc_new": "L2-platform/runtime-compatibility-helpers.md",
+      "compose_dirs": [
+        "azurelinuxagent/common"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/future.py.md"
+      ],
+      "description": "Compatibility helpers for UTC time zone behavior across Python runtimes",
+      "cluster_id": 7,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/future",
+      "min_namespace_list": [
+        "UTC",
+        "_UTC"
+      ],
+      "cross_referenced_dags": [
+        "L2-platform/shell-command-validation.md"
+      ],
+      "cross_ref_count": 1
+    },
+    {
+      "dag_doc_new": "L2-platform/service-error-state.md",
+      "compose_dirs": [
+        "azurelinuxagent/common",
+        "azurelinuxagent/common/protocol"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/errorstate.py.md",
+        "azurelinuxagent/common/protocol/hostplugin.py.md"
+      ],
+      "description": "Error state tracking and host plugin failure handling",
+      "cluster_id": 4,
+      "file_count": 2,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/errorstate",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/errorstate",
+        "%REPO%/azurelinuxagent/common/event",
+        "%REPO%/azurelinuxagent/common/exception",
+        "%REPO%/azurelinuxagent/common/future",
+        "%REPO%/azurelinuxagent/common/protocol/extensions_goal_state",
+        "%REPO%/azurelinuxagent/common/protocol/extensions_goal_state_factory",
+        "%REPO%/azurelinuxagent/common/protocol/healthservice",
+        "%REPO%/azurelinuxagent/common/utils/flexible_version",
+        "%REPO%/azurelinuxagent/common/utils/textutil",
+        "%REPO%/azurelinuxagent/common/version"
+      ],
+      "cross_referenced_dags": [
+        "L1-conceptual/goal-state-domain-models.md",
+        "L1-conceptual/extension-goal-state-factory.md",
+        "L2-platform/shell-command-validation.md",
+        "L2-platform/utc-time-utilities.md",
+        "L2-platform/cgroup-resource-governance.md",
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 6
+    },
+    {
+      "dag_doc_new": "L2-platform/shell-command-validation.md",
+      "compose_dirs": [
+        "azurelinuxagent/common/utils",
+        "azurelinuxagent/ga"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/utils/shellutil.py.md",
+        "azurelinuxagent/ga/signature_validation_util.py.md"
+      ],
+      "description": "Shell command execution and signature validation support",
+      "cluster_id": 18,
+      "file_count": 2,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/utils/shellutil",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/event",
+        "%REPO%/azurelinuxagent/common/exception",
+        "%REPO%/azurelinuxagent/common/future",
+        "%REPO%/azurelinuxagent/common/utils/flexible_version",
+        "%REPO%/azurelinuxagent/common/utils/shellutil",
+        "%REPO%/azurelinuxagent/common/version",
+        "%REPO%/azurelinuxagent/ga/signature_validation_util",
+        "%REPO%/azurelinuxagent/ga/signing_certificate_util",
+        "CalledProcessError",
+        "TimeoutExpired"
+      ],
+      "cross_referenced_dags": [
+        "L2-platform/cgroup-resource-governance.md",
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 2
+    },
+    {
+      "dag_doc_new": "L2-platform/text-xml-utilities.md",
+      "compose_dirs": [
+        "azurelinuxagent/common/utils"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/utils/textutil.py.md"
+      ],
+      "description": "Text conversion, XML parsing, and document traversal utilities",
+      "cluster_id": 19,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/utils/textutil",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/utils/textutil"
+      ],
+      "cross_referenced_dags": [
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 1
+    },
+    {
+      "dag_doc_new": "L2-platform/utc-time-utilities.md",
+      "compose_dirs": [
+        "azurelinuxagent/common/utils"
+      ],
+      "compose_files": [
+        "azurelinuxagent/common/utils/timeutil.py.md"
+      ],
+      "description": "UTC timestamp creation and time conversion utilities",
+      "cluster_id": 20,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/common/utils/timeutil",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/utils/timeutil"
+      ],
+      "cross_referenced_dags": [],
+      "cross_ref_count": 0
+    },
+    {
+      "dag_doc_new": "L3-flows/agent-application-bootstrap.md",
+      "compose_dirs": [
+        "__main__.py.md"
+      ],
+      "compose_files": [
+        "__main__.py.md"
+      ],
+      "description": "Agent process entry point and application startup",
+      "cluster_id": 0,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/agent",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/agent"
+      ],
+      "cross_referenced_dags": [],
+      "cross_ref_count": 0
+    },
+    {
+      "dag_doc_new": "L3-flows/daemon-entrypoint.md",
+      "compose_dirs": [
+        "azurelinuxagent/daemon"
+      ],
+      "compose_files": [
+        "azurelinuxagent/daemon/__init__.py.md"
+      ],
+      "description": "Daemon startup entrypoint for initializing and running the agent service",
+      "cluster_id": 22,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/daemon/main",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/daemon/main"
+      ],
+      "cross_referenced_dags": [],
+      "cross_ref_count": 0
+    },
+    {
+      "dag_doc_new": "L3-flows/distro-deprovision-workflows.md",
+      "compose_dirs": [
+        "azurelinuxagent/pa/deprovision"
+      ],
+      "compose_files": [
+        "azurelinuxagent/pa/deprovision/arch.py.md",
+        "azurelinuxagent/pa/deprovision/clearlinux.py.md",
+        "azurelinuxagent/pa/deprovision/coreos.py.md",
+        "azurelinuxagent/pa/deprovision/ubuntu.py.md"
+      ],
+      "description": "Implements distribution-specific cleanup workflows for machine deprovisioning",
+      "cluster_id": 32,
+      "file_count": 4,
+      "defining_namespace": "%REPO%/azurelinuxagent/pa/deprovision/default",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/pa/deprovision/arch",
+        "%REPO%/azurelinuxagent/pa/deprovision/clearlinux",
+        "%REPO%/azurelinuxagent/pa/deprovision/coreos",
+        "%REPO%/azurelinuxagent/pa/deprovision/default",
+        "%REPO%/azurelinuxagent/pa/deprovision/ubuntu"
+      ],
+      "cross_referenced_dags": [],
+      "cross_ref_count": 0
+    },
+    {
+      "dag_doc_new": "L3-flows/machine-deprovisioning-flow.md",
+      "compose_dirs": [
+        "azurelinuxagent/pa/deprovision"
+      ],
+      "compose_files": [
+        "azurelinuxagent/pa/deprovision/default.py.md"
+      ],
+      "description": "Guest deprovisioning workflow and associated resource isolation cleanup",
+      "cluster_id": 25,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/ga/cgroupconfigurator",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/exception",
+        "%REPO%/azurelinuxagent/common/osutil/factory",
+        "%REPO%/azurelinuxagent/common/protocol/util",
+        "%REPO%/azurelinuxagent/ga/cgroupconfigurator",
+        "%REPO%/azurelinuxagent/ga/exthandlers",
+        "%REPO%/azurelinuxagent/ga/persist_firewall_rules",
+        "%REPO%/azurelinuxagent/pa/deprovision/default"
+      ],
+      "cross_referenced_dags": [
+        "L1-conceptual/os-service-management.md",
+        "L2-platform/cgroup-resource-governance.md",
+        "L3-flows/distro-deprovision-workflows.md",
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 4
+    },
+    {
+      "dag_doc_new": "L3-flows/rdma-configuration-workflows.md",
+      "compose_dirs": [
+        "azurelinuxagent/pa/rdma"
+      ],
+      "compose_files": [
+        "azurelinuxagent/pa/rdma/centos.py.md",
+        "azurelinuxagent/pa/rdma/factory.py.md",
+        "azurelinuxagent/pa/rdma/rdma.py.md",
+        "azurelinuxagent/pa/rdma/suse.py.md",
+        "azurelinuxagent/pa/rdma/ubuntu.py.md"
+      ],
+      "description": "Configures RDMA drivers and packages across supported Linux distributions",
+      "cluster_id": 35,
+      "file_count": 5,
+      "defining_namespace": "%REPO%/azurelinuxagent/pa/rdma/rdma",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/conf",
+        "%REPO%/azurelinuxagent/common/logger",
+        "%REPO%/azurelinuxagent/common/utils/distro_version",
+        "%REPO%/azurelinuxagent/common/utils/shellutil",
+        "%REPO%/azurelinuxagent/common/utils/textutil",
+        "%REPO%/azurelinuxagent/common/version",
+        "%REPO%/azurelinuxagent/pa/rdma/centos",
+        "%REPO%/azurelinuxagent/pa/rdma/factory",
+        "%REPO%/azurelinuxagent/pa/rdma/rdma",
+        "%REPO%/azurelinuxagent/pa/rdma/suse",
+        "%REPO%/azurelinuxagent/pa/rdma/ubuntu"
+      ],
+      "cross_referenced_dags": [
+        "L2-platform/file-io-utilities.md"
+      ],
+      "cross_ref_count": 1
+    },
+    {
+      "dag_doc_new": "L3-flows/scvmm-agent-integration.md",
+      "compose_dirs": [
+        "azurelinuxagent/daemon"
+      ],
+      "compose_files": [
+        "azurelinuxagent/daemon/scvmm.py.md"
+      ],
+      "description": "SCVMM environment detection and guest agent startup workflow",
+      "cluster_id": 24,
+      "file_count": 1,
+      "defining_namespace": "%REPO%/azurelinuxagent/daemon/scvmm",
+      "min_namespace_list": [
+        "%REPO%/azurelinuxagent/common/conf",
+        "%REPO%/azurelinuxagent/common/logger",
+        "%REPO%/azurelinuxagent/common/osutil/factory",
+        "%REPO%/azurelinuxagent/daemon/scvmm"
+      ],
+      "cross_referenced_dags": [
+        "L2-platform/cgroup-resource-governance.md",
+        "L3-flows/rdma-configuration-workflows.md"
+      ],
+      "cross_ref_count": 2
+    }
+  ],
+  "ignored_patterns": [
+    "*/obj/*",
+    "*/bin/*",
+    "*project.nuget.cache.md",
+    "*.nuget.g.props.md",
+    "*.nuget.g.targets.md",
+    "*/owners.txt.md"
+  ]
+}
