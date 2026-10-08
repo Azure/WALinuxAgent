@@ -33,11 +33,11 @@ class VmExtensionIdentifier(object):
         self.version: str = version
 
     unsupported_distros: Dict[str, List[str]] = {
-        "Microsoft.OSTCExtensions.VMAccessForLinux": ["flatcar"],
+        "Microsoft.OSTCExtensions.VMAccessForLinux": ["flatcar", "sles_16"],
         "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent": ["flatcar", "mariner_1", "ubuntu_2404", "sles_15", "rhel_10", "almalinux_10", "oracle_10"],
         "Microsoft.GuestConfiguration.ConfigurationforLinux": ["flatcar"],
-        # TODO: Remove azurelinux_4 once AzureSecurityLinuxAgent supports Azure Linux 4.
-        "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent": ["flatcar", "azurelinux_4"],
+        # TODO: Remove azurelinux_4 and sles_16 once AzureSecurityLinuxAgent supports Azure Linux 4 and SUSE 16.
+        "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent": ["flatcar", "azurelinux_4", "sles_16"],
         # TODO: RCv2 currently fails on AzureCloud on the distros below due to GLIBC < 2.34. Once the extension is fixed to support older GLIB versions, remove this entry.
         "Microsoft.CPlat.Core.RunCommandHandlerLinux": ["almalinux_810", "centos_82", "debian_11", "redhat_810", "ubuntu_1804", "ubuntu_2004"]
     }
