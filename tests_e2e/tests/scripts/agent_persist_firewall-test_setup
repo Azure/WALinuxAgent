@@ -34,6 +34,9 @@ if ! command -v crontab; then
     if [[ "$distro" == *"sles"* ]]; then
         zypper -n refresh
         zypper -n install cronie
+    elif [[ "$distro" == *"azurelinux"* ]]; then
+        tdnf makecache
+        tdnf install -y cronie
     else
         apt-get update
         apt-get install -y cron
@@ -45,6 +48,9 @@ if ! command -v ping; then
     if [[ "$distro" == *"sles"* ]]; then
         zypper -n refresh
         zypper -n install iputils
+    elif [[ "$distro" == *"azurelinux"* ]]; then
+        tdnf makecache
+        tdnf install -y iputils
     else
         apt-get update
         apt-get install -y iputils-ping
