@@ -1494,7 +1494,9 @@ class ExtHandlerInstance(object):
         try:
             zipfile.ZipFile(source_file).extractall(target_directory)
         except Exception as exception:
-            logger.info("Error while unzipping extension package: {0}", ustr(exception))
+            message = "Error while unzipping extension package: {0}".format(ustr(exception))
+            logger.info(message)
+            add_event(op=WALAEventOperation.PackageExtractionFailure, message=message, name=self.ext_handler.name, version=self.ext_handler.version, is_success=False, log_event=False)
             os.remove(source_file)
             if os.path.exists(target_directory):
                 shutil.rmtree(target_directory)
