@@ -726,7 +726,13 @@ class WireClient(object):
         try:
             zipfile.ZipFile(target_file).extractall(target_directory)
         except Exception as exception:
-            logger.error("Error while unzipping {0}: {1}", package_type, ustr(exception))
+            message = "Error while unzipping {0}: {1}".format(package_type, ustr(exception))
+            logger.error(message)
+            # Extract package name and version from 'package_type' for telemetry. If format is not <name>-<version>, use
+            # 'package_type' as the name and an empty string for version.
+            package_type = "" if package_type is None else package_type
+            name, version = package_type.rsplit('-', 1) if '-' in package_type else (package_type, "")
+            add_event(op=WALAEventOperation.PackageExtractionFailure, message=message, name=name, version=version, is_success=False, log_event=False)
             if os.path.exists(target_directory):
                 try:
                     shutil.rmtree(target_directory)
