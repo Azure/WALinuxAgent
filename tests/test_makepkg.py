@@ -58,6 +58,26 @@ class TestMakePackage(unittest.TestCase):
 
         self.assertEqual(1, entries.count("package/"))
 
+    def test_remove_vendor_bytecode_keeps_sources_and_agent_bytecode(self):
+        archive_path = os.path.join(self.test_directory, "agent.egg")
+        vendor_source = "azurelinuxagent/vendor/site-packages/opentelemetry/trace/__init__.py"
+        vendor_bytecode = "azurelinuxagent/vendor/site-packages/opentelemetry/trace/__pycache__/__init__.pyc"
+        agent_bytecode = "azurelinuxagent/common/__pycache__/version.pyc"
+
+        with zipfile.ZipFile(archive_path, mode="w") as archive:
+            archive.writestr(vendor_source, b"source")
+            archive.writestr(vendor_bytecode, b"vendor bytecode")
+            archive.writestr(agent_bytecode, b"agent bytecode")
+
+        makepkg.remove_vendor_bytecode(archive_path)
+
+        with zipfile.ZipFile(archive_path) as archive:
+            entries = archive.namelist()
+
+        self.assertIn(vendor_source, entries)
+        self.assertNotIn(vendor_bytecode, entries)
+        self.assertIn(agent_bytecode, entries)
+
 
 if __name__ == "__main__":
     unittest.main()
