@@ -174,11 +174,17 @@ class Extension(object):
 class InVMGoalStateMetaData(DataContract):
     """
     Object for parsing the GoalState MetaData received from CRP
-    Eg: <InVMGoalStateMetaData inSvdSeqNo="2" createdOnTicks="637405409304121230" activityId="555e551c-600e-4fb4-90ba-8ab8ec28eccc" correlationId="400de90b-522e-491f-9d89-ec944661f531" />
+    Eg: <InVMGoalStateMetaData inSvdSeqNo="2" createdOnTicks="637405409304121230"
+            activityId="555e551c-600e-4fb4-90ba-8ab8ec28eccc"
+            correlationId="400de90b-522e-491f-9d89-ec944661f531"
+            traceParent="00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+            traceState="vendor=value" />
     """
     def __init__(self, in_vm_metadata_node):
         self.correlation_id = getattrib(in_vm_metadata_node, "correlationId")
         self.activity_id = getattrib(in_vm_metadata_node, "activityId")
+        self.trace_parent = getattrib(in_vm_metadata_node, "traceParent") or None
+        self.trace_state = getattrib(in_vm_metadata_node, "traceState") or None
         self.created_on_ticks = getattrib(in_vm_metadata_node, "createdOnTicks")
         self.in_svd_seq_no = getattrib(in_vm_metadata_node, "inSvdSeqNo")
 

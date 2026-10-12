@@ -90,6 +90,14 @@ class ExtensionsGoalState(object):
         raise NotImplementedError()
 
     @property
+    def trace_parent(self):
+        raise NotImplementedError()
+
+    @property
+    def trace_state(self):
+        raise NotImplementedError()
+
+    @property
     def created_on_timestamp(self):
         raise NotImplementedError()
 
@@ -209,6 +217,14 @@ class EmptyExtensionsGoalState(ExtensionsGoalState):
     @property
     def correlation_id(self):
         return AgentGlobals.GUID_ZERO
+
+    @property
+    def trace_parent(self):
+        return None
+
+    @property
+    def trace_state(self):
+        return None
 
     @property
     def created_on_timestamp(self):

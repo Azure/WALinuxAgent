@@ -32,6 +32,7 @@ from datetime import datetime, timedelta
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common import event
+from azurelinuxagent.common import opentelemetry as agent_opentelemetry
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames, \
     get_agent_supported_features_list_for_crp
@@ -333,6 +334,8 @@ class UpdateHandler(object):
             logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
             logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
 
+            agent_opentelemetry.initialize_from_config()
+
             vm_arch = self.osutil.get_vm_arch()
             logger.info("CPU Arch: {0}", vm_arch)
 
@@ -435,6 +438,7 @@ class UpdateHandler(object):
             self._set_sentinel(msg=msg)
             logger.warn(msg)
             logger.warn(textutil.format_exception(error))
+            agent_opentelemetry.shutdown()
             sys.exit(1)
             # additional return here because sys.exit is mocked in unit tests
             return  # pylint: disable=unreachable
@@ -1035,6 +1039,7 @@ class UpdateHandler(object):
         # Todo: Ensure all threads stopped when shutting down the main extension handler to ensure that the state of
         # all threads is clean.
         self.is_running = False
+        agent_opentelemetry.shutdown()
 
         if not os.path.isfile(self._sentinel_file_path()):
             return

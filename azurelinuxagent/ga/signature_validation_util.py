@@ -22,6 +22,7 @@ import os
 import re
 
 from azurelinuxagent.common import conf
+from azurelinuxagent.common import opentelemetry as agent_opentelemetry
 from azurelinuxagent.common.utils.shellutil import run_command, CommandError
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common import logger
@@ -143,6 +144,7 @@ def _report_validation_event(op, level, message, name, version, duration):
     add_event(op=op, message=event_msg, name=name, version=version, is_success=is_success, duration=duration, log_event=False)
 
 
+@agent_opentelemetry.trace_operation("ValidateExtensionPackage")
 def validate_signature(package_path, signature, package_full_name, failure_log_level):
     """
     Validates signature of provided package using OpenSSL CLI. The verification checks the signature against a trusted
@@ -233,6 +235,7 @@ def validate_signature(package_path, signature, package_full_name, failure_log_l
                                      name=name, version=version, duration=0)
 
 
+@agent_opentelemetry.trace_operation("ValidateHandlerManifest")
 def validate_handler_manifest_signing_info(manifest, ext_handler, failure_log_level):
     """
     For signed extensions, the handler manifest includes a "signingInfo" section that specifies

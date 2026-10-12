@@ -569,6 +569,7 @@ def http_post(url,
               retry_codes=None,
               retry_delay=DELAY_IN_SECONDS,
               throttle_delay=THROTTLE_DELAY_IN_SECONDS,
+              redact_data=False,
               timeout=10):
 
     if max_retry is None:
@@ -582,7 +583,8 @@ def http_post(url,
                         max_retry=max_retry,
                         retry_codes=retry_codes,
                         retry_delay=retry_delay,
-                        throttle_delay=throttle_delay)
+                        throttle_delay=throttle_delay,
+                        redact_data=redact_data)
 
 
 def http_put(url,

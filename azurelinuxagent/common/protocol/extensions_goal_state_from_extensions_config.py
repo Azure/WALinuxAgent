@@ -44,6 +44,8 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         self._on_hold = False
         self._activity_id = None
         self._correlation_id = None
+        self._trace_parent = None
+        self._trace_state = None
         self._created_on_timestamp = None
         self._agent_families = []
         self._extensions = []
@@ -96,6 +98,8 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         in_vm_gs_metadata = InVMGoalStateMetaData(find(xml_doc, "InVMGoalStateMetaData"))
         self._activity_id = self._string_to_id(in_vm_gs_metadata.activity_id)
         self._correlation_id = self._string_to_id(in_vm_gs_metadata.correlation_id)
+        self._trace_parent = in_vm_gs_metadata.trace_parent
+        self._trace_state = in_vm_gs_metadata.trace_state
         self._created_on_timestamp = self._ticks_to_utc_timestamp(in_vm_gs_metadata.created_on_ticks)
 
     @staticmethod
@@ -150,6 +154,14 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
     @property
     def correlation_id(self):
         return self._correlation_id
+
+    @property
+    def trace_parent(self):
+        return self._trace_parent
+
+    @property
+    def trace_state(self):
+        return self._trace_state
 
     @property
     def created_on_timestamp(self):
@@ -609,4 +621,3 @@ class _InVMArtifactsProfile(object):
 
     def get_on_hold(self):
         return self._on_hold
-

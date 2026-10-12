@@ -20,6 +20,7 @@
 """
 Module conf loads and parses configuration file
 """  # pylint: disable=W0105
+import math
 import os
 import os.path
 
@@ -122,6 +123,7 @@ __SWITCH_OPTIONS__ = {
     "Logs.Verbose": False,
     "Logs.Console": True,
     "Logs.Collect": True,
+    "OpenTelemetry.Enabled": False,
     "Extensions.Enabled": True,
     "Extensions.WaitForCloudInit": False,
     "Provisioning.AllowResetSysUser": False,
@@ -192,6 +194,10 @@ __INTEGER_OPTIONS__ = {
     "ResourceDisk.SwapSizeMB": 0,
     "Autoupdate.Frequency": 3600,
     "Logs.CollectPeriod": 3600,
+    "OpenTelemetry.ExportTimeoutSeconds": 10,
+    "OpenTelemetry.ExportIntervalMilliseconds": 5000,
+    "OpenTelemetry.MaxQueueSize": 2048,
+    "OpenTelemetry.MaxExportBatchSize": 64,
     #
     # "Debug" options are experimental and may be removed in later
     # versions of the Agent.
@@ -207,6 +213,10 @@ __INTEGER_OPTIONS__ = {
     "Debug.LogCollectorInitialDelay": 5 * 60
 }
 
+__FLOAT_OPTIONS__ = {
+    "OpenTelemetry.RootSamplingRatio": 1.0
+}
+
 
 def get_configuration(conf=__conf__):
     options = {}
@@ -218,6 +228,9 @@ def get_configuration(conf=__conf__):
 
     for option in __INTEGER_OPTIONS__:
         options[option] = conf.get_int(option, __INTEGER_OPTIONS__[option])
+
+    for option in __FLOAT_OPTIONS__:
+        options[option] = _get_float(option, __FLOAT_OPTIONS__[option], conf)
 
     return options
 
@@ -238,6 +251,32 @@ def get_switch_default_value(option):
     if option in __SWITCH_OPTIONS__:
         return __SWITCH_OPTIONS__[option]
     raise ValueError("{0} is not a valid configuration parameter.".format(option))
+
+
+def _get_positive_int(option, default_value, conf):
+    value = conf.get_int(option, None)
+    if value is None:
+        if conf.is_present(option):
+            raise AgentConfigError("The value of {0} must be a positive integer".format(option))
+        return default_value
+    if value <= 0:
+        raise AgentConfigError("The value of {0} must be a positive integer".format(option))
+    return value
+
+
+def _get_float(option, default_value, conf):
+    value = conf.get(option, None)
+    if value is None:
+        if conf.is_present(option):
+            raise AgentConfigError("The value of {0} must be a number".format(option))
+        return default_value
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        raise AgentConfigError("The value of {0} must be a number".format(option))
+    if math.isnan(value) or math.isinf(value):
+        raise AgentConfigError("The value of {0} must be a finite number".format(option))
+    return value
 
 
 def is_present(key, conf=__conf__):
@@ -393,6 +432,61 @@ def get_ssh_host_keypair_mode(conf=__conf__):
 
 def get_extensions_enabled(conf=__conf__):
     return conf.get_switch("Extensions.Enabled", True)
+
+
+def get_opentelemetry_enabled(conf=__conf__):
+    value = conf.get("OpenTelemetry.Enabled", None)
+    if value is None:
+        return False
+    if value.lower() == "y":
+        return True
+    if value.lower() == "n":
+        return False
+    raise AgentConfigError("The value of OpenTelemetry.Enabled must be 'y' or 'n'")
+
+
+def get_opentelemetry_export_timeout(conf=__conf__):
+    return _get_positive_int("OpenTelemetry.ExportTimeoutSeconds", 10, conf)
+
+
+def get_opentelemetry_export_interval(conf=__conf__):
+    return _get_positive_int("OpenTelemetry.ExportIntervalMilliseconds", 5000, conf)
+
+
+def get_opentelemetry_max_queue_size(conf=__conf__):
+    return _get_positive_int("OpenTelemetry.MaxQueueSize", 2048, conf)
+
+
+def get_opentelemetry_max_export_batch_size(conf=__conf__):
+    return _get_positive_int("OpenTelemetry.MaxExportBatchSize", 64, conf)
+
+
+def get_opentelemetry_root_sampling_ratio(conf=__conf__):
+    ratio = _get_float("OpenTelemetry.RootSamplingRatio", 1.0, conf)
+    if ratio < 0.0 or ratio > 1.0:
+        raise AgentConfigError("OpenTelemetry.RootSamplingRatio must be between 0.0 and 1.0 inclusive")
+    return ratio
+
+
+def get_opentelemetry_configuration(conf=__conf__):
+    max_queue_size = get_opentelemetry_max_queue_size(conf)
+    max_export_batch_size = get_opentelemetry_max_export_batch_size(conf)
+    if max_export_batch_size > max_queue_size:
+        raise AgentConfigError(
+            "OpenTelemetry.MaxExportBatchSize cannot be greater than OpenTelemetry.MaxQueueSize"
+        )
+    if max_export_batch_size > 64:
+        raise AgentConfigError(
+            "OpenTelemetry.MaxExportBatchSize cannot be greater than the HostGAPlugin limit of 64"
+        )
+
+    return {
+        "timeout": get_opentelemetry_export_timeout(conf),
+        "schedule_delay_millis": get_opentelemetry_export_interval(conf),
+        "max_queue_size": max_queue_size,
+        "max_export_batch_size": max_export_batch_size,
+        "root_sampling_ratio": get_opentelemetry_root_sampling_ratio(conf)
+    }
 
 
 def get_wait_for_cloud_init(conf=__conf__):
