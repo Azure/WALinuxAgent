@@ -46,6 +46,8 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         self._schema_version = FlexibleVersion('0.0.0.0')
         self._activity_id = AgentGlobals.GUID_ZERO
         self._correlation_id = AgentGlobals.GUID_ZERO
+        self._trace_parent = None
+        self._trace_state = None
         self._created_on_timestamp = timeutil.create_utc_timestamp(datetime_min_utc)
         self._source = None
         self._status_upload_blob = None
@@ -95,6 +97,14 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         The correlation id for the CRP operation
         """
         return self._correlation_id
+
+    @property
+    def trace_parent(self):
+        return self._trace_parent
+
+    @property
+    def trace_state(self):
+        return self._trace_state
 
     @property
     def hostga_plugin_correlation_id(self):
@@ -196,6 +206,8 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
         self._activity_id = self._string_to_id(vm_settings.get("activityId"))
         self._correlation_id = self._string_to_id(vm_settings.get("correlationId"))
+        self._trace_parent = vm_settings.get("traceParent") or None
+        self._trace_state = vm_settings.get("traceState") or None
         self._svd_sequence_number = self._string_to_id(vm_settings.get("inSvdSeqNo"))
         self._created_on_timestamp = self._ticks_to_utc_timestamp(vm_settings.get("extensionsLastModifiedTickCount"))
 
@@ -664,8 +676,6 @@ def _casefold(string):
     # Class 'str' has no 'casefold' member (no-member) -- Disabled: This warning shows up on Python 2.7 pylint runs
     # but this code is actually not executed on Python 2.
     return str.casefold(string)  # pylint: disable=no-member
-
-
 
 
 

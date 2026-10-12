@@ -33,6 +33,7 @@ from datetime import datetime, timedelta
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common import event
+from azurelinuxagent.common import opentelemetry as agent_opentelemetry
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames, \
     get_agent_supported_features_list_for_crp
@@ -392,6 +393,8 @@ class UpdateHandler(object):
             # Ensure state dir exists (may not be created by the daemon if it runs an older version)
             state_dir.initialize_state_dir()
 
+            agent_opentelemetry.initialize_from_config()
+
             vm_arch = self.osutil.get_vm_arch()
             logger.info("CPU Arch: {0}", vm_arch)
 
@@ -514,6 +517,7 @@ class UpdateHandler(object):
             self._set_sentinel(msg=msg)
             logger.warn(msg)
             logger.warn(textutil.format_exception(error))
+            agent_opentelemetry.shutdown()
             sys.exit(1)
             # additional return here because sys.exit is mocked in unit tests
             return  # pylint: disable=unreachable
@@ -1144,6 +1148,7 @@ class UpdateHandler(object):
         # method is also called from the daemon's forward_signal(), but in the daemon process
         # _all_thread_handlers is empty, so it only cleans up the sentinel file.
         self.is_running = False
+        agent_opentelemetry.shutdown()
 
         # Build an explicit shutdown order, so we don't rely on the order of items in self._all_thread_handlers.
         #
