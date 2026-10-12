@@ -1,0 +1,10 @@
+Third-Party Notices for vendored OpenTelemetry tracing dependencies
+
+The following components are redistributed in source form under
+azurelinuxagent/vendor/site-packages. Their required license and notice texts
+are preserved under azurelinuxagent/vendor/licenses.
+
+- opentelemetry-api 1.44.0 (Apache-2.0)
+- opentelemetry-sdk 1.44.0 (Apache-2.0)
+- opentelemetry-semantic-conventions 0.65b0 (Apache-2.0)
+- typing_extensions 4.16.0 (PSF-2.0)
