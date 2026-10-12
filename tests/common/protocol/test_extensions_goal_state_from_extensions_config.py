@@ -12,6 +12,12 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
             self.assertEqual("555e551c-600e-4fb4-90ba-8ab8ec28eccc", extensions_goal_state.activity_id, "Incorrect activity Id")
             self.assertEqual("400de90b-522e-491f-9d89-ec944661f531", extensions_goal_state.correlation_id, "Incorrect correlation Id")
+            self.assertEqual(
+                "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+                extensions_goal_state.trace_parent,
+                "Incorrect trace parent"
+            )
+            self.assertEqual("vendor=opaque-value", extensions_goal_state.trace_state, "Incorrect trace state")
             self.assertEqual('2020-11-09T17:48:50.412125Z', extensions_goal_state.created_on_timestamp, "Incorrect GS Creation time")
 
     def test_it_should_use_default_values_when_in_vm_metadata_is_missing(self):
@@ -21,6 +27,8 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
             self.assertEqual(AgentGlobals.GUID_ZERO, extensions_goal_state.activity_id, "Incorrect activity Id")
             self.assertEqual(AgentGlobals.GUID_ZERO, extensions_goal_state.correlation_id, "Incorrect correlation Id")
+            self.assertIsNone(extensions_goal_state.trace_parent)
+            self.assertIsNone(extensions_goal_state.trace_state)
             self.assertEqual('0001-01-01T00:00:00.000000Z', extensions_goal_state.created_on_timestamp, "Incorrect GS Creation time")
 
     def test_it_should_use_default_values_when_in_vm_metadata_is_invalid(self):
@@ -28,6 +36,8 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
             self.assertEqual(AgentGlobals.GUID_ZERO, extensions_goal_state.activity_id, "Incorrect activity Id")
             self.assertEqual(AgentGlobals.GUID_ZERO, extensions_goal_state.correlation_id, "Incorrect correlation Id")
+            self.assertIsNone(extensions_goal_state.trace_parent)
+            self.assertIsNone(extensions_goal_state.trace_state)
             self.assertEqual('0001-01-01T00:00:00.000000Z', extensions_goal_state.created_on_timestamp, "Incorrect GS Creation time")
 
     def test_it_should_parse_missing_status_upload_blob_as_none(self):

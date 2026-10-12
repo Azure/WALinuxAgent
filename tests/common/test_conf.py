@@ -47,6 +47,12 @@ class TestConf(AgentTestCase):
         "ResourceDisk.SwapSizeMB": 0,
         "ResourceDisk.MountOptions": None,
         "Logs.Verbose": False,
+        "OpenTelemetry.Enabled": False,
+        "OpenTelemetry.ExportTimeoutSeconds": 10,
+        "OpenTelemetry.ExportIntervalMilliseconds": 5000,
+        "OpenTelemetry.MaxQueueSize": 2048,
+        "OpenTelemetry.MaxExportBatchSize": 64,
+        "OpenTelemetry.RootSamplingRatio": 1.0,
         "OS.EnableFIPS": True,
         "OS.RootDeviceScsiTimeout": '300',
         "OS.OpensslPath": '/usr/bin/openssl',
@@ -147,6 +153,93 @@ class TestConf(AgentTestCase):
 
     def test_get_extensions_enabled(self):
         self.assertTrue(conf.get_extensions_enabled(self.conf))
+
+    def test_get_opentelemetry_configuration_returns_defaults(self):
+        self.assertFalse(conf.get_opentelemetry_enabled(self.conf))
+        self.assertEqual({
+            "timeout": 10,
+            "schedule_delay_millis": 5000,
+            "max_queue_size": 2048,
+            "max_export_batch_size": 64,
+            "root_sampling_ratio": 1.0
+        }, conf.get_opentelemetry_configuration(self.conf))
+
+    def test_get_opentelemetry_configuration_returns_configured_values(self):
+        configuration = conf.ConfigurationProvider()
+        configuration.load("""
+OpenTelemetry.Enabled=y
+OpenTelemetry.ExportTimeoutSeconds=7
+OpenTelemetry.ExportIntervalMilliseconds=1000
+OpenTelemetry.MaxQueueSize=100
+OpenTelemetry.MaxExportBatchSize=50
+OpenTelemetry.RootSamplingRatio=0.25
+""")
+
+        self.assertTrue(conf.get_opentelemetry_enabled(configuration))
+        self.assertEqual({
+            "timeout": 7,
+            "schedule_delay_millis": 1000,
+            "max_queue_size": 100,
+            "max_export_batch_size": 50,
+            "root_sampling_ratio": 0.25
+        }, conf.get_opentelemetry_configuration(configuration))
+
+    def test_get_opentelemetry_configuration_rejects_invalid_integer_values(self):
+        for option, value in [
+            ("OpenTelemetry.ExportTimeoutSeconds", "invalid"),
+            ("OpenTelemetry.ExportIntervalMilliseconds", "0"),
+            ("OpenTelemetry.MaxQueueSize", "-1"),
+            ("OpenTelemetry.MaxExportBatchSize", "0")
+        ]:
+            configuration = conf.ConfigurationProvider()
+            configuration.load("{0}={1}".format(option, value))
+            with self.assertRaises(conf.AgentConfigError):
+                conf.get_opentelemetry_configuration(configuration)
+
+    def test_get_opentelemetry_enabled_rejects_invalid_switch_values(self):
+        configuration = conf.ConfigurationProvider()
+        configuration.load("OpenTelemetry.Enabled=invalid")
+
+        with self.assertRaises(conf.AgentConfigError):
+            conf.get_opentelemetry_enabled(configuration)
+
+    def test_get_opentelemetry_configuration_rejects_invalid_sampling_ratios(self):
+        for value in ["invalid", "-0.1", "1.1", "nan", "inf"]:
+            configuration = conf.ConfigurationProvider()
+            configuration.load("OpenTelemetry.RootSamplingRatio={0}".format(value))
+
+            with self.assertRaises(conf.AgentConfigError):
+                conf.get_opentelemetry_configuration(configuration)
+
+    def test_get_opentelemetry_configuration_accepts_sampling_ratio_boundaries(self):
+        for value in ["0.0", "1.0"]:
+            configuration = conf.ConfigurationProvider()
+            configuration.load("OpenTelemetry.RootSamplingRatio={0}".format(value))
+
+            self.assertEqual(
+                float(value),
+                conf.get_opentelemetry_configuration(configuration)["root_sampling_ratio"]
+            )
+
+    def test_get_opentelemetry_configuration_rejects_batch_larger_than_queue(self):
+        configuration = conf.ConfigurationProvider()
+        configuration.load("""
+OpenTelemetry.MaxQueueSize=10
+OpenTelemetry.MaxExportBatchSize=11
+""")
+
+        with self.assertRaises(conf.AgentConfigError):
+            conf.get_opentelemetry_configuration(configuration)
+
+    def test_get_opentelemetry_configuration_rejects_batch_larger_than_host_limit(self):
+        configuration = conf.ConfigurationProvider()
+        configuration.load("""
+OpenTelemetry.MaxQueueSize=100
+OpenTelemetry.MaxExportBatchSize=65
+""")
+
+        with self.assertRaises(conf.AgentConfigError):
+            conf.get_opentelemetry_configuration(configuration)
 
     def test_get_get_auto_update_to_latest_version(self):
         # update flags not set

@@ -894,15 +894,19 @@ class TestUpdate(UpdateTestCase):
 
     def test_shutdown(self):
         self.update_handler._set_sentinel()
-        self.update_handler._shutdown()
+        with patch("azurelinuxagent.ga.update.agent_opentelemetry.shutdown") as shutdown:
+            self.update_handler._shutdown()
         self.assertFalse(self.update_handler.is_running)
         self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
+        shutdown.assert_called_once_with()
 
     def test_shutdown_ignores_missing_sentinel_file(self):
         self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
-        self.update_handler._shutdown()
+        with patch("azurelinuxagent.ga.update.agent_opentelemetry.shutdown") as shutdown:
+            self.update_handler._shutdown()
         self.assertFalse(self.update_handler.is_running)
         self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
+        shutdown.assert_called_once_with()
 
     def test_shutdown_ignores_exceptions(self):
         self.update_handler._set_sentinel()
@@ -1362,7 +1366,12 @@ class UpdateHandlerRunTestCase(AgentTestCase):
                                                 return update_handler
 
     def test_run(self):
-        self._test_run()
+        with patch("azurelinuxagent.ga.update.agent_opentelemetry.initialize_from_config") as initialize:
+            with patch("azurelinuxagent.ga.update.agent_opentelemetry.shutdown") as shutdown:
+                self._test_run()
+
+        initialize.assert_called_once_with()
+        shutdown.assert_called_once_with()
 
     def test_run_stops_if_orphaned(self):
         with patch('os.getppid', return_value=1):
@@ -1374,9 +1383,14 @@ class UpdateHandlerRunTestCase(AgentTestCase):
         self.assertFalse(os.path.isfile(update_handler._sentinel_file_path()))
 
     def test_run_leaves_sentinel_on_unsuccessful_exit(self):
-        with patch('azurelinuxagent.ga.agent_update_handler.AgentUpdateHandler.run', side_effect=Exception):
-            update_handler = self._test_run(autoupdate_enabled=True,expected_exit_code=1)
-            self.assertTrue(os.path.isfile(update_handler._sentinel_file_path()))
+        with patch("azurelinuxagent.ga.update.agent_opentelemetry.initialize_from_config") as initialize:
+            with patch("azurelinuxagent.ga.update.agent_opentelemetry.shutdown") as shutdown:
+                with patch('azurelinuxagent.ga.agent_update_handler.AgentUpdateHandler.run', side_effect=Exception):
+                    update_handler = self._test_run(autoupdate_enabled=True,expected_exit_code=1)
+                    self.assertTrue(os.path.isfile(update_handler._sentinel_file_path()))
+
+        initialize.assert_called_once_with()
+        shutdown.assert_called_once_with()
 
     def test_run_emits_restart_event(self):
         update_handler = self._test_run(emit_restart_event=Mock())

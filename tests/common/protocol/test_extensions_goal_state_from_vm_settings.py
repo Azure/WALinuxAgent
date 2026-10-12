@@ -19,6 +19,8 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
 
             assert_property("activity_id", "a33f6f53-43d6-4625-b322-1a39651a00c9")
             assert_property("correlation_id", "9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e")
+            assert_property("trace_parent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+            assert_property("trace_state", "vendor=opaque-value")
             assert_property("created_on_timestamp", "2021-11-16T13:22:50.620529Z")
             assert_property("status_upload_blob", "https://dcrcl3a0xs.blob.core.windows.net/$system/edp0plkw2b.86f4ae0a-61f8-48ae-9199-40f402d56864.status?sv=2018-03-28&sr=b&sk=system-1&sig=KNWgC2%3d&se=9999-01-01T00%3a00%3a00Z&sp=w")
             assert_property("status_upload_blob_type", "BlockBlob")
@@ -138,6 +140,15 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
 
             self.assertIsNone(extensions_goal_state.status_upload_blob, "Expected status upload blob to be None")
             self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, "Expected status upload blob to be Block")
+
+    def test_it_should_default_missing_trace_context_to_none(self):
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-no_status_upload_blob.json"
+        with mock_wire_protocol(data_file) as protocol:
+            extensions_goal_state = protocol.get_goal_state().extensions_goal_state
+
+            self.assertIsNone(extensions_goal_state.trace_parent)
+            self.assertIsNone(extensions_goal_state.trace_state)
 
     def test_it_should_parse_missing_agent_manifests_as_empty(self):
         data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
