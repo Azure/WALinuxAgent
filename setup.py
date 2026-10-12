@@ -36,6 +36,24 @@ root_dir = os.path.dirname(os.path.abspath(__file__))  # pylint: disable=invalid
 os.chdir(root_dir)
 
 
+def get_vendor_files():
+    """
+    Returns all files under azurelinuxagent/vendor relative to the
+    azurelinuxagent package directory.
+    """
+    package_root = os.path.join(root_dir, "azurelinuxagent")
+    vendor_root = os.path.join(package_root, "vendor")
+    vendor_files = []
+
+    for directory, _, filenames in os.walk(vendor_root):
+        for filename in filenames:
+            path = os.path.join(directory, filename)
+            relative_path = os.path.relpath(path, package_root)
+            vendor_files.append(relative_path.replace(os.sep, "/"))
+
+    return sorted(vendor_files)
+
+
 def set_files(data_files, dest=None, src=None):
     data_files.append((dest, src))
 
@@ -375,10 +393,12 @@ setuptools.setup(
     url='https://github.com/Azure/WALinuxAgent',
     license='Apache License Version 2.0',
     packages=find_packages(exclude=["tests*", "dcr*"]),
+    package_data={
+        "azurelinuxagent": get_vendor_files()
+    },
     py_modules=modules,
     install_requires=requires,
     cmdclass={
         'install': install
     }
 )
-

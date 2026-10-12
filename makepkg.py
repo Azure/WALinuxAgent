@@ -7,6 +7,7 @@ import os.path
 import shutil
 import subprocess
 import sys
+import zipfile
 
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
     AGENT_LONG_VERSION
@@ -57,7 +58,28 @@ def do(*args):
         raise Exception("[{0}] failed:\n{1}\n{2}".format(" ".join(args), str(e), e.output))
 
 
+def add_zip_directory_entries(archive_path):
+    """
+    Adds missing directory entries to an archive.
+
+    Python's zip importer needs these entries to discover PEP 420 namespace
+    packages, such as the vendored opentelemetry and google packages.
+    """
+    with zipfile.ZipFile(archive_path, mode="a") as archive:
+        existing_entries = set(archive.namelist())
+        directory_entries = set()
+
+        for entry in existing_entries:
+            components = entry.rstrip("/").split("/")
+            for index in range(1, len(components)):
+                directory_entries.add("/".join(components[:index]) + "/")
+
+        for directory in sorted(directory_entries - existing_entries):
+            archive.writestr(directory, b"")
+
+
 def run(agent_family, output_directory, log):
+    output_directory = os.path.abspath(output_directory)
     output_path = os.path.join(output_directory, "eggs")
     target_path = os.path.join(output_path, AGENT_LONG_VERSION)
     bin_path = os.path.join(target_path, "bin")
@@ -81,8 +103,9 @@ def run(agent_family, output_directory, log):
     log.info("Creating egg {0}".format(egg_path))
     do(*args)
 
-    egg_name = os.path.join("bin", os.path.basename(
-        glob.glob(os.path.join(bin_path, "*"))[0]))
+    generated_egg_path = glob.glob(os.path.join(bin_path, "*"))[0]
+    add_zip_directory_entries(generated_egg_path)
+    egg_name = os.path.join("bin", os.path.basename(generated_egg_path))
 
     log.info("Writing {0}".format(manifest_path))
     with open(manifest_path, mode='w') as manifest:
