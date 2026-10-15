@@ -48,10 +48,7 @@ class TestMemoryControllerV1(AgentTestCase):
 
         self.assertEqual(e.exception.errno, errno.ENOENT)
 
-        with self.assertRaises(IOError) as e:
-            test_mem_controller.get_max_memory_usage()
-
-        self.assertEqual(e.exception.errno, errno.ENOENT)
+        self.assertEqual(0, test_mem_controller.get_max_memory_usage())
 
         with self.assertRaises(IOError) as e:
             test_mem_controller.try_swap_memory_usage()
@@ -98,10 +95,7 @@ class TestMemoryControllerV2(AgentTestCase):
 
         self.assertEqual(e.exception.errno, errno.ENOENT)
 
-        with self.assertRaises(IOError) as e:
-            test_mem_controller.get_max_memory_usage()
-
-        self.assertEqual(e.exception.errno, errno.ENOENT)
+        self.assertEqual(0, test_mem_controller.get_max_memory_usage())
 
         with self.assertRaises(IOError) as e:
             test_mem_controller.try_swap_memory_usage()
