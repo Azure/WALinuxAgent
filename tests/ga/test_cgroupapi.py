@@ -26,7 +26,7 @@ from azurelinuxagent.ga.cgroupapi import SystemdCgroupApiv1, SystemdCgroupApiv2,
     InvalidCgroupMountpointException, CgroupV1, CgroupV2
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.osutil import systemd
-from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.ga.cpucontroller import CpuControllerV1, CpuControllerV2
 from azurelinuxagent.ga.memorycontroller import MemoryControllerV1, MemoryControllerV2
 from tests.lib.mock_cgroup_environment import mock_cgroup_v1_environment, mock_cgroup_v2_environment, \
@@ -154,6 +154,24 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             cpu_accounting = systemd.get_unit_property("walinuxagent.service", "CPUAccounting")
 
             self.assertEqual(cpu_accounting, "no", "Property {0} of {1} is incorrect".format("CPUAccounting", "walinuxagent.service"))
+
+    def test_stop_unit_should_stop_the_given_unit(self):
+        unit_name = "azure-vmextensions-Microsoft.CPlat.Extension.slice"
+        with patch("azurelinuxagent.common.osutil.systemd.shellutil.run_command") as run_command:
+            systemd.stop_unit(unit_name)
+
+        run_command.assert_called_once_with(["systemctl", "stop", unit_name])
+
+    def test_stop_unit_should_raise_value_error_when_systemctl_fails(self):
+        unit_name = "azure-vmextensions-Microsoft.CPlat.Extension.slice"
+        command = ["systemctl", "stop", unit_name]
+        error = shellutil.CommandError(command, 1, "", "Access denied")
+        with patch("azurelinuxagent.common.osutil.systemd.shellutil.run_command", side_effect=error) as run_command:
+            with self.assertRaises(ValueError) as context:
+                systemd.stop_unit(unit_name)
+
+        run_command.assert_called_once_with(command)
+        self.assertEqual("Can't stop unit {0}: {1}".format(unit_name, error), str(context.exception))
 
 
 class SystemdCgroupsApiv1TestCase(AgentTestCase):

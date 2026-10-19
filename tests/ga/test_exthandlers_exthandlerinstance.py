@@ -7,7 +7,7 @@ import sys
 
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerPackage
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
-from tests.lib.tools import AgentTestCase, patch
+from tests.lib.tools import AgentTestCase, call, patch
 
 
 class ExtHandlerInstanceTestCase(AgentTestCase):
@@ -42,6 +42,21 @@ class ExtHandlerInstanceTestCase(AgentTestCase):
 
         self.assertFalse(os.path.exists(self.extension_directory))
         self.assertFalse(os.path.exists(os.path.join(self.base_dir, "foo__1.2.3.zip")))
+
+    def test_remove_ext_handler_should_reset_quota_before_removing_the_slice(self):
+        for directory_exists in [True, False]:
+            if directory_exists:
+                os.mkdir(self.extension_directory)
+
+            with patch("azurelinuxagent.ga.exthandlers.CGroupConfigurator.get_instance") as get_configurator:
+                self.ext_handler_instance.remove_ext_handler()
+
+            self.assertEqual([
+                call.stop_tracking_extension_cgroups("foo-1.2.3"),
+                call.reset_extension_quota(extension_name="foo-1.2.3"),
+                call.remove_extension_slice(extension_name="foo-1.2.3")
+            ], get_configurator.return_value.mock_calls)
+            self.assertFalse(os.path.exists(self.extension_directory))
 
     def test_rm_ext_handler_dir_should_remove_the_extension_directory(self):
         os.mkdir(self.extension_directory)
@@ -126,4 +141,3 @@ class ExtHandlerInstanceTestCase(AgentTestCase):
 
         args, kwargs = mock_report_event.call_args  # pylint: disable=unused-variable
         self.assertTrue("A mocked error" in kwargs["message"])
-

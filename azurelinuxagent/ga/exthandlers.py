@@ -1862,6 +1862,7 @@ class ExtHandlerInstance(object):
             self.logger.info("Remove the extension slice: {0}".format(self.get_full_name()))
             CGroupConfigurator.get_instance().reset_extension_quota(
                 extension_name=self.get_full_name())
+            CGroupConfigurator.get_instance().remove_extension_slice(extension_name=self.get_full_name())
 
         except IOError as e:
             message = "Failed to remove extension handler directory: {0}".format(e)
@@ -2254,7 +2255,7 @@ class ExtHandlerInstance(object):
                     # Add the os environment variables before executing command
                     env.update(os.environ)
                     process_output = CGroupConfigurator.get_instance().start_extension_command(
-                        extension_name=self.get_full_name(extension),
+                        extension_name=self.get_full_name(),
                         command=command_full_path,
                         cmd_name=cmd_name,
                         timeout=timeout,

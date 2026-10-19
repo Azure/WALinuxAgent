@@ -364,6 +364,43 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             self.assertIn(command, configurator.mocks.commands_call_list, "The command to set the CPU quota was not called")
             self.assertFalse(os.path.exists(extension_slice_unit_file), "{0} should not have been created".format(extension_slice_unit_file))
 
+    def test_remove_extension_slice_should_stop_the_slice(self):
+        extension_name = "Microsoft.CPlat.Test-Extension-1.2.3"
+        command = "systemctl stop azure-vmextensions-Microsoft.CPlat.Test_Extension.slice"
+        for get_configurator in [self._get_cgroup_configurator, self._get_cgroup_configurator_v2]:
+            with get_configurator(mock_commands=[MockCommand("^" + re.escape(command) + "$", "")]) as configurator:
+                self.assertTrue(configurator.enabled())
+                configurator.mocks.commands_call_list[:] = []
+
+                configurator.remove_extension_slice(extension_name)
+
+                self.assertEqual([command], configurator.mocks.commands_call_list)
+
+    def test_remove_extension_slice_should_not_stop_the_slice_when_cgroups_are_disabled(self):
+        for get_configurator in [self._get_cgroup_configurator, self._get_cgroup_configurator_v2]:
+            with get_configurator(enable=False) as configurator:
+                self.assertFalse(configurator.enabled())
+                with patch("azurelinuxagent.ga.cgroupconfigurator.systemd.stop_unit") as stop_unit:
+                    configurator.remove_extension_slice("Microsoft.CPlat.Extension-1.2.3")
+
+                stop_unit.assert_not_called()
+
+    def test_remove_extension_slice_should_log_a_warning_when_stopping_the_slice_fails(self):
+        extension_name = "Microsoft.CPlat.Extension-1.2.3"
+        command = "systemctl stop azure-vmextensions-Microsoft.CPlat.Extension.slice"
+        command_mock = MockCommand("^" + re.escape(command) + "$", return_value=1, stdout="", stderr="Access denied")
+        for get_configurator in [self._get_cgroup_configurator, self._get_cgroup_configurator_v2]:
+            with get_configurator(mock_commands=[command_mock]) as configurator:
+                configurator.mocks.commands_call_list[:] = []
+                with patch("azurelinuxagent.ga.cgroupconfigurator.log_cgroup_warning") as log_warning:
+                    configurator.remove_extension_slice(extension_name)
+
+                self.assertEqual([command], configurator.mocks.commands_call_list)
+                self.assertEqual(1, log_warning.call_count)
+                self.assertIn("Failed to remove the extension {0} slice:".format(extension_name), log_warning.call_args[0][0])
+                self.assertIn("Access denied", log_warning.call_args[0][0])
+                self.assertTrue(configurator.enabled())
+
     def test_reset_extension_quota(self):
         command_mocks = [MockCommand(r"^systemctl show (.+) --property CPUQuotaPerSecUSec",
                                      '''CPUQuotaPerSecUSec=5ms
