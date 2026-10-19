@@ -81,12 +81,6 @@ def get_agent_drop_in_path():
     """
     return os.path.join(get_unit_file_install_path(), "{0}.d".format(get_agent_unit_name()))
 
-def stop_unit(unit_name):
-    try:
-        shellutil.run_command(["systemctl", "stop", unit_name])
-    except shellutil.CommandError as e:
-        raise ValueError("Can't stop unit {0}: {1}".format(unit_name, e))
-
 
 def get_unit_property(unit_name, property_name):
     output = shellutil.run_command(["systemctl", "show", unit_name, "--property", property_name])

@@ -43,7 +43,7 @@ class ExtHandlerInstanceTestCase(AgentTestCase):
         self.assertFalse(os.path.exists(self.extension_directory))
         self.assertFalse(os.path.exists(os.path.join(self.base_dir, "foo__1.2.3.zip")))
 
-    def test_remove_ext_handler_should_reset_quota_before_removing_the_slice(self):
+    def test_remove_ext_handler_should_stop_tracking_cgroups_and_reset_quota(self):
         for directory_exists in [True, False]:
             if directory_exists:
                 os.mkdir(self.extension_directory)
@@ -53,8 +53,7 @@ class ExtHandlerInstanceTestCase(AgentTestCase):
 
             self.assertEqual([
                 call.stop_tracking_extension_cgroups("foo-1.2.3"),
-                call.reset_extension_quota(extension_name="foo-1.2.3"),
-                call.remove_extension_slice(extension_name="foo-1.2.3")
+                call.reset_extension_quota(extension_name="foo-1.2.3")
             ], get_configurator.return_value.mock_calls)
             self.assertFalse(os.path.exists(self.extension_directory))
 

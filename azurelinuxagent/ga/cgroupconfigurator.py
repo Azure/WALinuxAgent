@@ -952,18 +952,6 @@ class CGroupConfigurator(object):
                     log_cgroup_warning("Failed to set the extension {0} slice and quotas: {1}".format(extension_slice,
                                         ustr(exception)))
 
-        def remove_extension_slice(self, extension_name):
-            """
-            Removes the extension slice from the disk. This is a cleanup operation and does not reset any quotas.
-            """
-            if self.enabled():
-                try:
-                    extension_slice_name = CGroupUtil.get_extension_slice_name(extension_name)
-                    # stop would remove the slice
-                    systemd.stop_unit(extension_slice_name)
-                except Exception as exception:
-                    log_cgroup_warning("Failed to remove the extension {0} slice: {1}".format(extension_name, ustr(exception)))
-
         def reset_extension_quota(self, extension_name):
             """
             Removes any CPUQuota on the extension
