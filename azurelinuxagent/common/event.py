@@ -121,6 +121,7 @@ class WALAEventOperation:
     NoExec = "NoExec"
     OSInfo = "OSInfo"
     OpenSsl = "OpenSsl"
+    PackageExtractionFailure = "PackageExtractionFailure"               # Event emitted when package extraction fails.
     PackageSignatureResult = "PackageSignatureResult"                   # Event with the result of package signature validation.
     PackageSigningInfoResult = "PackageSigningInfoResult"               # Event with the result of package manifest 'signingInfo' validation.
     PersistFirewallRules = "PersistFirewallRules"
