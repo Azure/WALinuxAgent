@@ -385,22 +385,6 @@ class AgentLog(object):
                 'if': lambda r: r.level == "WARNING"
             },
             #
-            # AlmaLinux 10 does not include the xt_owner and xt_conntrack kernel modules or the nft command. The agent
-            # cannot create the UID-based allow rule or conntrack-based drop rule until the image provides a usable
-            # firewall backend. Ignore these known firewall errors when checking the agent log for other test suites.
-            # TODO: Remove this ignore rule once the distro resolves the dependency issue
-            #
-            {
-                'message': r"(Required iptables kernel modules are unresolved \(xt_owner, xt_conntrack\) and nft is not available, continuing with iptables as best effort)"
-                           "|"
-                           r"((Error initializing firewall|An error occurred while verifying the state of the firewall): .*iptables.*-m (owner|conntrack).*missing kernel module)"
-                           "|"
-                           r"(The firewall rules for Azure Fabric are not setup correctly \(the environment thread will fix it\): The following rules are missing: \['ACCEPT', 'DROP'\])"
-                           "|"
-                           r"(The firewall is not configured correctly. The following rules are missing: \['ACCEPT', 'DROP'\].*Will reset it.)",
-                'if': lambda r: DISTRO_NAME == "almalinux" and FlexibleVersion(DISTRO_VERSION).major == 10
-            },
-            #
             # RHEL 10.2 does not include the kernel modules required by the iptables rules. These warnings are expected
             # when the agent selects nftables for runtime and persistent firewall rules instead.
             #
