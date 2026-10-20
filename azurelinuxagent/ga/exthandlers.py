@@ -2544,7 +2544,7 @@ class ExtHandlerInstance(object):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
 
     def get_runtime_policy_file(self):
-        return os.path.join(self.get_conf_dir(), 'waagent_runtime_policy.json')
+        return os.path.join(self.get_conf_dir(), 'runtime_policy.json')
 
     def runtime_policy_exists(self):
         return os.path.isfile(self.get_runtime_policy_file())
