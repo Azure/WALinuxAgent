@@ -2254,7 +2254,7 @@ class ExtHandlerInstance(object):
                     # Add the os environment variables before executing command
                     env.update(os.environ)
                     process_output = CGroupConfigurator.get_instance().start_extension_command(
-                        extension_name=self.get_full_name(extension),
+                        extension_name=self.get_full_name(),
                         command=command_full_path,
                         cmd_name=cmd_name,
                         timeout=timeout,
