@@ -7,6 +7,7 @@ import time
 import zipfile
 
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionErrorCodes
+from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerPackage
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, ExtHandlerState
@@ -115,6 +116,21 @@ class DownloadExtensionTestCase(AgentTestCase):
     def _assert_download_and_expand_succeeded(self):
         self.assertTrue(os.path.exists(self._get_extension_base_dir()), "The extension package was not downloaded to the expected location")
         self.assertTrue(os.path.exists(self._get_extension_command_file()), "The extension package was not expanded to the expected location")
+
+    def test_unzip_extension_package_should_report_extraction_failures(self):
+        package_file = self._get_extension_package_file()
+        DownloadExtensionTestCase._create_invalid_zip_file(package_file)
+
+        with patch("azurelinuxagent.ga.exthandlers.add_event") as add_event:
+            self.assertFalse(self.ext_handler_instance._unzip_extension_package(package_file, self.extension_dir))
+
+        self.assertEqual(1, add_event.call_count)
+        event = add_event.call_args[1]
+        self.assertEqual(WALAEventOperation.PackageExtractionFailure, event["op"])
+        self.assertEqual(self.ext_handler_instance.ext_handler.name, event["name"])
+        self.assertEqual(self.ext_handler_instance.ext_handler.version, event["version"])
+        self.assertFalse(event["is_success"])
+        self.assertIn("Error while unzipping extension package", event["message"])
 
     @staticmethod
     @contextlib.contextmanager
