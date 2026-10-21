@@ -36,7 +36,7 @@ class ExtHandlerInstanceTestCase(AgentTestCase):
     def test_create_runtime_policy_file_should_raise_runtime_policy_error_on_ioerror(self):
         # Return a path with a nonexistent parent directory to force fileutil.write_file() to raise IOError.
         with patch.object(self.ext_handler_instance, "get_runtime_policy_file",
-                          return_value="/nonexistent/path/waagent_runtime_policy.json"):
+                          return_value="/nonexistent/path/runtime_policy.json"):
             with self.assertRaises(ExtensionRuntimePolicyError):
                 self.ext_handler_instance.update_runtime_policy({"allowDirectScripts": False})
 
