@@ -21,7 +21,7 @@ import errno
 import os
 import shutil
 
-from azurelinuxagent.ga.cgroupcontroller import CounterNotFound
+from azurelinuxagent.ga.cgroupcontroller import CounterNotFound, MetricsCounter
 from azurelinuxagent.ga.memorycontroller import MemoryControllerV1, MemoryControllerV2
 from tests.lib.tools import AgentTestCase, data_dir
 
@@ -40,6 +40,24 @@ class TestMemoryControllerV1(AgentTestCase):
         swap_memory_usage = test_mem_controller.try_swap_memory_usage()
         self.assertEqual(20000, swap_memory_usage)
 
+    def test_get_tracked_metrics_v1_when_max_memory_usage_file_is_missing(self):
+        cgroup_path = os.path.join(self.tmp_dir, "v1")
+        shutil.copytree(os.path.join(data_dir, "cgroups", "v1"), cgroup_path)
+        os.remove(os.path.join(cgroup_path, "memory.max_usage_in_bytes"))
+        test_mem_controller = MemoryControllerV1("test_extension", cgroup_path)
+
+        metrics = test_mem_controller.get_tracked_metrics()
+        counters = dict((metric.counter, metric.value) for metric in metrics)
+
+        self.assertNotIn(MetricsCounter.MAX_MEM_USAGE, counters)
+        self.assertEqual({
+            MetricsCounter.TOTAL_MEM_USAGE: 150000,
+            MetricsCounter.ANON_MEM_USAGE: 100000,
+            MetricsCounter.CACHE_MEM_USAGE: 50000,
+            MetricsCounter.SWAP_MEM_USAGE: 20000
+        }, counters)
+        self.assertEqual(4, len(metrics))
+
     def test_get_metrics_v1_when_files_not_present(self):
         test_mem_controller = MemoryControllerV1("test_extension", os.path.join(data_dir, "cgroups"))
 
@@ -48,10 +66,7 @@ class TestMemoryControllerV1(AgentTestCase):
 
         self.assertEqual(e.exception.errno, errno.ENOENT)
 
-        with self.assertRaises(IOError) as e:
-            test_mem_controller.get_max_memory_usage()
-
-        self.assertEqual(e.exception.errno, errno.ENOENT)
+        self.assertEqual(0, test_mem_controller.get_max_memory_usage())
 
         with self.assertRaises(IOError) as e:
             test_mem_controller.try_swap_memory_usage()
@@ -90,6 +105,26 @@ class TestMemoryControllerV2(AgentTestCase):
         memory_pressure_events = test_mem_controller.get_memory_pressure_events()
         self.assertEqual(15.00, memory_pressure_events)
 
+    def test_get_tracked_metrics_v2_when_max_memory_usage_file_is_missing(self):
+        cgroup_path = os.path.join(self.tmp_dir, "v2")
+        shutil.copytree(os.path.join(data_dir, "cgroups", "v2"), cgroup_path)
+        os.remove(os.path.join(cgroup_path, "memory.peak"))
+        test_mem_controller = MemoryControllerV2("test_extension", cgroup_path)
+
+        metrics = test_mem_controller.get_tracked_metrics()
+        counters = dict((metric.counter, metric.value) for metric in metrics)
+
+        self.assertNotIn(MetricsCounter.MAX_MEM_USAGE, counters)
+        self.assertEqual({
+            MetricsCounter.TOTAL_MEM_USAGE: 152142900,
+            MetricsCounter.ANON_MEM_USAGE: 17589300,
+            MetricsCounter.CACHE_MEM_USAGE: 134553600,
+            MetricsCounter.SWAP_MEM_USAGE: 20000,
+            MetricsCounter.MEM_THROTTLED: 9,
+            MetricsCounter.MEM_PRESSURE: 15.00
+        }, counters)
+        self.assertEqual(6, len(metrics))
+
     def test_get_metrics_v2_when_files_not_present(self):
         test_mem_controller = MemoryControllerV2("test_extension", os.path.join(data_dir, "cgroups"))
 
@@ -98,10 +133,7 @@ class TestMemoryControllerV2(AgentTestCase):
 
         self.assertEqual(e.exception.errno, errno.ENOENT)
 
-        with self.assertRaises(IOError) as e:
-            test_mem_controller.get_max_memory_usage()
-
-        self.assertEqual(e.exception.errno, errno.ENOENT)
+        self.assertEqual(0, test_mem_controller.get_max_memory_usage())
 
         with self.assertRaises(IOError) as e:
             test_mem_controller.try_swap_memory_usage()

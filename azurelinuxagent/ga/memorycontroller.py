@@ -107,15 +107,16 @@ class _MemoryController(_CgroupController):
         # The log collector monitor tracks anon and cache memory separately.
         anon_mem_usage, cache_mem_usage = self.get_memory_usage()
         total_mem_usage = anon_mem_usage + cache_mem_usage
-        return [
+        max_mem_usage = self.get_max_memory_usage()
+
+        tracked = [
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, self.name, total_mem_usage),
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.ANON_MEM_USAGE, self.name, anon_mem_usage),
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.CACHE_MEM_USAGE, self.name, cache_mem_usage),
-            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MAX_MEM_USAGE, self.name,
-                        self.get_max_memory_usage(), _REPORT_EVERY_HOUR),
-            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.SWAP_MEM_USAGE, self.name,
-                        self.try_swap_memory_usage(), _REPORT_EVERY_HOUR)
-        ]
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.SWAP_MEM_USAGE, self.name, self.try_swap_memory_usage(), _REPORT_EVERY_HOUR)]
+        if max_mem_usage > 0:
+            tracked.append(MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MAX_MEM_USAGE, self.name, max_mem_usage, _REPORT_EVERY_HOUR))
+        return tracked
 
     def get_unit_properties(self):
         raise NotImplementedError()
@@ -150,7 +151,7 @@ class MemoryControllerV1(_MemoryController):
             usage = int(self._get_parameters('memory.max_usage_in_bytes', first_line_only=True))
         except Exception as e:
             if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:  # pylint: disable=E1101
-                raise
+                return usage  # if memory.max_usage_in_bytes is not present in some distros, so we return 0 in that case
             raise CGroupsException("Exception while attempting to read {0}".format("memory.max_usage_in_bytes"), e)
 
         return usage
@@ -246,7 +247,7 @@ class MemoryControllerV2(_MemoryController):
             usage = int(self._get_parameters('memory.peak', first_line_only=True))
         except Exception as e:
             if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:  # pylint: disable=E1101
-                raise
+                return usage  # memory.peak is not present in some distros, so we return 0 in that case
             raise CGroupsException("Exception while attempting to read {0}".format("memory.peak"), e)
 
         return usage
