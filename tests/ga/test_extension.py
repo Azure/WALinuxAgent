@@ -3591,7 +3591,7 @@ class TestExtensionPolicy(TestExtensionBase):
         self.patch_is_cvm.start()
         self.maxDiff = None     # When long error messages don't match, display the entire diff.
 
-        self.runtime_policy_path = os.path.join(conf.get_lib_dir(), "OSTCExtensions.ExampleHandlerLinux-1.0.0", "config", "waagent_runtime_policy.json")
+        self.runtime_policy_path = os.path.join(conf.get_lib_dir(), "OSTCExtensions.ExampleHandlerLinux-1.0.0", "config", "runtime_policy.json")
 
     def tearDown(self):
         self.mock_sleep.stop()
