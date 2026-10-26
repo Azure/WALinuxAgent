@@ -377,6 +377,38 @@ class LaunchCommandTestCase(AgentTestCase):
                 continue
         return False
 
+    def test_launch_command_should_use_the_handler_name_for_cgroups_without_extension_settings(self):
+        with patch("azurelinuxagent.ga.exthandlers.CGroupConfigurator.get_instance") as get_configurator:
+            start_command = get_configurator.return_value.start_extension_command
+            start_command.return_value = "command output"
+
+            output = self.ext_handler_instance.launch_command("enable", cmd_name="enable")
+
+        self.assertEqual("command output", output)
+        self.assertEqual(1, start_command.call_count)
+        self.assertEqual("foo-1.2.3", start_command.call_args[1]["extension_name"])
+
+    def test_launch_command_should_share_handler_cgroups_across_multi_config_extensions(self):
+        self.ext_handler.supports_multi_config = True
+        with patch("azurelinuxagent.ga.exthandlers.CGroupConfigurator.get_instance") as get_configurator:
+            start_command = get_configurator.return_value.start_extension_command
+            start_command.return_value = "command output"
+
+            for name, sequence_number in [("config1", 1), ("config2", 2)]:
+                extension = ExtensionSettings()
+                extension.name = name
+                extension.sequenceNumber = sequence_number
+
+                output = self.ext_handler_instance.launch_command("enable", cmd_name="enable", extension=extension)
+
+                self.assertEqual("command output", output)
+                kwargs = start_command.call_args[1]
+                self.assertEqual("foo-1.2.3", kwargs["extension_name"])
+                self.assertEqual(name, kwargs["env"][ExtCommandEnvVariable.ExtensionName])
+                self.assertEqual(str(sequence_number), kwargs["env"][ExtCommandEnvVariable.ExtensionSeqNumber])
+
+        self.assertEqual(2, start_command.call_count)
+
     def test_it_should_capture_the_output_of_the_command(self):
         stdout = "stdout" * 5
         stderr = "stderr" * 5
