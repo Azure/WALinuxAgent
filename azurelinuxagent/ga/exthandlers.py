@@ -1494,7 +1494,9 @@ class ExtHandlerInstance(object):
         try:
             zipfile.ZipFile(source_file).extractall(target_directory)
         except Exception as exception:
-            logger.info("Error while unzipping extension package: {0}", ustr(exception))
+            message = "Error while unzipping extension package: {0}".format(ustr(exception))
+            logger.info(message)
+            add_event(op=WALAEventOperation.PackageExtractionFailure, message=message, name=self.ext_handler.name, version=self.ext_handler.version, is_success=False, log_event=False)
             os.remove(source_file)
             if os.path.exists(target_directory):
                 shutil.rmtree(target_directory)
@@ -2284,7 +2286,7 @@ class ExtHandlerInstance(object):
                     # Add the os environment variables before executing command
                     env.update(os.environ)
                     process_output = CGroupConfigurator.get_instance().start_extension_command(
-                        extension_name=self.get_full_name(extension),
+                        extension_name=self.get_full_name(),
                         command=command_full_path,
                         cmd_name=cmd_name,
                         timeout=timeout,
@@ -2544,7 +2546,7 @@ class ExtHandlerInstance(object):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
 
     def get_runtime_policy_file(self):
-        return os.path.join(self.get_conf_dir(), 'waagent_runtime_policy.json')
+        return os.path.join(self.get_conf_dir(), 'runtime_policy.json')
 
     def runtime_policy_exists(self):
         return os.path.isfile(self.get_runtime_policy_file())

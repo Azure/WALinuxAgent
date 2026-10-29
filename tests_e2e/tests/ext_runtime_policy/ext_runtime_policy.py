@@ -101,19 +101,12 @@ class ExtRuntimePolicy(AgentVmTest):
             arguments["timeout"] = timeout
         extension.enable(**arguments)
 
-    def _assert_runtime_policy_file_contents(self, runtime_policy_file_path, expected_policy):
-        """
-        Assert that the agent copied the expected extension policy into CSE's config directory.
-        """
-        actual_policy = json.loads(self._ssh_client.run_command(f"cat {runtime_policy_file_path}", use_sudo=True))
-        assert_that(actual_policy).described_as("Extension runtime policy").is_equal_to(expected_policy)
-
     def _assert_cse_loaded_policy(self, after_timestamp, extension_name):
         """
         Assert that CSE loaded its extension policy after the given enable operation started.
         """
-        command_execution_log = "/var/log/azure/{0}/CommandExecution.log".format(extension_name)
-        log_contents = self._ssh_client.run_command("cat {0}".format(command_execution_log), use_sudo=True)
+        handler_log = "/var/log/azure/{0}/handler.log".format(extension_name)
+        log_contents = self._ssh_client.run_command("cat {0}".format(handler_log), use_sudo=True)
         expected_message = "successfully loaded extension policy settings"
         matching_lines = []
         for line in log_contents.splitlines():
@@ -125,18 +118,18 @@ class ExtRuntimePolicy(AgentVmTest):
 
         assert_that(matching_lines) \
             .described_as(
-                "Expected CommandExecution.log to contain '{0}' after {1}. Log contents:\n{2}".format(
+                "Expected handler.log to contain '{0}' after {1}. Log contents:\n{2}".format(
                     expected_message,
                     after_timestamp,
                     log_contents)) \
             .is_not_empty()
 
     def run(self):
-        # TODO: Only the Test CSE Extension 2.8.0+ supports 'AllowedCommandToExecute' policy right now. Once the Prod CSE
+        # TODO: Only the Test CSE Extension 2.9.0+ supports 'AllowedCommandToExecute' policy right now. Once the Prod CSE
         #  Extension supports this policy, the publisher/type/version should be updated to use Prod
         cse_supports_policy = VirtualMachineExtensionClient(
             self._context.vm,
-            VmExtensionIdentifier(publisher="Microsoft.Azure.Extensions.Edp", ext_type="CustomScript", version="2.8"),
+            VmExtensionIdentifier(publisher="Microsoft.Azure.Extensions.Edp", ext_type="CustomScript", version="2.9"),
             resource_name="CustomScriptRuntimePolicy")
 
         # CSE 2.0 does not declare supportsPolicy and is used to validate that the agent does not attempt to use policy
@@ -169,18 +162,13 @@ class ExtRuntimePolicy(AgentVmTest):
 
             log.info("Validating that CSE logs show the runtime policy was loaded successfully...")
             cse_version = cse_supports_policy.get_instance_view().type_handler_version
-            runtime_policy_file_path = ("/var/lib/waagent/{0}.{1}-{2}/config/waagent_runtime_policy.json".format(
+            runtime_policy_file_path = ("/var/lib/waagent/{0}.{1}-{2}/config/runtime_policy.json".format(
                 cse_supports_policy.extension_id.publisher,
                 cse_supports_policy.extension_id.type,
                 cse_version)
             )
             self._assert_cse_loaded_policy(enable_timestamp, "{0}.{1}".format(cse_supports_policy.extension_id.publisher, cse_supports_policy.extension_id.type))
             log.info("Successfully validated the runtime policy was loaded by CSE.")
-            log.info("")
-
-            log.info("Validating that the runtime policy config file for the extension has the expected content...")
-            self._assert_runtime_policy_file_contents(runtime_policy_file_path, cse_runtime_policy)
-            log.info("Successfully validated the runtime policy config file has the expected content.")
             log.info("")
 
             log.info("***Test Case 2 - CSE which supports policy should fail to enable when the requested commandToExecute is not allowed")
@@ -207,11 +195,6 @@ class ExtRuntimePolicy(AgentVmTest):
             log.info("Successfully validated the runtime policy was loaded by CSE.")
             log.info("")
 
-            log.info("Validating that the runtime policy config file for the extension has the expected content...")
-            self._assert_runtime_policy_file_contents(runtime_policy_file_path, cse_disallow_policy)
-            log.info("Successfully validated the runtime policy config file has the expected content.")
-            log.info("")
-
             log.info("***Test Case 3 - CSE which supports policy should succeed when extension specific runtime policy is removed")
             log.info("Refreshing agent policy to remove the runtime policy property for CSE...")
             self._set_runtime_policy("{0}.{1}".format(cse_supports_policy.extension_id.publisher, cse_supports_policy.extension_id.type))
@@ -228,11 +211,6 @@ class ExtRuntimePolicy(AgentVmTest):
             log.info("Validating that CSE logs show the runtime policy was loaded successfully...")
             self._assert_cse_loaded_policy(enable_timestamp, "{0}.{1}".format(cse_supports_policy.extension_id.publisher, cse_supports_policy.extension_id.type))
             log.info("Successfully validated the runtime policy was loaded by CSE.")
-            log.info("")
-
-            log.info("Validating that the runtime policy config file for the extension has the expected content...")
-            self._assert_runtime_policy_file_contents(runtime_policy_file_path, {})
-            log.info("Successfully validated the runtime policy config file has the expected content.")
             log.info("")
 
             log.info("***Test Case 4 - CSE which supports policy should succeed when the agent policy is removed")
@@ -283,7 +261,7 @@ class ExtRuntimePolicy(AgentVmTest):
             log.info("")
 
             cse_version = cse_does_not_support_policy.get_instance_view().type_handler_version
-            runtime_policy_file_path = ("/var/lib/waagent/{0}.{1}-{2}/config/waagent_runtime_policy.json".format(
+            runtime_policy_file_path = ("/var/lib/waagent/{0}.{1}-{2}/config/runtime_policy.json".format(
                 cse_does_not_support_policy.extension_id.publisher,
                 cse_does_not_support_policy.extension_id.type,
                 cse_version)

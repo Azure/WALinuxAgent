@@ -585,6 +585,24 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(os.path.exists(target_directory), "The extension package was not downloaded")
             self.assertFalse(os.path.exists(target_file), "The extension package was not deleted")
 
+    def test_try_expand_zip_package_should_report_extraction_failures(self):
+        target_file = os.path.join(self.tmp_dir, 'fake_extension.zip')
+        target_directory = os.path.join(self.tmp_dir, "fake_extension")
+
+        with patch("azurelinuxagent.common.protocol.wire.zipfile.ZipFile") as zip_file:
+            zip_file.return_value.extractall.side_effect = Exception("Test extraction failure")
+            with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event:
+                with self.assertRaises(Exception):
+                    WireClient._try_expand_zip_package("Microsoft.FakeExtension-1.0.0.0", target_file, target_directory)
+
+        self.assertEqual(1, add_event.call_count)
+        event = add_event.call_args[1]
+        self.assertEqual(WALAEventOperation.PackageExtractionFailure, event["op"])
+        self.assertEqual("Microsoft.FakeExtension", event["name"])
+        self.assertEqual("1.0.0.0", event["version"])
+        self.assertFalse(event["is_success"])
+        self.assertIn("Error while unzipping", event["message"])
+
     def test_download_zip_package_should_not_attempt_signature_validation_if_signature_is_empty(self):
         extension_url = 'https://fake_host/fake_extension.zip'
         target_file = os.path.join(self.tmp_dir, 'fake_extension.zip')
