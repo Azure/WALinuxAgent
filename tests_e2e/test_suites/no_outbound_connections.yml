@@ -16,5 +16,7 @@ tests:
   - "agent_bvt/vm_access.py"
   - "no_outbound_connections/check_fallback_to_hgap.py"
 images: "random(endorsed)"
+skip_on_images:
+  - "oracle_10"   # oracle_10 does not have tar by default, and blocked outbound access causes installation via package manager to fail
 template: "no_outbound_connections/deny_outbound_connections.py"
 owns_vm: true
