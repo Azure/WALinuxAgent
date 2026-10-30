@@ -54,6 +54,10 @@ class UpdateArmTemplateHook:
             log.info("******** Waagent: Adding network security rule to allow SSH connections from %s", allow_ssh)
             network_security_rule.add_allow_ssh_rule(allow_ssh)
 
+        # Add the public ip tag to the template
+        log.info("******** Waagent: Adding public ip tag to the template")
+        network_security_rule.add_public_ip_tags()
+
         #
         # Apply any template customizations provided by the tests.
         #

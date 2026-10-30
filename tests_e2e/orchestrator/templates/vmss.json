@@ -92,6 +92,12 @@
             "apiVersion": "2023-06-01",
             "properties": {
                 "publicIPAllocationMethod": "Dynamic",
+                "ipTags": [
+                    {
+                        "ipTagType": "FirstPartyUsage",
+                        "tag": "/NonProd"
+                    }
+                ],
                 "dnsSettings": {
                     "domainNameLabel": "[parameters('vmName')]"
                 }
@@ -243,6 +249,12 @@
                                                 "publicIPAddressConfiguration": {
                                                     "name": "[variables('publicIPAddressName')]",
                                                     "properties": {
+                                                        "ipTags": [
+                                                            {
+                                                                "ipTagType": "FirstPartyUsage",
+                                                                "tag": "/NonProd"
+                                                            }
+                                                        ],
                                                         "idleTimeoutInMinutes": 15
                                                     }
                                                 },

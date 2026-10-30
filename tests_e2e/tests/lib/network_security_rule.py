@@ -59,6 +59,30 @@ class NetworkSecurityRule:
         subnet = subnets[0]
         subnet["properties"]["defaultoutboundaccess"] = False
 
+    def add_public_ip_tags(self) -> None:
+        resources: Any = self._template["resources"]
+        if isinstance(resources, dict):
+            resources = resources.values()
+        for resource in resources:
+            if resource["type"] == "Microsoft.Network/publicIPAddresses":
+                properties = resource["properties"]
+                ip_tags = properties.get("ipTags")
+                non_prod_tag = {"ipTagType": "FirstPartyUsage", "tag": "/NonProd"}
+                if ip_tags is None:
+                    properties["ipTags"] = [non_prod_tag]
+                elif isinstance(ip_tags, list):
+                    if non_prod_tag not in ip_tags:
+                        ip_tags.append(non_prod_tag)
+                elif isinstance(ip_tags, str) and ip_tags.startswith("[") and ip_tags.endswith("]") and not ip_tags.startswith("[["):
+                    # Azure evaluates Bicep's ipTags expression at deployment time. coalesce converts null to an empty
+                    # array; union preserves existing tags and adds /NonProd without duplicating an identical tag.
+                    tag_array = f"json('{json.dumps([non_prod_tag])}')"
+                    expression = f"[union(coalesce({ip_tags[1:-1]}, json('[]')), {tag_array})]"
+                    if not ip_tags.endswith(f", {tag_array})]"):
+                        properties["ipTags"] = expression
+                else:
+                    raise ValueError(f"Expected public IP ipTags to be an array or ARM expression, got {ip_tags!r}")
+
     def _get_network_security_group(self) -> Dict[str, Any]:
         resources: Any = self._template["resources"]
         #
