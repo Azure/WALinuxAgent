@@ -16,6 +16,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+from datetime import timedelta
 from typing import Any, Dict, List
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
@@ -24,6 +25,8 @@ from tests_e2e.tests.lib.firewall_utilities import FirewallUtilities
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
+from tests_e2e.tests.lib.test_result import TestSkipped
+from tests_e2e.tests.lib.virtual_machine_client import SshNotReadyError
 
 
 class AgentPersistFirewallTest(AgentVmTest):
@@ -35,9 +38,11 @@ class AgentPersistFirewallTest(AgentVmTest):
         super().__init__(context)
         self._ssh_client: SshClient = self._context.create_ssh_client()
         self._expect_firewalld_running = False
+        self._distro = ""
 
     def run(self):
         FirewallUtilities.skip_test_if_proxy_agent_is_managing_the_wireserver_endpoint(self._ssh_client)
+        self._distro = self._ssh_client.run_command("get_distro.py").rstrip().lower()
         self._expect_firewalld_running = self._is_firewalld_running()
 
         self._test_setup()
@@ -46,7 +51,7 @@ class AgentPersistFirewallTest(AgentVmTest):
         # Test case 2: Disable the agent(so that agent won't get started after reboot)
         # perform reboot and ensure firewall rules added on boot even after agent is disabled
         self._disable_agent()
-        self._context.vm.restart(wait_for_boot=True, ssh_client=self._ssh_client)
+        self._restart_vm()
 
         # TODO: for now we need to check again after reboot, since the GPA has a race condition on initialization than makes it take over the WireServer endpoint when it shouldn't.
         FirewallUtilities.skip_test_if_proxy_agent_is_managing_the_wireserver_endpoint(self._ssh_client)
@@ -55,7 +60,7 @@ class AgentPersistFirewallTest(AgentVmTest):
         self._verify_firewall_rules_on_boot("first_boot")
         # Test case 3: Re-enable the agent and do an additional reboot. The intention is to check for conflicts between the agent and the persist firewall service
         self._enable_agent()
-        self._context.vm.restart(wait_for_boot=True, ssh_client=self._ssh_client)
+        self._restart_vm()
 
         # TODO: for now we need to check again after reboot, since the GPA has a race condition on initialization than makes it take over the WireServer endpoint when it shouldn't.
         FirewallUtilities.skip_test_if_proxy_agent_is_managing_the_wireserver_endpoint(self._ssh_client)
@@ -67,6 +72,15 @@ class AgentPersistFirewallTest(AgentVmTest):
 
         # Test case 5: ensure stale firewalld rules created by an older agent are removed when nftables is in use
         self._verify_stale_firewalld_rules_removed()
+
+    def _restart_vm(self):
+        try:
+            self._context.vm.restart(wait_for_boot=True, ssh_client=self._ssh_client, boot_timeout=timedelta(minutes=7))
+        except SshNotReadyError as error:
+            if self._distro == "azurelinux_4":
+                # Cloud-init on AzLinux4 can spend 5+ minutes waiting on DHCP during boot, delaying SSH startup
+                raise TestSkipped(f"Skipping test due to known Azure Linux 4 cloud-init/sshd issue: {error}") from error
+            raise
 
     def _test_setup(self):
         log.info("Doing test setup")

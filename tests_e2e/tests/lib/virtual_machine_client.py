@@ -43,6 +43,12 @@ from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
 
 
+class SshNotReadyError(TimeoutError):
+    """
+    Raised when a VM does not accept SSH connections before the boot timeout.
+    """
+
+
 class VirtualMachineClient(AzureSdkClient):
     """
     Provides operations on virtual machines (get instance view, update, restart, etc).
@@ -213,10 +219,12 @@ class VirtualMachineClient(AzureSdkClient):
 
         # self._wait_for_status() works by checking the instance view, and we may capture a view from before the reboot actually happened, so we verify
         # that the reboot actually happened by checking the system's uptime.
+        ssh_not_ready = False
         while datetime.datetime.now(UTC) < start + boot_timeout:
             log.info("Verifying VM's uptime to ensure the reboot has completed...")
             try:
                 uptime = ssh_client.run_command("cat /proc/uptime | sed 's/ .*//'", attempts=1).rstrip()  # The uptime is the first field in the file
+                ssh_not_ready = False
                 log.info("Uptime: %s", uptime)
                 boot_time = datetime.datetime.now(UTC) - datetime.timedelta(seconds=float(uptime))
                 if boot_time > before_restart:
@@ -225,11 +233,14 @@ class VirtualMachineClient(AzureSdkClient):
                 log.info("The VM has not rebooted yet. Restart time: %s. Boot time: %s", before_restart, boot_time)
             except CommandError as e:
                 if (e.exit_code == 255 and ("Connection refused" in str(e) or "Connection timed out" in str(e))) or "Unprivileged users are not permitted to log in yet" in str(e):
+                    ssh_not_ready = True
                     log.info("VM %s is not yet accepting SSH connections", self)
                 else:
                     raise
             time.sleep(10)
 
+        if ssh_not_ready:
+            raise SshNotReadyError(f"VM {self} is not yet accepting SSH connections after {boot_timeout}")
         raise Exception(f"VM {self} did not boot after {boot_timeout}")
 
     def start(self, start_timeout: datetime.timedelta = datetime.timedelta(minutes=5), timeout: int = AzureSdkClient._DEFAULT_TIMEOUT) -> None:
