@@ -402,7 +402,8 @@ class AgentTestSuitesCombinator(Combinator):
                         "subscription_id": self.runbook.subscription_id,
                         "provisioning_timeout": self.runbook.vm_provisioning_timeout,
                         "wait_delete": False,
-                        "vm_tags": vm_tags
+                        "vm_tags": vm_tags,
+                        "ip_service_tags": {"FirstPartyUsage": "/NonProd"}
                     },
                     "requirement": {
                         "core_count": {
