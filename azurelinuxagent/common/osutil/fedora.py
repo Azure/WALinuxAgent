@@ -42,7 +42,7 @@ class FedoraOSUtil(DefaultOSUtil):
     def start_network(self):
         pass
 
-    def restart_if(self, ifname=None, retries=None, wait=None):
+    def restart_if(self, ifname=None, retries=3, wait=5):
         retry_limit = retries+1
         for attempt in range(1, retry_limit):
             return_code = shellutil.run("ip link set {0} down && ip link set {0} up".format(ifname))
