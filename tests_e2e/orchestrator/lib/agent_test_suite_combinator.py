@@ -402,8 +402,7 @@ class AgentTestSuitesCombinator(Combinator):
                         "subscription_id": self.runbook.subscription_id,
                         "provisioning_timeout": self.runbook.vm_provisioning_timeout,
                         "wait_delete": False,
-                        "vm_tags": vm_tags,
-                        "ip_service_tags": {"FirstPartyUsage": "/NonProd"}
+                        "vm_tags": vm_tags
                     },
                     "requirement": {
                         "core_count": {
@@ -429,6 +428,10 @@ class AgentTestSuitesCombinator(Combinator):
             "c_is_vhd": vhd != "",
             "vm_tags": vm_tags
         }
+
+        # IP tags require AllowBringYourOwnPublicIpAddress, which is not supported in national clouds.
+        if self.runbook.cloud == "AzureCloud":
+            environment['c_platform'][0]['azure']['ip_service_tags'] = {"FirstPartyUsage": "/NonProd"}
 
         if shared_gallery != '':
             # Currently all the images in our shared gallery require secure boot
