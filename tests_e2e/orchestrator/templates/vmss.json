@@ -41,6 +41,7 @@
         }
     },
     "variables": {
+        "ipTags": "[if(equals(environment().name, 'AzureCloud'), createArray(createObject('ipTagType', 'FirstPartyUsage', 'tag', '/NonProd')), json('[]'))]",
         "nicName": "[concat(parameters('scenarioPrefix'),'Nic')]",
         "vnetAddressPrefix": "10.130.0.0/16",
         "subnetName": "[concat(parameters('scenarioPrefix'),'Subnet')]",
@@ -92,12 +93,7 @@
             "apiVersion": "2023-06-01",
             "properties": {
                 "publicIPAllocationMethod": "Dynamic",
-                "ipTags": [
-                    {
-                        "ipTagType": "FirstPartyUsage",
-                        "tag": "/NonProd"
-                    }
-                ],
+                "ipTags": "[variables('ipTags')]",
                 "dnsSettings": {
                     "domainNameLabel": "[parameters('vmName')]"
                 }
@@ -249,12 +245,7 @@
                                                 "publicIPAddressConfiguration": {
                                                     "name": "[variables('publicIPAddressName')]",
                                                     "properties": {
-                                                        "ipTags": [
-                                                            {
-                                                                "ipTagType": "FirstPartyUsage",
-                                                                "tag": "/NonProd"
-                                                            }
-                                                        ],
+                                                        "ipTags": "[variables('ipTags')]",
                                                         "idleTimeoutInMinutes": 15
                                                     }
                                                 },
