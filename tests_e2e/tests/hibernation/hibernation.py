@@ -59,31 +59,28 @@ class Hibernation(AgentVmTest):
         self._enable_hibernation()
         log.info("")
 
-        #
-        # Check that the current incarnation is 1; if that is not the case, do a hibernate-resume cycle to reset the incarnation to 1
-        #
-        log.info("Verifying that the current incarnation is 1...")
-        incarnation = self._ssh_client.run_command("get_goal_state.py --tag Incarnation", use_sudo=True).rstrip()
-        if incarnation != "1":
-            log.info("The current incarnation is %s, doing a hibernate-resume cycle to reset it to 1...", incarnation)
-            self._do_hibernate_resume_cycle()
+        # Azure policy may install an extension while the machine is resuming, which would increment the incarnation, so try a couple of times.
+        # Each attempt must start at incarnation 1; a reset from 2 to 1 does not exercise the unchanged-incarnation scenario.
+        for i in range(2):
+            log.info("Verifying that the current incarnation is 1 before hibernation...")
             incarnation = self._ssh_client.run_command("get_goal_state.py --tag Incarnation", use_sudo=True).rstrip()
             if incarnation != "1":
-                raise Exception(f"The incarnation was not reset to 1 after a hibernate-resume cycle. Incarnation is {incarnation}")
-        log.info("The current incarnation is 1")
-        log.info("")
+                log.info("The current incarnation is %s, doing a hibernate-resume cycle to reset it to 1...", incarnation)
+                self._do_hibernate_resume_cycle()
+                incarnation = self._ssh_client.run_command("get_goal_state.py --tag Incarnation", use_sudo=True).rstrip()
+                if incarnation != "1":
+                    raise Exception(f"The incarnation was not reset to 1 after a hibernate-resume cycle. Incarnation is {incarnation}")
+            log.info("The current incarnation is 1")
+            log.info("")
 
-        #
-        # Do a hibernate-resume cycle; this will generate a new tenant certificate but, since the incarnation has not changed,
-        # the Agent will not download it yet.
-        #
-        log.info("Retrieving tenant certificate before hibernation...")
-        pre_hibernation_tenant_certificate = self._get_tenant_certificate()
-        log.info("Tenant certificate: %s", pre_hibernation_tenant_certificate)
-        log.info("")
+            #
+            # Capture the certificate after any reset, then test a cycle that leaves the incarnation unchanged.
+            #
+            log.info("Retrieving tenant certificate before hibernation...")
+            pre_hibernation_tenant_certificate = self._get_tenant_certificate()
+            log.info("Tenant certificate: %s", pre_hibernation_tenant_certificate)
+            log.info("")
 
-        # Azure policy may install an extension while the machine is resuming, which would increment the incarnation, so try a couple of times
-        for i in range(2):
             log.info("Triggering a hibernate-resume cycle to test the tenant certificate...")
             hibernate_time = self._ssh_client.get_time()
             self._do_hibernate_resume_cycle()
@@ -94,11 +91,12 @@ class Hibernation(AgentVmTest):
             if incarnation == "1":
                 log.info("The current incarnation is 1")
                 break
-            if i > 0:
-                raise Exception(f"Unexpected behavior: The incarnation is not 1 after a couple of hibernate-resume cycles. Incarnation is {incarnation}")
             log.info(f"The current incarnation is not 1, as was expected. A new goal state was generated after resuming the VM. An extension installed by policy may have been the reason. Incarnation: {incarnation}")
-            log.info("Will retry the hibernate-resume cycle to reset it to 1...")
+            if i == 0:
+                log.info("Will reset the incarnation to 1 before retrying the tenant certificate test...")
             log.info("")
+        else:
+            raise Exception("Unexpected behavior: Could not complete a hibernate-resume cycle with incarnation 1 both before hibernation and after resume.")
 
         log.info("")
 
@@ -229,4 +227,3 @@ class Hibernation(AgentVmTest):
 
 if __name__ == "__main__":
     Hibernation.run_from_command_line()
-
