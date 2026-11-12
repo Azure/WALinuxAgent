@@ -586,9 +586,17 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_disable_cgroups_and_invoke_the_command_directly_if_systemd_fails(self, _):
+        for error in (
+                'Failed to start transient scope unit: syntax error',
+                'Failed to start transient scope unit: Unit test_test_uuid not found.',
+                'Failed to start transient scope unit: Unit test_test_uuid.scope not found.'):
+            with patch("azurelinuxagent.ga.cgroupapi.uuid.uuid4", return_value="test_uuid"):
+                self._assert_direct_invocation_if_systemd_fails(error)
+
+    def _assert_direct_invocation_if_systemd_fails(self, error):
         with self._get_cgroup_configurator() as configurator:
 
-            configurator.mocks.add_command(MockCommand("systemd-run", return_value=1, stdout='', stderr='Failed to start transient scope unit: syntax error'))
+            configurator.mocks.add_command(MockCommand("systemd-run", return_value=1, stdout='', stderr=error))
 
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as output_file:
                 with patch("azurelinuxagent.ga.cgroupapi.add_event") as mock_add_event:
