@@ -14,22 +14,13 @@ skip_on_images:
   - "alma_8"
   - "alma_9"
   - "alma_10"
-  # TODO: The test depends on Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, which currently does not support Azure Linux 4. Remove this exclusion when the issue is fixed.
-  - "azure-linux_4"
   # The test depends on Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, which does not support these distros since version 1.43
   - "centos_79"
   - "centos_82"
-  - "suse_12"
   # TODO: The test depends on Microsoft.OSTCExtensions.VMAccessForLinux, which currently does not support SUSE 16. Remove this exclusion when the issue is fixed.
   - "suse_16"
-  # TODO: AzureMonitorLinuxAgent does not support Ubuntu 26.04 in the sovereign clouds. Remove these exclusions when the extension is updated.
+  # TODO: VMAccess fails on Ubuntu 24. Remove this exclusion when the extension is updated.
   - "AzureChinaCloud:ubuntu_2604"
   - "AzureChinaCloud:ubuntu_2604_minimal"
-  - "AzureUSGovernment:ubuntu_2604"
-  - "AzureUSGovernment:ubuntu_2604_minimal"
-  - "AzureChinaCloud:debian_12"   # AMA takes 10+ minutes to install on Debian 12, since it does an apt-get update. Skip on that image since extension takes too long to install
-  - "AzureChinaCloud:debian_13"   # AMA takes 10+ minutes to install on Debian 13, since it does an apt-get update. Skip on that image since extension takes too long to install
-
-# TODO: The current deployment of VmAccess 1.5.22 prevents the extension from uninstalling; enable this test when the issue is fixed
-skip_on_clouds:
-  - "AzureUSGovernment"
+  - "AzureChinaCloud:debian_12"             # AMA takes 10+ minutes to install on Debian 12, since it does an apt-get update. Skip on that image since extension takes too long to install
+  - "AzureChinaCloud:debian_13"             # AMA takes 10+ minutes to install on Debian 13, since it does an apt-get update. Skip on that image since extension takes too long to install

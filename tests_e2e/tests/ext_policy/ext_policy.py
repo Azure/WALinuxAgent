@@ -18,6 +18,7 @@
 #
 import json
 import re
+import time
 import uuid
 import os
 from typing import List, Dict, Any
@@ -26,6 +27,7 @@ from assertpy import assert_that, fail
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 from tests_e2e.tests.lib.virtual_machine_runcommand_client import VirtualMachineRunCommandClient
@@ -129,57 +131,29 @@ class ExtPolicy(AgentVmTest):
             # For delete operations, CRP polls until the agent stops reporting status for the extension, or until timeout is
             # reached, because delete is a best-effort operation and is not expected to fail. However, when delete is called
             # on a disallowed extension, the agent reports failure status, so CRP will continue to poll until timeout.
-            # We wait for the full timeout period (set to 15 minutes), verify that CRP returns a timeout error, and
-            # check the agent log to confirm that delete was blocked by policy.
-            #
-            # Note: this scenario is currently executed only once. If it must be run multiple times in the future,
-            # avoid waiting for CRP timeout and asynchronously check agent log to confirm delete failure.
-            # This solution may run into issues (the following issues are known, but there are likely others):
-            #   - while CRP is waiting for the delete operation to timeout, enable requests on the extension will fail, only
-            #     delete can be retried.
-            #   - if a second delete operation is requested while the first is still running, CRP will merge the goal states
-            #     and not send a new goal state to the agent.
-            #   - if an enable request is sent while a delete operation is still in progress, the SDK may occasionally throw a
-            #     "ResourceNotFound" error
-            #
-            # Use the following steps as a workaround:
-            #   1. asynchronously check the agent log to confirm delete failure
-            #   2. force a new goal state by enabling a different extension
-            #   3. allow extension with policy and send another delete request (should succeed)
+            # Verify the agent rejected the uninstall from the agent log without waiting for CRP.
             log.info(f"Attempting to delete {extension_case.extension}, should fail due to policy.")
             delete_start_time = self._ssh_client.run_command("date --utc '+%Y-%m-%d %T'").rstrip()
-            try:
-                # Wait long enough for CRP timeout (15 min) and confirm that a timeout error was thrown.
-                timeout = (20 * 60)
-                extension_case.extension.delete(timeout=timeout)
-                fail(f"CRP should not have successfully completed the delete operation for {extension_case.extension} "
-                     f"because the extension is disallowed by policy and agent should have reported a policy failure.")
-
-            except Exception as error:
-                assert_that("VMExtensionProvisioningTimeout" in str(error)) \
-                    .described_as(f"Expected a VMExtensionProvisioningTimeout error, but actual error was: {error}") \
-                    .is_true()
-                log.info("Delete operation timed out, as expected. Error:")
-                log.info(error)
-                log.info("")
-                log.info("Checking agent log to confirm that delete operation failed due to policy.")
-
-                # Confirm that agent log contains error message that uninstall was blocked due to policy
-                # The script will check for a log message such as "Extension will not be processed: failed to uninstall
-                # extension 'Microsoft.Azure.Extensions.CustomScript' because it is not specified as an allowed extension"
-                self._ssh_client.run_command(
-                    f"agent_ext_policy-verify_operation_disallowed.py --extension-name '{extension_case.extension._identifier}' "
-                    f"--after-timestamp '{delete_start_time}' --operation 'uninstall'", use_sudo = True)
+            extension_case.extension.delete(wait=False)
+            time.sleep(30)
+            for attempt in range(3):
+                try:
+                    self._ssh_client.run_command(
+                        f"agent_ext_policy-verify_operation_disallowed.py --extension-name '{extension_case.extension._identifier}' "
+                        f"--after-timestamp '{delete_start_time}' --operation 'uninstall'", use_sudo=True)
+                    break
+                except CommandError as error:
+                    if (error.exit_code != 1 or "Did not find expected error in agent log." not in error.stdout or
+                            "Error thrown when searching for test data in agent log:" in error.stdout or attempt == 2):
+                        raise
+                    log.info("Uninstall rejection not in agent log yet; checking again in 30 seconds.")
+                    time.sleep(30)
+            log.info("Agent log confirms that uninstall was blocked by policy.")
 
     def run(self):
 
         try:
             log.info("*** Begin test setup")
-
-            #  We expect "delete" operations on disallowed VMs to reach timeout, because delete is a best effort operation
-            #  by-design and should not fail. For efficiency, we reduce the timeout limit to the minimum allowed (15 minutes).
-            log.info("Update CRP timeout period to 15 minutes.")
-            self._context.vm.update({"extensionsTimeBudget": "PT15M"})
 
             # Prepare no-config, single-config, and multi-config extension to test. Extensions with settings and extensions
             # without settings have different status reporting logic, so we should test all cases.
@@ -235,22 +209,6 @@ class ExtPolicy(AgentVmTest):
             log.info("Enabling policy via conf file on the test VM [%s]", self._context.vm.name)
             self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
 
-            # Azure Policy automatically installs the GuestConfig extension on test machines, which may occur while CRP
-            # is waiting for a disallowed delete request to time out (test case 5). In this case, the GuestConfig enable
-            # request would be merged with the delete request into a new goal state. CRP would report success for GuestConfig
-            # enable, but continue to poll for delete for another full timeout period (15 minutes), extending the total
-            # test runtime. As a workaround, we manually install GuestConfig if not already present. If GuestConfig
-            # does not support the distro, skip this workaround and the test case (5).
-            distro = self._ssh_client.run_command("get_distro.py").rstrip()
-            if VmExtensionIds.GuestConfig.supports_distro(distro):
-                # Refresh the list of installed extensions and check if GuestConfig is already present
-                extension_types_on_vm = {ext.type_properties_type for ext in self._context.vm.get_extensions().value}
-                if "ConfigurationforLinux" not in extension_types_on_vm:
-                    log.info("")
-                    log.info("Installing GuestConfig extension.")
-                    guest_config = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.GuestConfig)
-                    guest_config.enable(auto_upgrade_minor_version=True)
-
             log.info("")
             log.info("Test setup complete.")
 
@@ -285,6 +243,8 @@ class ExtPolicy(AgentVmTest):
             # If we were to enable AMA on an unsupported distro, the operation would initially be blocked by policy as
             # expected. However, after changing the policy to allow all with the next goal state, the agent would attempt to
             # re-enable AMA on an unsupported distro, causing errors.
+            # Do not leave a blocked AMA installation that would fail on an unsupported distro when policy allows it.
+            distro = self._ssh_client.run_command("get_distro.py").rstrip()
             if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(distro):
                 self._operation_should_fail("enable", azure_monitor)
 
@@ -369,12 +329,12 @@ class ExtPolicy(AgentVmTest):
 
             # This policy tests the following scenarios:
             # - disallow a previously-enabled extension that reports heartbeat (AzureSecurityLinuxAgent), then try to enable again -> should fail
-            # - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> should reach timeout
+            # - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> agent should block uninstall
             log.info("")
             log.info("*** Begin test case 5")
             log.info("This policy tests the following scenarios:")
             log.info(" - disallow a previously-enabled extension that reports heartbeat (AzureSecurityLinuxAgent), then try to enable again -> should fail")
-            log.info(" - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> should reach timeout")
+            log.info(" - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> agent should block uninstall")
             policy = \
                 {
                     "policyVersion": "0.1.0",
@@ -390,22 +350,20 @@ class ExtPolicy(AgentVmTest):
             if VmExtensionIds.AzureSecurityLinuxAgent.supports_distro(distro):
                 self._operation_should_fail("enable", azure_security)
 
-            # To avoid Azure Policy automatically installing GuestConfig and extending the timeout period, we manually
-            # install it ahead of time on supported distros. However, Azure Policy will still attempt to install GuestConfig on
-            # unsupported distros and extend test runtime, so we skip this test case on any unsupported distros.
-            if not VmExtensionIds.GuestConfig.supports_distro(distro):
-                log.info("Skipping delete failure test case: GuestConfig does not support distro '{0}' but Azure Policy "
-                         "may still attempt to install it, extending the timeout period".format(distro))
-            else:
-                # Because this request marks CSE for deletion, the next operation must be a delete retry (enable will fail).
-                self._operation_should_fail("delete", custom_script)
+            self._operation_should_fail("delete", custom_script)
 
             # This policy tests the following scenarios:
-            # - allow a previously-disallowed single-config extension (CustomScript), then try to delete again -> should succeed
+            # - allow a previously-disallowed single-config extension (CustomScript), then force a new goal state -> pending delete should succeed
             log.info("")
             log.info("*** Begin test case 6")
             log.info("This policy tests the following scenarios:")
-            log.info("- allow a previously-disallowed single-config extension (CustomScript), then retry delete -> should succeed")
+            log.info("- allow a previously-disallowed single-config extension (CustomScript) which has an active uninstall request, then force a new goal state by adding another allowed extension -> CustomScript delete should succeed now")
+            # CRP can merge a pending delete retry into the existing goal state without sending it to the agent.
+            # Enable RunCommandLinux to force a new goal state that will result in the agent retrying the pending CustomScript uninstall.
+            run_command_linux = ExtPolicy.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommand),
+                {"commandToExecute": "date"}
+            )
             policy = \
                 {
                     "policyVersion": "0.1.0",
@@ -413,13 +371,18 @@ class ExtPolicy(AgentVmTest):
                         "allowListedExtensionsOnly": True,
                         "extensions": {
                             "Microsoft.Azure.Extensions.CustomScript": {},
+                            "Microsoft.CPlat.Core.RunCommandLinux": {},
                             # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
                             "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
                         }
                     }
                 }
             self._create_policy_file(policy)
-            self._operation_should_succeed("delete", custom_script)
+            enable_start_time = self._ssh_client.run_command("date --utc '+%Y-%m-%d %T'").rstrip()
+            self._operation_should_succeed("enable", run_command_linux)
+            self._ssh_client.run_command(
+                f"agent_ext_policy-verify_operation_success.py --extension-list '{custom_script.extension.extension_id}' "
+                f"--after-timestamp '{enable_start_time}' --operation 'uninstall'", use_sudo=True)
 
             # Attempt to delete an extension that was previously blocked (failed to install) -> should succeed.
             # Even if the extension is still disallowed by policy, uninstall should succeed because the extension
@@ -440,6 +403,7 @@ class ExtPolicy(AgentVmTest):
                     }
                 }
             self._create_policy_file(policy)
+            time.sleep(10)  # Sleep for 10 seconds to allow the ARM metadata cleanup from test case 6 DELETE operation to complete before enabling CSE again (this sleep helps with an observed race condition in ARM).
             self._operation_should_fail("enable", custom_script)        # CSE should not be installed
             self._operation_should_succeed("delete", custom_script)     # Since CSE was not installed, delete should succeed
 
