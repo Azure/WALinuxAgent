@@ -147,8 +147,8 @@ def is_systemd_run_failure(unit_name, stderr):
        itself failed or produced errors
     
     The determination is made by examining the stderr output:
-    - If stderr contains "Unit {unit_name} not found", it indicates systemd-run couldn't find/create
-      the unit, which is a systemd-run failure
+    - If stderr contains "Unit {unit_name} not found." (with or without a ".scope" suffix on the
+      unit name), it indicates systemd-run couldn't find/create the unit, which is a systemd-run failure
     - If stderr does NOT contain the unit_name at all, it suggests systemd-run failed before even
       attempting to run the command (e.g., D-Bus connection failures, systemd not running), which
       is a systemd-run failure
@@ -171,4 +171,5 @@ def is_systemd_run_failure(unit_name, stderr):
         stderr_str = ustr(stderr.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
 
     unit_not_found = "Unit {0} not found.".format(unit_name)
-    return unit_not_found in stderr_str or unit_name not in stderr_str
+    unit_with_scope_not_found = "Unit {0}.scope not found.".format(unit_name)
+    return unit_not_found in stderr_str or unit_with_scope_not_found in stderr_str or unit_name not in stderr_str
