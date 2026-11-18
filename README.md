@@ -135,6 +135,31 @@ samples provided in the deb and rpm sections below. This method is also meant fo
 provide very limited support for it.
 
 
+### Custom systemd slice hierarchy (prototype)
+
+The agent detects its configured slice using `systemctl show <agent-service> --property Slice`
+and checks its effective `ControlGroup` before enabling cgroups. The default `azure.slice`
+hierarchy, unit names, accounting, and quotas are unchanged. A service still using the
+default `system.slice` is treated as the legacy startup transition, not as a request to
+relocate extensions.
+
+For a new image, configure a distinct parent slice in the agent service or an administrator
+drop-in before the service first starts. For example, `Slice=system-azure.slice` puts the
+agent under `system.slice/system-azure.slice`; extension slices are then named
+`system-azure-vmextensions-<extension>.slice`. Child slice names follow systemd's
+hyphen-based parentage, rather than a fixed directory prefix. Log collection and package
+signature validation use corresponding child slices with unchanged resource limits.
+Services installed by extensions retain their own configured placement.
+
+Install the service configuration and any custom parent-slice definitions, and have
+systemd load them before starting the agent. Custom placement requires the configured
+slice and running control group to agree; this prototype does not migrate running nodes
+or reload/restart services. Introspection failures, the root slice (`-.slice`), and
+unexpected control groups are reported and prevent cgroup initialization, rather than
+selecting another hierarchy. Parent-slice limits also constrain all descendants, so
+deployments must budget them for the agent, extensions, and helpers; the agent does not
+remove or relax inherited limits.
+
 ## Upgrade
 
 Upgrading via your distribution's package repository or using automatic updates are the only supported

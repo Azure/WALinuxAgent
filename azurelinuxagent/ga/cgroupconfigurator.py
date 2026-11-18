@@ -46,7 +46,6 @@ DefaultDependencies=no
 Before=slices.target
 """
 _VMEXTENSIONS_SLICE = EXTENSION_SLICE_PREFIX + ".slice"
-_AZURE_VMEXTENSIONS_SLICE = AZURE_SLICE + "/" + _VMEXTENSIONS_SLICE
 _VMEXTENSIONS_SLICE_CONTENTS = """
 [Unit]
 Description=Slice for Azure VM Extensions
@@ -122,6 +121,7 @@ class CGroupConfigurator(object):
             self._cgroups_api = None
             self._agent_cgroup = None
             self._agent_memory_metrics = None
+            self._agent_slice = AZURE_SLICE
             self._check_cgroups_lock = threading.RLock()  # Protect the check_cgroups which is called from Monitor thread and main loop.
             self._unexpected_processes = {}
 
@@ -139,24 +139,29 @@ class CGroupConfigurator(object):
                     self._reset_agent_cgroup_setup()
                     return
 
-                # PR #2015 introduced a check to disable cgroups when the Agent is not in the expected cgroup. Telemetry at the time indicated that in a small number of
-                # VMs the Agent was showing up directly under the root cgroup or system.slice. As we started moving the agent to its own slice, the check was eventually
-                # changed to use the Slice property as returned by systemctl show (PR #2160).
-                # Current telemetry doesn't report any VMs where the Agent shows up in an unexpected Slice. The cgroups logic has had quite a few fixes since the original
-                # check was introduced, and very likely the issue causing the mismatch has been resolved. However, the check using the Slice property is not always accurate,
-                # for example when the dropin file that defines the slice has been created but the Agent service has not been restarted, so the Agent is still in the default
-                # slice.
-                # I am changing the check to use the ControlGroup property instead. Consider removing it after a few releases if telemetry does not show any VMs failing
-                # the check.
                 agent_unit_name = systemd.get_agent_unit_name()
+                self._agent_slice = None
+                self._agent_slice = CGroupUtil.get_agent_slice_name()
                 agent_control_group = systemd.get_unit_property(agent_unit_name, "ControlGroup")
-                if agent_control_group not in ("/{0}/{1}".format(AZURE_SLICE, agent_unit_name), "/system.slice/{0}".format(agent_unit_name)):
-                    log_cgroup_warning("The agent is within an unexpected control group: {0}".format(agent_control_group))
+                if self._agent_slice == AZURE_SLICE:
+                    # Preserve the legacy startup transition, even if systemd has not loaded the Slice drop-in yet.
+                    expected_control_groups = ["/{0}/{1}".format(AZURE_SLICE, agent_unit_name), "/system.slice/{0}".format(agent_unit_name)]
+                else:
+                    slice_control_group = systemd.get_unit_property(self._agent_slice, "ControlGroup")
+                    if not slice_control_group.startswith("/") or slice_control_group == "/":
+                        raise CGroupsException("Invalid control group for slice {0}: {1}".format(self._agent_slice, slice_control_group))
+                    expected_control_groups = [os.path.join(slice_control_group, agent_unit_name)]
+                if agent_control_group not in expected_control_groups:
+                    log_cgroup_warning("The agent is within an unexpected control group: {0}; configured slice: {1}; expected: {2}".format(
+                        agent_control_group, self._agent_slice, expected_control_groups))
                     return
+                self._cgroups_api.set_agent_slice(self._agent_slice)
+                log_cgroup_info("Using agent slice {0}; current control group: {1}".format(self._agent_slice, agent_control_group))
 
-                # Before agent setup, cleanup the old agent setup (drop-in files) since new agent uses different approach(systemctl) to setup cgroups.
-                log_cgroup_info("Cleaning up old agent setup (drop-in files), if any")
-                self._cleanup_old_agent_setup()
+                if self._agent_slice == AZURE_SLICE:
+                    # Legacy generated files cannot belong to a custom hierarchy.
+                    log_cgroup_info("Cleaning up old agent setup (drop-in files), if any")
+                    self._cleanup_old_agent_setup()
                 if self.using_cgroup_v2():
                     self._reset_resource_quota(systemd.get_agent_unit_name(), ResourceName.MEMORY, ignore_enforce_check=True)
 
@@ -297,9 +302,17 @@ class CGroupConfigurator(object):
                           └─Microsoft.CPlat.Extension.slice
                               └─5894 /usr/bin/python3 /var/lib/waagent/Microsoft.CPlat.Extension-1.0.0.0/enable.py
 
-            This method ensures that the "azure" and "vmextensions" slices are created. Setup should create those slices
-            under /lib/systemd/system; but if they do not exist, __ensure_azure_slices_exist will create them.
+            For the default hierarchy, this method ensures that the "azure" and "vmextensions" slices are created.
+            A custom parent must already be active; its children are configured through systemd at runtime.
             """
+
+            if self._agent_slice != AZURE_SLICE:
+                # Runtime properties configure a new slice without creating files that would need daemon-reload.
+                accounting_props, accounting_vals = self._cgroups_api.get_accounting_properties()
+                if len(accounting_props) > 0:
+                    extension_slice = self.get_agent_child_slice_name("vmextensions")
+                    systemd.set_unit_run_time_properties(extension_slice, accounting_props, accounting_vals)
+                return
 
             unit_file_install_path = systemd.get_unit_file_install_path()
             azure_slice = os.path.join(unit_file_install_path, AZURE_SLICE)
@@ -685,6 +698,9 @@ class CGroupConfigurator(object):
 
             return logcollector_properties
 
+        def get_agent_child_slice_name(self, child_name):
+            return CGroupUtil.get_agent_child_slice_name(self._agent_slice, child_name)
+
         @staticmethod
         def _get_command(pid):
             try:
@@ -745,8 +761,7 @@ class CGroupConfigurator(object):
                 pass
             return False
 
-        @staticmethod
-        def _check_systemd_run_process(process):
+        def _check_systemd_run_process(self, process):
             """
             Returns True if process is shell systemd-run process started by agent otherwise False.
 
@@ -758,7 +773,8 @@ class CGroupConfigurator(object):
                 if os.path.exists(cmdline):
                     with open(cmdline, "r") as cmdline_file:
                         process_name = "{0}".format(cmdline_file.read())
-                match = re.search(r'systemd-run.*--unit=.*--scope.*--slice=azure-vmextensions.*', process_name)
+                slice_prefix = self.get_agent_child_slice_name("vmextensions")[:-len(".slice")]
+                match = re.search(r"systemd-run.*--unit=.*--scope.*--slice='?" + re.escape(slice_prefix) + r'.*', process_name)
                 if match is not None:
                     return True
             except Exception:
@@ -836,11 +852,7 @@ class CGroupConfigurator(object):
         def stop_tracking_extension_cgroups(self, extension_name):
             if self.enabled():
                 try:
-                    extension_slice_name = CGroupUtil.get_extension_slice_name(extension_name)
-                    cgroup_relative_path = os.path.join(_AZURE_VMEXTENSIONS_SLICE, extension_slice_name)
-
-                    cgroup = self._cgroups_api.get_cgroup_from_relative_path(relative_path=cgroup_relative_path,
-                                                                             cgroup_name=extension_name)
+                    cgroup = self._cgroups_api.get_extension_cgroup(extension_name)
                     controllers = cgroup.get_controllers()
                     for controller in controllers:
                         CGroupsTelemetry.stop_tracking(controller)
@@ -905,25 +917,25 @@ class CGroupConfigurator(object):
         def setup_extension_slice(self, extension_name, cpu_quota):
             """
             Each extension runs under its own slice (Ex "Microsoft.CPlat.Extension.slice"). All the slices for
-            extensions are grouped under "azure-vmextensions.slice.
+            extensions are grouped under the configured parent's "vmextensions" child slice.
 
             This method ensures that the desired configuration created for the extension slice using systemdctl set-property.
             TODO: set memory quotas
             """
             if self.enabled():
-                extension_slice = CGroupUtil.get_extension_slice_name(extension_name)
+                extension_slice = self._cgroups_api.get_extension_slice_name(extension_name)
                 try:
-                    # clean up the old slice from the disk, new agent use systemdctl set-property
-                    unit_file_install_path = systemd.get_unit_file_install_path()
-                    extension_slice_path = os.path.join(unit_file_install_path, extension_slice)
-                    CGroupConfigurator._Impl._cleanup_unit_file(extension_slice_path)
+                    if self._agent_slice == AZURE_SLICE:
+                        # Only the legacy hierarchy has unit files generated by older agents.
+                        unit_file_install_path = systemd.get_unit_file_install_path()
+                        extension_slice_path = os.path.join(unit_file_install_path, extension_slice)
+                        CGroupConfigurator._Impl._cleanup_unit_file(extension_slice_path)
 
-                    # clean up the old-old slice(includes version in the name) from the disk
-                    old_extension_slice_path = os.path.join(unit_file_install_path,
-                                                            CGroupUtil.get_extension_slice_name(extension_name,
-                                                                                                old_slice=True))
-                    if os.path.exists(old_extension_slice_path):
-                        CGroupConfigurator._Impl._cleanup_unit_file(old_extension_slice_path)
+                        old_extension_slice_path = os.path.join(unit_file_install_path,
+                                                                self._cgroups_api.get_extension_slice_name(extension_name,
+                                                                                                           old_slice=True))
+                        if os.path.exists(old_extension_slice_path):
+                            CGroupConfigurator._Impl._cleanup_unit_file(old_extension_slice_path)
 
                     cpu_quota = "{0}%".format(
                         cpu_quota) if cpu_quota is not None and self._cgroups_api.can_enforce_cpu() else "infinity"  # following systemd convention for no-quota (infinity)
@@ -952,7 +964,7 @@ class CGroupConfigurator(object):
             """
             if self.enabled():
                 try:
-                    self._reset_resource_quota(CGroupUtil.get_extension_slice_name(extension_name), ResourceName.CPU)
+                    self._reset_resource_quota(self._cgroups_api.get_extension_slice_name(extension_name), ResourceName.CPU)
                 except Exception as exception:
                     log_cgroup_warning('Failed to reset for {0}: {1}'.format(extension_name, ustr(exception)))
 

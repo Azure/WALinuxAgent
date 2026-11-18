@@ -21,7 +21,7 @@ import os
 import sys
 import threading
 import time
-from azurelinuxagent.ga import logcollector, cgroupconfigurator
+from azurelinuxagent.ga import logcollector
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
@@ -179,7 +179,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
         systemd_cmd = [
             "systemd-run",
             "--unit={0}".format(logcollector.CGROUPS_UNIT),
-            "--slice={0}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE), "--scope"
+            "--slice={0}".format(CGroupConfigurator.get_instance().get_agent_child_slice_name("walinuxagent-logcollector")), "--scope"
         ] + CGroupConfigurator.get_instance().get_logcollector_unit_properties()
 
         # The log tool is invoked from the current agent's egg with the command line option

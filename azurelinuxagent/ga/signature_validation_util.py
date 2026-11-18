@@ -31,7 +31,7 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr, UTC, datetime_min_utc
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME, AGENT_SIGNING_INFO_NAME
-from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, PKG_SIGNATURE_VALIDATION_CPU_QUOTA, PKG_SIGNATURE_VALIDATION_SLICE_NAME, PKG_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME, DisableCgroups
+from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, PKG_SIGNATURE_VALIDATION_CPU_QUOTA, PKG_SIGNATURE_VALIDATION_CGROUPS_UNIT_NAME, DisableCgroups
 from azurelinuxagent.common.osutil.systemd import is_systemd_run_failure
 from azurelinuxagent.ga.confidential_vm_info import ConfidentialVMInfo
 
@@ -301,7 +301,7 @@ def validate_signature(package_path, signature, package_full_name):
         # If the systemd-run invocation fails, disable cgroups entirely and fall back to running the OpenSSL command directly.
         use_cgroups = CGroupConfigurator.get_instance().enabled()
         if use_cgroups:
-            slice_name = PKG_SIGNATURE_VALIDATION_SLICE_NAME + ".slice"
+            slice_name = CGroupConfigurator.get_instance().get_agent_child_slice_name("walinuxagent-pkgsignaturevalidation")
             # Use a unique unit name per invocation to avoid collisions with prior transient units that systemd may
             # not have garbage-collected yet (e.g. if a previous invocation left the unit in a 'failed' state). This
             # mirrors the pattern used by start_extension_command() in cgroupapi.py.
