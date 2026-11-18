@@ -20,8 +20,10 @@ import unittest
 import zipfile
 
 import makepkg
+from tests.lib.tools import is_python_version_26, skip_if_predicate_true
 
 
+@skip_if_predicate_true(is_python_version_26, "ZipFile context managers require Python 2.7 or newer")
 class TestMakePackage(unittest.TestCase):
     def setUp(self):
         self.test_directory = tempfile.mkdtemp()

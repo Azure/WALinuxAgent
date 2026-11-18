@@ -15,20 +15,20 @@
 import json
 
 import azurelinuxagent.common.opentelemetry as agent_opentelemetry
-from tests.lib.tools import AgentTestCase, Mock
+from tests.lib.tools import AgentTestCase, Mock, skip_if_predicate_false
 
-agent_opentelemetry.enable_vendored_packages()
+if agent_opentelemetry.enable_vendored_packages():
+    from azurelinuxagent.common.opentelemetry_exporter import (
+        HostPluginSpanExporter,
+        encode_spans_as_otlp_json
+    )
+    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SpanExportResult
+    from opentelemetry.trace import SpanKind, Status, StatusCode
 
-from azurelinuxagent.common.opentelemetry_exporter import (  # noqa: E402
-    HostPluginSpanExporter,
-    encode_spans_as_otlp_json
-)
-from opentelemetry.sdk.resources import Resource  # noqa: E402
-from opentelemetry.sdk.trace import TracerProvider  # noqa: E402
-from opentelemetry.sdk.trace.export import SpanExportResult  # noqa: E402
-from opentelemetry.trace import SpanKind, Status, StatusCode  # noqa: E402
 
-
+@skip_if_predicate_false(agent_opentelemetry.is_supported, "OpenTelemetry requires Python 3.10 or newer")
 class TestOpenTelemetryExporter(AgentTestCase):
     @staticmethod
     def _create_span(name="ProcessExtensionsGoalState"):
@@ -66,10 +66,10 @@ class TestOpenTelemetryExporter(AgentTestCase):
         self.assertEqual(1, encoded_span["status"]["code"])
         self.assertEqual("goal-state-received", encoded_span["events"][0]["name"])
 
-        attributes = {
-            attribute["key"]: attribute["value"]
+        attributes = dict(
+            (attribute["key"], attribute["value"])
             for attribute in encoded_span["attributes"]
-        }
+        )
         self.assertEqual({"stringValue": "value"}, attributes["string"])
         self.assertEqual({"intValue": "42"}, attributes["integer"])
         self.assertEqual({"boolValue": True}, attributes["boolean"])

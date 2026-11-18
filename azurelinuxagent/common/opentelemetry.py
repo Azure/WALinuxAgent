@@ -141,6 +141,24 @@ def extract_goal_state_context(extensions_goal_state):
         return None
 
 
+@contextmanager
+def _span_without_exception_details(span_scope):
+    from opentelemetry.trace import StatusCode
+
+    with span_scope as span:
+        try:
+            yield span
+        except Exception:
+            try:
+                span.set_status(StatusCode.ERROR)
+            except Exception as error:
+                logger.error(
+                    "OpenTelemetry span status update failed: {0}",
+                    error.__class__.__name__
+                )
+            raise
+
+
 def start_goal_state_span(extensions_goal_state):
     """
     Creates the consumer span for processing an ExtensionsGoalState.
@@ -162,16 +180,18 @@ def start_goal_state_span(extensions_goal_state):
             parent_context = Context()
 
         tracer = trace.get_tracer(_EXTENSIONS_TRACER_NAME)
-        return tracer.start_as_current_span(
+        return _span_without_exception_details(tracer.start_as_current_span(
             _PROCESS_EXTENSIONS_GOAL_STATE_SPAN_NAME,
             context=parent_context,
             kind=SpanKind.CONSUMER,
+            record_exception=False,
+            set_status_on_exception=False,
             attributes={
                 "walinuxagent.goal_state.id": extensions_goal_state.id,
                 "walinuxagent.goal_state.channel": extensions_goal_state.channel,
                 "walinuxagent.goal_state.source": extensions_goal_state.source
             }
-        )
+        ))
     except Exception as error:
         logger.error(
             "OpenTelemetry goal state span creation failed: {0}",
@@ -196,11 +216,13 @@ def start_operation_span(span_name, context=None):
         from opentelemetry.trace import SpanKind
 
         tracer = trace.get_tracer(_EXTENSIONS_TRACER_NAME)
-        return tracer.start_as_current_span(
+        return _span_without_exception_details(tracer.start_as_current_span(
             span_name,
             context=context,
-            kind=SpanKind.INTERNAL
-        )
+            kind=SpanKind.INTERNAL,
+            record_exception=False,
+            set_status_on_exception=False
+        ))
     except Exception as error:
         logger.error(
             "OpenTelemetry operation span creation failed: {0}",

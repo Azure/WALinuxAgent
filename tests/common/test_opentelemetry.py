@@ -15,6 +15,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import json
 import os
 import sys
 
@@ -24,7 +25,7 @@ except ImportError:
     import ConfigParser as configparser
 
 import azurelinuxagent.common.opentelemetry as opentelemetry
-from tests.lib.tools import AgentTestCase, MagicMock, Mock, patch
+from tests.lib.tools import AgentTestCase, MagicMock, Mock, patch, skip_if_predicate_false
 
 
 class TestOpenTelemetry(AgentTestCase):
@@ -54,6 +55,7 @@ class TestOpenTelemetry(AgentTestCase):
         with patch.object(opentelemetry.sys, "version_info", (3, 9)):
             self.assertFalse(opentelemetry.is_supported())
 
+    @skip_if_predicate_false(opentelemetry.is_supported, "OpenTelemetry requires Python 3.10 or newer")
     def test_vendored_entry_points_reference_retained_modules(self):
         opentelemetry.enable_vendored_packages()
 
@@ -141,6 +143,7 @@ class TestOpenTelemetry(AgentTestCase):
 
         enable_vendored_packages.assert_not_called()
 
+    @skip_if_predicate_false(opentelemetry.is_supported, "OpenTelemetry requires Python 3.10 or newer")
     def test_extract_goal_state_context_extracts_remote_parent_and_trace_state(self):
         extensions_goal_state = Mock()
         extensions_goal_state.trace_parent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
@@ -156,6 +159,7 @@ class TestOpenTelemetry(AgentTestCase):
         self.assertEqual(0x00f067aa0ba902b7, span_context.span_id)
         self.assertEqual("opaque-value", span_context.trace_state.get("vendor"))
 
+    @skip_if_predicate_false(opentelemetry.is_supported, "OpenTelemetry requires Python 3.10 or newer")
     def test_extract_goal_state_context_treats_missing_context_as_absent(self):
         extensions_goal_state = Mock()
         extensions_goal_state.trace_parent = None
@@ -166,6 +170,7 @@ class TestOpenTelemetry(AgentTestCase):
         from opentelemetry import trace
         self.assertFalse(trace.get_current_span(context).get_span_context().is_valid)
 
+    @skip_if_predicate_false(opentelemetry.is_supported, "OpenTelemetry requires Python 3.10 or newer")
     def test_extract_goal_state_context_treats_invalid_context_as_absent(self):
         extensions_goal_state = Mock()
         extensions_goal_state.trace_parent = "invalid"
@@ -176,6 +181,7 @@ class TestOpenTelemetry(AgentTestCase):
         from opentelemetry import trace
         self.assertFalse(trace.get_current_span(context).get_span_context().is_valid)
 
+    @skip_if_predicate_false(opentelemetry.is_supported, "OpenTelemetry requires Python 3.10 or newer")
     def test_extract_goal_state_context_does_not_log_trace_context_on_failure(self):
         extensions_goal_state = Mock()
         extensions_goal_state.trace_parent = "sensitive-trace-parent"
@@ -208,6 +214,7 @@ class TestOpenTelemetry(AgentTestCase):
 
         extract_context.assert_not_called()
 
+    @skip_if_predicate_false(opentelemetry.is_supported, "OpenTelemetry requires Python 3.10 or newer")
     def test_start_goal_state_span_creates_consumer_span_with_remote_parent(self):
         opentelemetry._tracer_provider = Mock()
         opentelemetry.enable_vendored_packages()
@@ -222,18 +229,21 @@ class TestOpenTelemetry(AgentTestCase):
         extensions_goal_state.source = "Fabric"
         parent_context = Context()
         tracer = Mock()
-        span_scope = Mock()
+        span_scope = MagicMock()
         tracer.start_as_current_span.return_value = span_scope
 
         with patch.object(opentelemetry, "extract_goal_state_context", return_value=parent_context):
             with patch.object(trace, "get_tracer", return_value=tracer) as get_tracer:
-                self.assertIs(span_scope, opentelemetry.start_goal_state_span(extensions_goal_state))
+                with opentelemetry.start_goal_state_span(extensions_goal_state) as span:
+                    self.assertIs(span_scope.__enter__.return_value, span)
 
         get_tracer.assert_called_once_with("azurelinuxagent.ga.exthandlers")
         tracer.start_as_current_span.assert_called_once_with(
             "ProcessExtensionsGoalState",
             context=parent_context,
             kind=SpanKind.CONSUMER,
+            record_exception=False,
+            set_status_on_exception=False,
             attributes={
                 "walinuxagent.goal_state.id": "incarnation_2",
                 "walinuxagent.goal_state.channel": "WireServer",
@@ -241,6 +251,7 @@ class TestOpenTelemetry(AgentTestCase):
             }
         )
 
+    @skip_if_predicate_false(opentelemetry.is_supported, "OpenTelemetry requires Python 3.10 or newer")
     def test_start_goal_state_span_uses_root_context_when_parent_extraction_fails(self):
         opentelemetry._tracer_provider = Mock()
         opentelemetry.enable_vendored_packages()
@@ -262,6 +273,7 @@ class TestOpenTelemetry(AgentTestCase):
         self.assertIsInstance(span_context, Context)
         self.assertEqual(0, len(span_context))
 
+    @skip_if_predicate_false(opentelemetry.is_supported, "OpenTelemetry requires Python 3.10 or newer")
     def test_operation_span_creates_internal_child_span(self):
         opentelemetry._tracer_provider = Mock()
         opentelemetry.enable_vendored_packages()
@@ -280,7 +292,9 @@ class TestOpenTelemetry(AgentTestCase):
         tracer.start_as_current_span.assert_called_once_with(
             "InstallExtension",
             context=None,
-            kind=SpanKind.INTERNAL
+            kind=SpanKind.INTERNAL,
+            record_exception=False,
+            set_status_on_exception=False
         )
         span_scope.__exit__.assert_called_once_with(None, None, None)
 
@@ -309,6 +323,75 @@ class TestOpenTelemetry(AgentTestCase):
         self.assertIs(error, exit_arguments[1])
         self.assertIsNotNone(exit_arguments[2])
 
+    @skip_if_predicate_false(opentelemetry.is_supported, "OpenTelemetry requires Python 3.10 or newer")
+    def test_operation_and_goal_state_spans_do_not_export_exception_details(self):
+        opentelemetry.enable_vendored_packages()
+
+        from opentelemetry import trace
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+        from azurelinuxagent.common.opentelemetry_exporter import HostPluginSpanExporter
+
+        response = Mock(status=200)
+        response.read.return_value = b"{}"
+        http_post = Mock(return_value=response)
+        provider = TracerProvider(shutdown_on_exit=False)
+        provider.add_span_processor(SimpleSpanProcessor(HostPluginSpanExporter(
+            host_endpoint="localhost", http_post=http_post
+        )))
+        opentelemetry._tracer_provider = provider
+        tracer = provider.get_tracer("test")
+        goal_state = Mock(
+            id="incarnation_2", channel="WireServer", source="Fabric",
+            trace_parent=None, trace_state=None
+        )
+        error = ValueError(
+            "Command output: https://example.invalid/package?sv=1&sig=synthetic-secret"
+        )
+
+        @opentelemetry.trace_operation("EnableExtension")
+        def operation():
+            raise error
+
+        try:
+            with patch.object(trace, "get_tracer", return_value=tracer):
+                with opentelemetry.operation_span("SuccessfulOperation"):
+                    pass
+                with self.assertRaises(ValueError) as raised:
+                    with opentelemetry.start_goal_state_span(goal_state):
+                        with opentelemetry.operation_span("InstallExtension"):
+                            operation()
+            self.assertIs(error, raised.exception)
+        finally:
+            provider.shutdown()
+
+        self.assertEqual(4, http_post.call_count)
+        for post_call in http_post.call_args_list:
+            payload = post_call[1]["data"].decode("utf-8")
+            span = json.loads(payload)["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
+            expected_status = 0 if span["name"] == "SuccessfulOperation" else 2
+            self.assertEqual({"code": expected_status}, span["status"])
+            self.assertNotIn("events", span)
+            self.assertNotIn("synthetic-secret", payload)
+            self.assertNotIn("Command output", payload)
+            self.assertNotIn("Traceback", payload)
+
+    @skip_if_predicate_false(opentelemetry.is_supported, "OpenTelemetry requires Python 3.10 or newer")
+    def test_span_status_update_failure_preserves_the_original_exception(self):
+        opentelemetry.enable_vendored_packages()
+        span_scope = MagicMock()
+        span_scope.__enter__.return_value.set_status.side_effect = ValueError("sensitive status error")
+        error = RuntimeError("sensitive operation error")
+
+        with patch.object(opentelemetry.logger, "error") as log_error:
+            with self.assertRaises(RuntimeError) as raised:
+                with opentelemetry._span_without_exception_details(span_scope):
+                    raise error
+
+        self.assertIs(error, raised.exception)
+        log_error.assert_called_once_with("OpenTelemetry span status update failed: {0}", "ValueError")
+
+    @skip_if_predicate_false(opentelemetry.is_supported, "OpenTelemetry requires Python 3.10 or newer")
     def test_inject_current_context_preserves_headers_and_replaces_existing_context(self):
         opentelemetry._tracer_provider = Mock()
         opentelemetry.enable_vendored_packages()
@@ -357,6 +440,22 @@ class TestOpenTelemetry(AgentTestCase):
             self.assertIsNone(opentelemetry.initialize_from_config(configuration))
 
         initialize.assert_not_called()
+
+    def test_initialize_from_config_enables_tracing_when_flag_is_missing(self):
+        configuration = opentelemetry.conf.ConfigurationProvider()
+        provider = Mock()
+
+        with patch.object(opentelemetry, "is_supported", return_value=True):
+            with patch.object(opentelemetry, "initialize", return_value=provider) as initialize:
+                self.assertIs(provider, opentelemetry.initialize_from_config(configuration))
+
+        initialize.assert_called_once_with(
+            timeout=10,
+            schedule_delay_millis=5000,
+            max_queue_size=2048,
+            max_export_batch_size=64,
+            root_sampling_ratio=1.0
+        )
 
     def test_initialize_from_config_passes_validated_settings_to_initialize(self):
         configuration = opentelemetry.conf.ConfigurationProvider()
@@ -437,6 +536,7 @@ OpenTelemetry.MaxQueueSize=0
         )
         set_provider.assert_called_once_with(provider)
 
+    @skip_if_predicate_false(opentelemetry.is_supported, "OpenTelemetry requires Python 3.10 or newer")
     def test_sampler_preserves_remote_parent_sampling_decisions(self):
         opentelemetry.enable_vendored_packages()
 

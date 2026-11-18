@@ -123,7 +123,7 @@ __SWITCH_OPTIONS__ = {
     "Logs.Verbose": False,
     "Logs.Console": True,
     "Logs.Collect": True,
-    "OpenTelemetry.Enabled": False,
+    "OpenTelemetry.Enabled": True,
     "Extensions.Enabled": True,
     "Extensions.WaitForCloudInit": False,
     "Provisioning.AllowResetSysUser": False,
@@ -449,7 +449,7 @@ def get_extensions_enabled(conf=__conf__):
 def get_opentelemetry_enabled(conf=__conf__):
     value = conf.get("OpenTelemetry.Enabled", None)
     if value is None:
-        return False
+        return True
     if value.lower() == "y":
         return True
     if value.lower() == "n":

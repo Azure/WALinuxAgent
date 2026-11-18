@@ -47,7 +47,7 @@ class TestConf(AgentTestCase):
         "ResourceDisk.SwapSizeMB": 0,
         "ResourceDisk.MountOptions": None,
         "Logs.Verbose": False,
-        "OpenTelemetry.Enabled": False,
+        "OpenTelemetry.Enabled": True,
         "OpenTelemetry.ExportTimeoutSeconds": 10,
         "OpenTelemetry.ExportIntervalMilliseconds": 5000,
         "OpenTelemetry.MaxQueueSize": 2048,
@@ -160,7 +160,7 @@ class TestConf(AgentTestCase):
         self.assertTrue(conf.get_extensions_enabled(self.conf))
 
     def test_get_opentelemetry_configuration_returns_defaults(self):
-        self.assertFalse(conf.get_opentelemetry_enabled(self.conf))
+        self.assertTrue(conf.get_opentelemetry_enabled(self.conf))
         self.assertEqual({
             "timeout": 10,
             "schedule_delay_millis": 5000,
@@ -168,6 +168,12 @@ class TestConf(AgentTestCase):
             "max_export_batch_size": 64,
             "root_sampling_ratio": 1.0
         }, conf.get_opentelemetry_configuration(self.conf))
+
+    def test_get_opentelemetry_enabled_respects_explicit_disable(self):
+        configuration = conf.ConfigurationProvider()
+        configuration.load("OpenTelemetry.Enabled=n")
+
+        self.assertFalse(conf.get_opentelemetry_enabled(configuration))
 
     def test_get_opentelemetry_configuration_returns_configured_values(self):
         configuration = conf.ConfigurationProvider()
