@@ -16,7 +16,7 @@
 #
 
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, ExtHandlersHandler
-from azurelinuxagent.ga.signature_validation_util import validate_handler_manifest_signing_info, validate_signature
+from azurelinuxagent.ga.signature_validation_util import validate_extension_manifest_signing_info, validate_signature
 from tests.lib.tools import AgentTestCase, MagicMock, Mock, patch
 
 
@@ -84,7 +84,7 @@ class TestExtHandlersTracing(AgentTestCase):
             (ExtHandlerInstance._fetch_extension_manifest, "DownloadExtensionManifest"),
             (ExtHandlerInstance.download, "DownloadExtensionPackage"),
             (validate_signature, "ValidateExtensionPackage"),
-            (validate_handler_manifest_signing_info, "ValidateHandlerManifest"),
+            (validate_extension_manifest_signing_info, "ValidateHandlerManifest"),
             (ExtHandlerInstance.install, "InstallExtension"),
             (ExtHandlerInstance.enable, "EnableExtension"),
             (ExtHandlerInstance.disable, "DisableExtension"),
