@@ -32,10 +32,10 @@ import threading
 import time
 
 from azurelinuxagent.common.exception import CGroupsException
-from azurelinuxagent.ga import logcollector, cgroupconfigurator
+from azurelinuxagent.ga import logcollector
 from azurelinuxagent.ga.cgroupcontroller import AGENT_LOG_COLLECTOR
 from azurelinuxagent.ga.cpucontroller import _CpuController
-from azurelinuxagent.ga.cgroupapi import create_cgroup_api, InvalidCgroupMountpointException
+from azurelinuxagent.ga.cgroupapi import create_cgroup_api, InvalidCgroupMountpointException, CGroupUtil
 from azurelinuxagent.ga.firewall_manager import FirewallManager, IpTables
 
 import azurelinuxagent.common.conf as conf
@@ -240,11 +240,12 @@ class Agent(object):
                 retry_count = 0
                 while True:
                     try:
+                        expected_slice = CGroupUtil.get_agent_child_slice_name(CGroupUtil.get_agent_slice_name(), "walinuxagent-logcollector")
                         log_collector_cgroup = cgroup_api.get_process_cgroup(process_id="self", cgroup_name=AGENT_LOG_COLLECTOR)
-                        if not log_collector_cgroup.check_in_expected_slice(cgroupconfigurator.LOGCOLLECTOR_SLICE):
-                            raise CGroupsException("The Log Collector process is not in the proper cgroup. Expected slice: {0}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE))
+                        if not log_collector_cgroup.check_in_expected_slice(expected_slice):
+                            raise CGroupsException("The Log Collector process is not in the proper cgroup. Expected slice: {0}".format(expected_slice))
                         return log_collector_cgroup
-                    except CGroupsException as e:
+                    except (CGroupsException, ValueError, CommandError) as e:
                         retry_count += 1
                         if retry_count >= logcollector.LOG_COLLECTOR_CGROUP_PATH_VALIDATION_MAX_RETRIES:
                             event.warn(WALAEventOperation.LogCollection, ustr(e))

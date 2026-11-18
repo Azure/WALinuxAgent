@@ -73,14 +73,30 @@ class CGroupUtil(object):
             distro_name.lower() == 'chainguard'
 
     @staticmethod
-    def get_extension_slice_name(extension_name, old_slice=False):
+    def get_extension_slice_name(extension_name, old_slice=False, slice_prefix=EXTENSION_SLICE_PREFIX):
         # The old slice makes it difficult for user to override the limits because they need to place drop-in files on every upgrade if extension slice is different for each version.
         # old slice includes <HandlerName>.<ExtensionName>-<HandlerVersion>
         # new slice without version <HandlerName>.<ExtensionName>
         if not old_slice:
             extension_name = extension_name.rsplit("-", 1)[0]
         # Since '-' is used as a separator in systemd unit names, we replace it with '_' to prevent side-effects.
-        return EXTENSION_SLICE_PREFIX + "-" + extension_name.replace('-', '_') + ".slice"
+        return slice_prefix + "-" + extension_name.replace('-', '_') + ".slice"
+
+    @staticmethod
+    def get_agent_slice_name():
+        """
+        Read configured placement, not ControlGroup: legacy agents can still be running in system.slice.
+        """
+        slice_name = systemd.get_unit_property(systemd.get_agent_unit_name(), "Slice")
+        if slice_name == "-.slice" or re.match(r'^(?:[A-Za-z0-9:_.-]|\\x[0-9a-fA-F]{2})+\.slice$', slice_name) is None:
+            raise CGroupsException("Unsupported agent slice: {0}".format(slice_name))
+        return "azure.slice" if slice_name == "system.slice" else slice_name
+
+    @staticmethod
+    def get_agent_child_slice_name(agent_slice, child_name):
+        if agent_slice is None:
+            raise CGroupsException("The agent slice could not be determined")
+        return agent_slice[:-len(".slice")] + "-" + child_name + ".slice"
 
     @staticmethod
     def get_daemon_pid():
@@ -283,6 +299,23 @@ class _SystemdCgroupApi(object):
     def __init__(self):
         self._systemd_run_commands = []
         self._systemd_run_commands_lock = threading.RLock()
+        self._agent_slice = "azure.slice"
+
+    def set_agent_slice(self, slice_name):
+        self._agent_slice = slice_name
+
+    def get_extension_slice_name(self, extension_name, old_slice=False):
+        prefix = CGroupUtil.get_agent_child_slice_name(self._agent_slice, "vmextensions")[:-len(".slice")]
+        return CGroupUtil.get_extension_slice_name(extension_name, old_slice=old_slice, slice_prefix=prefix)
+
+    def get_extension_cgroup(self, extension_name):
+        extension_slice = self.get_extension_slice_name(extension_name)
+        if self._agent_slice == "azure.slice":
+            # Keep the legacy lookup, including its behavior for short-lived extension commands.
+            relative_path = os.path.join("azure.slice", "azure-vmextensions.slice", extension_slice)
+            return self.get_cgroup_from_relative_path(relative_path=relative_path, cgroup_name=extension_name)
+        # ControlGroup accounts for systemd's escaping and the full effective slice hierarchy.
+        return self.get_unit_cgroup(unit_name=extension_slice, cgroup_name=extension_name)
 
     def get_cgroup_version(self):
         """
@@ -352,7 +385,8 @@ class _SystemdCgroupApi(object):
     def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr,
                                 error_code=ExtensionErrorCodes.PluginUnknownFailure):
         scope = "{0}_{1}".format(cmd_name, uuid.uuid4())
-        extension_slice_name = CGroupUtil.get_extension_slice_name(extension_name)
+        extension_slice_name = self.get_extension_slice_name(extension_name)
+        extension_slice_argument = shellutil.quote(extension_slice_name) if "\\" in extension_slice_name else extension_slice_name
 
         # For v1: Disable accounting to prevent nested cgroups (slice already has accounting enabled), so that all the counters will be present in extension Cgroup
         # For v2: No accounting properties needed as they are enabled by default.
@@ -364,7 +398,7 @@ class _SystemdCgroupApi(object):
 
         with self._systemd_run_commands_lock:
             systemd_run_cmd = "systemd-run{0} --unit={1} --scope --slice={2} {3}".format(
-                accounting_args, scope, extension_slice_name, command)
+                accounting_args, scope, extension_slice_argument, command)
             process = subprocess.Popen(  # pylint: disable=W1509
                 systemd_run_cmd,
                 shell=shell,
@@ -383,8 +417,7 @@ class _SystemdCgroupApi(object):
 
         cpu_controller = None
         try:
-            cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice', extension_slice_name)
-            cgroup = self.get_cgroup_from_relative_path(cgroup_relative_path, extension_name)
+            cgroup = self.get_extension_cgroup(extension_name)
             has_cpu_quota = CGroupUtil.has_cpu_quota(extension_slice_name)
             for controller in cgroup.get_controllers():
                 if isinstance(controller, _CpuController):
