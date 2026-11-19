@@ -84,7 +84,7 @@ class DeprovisionHandler(object):
         username = ovfenv.username
         warnings.append(("WARNING! {0} account and entire home directory "
                          "will be deleted.").format(username))
-        actions.append(DeprovisionAction(self.osutil.del_account, 
+        actions.append(DeprovisionAction(self.osutil.del_account,
                                          [username]))
 
     def regen_ssh_host_key(self, warnings, actions):
@@ -120,6 +120,14 @@ class DeprovisionHandler(object):
 
     def del_dhcp_lease(self, warnings, actions):
         warnings.append("WARNING! Cached DHCP leases will be deleted.")
+
+        # For Arch based systems. Kill DHCPCD service. Needed to clear cached leases.
+        shellutil.run("systemctl stop dhcpcd", chk_err=False)
+
+        # For Arch based systems. Files mounted by DHCPCD can't be deleted whilst mounted, not even by root.
+        dirs_to_umount = ["/var/lib/dhcpcd/run/systemd/journal", "/var/lib/dhcpcd/run/udev", "/var/lib/dhcpcd/sys", "/var/lib/dhcpcd/dev", "/var/lib/dhcpcd/proc"]
+        actions.append(DeprovisionAction(fileutil.umount, dirs_to_umount))
+
         dirs_to_del = ["/var/lib/dhclient", "/var/lib/dhcpcd", "/var/lib/dhcp"]
         actions.append(DeprovisionAction(fileutil.rm_dirs, dirs_to_del))
 
@@ -183,9 +191,9 @@ class DeprovisionHandler(object):
 
     def reset_hostname(self, warnings, actions):  # pylint: disable=W0613
         localhost = ["localhost.localdomain"]
-        actions.append(DeprovisionAction(self.osutil.set_hostname, 
+        actions.append(DeprovisionAction(self.osutil.set_hostname,
                                          localhost))
-        actions.append(DeprovisionAction(self.osutil.set_dhcp_hostname, 
+        actions.append(DeprovisionAction(self.osutil.set_dhcp_hostname,
                                          localhost))
 
     def setup(self, deluser):
@@ -260,7 +268,7 @@ class DeprovisionHandler(object):
 
         confirm = read_input("Do you want to proceed (y/n)")
         return True if confirm.lower().startswith('y') else False
-    
+
     def do_warnings(self, warnings):
         for warning in warnings:
             print(warning)
