@@ -113,17 +113,21 @@ class VirtualMachineExtensionClient(AzureSdkClient):
 
         log.info("Provisioning state: %s", result.provisioning_state)
 
-    def delete(self, timeout: int = AzureSdkClient._DEFAULT_TIMEOUT) -> None:
+    def delete(self, timeout: int = AzureSdkClient._DEFAULT_TIMEOUT, wait: bool = True) -> None:
         """
-        Performs a delete operation on the extension
+        Performs a delete operation on the extension, optionally without waiting for completion.
         """
-        self._execute_async_operation(
-            lambda: self._compute_client.virtual_machine_extensions.begin_delete(
+        def begin_delete():
+            return self._compute_client.virtual_machine_extensions.begin_delete(
                 self._vm.resource_group,
                 self._vm.name,
-                self._resource_name),
-            operation_name=f"Delete {self._identifier}",
-            timeout=timeout)
+                self._resource_name)
+
+        if wait:
+            self._execute_async_operation(begin_delete, operation_name=f"Delete {self._identifier}", timeout=timeout)
+        else:
+            log.info("Starting delete of %s without waiting for completion", self._identifier)
+            execute_with_retry(begin_delete)
 
     def assert_instance_view(
             self,
