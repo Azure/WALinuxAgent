@@ -1,7 +1,7 @@
 [Unit]
 Description=Microsoft Azure Linux Agent (ACL)
-Wants=network-online.target sshd.service sshd-keygen.service
-After=network-online.target sshd-keygen.service systemd-sysext.service
+Wants=network-online.target sshd-keygen.service
+After=network-online.target sshd-keygen.service systemd-sysext.service sshd.service
 
 ConditionFileIsExecutable=/usr/bin/waagent
 ConditionPathExists=/etc/waagent.conf
