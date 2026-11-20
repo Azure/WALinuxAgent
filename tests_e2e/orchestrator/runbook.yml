@@ -22,7 +22,7 @@ variable:
   # Set the name to your email alias when doing developer runs.
   #
   - name: name
-    value: "WALinuxAgent"
+    value: "kchandrika-WALinuxAgent"
     is_case_visible: true
 
   #

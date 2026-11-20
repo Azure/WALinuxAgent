@@ -24,6 +24,7 @@ import threading
 import uuid
 
 from azurelinuxagent.common import logger, conf
+from azurelinuxagent.common import opentelemetry as agent_opentelemetry
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_HOST_PLUGIN_FAILURE
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common.exception import HttpError, ProtocolError, ResourceGoneError
@@ -198,7 +199,7 @@ class HostPluginProtocol(object):
         if artifact_manifest_url is not None:
             headers[_HEADER_ARTIFACT_MANIFEST_LOCATION] = artifact_manifest_url
 
-        return url, headers
+        return url, agent_opentelemetry.inject_current_context(headers)
 
     def report_fetch_health(self, uri, is_healthy=True, source='', response=''):
 
@@ -390,12 +391,13 @@ class HostPluginProtocol(object):
         return json.dumps(data, sort_keys=True)
     
     def _build_status_headers(self):
-        return {
+        headers = {
             _HEADER_VERSION: API_VERSION,
             "Content-type": "application/json",
             _HEADER_CONTAINER_ID: self.container_id,
             _HEADER_HOST_CONFIG_NAME: self.role_config_name
         }
+        return agent_opentelemetry.inject_current_context(headers)
 
     def _build_log_headers(self):
         return {
