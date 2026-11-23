@@ -42,6 +42,12 @@ class VmAccessBvt(AgentVmTest):
         ssh_client: SshClient = self._context.create_ssh_client()
         distro = ssh_client.run_command("get_distro.py").rstrip()
 
+        # TODO: VMAccess 1.5.25 fixes Ubuntu 26.04 support and is already deployed in Public and Fairfax. Remove this
+        # China-specific skip after that version is deployed there. This skip cannot be defined in the test suite YAML
+        # because we don't want to skip the other tests in the suite
+        if self._context.vm.cloud == "AzureChinaCloud" and "ubuntu_2604" in distro:
+            raise TestSkipped("Currently VMAccess is not supported on Ubuntu 26.04 in Azure China Cloud")
+
         if not VmExtensionIds.VmAccess.supports_distro(distro):
             raise TestSkipped("Currently VMAccess is not supported on this distro")
 
