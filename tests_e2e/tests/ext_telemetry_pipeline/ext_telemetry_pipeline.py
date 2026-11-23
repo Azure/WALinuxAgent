@@ -39,11 +39,15 @@ from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineE
 class ExtTelemetryPipeline(AgentVmTest):
     def run(self):
         ssh_client: SshClient = self._context.create_ssh_client()
+        distro = ssh_client.run_command("get_distro.py").rstrip()
 
         # Extensions we will create events for
         extensions = ["Microsoft.Azure.Extensions.CustomScript"]
-        if VmExtensionIds.VmAccess.supports_distro(ssh_client.run_command("get_distro.py").rstrip()):
-            extensions.append("Microsoft.OSTCExtensions.VMAccessForLinux")
+        if VmExtensionIds.VmAccess.supports_distro(distro):
+            # TODO: VMAccess 1.5.25 fixes Ubuntu 26.04 support and is already deployed in Public and Fairfax. Remove this
+            # China-specific logic after that version of VMAccess is deployed in China cloud.
+            if self._context.vm.cloud != "AzureChinaCloud" or "ubuntu_2604" not in distro:
+                extensions.append("Microsoft.OSTCExtensions.VMAccessForLinux")
 
         # Set the etp collection period to 30 seconds instead of default 5 minutes
         default_collection_period = get_etp_collection_period()
