@@ -223,7 +223,7 @@ images:
       urn: "Debian:debian-11:11:latest"
       vm_sizes:
          # This is a gen1 image but lisa is choosing a gen2 sku which is causing deployment failures. Pin this image to a gen1 sku.
-         - "Standard_D2ahs_v4"
+         - "Standard_D2ds_v4"
    debian_11_arm64:
       urn: "Debian:debian-11:11-backports-arm64-v2:latest"
       vm_sizes:
@@ -267,7 +267,7 @@ images:
       urn: "microsoftcblmariner:cbl-mariner:cbl-mariner-2:latest"
       vm_sizes:
          # This is a gen1 image but lisa is choosing a gen2 sku which is causing deployment failures. Pin this image to a gen1 sku.
-         - "Standard_D2ahs_v4"
+         - "Standard_D2ds_v4"
    mariner_2_arm64:
       urn: "microsoftcblmariner:cbl-mariner:cbl-mariner-2-arm64:latest"
       vm_sizes:
