@@ -34,11 +34,12 @@ import socket
 import string
 import struct
 import sys
+import tempfile
 import time
 import warnings
 from pwd import getpwall
 
-from azurelinuxagent.common.exception import OSUtilError
+from azurelinuxagent.common.exception import CryptError, OSUtilError
 
 #
 # The 'crypt' package was removed in Python 3.13.
@@ -88,6 +89,7 @@ if __HASH_METHOD__ == __HASH_METHOD_NONE__:
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
+from azurelinuxagent.common.osutil.sshkey import key_files
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils import textutil
@@ -347,75 +349,123 @@ class DefaultOSUtil(object):
             raise OSUtilError("Failed to delete root password:{0}".format(e))
 
     @staticmethod
-    def _norm_path(filepath):
-        home = conf.get_home_dir()
-        # Expand HOME variable if present in path
-        path = os.path.normpath(filepath.replace("$HOME", home))
-        return path
+    def _norm_path(filepath, user_home):
+        """Return the parts of an OVF key path below the user's .ssh directory.
+
+        In OVF, $HOME is the base directory (usually /home), not the user's home.
+        The configured base can be an alias such as /home -> /usr/home, whether
+        OVF spells it out or uses $HOME.
+        """
+        if not filepath or "\0" in filepath or os.path.basename(filepath) in ("", ".", ".."):
+            raise OSUtilError("SSH key path must name a file")
+        if not user_home or not os.path.isabs(user_home) or os.path.normpath(user_home).strip(os.sep) == "":
+            raise OSUtilError("Invalid home directory for SSH key deployment")
+        home_base = conf.get_home_dir()
+        path = os.path.normpath(filepath.replace("$HOME", home_base))
+        if not os.path.isabs(path):
+            raise OSUtilError("SSH key path must be absolute: {0}".format(path))
+        for resolve_aliases in (False, True):
+            if resolve_aliases:
+                # Resolve only configured locations, never the OVF-supplied suffix.
+                prefix = os.path.normpath(home_base).rstrip(os.sep) + os.sep
+                if os.path.isabs(home_base) and path.startswith(prefix):
+                    path = os.path.join(os.path.realpath(home_base), path[len(prefix):])
+                user_home = os.path.realpath(user_home)
+            parts = os.path.relpath(path, user_home).split(os.sep)
+            if len(parts) > 1 and parts[0] == ".ssh":
+                return tuple(parts[1:])
+        raise OSUtilError("SSH key path must be inside the user's .ssh directory: {0}".format(path))
+
+    def _ssh_key_destination(self, username, filepath, keypair=False):
+        account = self.get_userentry(username)
+        if account is None:
+            raise OSUtilError("Can't find user {0}".format(username))
+        home = self._ssh_key_home(account, public_key=not keypair)
+        components = self._norm_path(filepath, home)
+        return key_files(home, components, account, keypair=keypair)
+
+    def _ssh_key_home(self, account, public_key=False):  # pylint: disable=unused-argument
+        return account.pw_dir
+
+    @staticmethod
+    def _ssh_key_source(thumbprint, extension):
+        if not thumbprint or "\0" in thumbprint or os.path.basename(thumbprint) != thumbprint:
+            raise OSUtilError("SSH key fingerprint must not be a path")
+        source = os.path.join(conf.get_lib_dir(), thumbprint + extension)
+        if not os.path.isfile(source):
+            raise OSUtilError("Can't find {0}{1}".format(thumbprint, extension))
+        return source
+
+    def _label_ssh_key(self, output):
+        self.set_selinux_context('/proc/self/fd/0', 'unconfined_u:object_r:ssh_home_t:s0', stdin=output.fileno())
 
     def deploy_ssh_keypair(self, username, keypair):
-        """
-        Deploy id_rsa and id_rsa.pub
-        """
+        """Install both files of an OVF keypair under the target account's .ssh directory."""
         path, thumbprint = keypair
-        path = self._norm_path(path)
-        dir_path = os.path.dirname(path)
-        fileutil.mkdir(dir_path, mode=0o700, owner=username)
-        lib_dir = conf.get_lib_dir()
-        prv_path = os.path.join(lib_dir, thumbprint + '.prv')
-        if not os.path.isfile(prv_path):
-            raise OSUtilError("Can't find {0}.prv".format(thumbprint))
-        shutil.copyfile(prv_path, path)
-        pub_path = path + '.pub'
-        crytputil = CryptUtil(conf.get_openssl_cmd())
-        pub = crytputil.get_pubkey_from_prv(prv_path)
-        fileutil.write_file(pub_path, pub)
-        self.set_selinux_context(pub_path, 'unconfined_u:object_r:ssh_home_t:s0')
-        self.set_selinux_context(path, 'unconfined_u:object_r:ssh_home_t:s0')
-        os.chmod(path, 0o644)
-        os.chmod(pub_path, 0o600)
+        destination = self._ssh_key_destination(username, path, keypair=True)
+        try:
+            prv_path = self._ssh_key_source(thumbprint, '.prv')
+            pub = CryptUtil(conf.get_openssl_cmd()).get_pubkey_from_prv(prv_path)
+            if not pub.strip():
+                raise OSUtilError("SSH keypair contains no public key")
+            with open(prv_path, "rb") as source:
+                with destination as (private, public):
+                    private.truncate(0)
+                    shutil.copyfileobj(source, private)
+                    public.truncate(0)
+                    public.write(pub.encode("utf-8"))
+                    self._label_ssh_key(private)
+                    self._label_ssh_key(public)
+                    os.fchmod(private.fileno(), 0o644)
+                    os.fchmod(public.fileno(), 0o600)
+        except (IOError, OSError, CryptError, CommandError) as error:
+            raise OSUtilError("Failed to deploy SSH keypair for {0}".format(username), error)
 
     def openssl_to_openssh(self, input_file, output_file):
         cryptutil = CryptUtil(conf.get_openssl_cmd())
         cryptutil.crt_to_ssh(input_file, output_file)
 
+    # Gaia replaces certificate-backed keys. Inline keys always append.
+    _replace_certificate_key = False
+
+    def _read_ssh_certificate_key(self, thumbprint):
+        crt_path = self._ssh_key_source(thumbprint, '.crt')
+        pub_path = os.path.splitext(crt_path)[0] + '.pub'
+        try:
+            fileutil.write_file(pub_path, CryptUtil(conf.get_openssl_cmd()).get_pubkey_from_crt(crt_path))
+            fileutil.chmod(pub_path, 0o600)
+            self.set_selinux_context(pub_path, 'unconfined_u:object_r:ssh_home_t:s0')
+            # Converters take a pathname. Finish in the agent directory before opening the user's file.
+            with tempfile.NamedTemporaryFile(dir=conf.get_lib_dir()) as converted:
+                self.openssl_to_openssh(pub_path, converted.name)
+                key = converted.read()
+        except (IOError, OSError, CryptError, CommandError) as error:
+            raise OSUtilError("Failed to convert SSH certificate {0}".format(thumbprint), error)
+        if not key.strip():
+            raise OSUtilError("SSH public key conversion produced no key")
+        return key
+
     def deploy_ssh_pubkey(self, username, pubkey):
-        """
-        Deploy authorized_key
-        """
+        """Install an OVF public key under the target account's .ssh directory."""
         path, thumbprint, value = pubkey
-        if path is None:
-            raise OSUtilError("Public key path is None")
-
-        crytputil = CryptUtil(conf.get_openssl_cmd())
-
-        path = self._norm_path(path)
-        dir_path = os.path.dirname(path)
-        fileutil.mkdir(dir_path, mode=0o700, owner=username)
+        destination = self._ssh_key_destination(username, path)
         if value is not None:
             if not value.startswith("ssh-"):
                 raise OSUtilError("Bad public key: {0}".format(value))
             if not value.endswith("\n"):
                 value += "\n"
-            fileutil.write_file(path, value, append=True)
+            key = value.encode("utf-8")
         elif thumbprint is not None:
-            lib_dir = conf.get_lib_dir()
-            crt_path = os.path.join(lib_dir, thumbprint + '.crt')
-            if not os.path.isfile(crt_path):
-                raise OSUtilError("Can't find {0}.crt".format(thumbprint))
-            pub_path = os.path.join(lib_dir, thumbprint + '.pub')
-            pub = crytputil.get_pubkey_from_crt(crt_path)
-            fileutil.write_file(pub_path, pub)
-            self.set_selinux_context(pub_path,
-                                     'unconfined_u:object_r:ssh_home_t:s0')
-            self.openssl_to_openssh(pub_path, path)
-            fileutil.chmod(pub_path, 0o600)
+            key = self._read_ssh_certificate_key(thumbprint)
         else:
             raise OSUtilError("SSH public key Fingerprint and Value are None")
 
-        self.set_selinux_context(path, 'unconfined_u:object_r:ssh_home_t:s0')
-        fileutil.chowner(path, username)
-        fileutil.chmod(path, 0o644)
+        with destination as (output,):
+            if value is None and self._replace_certificate_key:
+                output.truncate(0)
+            output.write(key)
+            self._label_ssh_key(output)
+            os.fchmod(output.fileno(), 0o644)
 
     def is_selinux_system(self):
         """
@@ -438,18 +488,18 @@ class DefaultOSUtil(object):
         else:
             return False
 
-    def set_selinux_context(self, path, con):  # pylint: disable=R1710
+    def set_selinux_context(self, path, con, stdin=None):  # pylint: disable=R1710
         """
         Calls shell 'chcon' with 'path' and 'con' context.
         Returns exit result.
         """
         if self.is_selinux_system():
-            if not os.path.exists(path):
+            if stdin is None and not os.path.exists(path):
                 logger.error("Path does not exist: {0}".format(path))
                 return 1
             
             try:
-                shellutil.run_command(['chcon', con, path], log_error=True)
+                shellutil.run_command(['chcon', con, path], log_error=True, stdin=stdin)
             except shellutil.CommandError as cmd_err:
                 return cmd_err.returncode
             return 0

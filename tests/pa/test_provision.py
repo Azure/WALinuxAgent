@@ -15,8 +15,8 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import contextlib
-import getpass
 import os
+import pwd
 import re
 import unittest
 
@@ -453,13 +453,13 @@ class TestProvision(AgentTestCase):
         self.assertFalse(os.path.exists(ssh_key_path), 'The SSH key should not have been downloaded, since all requests failed. Got: {0}'.format(ssh_key_path))
 
     def test_deploy_ssh_pubkeys_should_raise_if_no_keys_have_been_downloaded(self):
-        ovfenv_data = load_data("ovf-env_public_key_no_value.xml")
-        ovfenv_data = ovfenv_data.replace('<UserName>UserName</UserName>', '<UserName>{0}</UserName>'.format(getpass.getuser()))
-        ovfenv_data = ovfenv_data.replace('<Path>$HOME/UserName/.ssh/authorized_keys</Path>', '<Path>{0}</Path>'.format(os.path.join(self.tmp_dir, "authorized_keys")))
-        ovfenv = OvfEnv(ovfenv_data)
+        account = pwd.struct_passwd(("UserName", "x", os.getuid(), os.getgid(), "", self.tmp_dir, "/bin/sh"))
+        ovfenv = OvfEnv(load_data("ovf-env_public_key_no_value.xml").replace("$HOME/UserName", self.tmp_dir))
         with TestProvision._create_provision_handler_with_mock_protocol() as (handler, _):
-            with self.assertRaises(OSUtilError) as context:
-                handler.deploy_ssh_pubkeys(ovfenv)
+            handler.osutil = DefaultOSUtil()
+            with patch.object(handler.osutil, "get_userentry", return_value=account):
+                with self.assertRaises(OSUtilError) as context:
+                    handler.deploy_ssh_pubkeys(ovfenv)
             self.assertIn("Can't find 8979F1AC8C4215827BF3B5A403E6137B504D02A4.crt", ustr(context.exception))
 
 

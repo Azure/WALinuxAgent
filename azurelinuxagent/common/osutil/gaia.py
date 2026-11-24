@@ -33,6 +33,8 @@ import azurelinuxagent.common.utils.shellutil as shellutil
 
 class GaiaOSUtil(DefaultOSUtil):
 
+    _replace_certificate_key = True
+
     def __init__(self):  # pylint: disable=W0235
         super(GaiaOSUtil, self).__init__()
 
@@ -80,9 +82,13 @@ class GaiaOSUtil(DefaultOSUtil):
             raise OSUtilError("Failed to delete root password")
 
     def _replace_user(self, path, username):
+        if not path:
+            raise OSUtilError("SSH key path is missing")
         if path.startswith('$HOME'):
             path = '/home' + path[5:]
         parts = path.split('/')
+        if len(parts) < 4 or not path.startswith('/'):
+            raise OSUtilError("Invalid SSH key path")
         parts[2] = username
         return '/'.join(parts)
 

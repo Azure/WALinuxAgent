@@ -99,6 +99,11 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         commands = [['setconf', '/usr/Firewall/ConfigFiles/webadmin', 'ACL', 'any'], ['ensl']]
         self._run_multiple_commands_without_raising(commands, log_error=False, continue_on_error=False)
 
+    def _ssh_key_home(self, account, public_key=False):
+        if public_key and account.pw_name == "admin":
+            return "/usr/Firewall"
+        return super(NSBSDOSUtil, self)._ssh_key_home(account, public_key)
+
     def deploy_ssh_pubkey(self, username, pubkey):
         """
         Deploy authorized_key
