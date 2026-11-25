@@ -315,9 +315,10 @@ class AgentLog(object):
             # 3) There seems to be a configuration issue in flatcar that prevents python from using HTTPS when trying to reach storage. This does not produce any actual errors, since the agent fallbacks to the HGAP.
             # 4) Remove this when bug 17523033 is fixed.
             #
+            # 1 is also seen in the Daemon on Alma/Rocky. Needs further investigation.
             {
                 'message': r"(Failed to mount resource disk)|(unable to detect disk topology)",
-                'if': lambda r: r.prefix == 'Daemon' and DISTRO_NAME == 'flatcar'
+                'if': lambda r: r.prefix == 'Daemon' and DISTRO_NAME in ('flatcar', 'almalinux', 'rocky')
             },
             {
                 'message': r"(HTTPS is unavailable and required)|(Unable to setup the persistent firewall rules.*Read-only file system)",
