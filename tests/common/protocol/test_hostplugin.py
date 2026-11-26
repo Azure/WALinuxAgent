@@ -614,6 +614,37 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
                     self.assertTrue(k in actual_headers)
                     self.assertEqual(expected_headers[k], actual_headers[k])
 
+    def test_extension_artifact_request_injects_trace_context(self):
+        with mock_wire_protocol(DATA_FILE) as protocol:
+            host_client = protocol.client.get_host_plugin()
+            traced_headers = {"traceparent": "trace-parent"}
+
+            with patch.object(wire.HostPluginProtocol, "get_api_versions", return_value=api_versions):
+                with patch.object(
+                        hostplugin.agent_opentelemetry,
+                        "inject_current_context",
+                        return_value=traced_headers) as inject_context:
+                    _, actual_headers = host_client.get_artifact_request(sas_url, use_verify_header=False)
+
+            self.assertIs(traced_headers, actual_headers)
+            inject_context.assert_called_once()
+            self.assertEqual(sas_url, inject_context.call_args[0][0]["x-ms-artifact-location"])
+
+    def test_status_request_headers_inject_trace_context(self):
+        with mock_wire_protocol(DATA_FILE) as protocol:
+            host_client = protocol.client.get_host_plugin()
+            traced_headers = {"traceparent": "trace-parent"}
+
+            with patch.object(
+                    hostplugin.agent_opentelemetry,
+                    "inject_current_context",
+                    return_value=traced_headers) as inject_context:
+                actual_headers = host_client._build_status_headers()
+
+            self.assertIs(traced_headers, actual_headers)
+            inject_context.assert_called_once()
+            self.assertEqual("application/json", inject_context.call_args[0][0]["Content-type"])
+
     def test_health(self):
         host_plugin = self._init_host()
 

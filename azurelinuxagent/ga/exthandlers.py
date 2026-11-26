@@ -33,6 +33,7 @@ from functools import partial
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
+from azurelinuxagent.common import opentelemetry as agent_opentelemetry
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common import version
@@ -355,8 +356,14 @@ class ExtHandlersHandler(object):
             add_event(op=WALAEventOperation.ExtensionProcessing, message=message)
 
             try:
-                self.__process_and_handle_extensions(egs.svd_sequence_number, egs.id)
-                self._cleanup_outdated_handlers()
+                span_scope = agent_opentelemetry.start_goal_state_span(egs)
+                if span_scope is None:
+                    self.__process_and_handle_extensions(egs.svd_sequence_number, egs.id)
+                    self._cleanup_outdated_handlers()
+                else:
+                    with span_scope:
+                        self.__process_and_handle_extensions(egs.svd_sequence_number, egs.id)
+                        self._cleanup_outdated_handlers()
             except Exception as e:
                 error = u"Error processing extensions:{0}".format(textutil.format_exception(e))
             finally:
@@ -1117,6 +1124,26 @@ class ExtHandlersHandler(object):
         Go through handler_state dir, collect and report status.
         Returns the status it reported, or None if an error occurred.
         """
+        parent_context = None
+        if agent_opentelemetry.is_active():
+            try:
+                extensions_goal_state = self.protocol.get_goal_state().extensions_goal_state
+                parent_context = agent_opentelemetry.extract_goal_state_context(extensions_goal_state)
+            except Exception as error:
+                logger.error(
+                    "OpenTelemetry status span parent extraction failed: {0}",
+                    error.__class__.__name__
+                )
+
+        with agent_opentelemetry.operation_span("ReportExtensionStatus", context=parent_context):
+            return self._report_ext_handlers_status(
+                goal_state_changed,
+                vm_agent_update_status,
+                vm_agent_supports_fast_track
+            )
+
+    def _report_ext_handlers_status(self, goal_state_changed=False, vm_agent_update_status=None,
+                                    vm_agent_supports_fast_track=False):
         try:
             vm_status = VMStatus(status="Ready", message="Guest Agent is running",
                                  gs_aggregate_status=self.__gs_aggregate_status,
@@ -1349,11 +1376,17 @@ class ExtHandlerInstance(object):
                         logger.warn("Exception occurred while attempting to remove file '{0}': {1}", f,
                                     cleanup_exception)
 
+    @agent_opentelemetry.trace_operation("DownloadExtensionManifest")
+    def _fetch_extension_manifest(self):
+        return self.protocol.get_goal_state().fetch_extension_manifest(
+            self.ext_handler.name,
+            self.ext_handler.manifest_uris
+        )
+
     def decide_version(self, target_state, extension, gs_activity_id):
         self.logger.verbose("Decide which version to use")
         try:
-            manifest = self.protocol.get_goal_state().fetch_extension_manifest(self.ext_handler.name, self.ext_handler.manifest_uris)
-            pkg_list = manifest.pkg_list
+            pkg_list = self._fetch_extension_manifest().pkg_list
         except ProtocolError as e:
             raise ExtensionError("Failed to get ext handler pkgs", e)
         except ExtensionDownloadError:
@@ -1523,6 +1556,7 @@ class ExtHandlerInstance(object):
         report_validation_event(op=ex.operation, level=logger.LogLevel.WARNING, message=ustr(ex),
                                 name=self.ext_handler.name, version=self.ext_handler.version, duration=ex.duration)
 
+    @agent_opentelemetry.trace_operation("DownloadExtensionPackage")
     def download(self, ignore_signature_validation_errors):
         """
         If extension is signed, validate extension package signature immediately after download, and validate handler
@@ -1752,6 +1786,7 @@ class ExtHandlerInstance(object):
             self.logger.info("Creating a placeholder status file {0} with status: {1}".format(status_path, status))
             fileutil.write_file(status_path, json.dumps(status_contents))
 
+    @agent_opentelemetry.trace_operation("EnableExtension")
     def enable(self, extension=None, uninstall_exit_code=None):
         try:
             self._enable_extension(extension, uninstall_exit_code)
@@ -1801,6 +1836,7 @@ class ExtHandlerInstance(object):
                             extension_error_code=ExtensionErrorCodes.PluginDisableProcessingFailed,
                             extension=extension)
 
+    @agent_opentelemetry.trace_operation("DisableExtension")
     def disable(self, extension=None, ignore_error=False):
         try:
             self._disable_extension(extension)
@@ -1831,6 +1867,7 @@ class ExtHandlerInstance(object):
             self.set_handler_state(ExtHandlerState.Installed)
             self.set_handler_status(status=ExtHandlerStatusValue.not_ready, message="Plugin disabled")
 
+    @agent_opentelemetry.trace_operation("InstallExtension")
     def install(self, uninstall_exit_code=None, extension=None):
         # For Handler level operations, extension just specifies the settings that initiated the install.
         # This is needed to provide the sequence number and extension name in case the extension needs to report
@@ -1847,6 +1884,7 @@ class ExtHandlerInstance(object):
         self.set_handler_state(ExtHandlerState.Installed)
         self.set_handler_status(status=ExtHandlerStatusValue.not_ready, message="Plugin installed but not enabled")
 
+    @agent_opentelemetry.trace_operation("UninstallExtension")
     def uninstall(self, extension=None):
         # For Handler level operations, extension just specifies the settings that initiated the uninstall.
         # This is needed to provide the sequence number and extension name in case the extension needs to report
